@@ -1,0 +1,325 @@
+<script>
+  $(document).ready(() => {
+    let taskData = {};
+    let assignedPeople = [];
+    // 用于存储每个任务最终分配的人员
+    let taskAssignments = {};
+    // 用于存储从后端获取的、筛选后的最终任务列表
+    let finalTaskList = [];
+
+    // --- 1. 从 sessionStorage 获取数据 ---
+    const taskDataString = sessionStorage.getItem('taskToAssign');
+    const peopleDataString = sessionStorage.getItem('peopleToAssign');
+
+    sessionStorage.removeItem('taskToAssign');
+    sessionStorage.removeItem('peopleToAssign');
+
+    try {
+        taskData = JSON.parse(taskDataString || '{}');
+        assignedPeople = JSON.parse(peopleDataString || '[]');
+        
+        console.log("从sessionStorage获取的人员数据:", assignedPeople);
+        if (!assignedPeople || assignedPeople.length === 0) {
+            console.warn("警告: 已分配人员列表为空。");
+        }
+
+    } catch (e) {
+        console.error("解析 sessionStorage 数据失败:", e);
+        taskData = {};
+        assignedPeople = [];
+    }
+
+    // --- 2. 在页面上显示任务详情 ---
+    $('#taskDate').text(taskData['开始日期'] || 'N/A');
+    $('#taskAEM').text(taskData['AEM#'] || 'N/A');
+    $('#taskEquip1').text(taskData['设备类型1'] || 'N/A');
+    $('#taskEquip2').text(taskData['设备类型2'] || 'N/A');
+    $('#taskAuto').text(taskData['自动化类型'] || 'N/A');
+
+    // --- 3. 设置导航 ---
+    const siWebPage = sessionStorage.getItem('siWebPage');
+    $('#navigateHome').on('click', (e) => {
+        e.preventDefault();
+        if (siWebPage) {
+            window.location.href = siWebPage;
+        } else {
+            alert('无法找到导航页地址！/ Cannot find navigation page URL!');
+        }
+    });
+
+    // --- 4. 初始化并填充已分配人员的表格 ---
+    $('#assignedPeopleTable').DataTable({
+        data: assignedPeople,
+        columns: [
+            { title: "工号 / Working Code", data: "WorkingCode" },
+            { title: "姓名 / Name", data: "Name" }
+        ],
+        dom: 'rt', 
+        paging: false,
+        searching: false,
+        info: false,
+        language: { emptyTable: "没有分配任何人员" }
+    });
+
+    // --- 5. 获取并显示标准任务清单 ---
+    // 新增：优先查找PM No.对应的任务明细
+    const pmNo = (taskData['开始日期'] || '').replace(/-/g, '') + (taskData['AEM#'] || '');
+    const sheetName = (taskData['工序'] || '') + '-' + (taskData['车间'] || '');
+    const pmInfo = {
+        process: taskData['工序'],
+        workshop: taskData['车间'],
+        Plan_SD: taskData['开始日期'],
+        workcenter: taskData['AEM#']
+    };
+    Swal.fire({
+        title: '加载任务清单...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    // 优先查找PM No.的任务明细
+    google.script.run.withSuccessHandler(function(response) {
+        const [status, data] = response;
+        if (status === "OK" && data) {
+            const records = JSON.parse(data);
+            if (records.length > 0 && (records[0][1].includes('人员已分配') || records[0][1].includes('进行中'))) {
+                console.log('[PM分配] 找到相同的PM No.，PM No.为：', pmNo, '记录内容：', records[0]);
+                window._pmNoMatched = true;
+                Swal.close();
+                try {
+                    finalTaskList = JSON.parse(records[0][10]);
+                } catch (e) {
+                    finalTaskList = [];
+                }
+                renderTaskTable(finalTaskList, assignedPeople);
+                return;
+            } else {
+                window._pmNoMatched = false;
+                console.log('[PM分配] 未找到相同的PM No.，PM No.为：', pmNo);
+            }
+        } else {
+            window._pmNoMatched = false;
+            console.log('[PM分配] 未找到相同的PM No.，PM No.为：', pmNo);
+        }
+        // 没找到则加载标准任务清单
+        loadStandardTaskList();
+    }).withFailureHandler(function(error) {
+        window._pmNoMatched = false;
+        console.log('[PM分配] 查询PM记录出错，PM No.为：', pmNo, error);
+        loadStandardTaskList();
+    }).getPMrecord(pmInfo);
+
+    function loadStandardTaskList() {
+        google.script.run.withSuccessHandler(function(allTasks) {
+            Swal.close();
+            const equip1 = taskData['设备类型1'];
+            const equip2 = taskData['设备类型2'];
+            const auto = taskData['自动化类型'];
+            const effectiveTasks = allTasks.filter(task => task.Status && task.Status.includes('生效'));
+            const relevantMachineTasks = effectiveTasks.filter(task => {
+                return task.MachineType === equip1 || task.MachineType === equip2 || task.MachineType === auto;
+            });
+            finalTaskList = [];
+            relevantMachineTasks.forEach(task => {
+                if (task.Tasklist) {
+                    try {
+                        const parsedTasks = JSON.parse(task.Tasklist);
+                        if (Array.isArray(parsedTasks)) {
+                            finalTaskList = finalTaskList.concat(parsedTasks);
+                        }
+                    } catch (e) {
+                        console.error("解析Tasklist失败:", e, "原始数据:", task.Tasklist);
+                    }
+                }
+            });
+            renderTaskTable(finalTaskList, assignedPeople);
+        }).withFailureHandler(function(error) {
+            Swal.fire('加载失败', '获取标准任务清单时出错: ' + error.message, 'error');
+        }).get_Tasklist_new();
+    }
+
+    // 新增：渲染任务表格的函数，复用原有逻辑
+    function renderTaskTable(taskList, assignedPeople) {
+        let columns = [];
+        if (taskList.length > 0) {
+            const allKeys = new Set();
+            taskList.forEach(task => {
+                Object.keys(task).forEach(key => allKeys.add(key));
+            });
+            columns = Array.from(allKeys).map(key => {
+                return { 
+                    title: key, 
+                    data: key,
+                    defaultContent: "" 
+                };
+            });
+        }
+        columns.push({
+            title: "执行人员 / Executive",
+            data: null, 
+            defaultContent: "", 
+            orderable: false
+        });
+        // 动态决定隐藏列
+        let extraHide = [];
+        if (window._pmNoMatched) {
+            extraHide = ['taskStatus', 'valueAndNote', 'image'];
+        }
+        const columnsToHide = [
+            'Task Type', 'Line Status', 'Tools & Equip', 'Resource', 
+            'Frecuency', 'No Resources', 'Function', 'Failure Mode', 
+            'Strategy', 'Task Status', '执行人员', ...extraHide
+        ];
+        const hiddenColumnIndices = [];
+        columns.forEach((col, index) => {
+            if (columnsToHide.includes(col.title)) {
+                hiddenColumnIndices.push(index);
+            }
+        });
+        $('#standardTaskTable').DataTable({
+            data: taskList,
+            columns: columns,
+            responsive: true,
+            pageLength: 10,
+            scrollX: true,
+            language: { emptyTable: "未找到匹配的任务清单" },
+            columnDefs: [
+                {
+                    targets: hiddenColumnIndices,
+                    visible: false
+                }
+            ],
+            createdRow: function(row, data, dataIndex) {
+                const taskId = data['Task No'] || data['任务编号'];
+                if (!taskId) return;
+                // 1. 取出原“执行人员”字段，支持字符串、数组
+                let initialExecutives = [];
+                if (data['执行人员']) {
+                    if (Array.isArray(data['执行人员'])) {
+                        initialExecutives = data['执行人员'];
+                    } else if (typeof data['执行人员'] === 'string') {
+                        try {
+                            const arr = JSON.parse(data['执行人员']);
+                            if (Array.isArray(arr)) initialExecutives = arr;
+                            else initialExecutives = data['执行人员'].split(/[，,\/]/).map(s => s.trim()).filter(Boolean);
+                        } catch {
+                            initialExecutives = data['执行人员'].split(/[，,\/]/).map(s => s.trim()).filter(Boolean);
+                        }
+                    }
+                }
+                // 2. 初始化 taskAssignments
+                taskAssignments[taskId] = [...initialExecutives];
+                // 3. 渲染按钮，按钮集合为 assignedPeople + initialExecutives（去重），已分配人员高亮
+                const assignmentCell = $('td:last', row);
+                if ((!assignedPeople || assignedPeople.length === 0) && initialExecutives.length === 0) {
+                    assignmentCell.text('无人可分配');
+                    return; 
+                }
+                // 合并 assignedPeople 和 initialExecutives，去重
+                const allNamesSet = new Set();
+                assignedPeople && assignedPeople.forEach(person => allNamesSet.add(person.Name));
+                initialExecutives.forEach(name => allNamesSet.add(name));
+                const allNames = Array.from(allNamesSet);
+                let buttonsHtml = '';
+                allNames.forEach(name => {
+                    const isAssigned = initialExecutives.includes(name);
+                    buttonsHtml += `<button class="btn btn-${isAssigned ? 'primary' : 'outline-secondary'} btn-sm person-toggle-btn me-1 mb-1" data-person-name="${name}" data-task-id="${taskId}">${name}</button>`;
+                });
+                assignmentCell.html(buttonsHtml);
+            },
+            order: [[1, 'asc']]
+        });
+    }
+
+    // 将事件委托绑定到 document
+    $(document).on('click', '#standardTaskTable .person-toggle-btn', function() {
+        $(this).toggleClass('btn-outline-secondary btn-primary');
+
+        const personName = $(this).data('person-name');
+        const taskId = $(this).data('task-id');
+
+        if (!taskAssignments[taskId]) {
+            taskAssignments[taskId] = []; 
+        }
+
+        if ($(this).hasClass('btn-primary')) {
+            if (!taskAssignments[taskId].includes(personName)) {
+                taskAssignments[taskId].push(personName);
+            }
+        } else {
+            const index = taskAssignments[taskId].indexOf(personName);
+            if (index > -1) {
+                taskAssignments[taskId].splice(index, 1);
+            }
+        }
+    });
+
+
+    // --- 6. 最终确认按钮逻辑 (已更新) ---
+    $('#confirmAssignmentBtn').on('click', function() {
+        Swal.fire({
+            title: '确认人员分配?',
+            text: "将为该任务正式分配人员。",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '确认',
+            cancelButtonText: '取消'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: '数据提交中...',
+                    text: '请稍候',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                // --- 任务明细格式重构 ---
+                const formattedTaskDetails = finalTaskList.map(task => {
+                    const taskId = task['Task No'] || task['任务编号'];
+                    const executives = taskAssignments[taskId] || [];
+                    return {
+                        ...task, // 包含所有原始任务属性
+                        "执行人员": executives, // 添加执行人员列表
+                        "taskStatus": false, // 默认未完成
+                        "valueAndNote": "", // 默认备注为空
+                        "image": "无图片" // 默认无图片
+                    };
+                });
+                
+                // 准备要提交到后端的数据对象
+                const submissionData = {
+                    // 任务基本信息
+                    "PM No.": (taskData['开始日期'] || '').replace(/-/g, '') + (taskData['AEM#'] || ''),
+                    "PmStatus": "人员已分配 / Personnel Assigned", // <<< 此处已修改
+                    "Notification": "", 
+                    "PM People": assignedPeople.map(p => p.Name).join('/'),
+                    "Plan PM Date": taskData['开始日期'],
+                    "SatrtDate": "", // 清空开始日期
+                    "StartTime": "", // 清空开始时间
+                    "EndDate": "",
+                    "EndTime": "",
+                    "Workcenter": taskData['AEM#'],
+                    
+                    // 任务清单和人员分配详情
+                    "任务明细": JSON.stringify(formattedTaskDetails),
+
+                    // 其他元数据
+                    "SheetName": taskData['工序'] + "-" + taskData['车间'],
+                    "Status": "Start" 
+                };
+
+                console.log("最终提交到后端的数据:", submissionData);
+
+                // 调用后端的保存函数
+                google.script.run
+                    .withSuccessHandler(function(response) {
+                        Swal.fire('成功!', '人员分配已成功提交。', 'success');
+                    })
+                    .withFailureHandler(function(error) {
+                        Swal.fire('提交失败', error.message, 'error');
+                    })
+                    .saveData_tasklist(submissionData);
+            }
+        });
+    });
+});
+</script>

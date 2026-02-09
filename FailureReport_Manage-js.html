@@ -1,0 +1,502 @@
+<script>
+    $(document).ready(function () {
+
+        console.log('FailureReport_Manage-js.html 文件加载完成');
+        console.log('jQuery版本 / jQuery version:', $.fn.jquery);
+        console.log('检查DataTables库 / Checking DataTables library:', typeof $.fn.DataTable !== 'undefined' ? '已加载 / Loaded' : '未加载 / Not loaded');
+
+        // 页面加载时显示一个提示框
+        Swal.fire({
+            title: '加载数据中... / Loading Data...',
+            text: '正在从服务器获取故障报告列表，请稍候。 / Fetching failure report list from server, please wait.',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        // 获取URL参数 - 已注释
+        // const urlParams = new URLSearchParams(window.location.search);
+        // const userId = urlParams.get('ID');
+        // const userName = urlParams.get('Name');
+        // const userProcess = urlParams.get('Process');
+        // const userWorkshop = urlParams.get('Workshop');
+
+        console.log('初始化DataTable / Initializing DataTable');
+        // 初始化三个工序的DataTable，添加错误处理
+        let imTable;
+        try {
+            if ($('#imTable').length) {
+                console.log('找到imTable元素 / Found imTable element');
+                imTable = $('#imTable').DataTable({
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+                    },
+                    pageLength: 10,
+                    responsive: true,
+                    columns: [
+                        { data: 'reportNo', title: '编号 / Report No.' },
+                        { data: 'machineNo', title: '机台号 / Machine No.' },
+                        { data: 'problemDescription', title: '问题描述 / Problem Description' },
+                        { data: 'status', title: '状态 / Status' },
+                        { data: 'repairTime', title: '维修时间 / Repair Time' },
+                        { data: 'submitDate', title: '提交日期 / Submit Date' },
+                        { data: 'workshop', title: '车间 / Workshop' },
+                        { data: 'process', title: '工序 / Process' },
+                        {
+                            data: 'confirmation',
+                            title: '故障报告确认 / Failure Report Confirmation',
+                            render: function (data, type, row) {
+                                return '<button class="btn btn-sm btn-success confirm-btn" data-id="' + row.reportNo + '" data-process="IM">需要故障报告 / Need Failure Report</button>' +
+                                       '<button class="btn btn-sm btn-secondary no-confirm-btn" data-id="' + row.reportNo + '" data-process="IM">不要故障报告 / No Failure Report</button>';
+                            }
+                        },
+                        {
+                            data: 'needFailureReport',
+                            title: '是否需要故障报告 / Need Failure Report',
+                            render: function (data, type, row) {
+                                // 根据后台数据实际值显示，空值显示"待定"
+                                if (data === '是' || data === true || data === 'true') {
+                                    return '<span class="badge bg-success">是 / Yes</span>';
+                                } else if (data === '否' || data === false || data === 'false') {
+                                    return '<span class="badge bg-secondary">否 / No</span>';
+                                } else {
+                                    return '<span class="badge bg-warning">待定 / Pending</span>';
+                                }
+                            }
+                        }
+                    ]
+                });
+                console.log('imTable 初始化成功 / imTable initialized successfully');
+            } else {
+                console.error('imTable 元素未找到 / imTable element not found');
+            }
+        } catch (e) {
+            console.error('初始化 imTable 出错 / Error initializing imTable:', e);
+        }
+
+        let tfTable;
+        try {
+            if ($('#tfTable').length) {
+                console.log('找到tfTable元素 / Found tfTable element');
+                tfTable = $('#tfTable').DataTable({
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+                    },
+                    pageLength: 10,
+                    responsive: true,
+                    columns: [
+                        { data: 'reportNo', title: '编号 / Report No.' },
+                        { data: 'machineNo', title: '机台号 / Machine No.' },
+                        { data: 'problemDescription', title: '问题描述 / Problem Description' },
+                        { data: 'status', title: '状态 / Status' },
+                        { data: 'repairTime', title: '维修时间 / Repair Time' },
+                        { data: 'submitDate', title: '提交日期 / Submit Date' },
+                        { data: 'workshop', title: '车间 / Workshop' },
+                        { data: 'process', title: '工序 / Process' },
+                        {
+                            data: 'confirmation',
+                            title: '故障报告确认 / Failure Report Confirmation',
+                            render: function (data, type, row) {
+                                return '<button class="btn btn-sm btn-success confirm-btn" data-id="' + row.reportNo + '" data-process="TF">需要故障报告 / Need Failure Report</button>' +
+                                       '<button class="btn btn-sm btn-secondary no-confirm-btn" data-id="' + row.reportNo + '" data-process="TF">不要故障报告 / No Failure Report</button>';
+                            }
+                        },
+                        {
+                            data: 'needFailureReport',
+                            title: '是否需要故障报告 / Need Failure Report',
+                            render: function (data, type, row) {
+                                // 根据后台数据实际值显示，空值显示"待定"
+                                if (data === '是' || data === true || data === 'true') {
+                                    return '<span class="badge bg-success">是 / Yes</span>';
+                                } else if (data === '否' || data === false || data === 'false') {
+                                    return '<span class="badge bg-secondary">否 / No</span>';
+                                } else {
+                                    return '<span class="badge bg-warning">待定 / Pending</span>';
+                                }
+                            }
+                        }
+                    ]
+                });
+                console.log('tfTable 初始化成功 / tfTable initialized successfully');
+            } else {
+                console.error('tfTable 元素未找到 / tfTable element not found');
+            }
+        } catch (e) {
+            console.error('初始化 tfTable 出错 / Error initializing tfTable:', e);
+        }
+
+        let pkTable;
+        try {
+            if ($('#pkTable').length) {
+                console.log('找到pkTable元素 / Found pkTable element');
+                pkTable = $('#pkTable').DataTable({
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+                    },
+                    pageLength: 10,
+                    responsive: true,
+                    columns: [
+                        { data: 'reportNo', title: '编号 / Report No.' },
+                        { data: 'machineNo', title: '机台号 / Machine No.' },
+                        { data: 'problemDescription', title: '问题描述 / Problem Description' },
+                        { data: 'status', title: '状态 / Status' },
+                        { data: 'repairTime', title: '维修时间 / Repair Time' },
+                        { data: 'submitDate', title: '提交日期 / Submit Date' },
+                        { data: 'workshop', title: '车间 / Workshop' },
+                        { data: 'process', title: '工序 / Process' },
+                        {
+                            data: 'confirmation',
+                            title: '故障报告确认 / Failure Report Confirmation',
+                            render: function (data, type, row) {
+                                return '<button class="btn btn-sm btn-success confirm-btn" data-id="' + row.reportNo + '" data-process="PK">需要故障报告 / Need Failure Report</button>' +
+                                       '<button class="btn btn-sm btn-secondary no-confirm-btn" data-id="' + row.reportNo + '" data-process="PK">不要故障报告 / No Failure Report</button>';
+                            }
+                        },
+                        {
+                            data: 'needFailureReport',
+                            title: '是否需要故障报告 / Need Failure Report',
+                            render: function (data, type, row) {
+                                // 根据后台数据实际值显示，空值显示"待定"
+                                if (data === '是' || data === true || data === 'true') {
+                                    return '<span class="badge bg-success">是 / Yes</span>';
+                                } else if (data === '否' || data === false || data === 'false') {
+                                    return '<span class="badge bg-secondary">否 / No</span>';
+                                } else {
+                                    return '<span class="badge bg-warning">待定 / Pending</span>';
+                                }
+                            }
+                        }
+                    ]
+                });
+                console.log('pkTable 初始化成功 / pkTable initialized successfully');
+            } else {
+                console.error('pkTable 元素未找到 / pkTable element not found');
+            }
+        } catch (e) {
+            console.error('初始化 pkTable 出错 / Error initializing pkTable:', e);
+        }
+
+        console.log('DataTable初始化完成 / DataTable initialization complete');
+
+        // 加载各工序的故障报告数据
+        function loadProcessData() {
+            console.log('尝试调用后端函数 / Attempting to call backend function');
+            console.log('检查google.script.run是否可用 / Checking if google.script.run is available:', typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined' ? '可用 / Available' : '不可用 / Not available');
+            if (typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined') {
+                google.script.run
+                    .withSuccessHandler(function (data) {
+                        console.log('从后端获取的数据（原始） / Data from backend (raw):', data);
+                        // 由于后端返回的是JSON字符串，需要解析为对象
+                        let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+                        console.log('从后端获取的数据（解析后） / Data from backend (parsed):', parsedData);
+                        // 格式化提交日期为YYYY-MM-DD
+                        function formatDate(dateStr) {
+                            if (!dateStr) return '';
+                            try {
+                                let date = new Date(dateStr);
+                                if (isNaN(date.getTime())) return dateStr; // 如果不是有效日期，返回原始字符串
+                                let year = date.getFullYear();
+                                let month = String(date.getMonth() + 1).padStart(2, '0');
+                                let day = String(date.getDate()).padStart(2, '0');
+                                return `${year}-${month}-${day}`;
+                            } catch (e) {
+                                console.error('日期格式化错误 / Date formatting error:', e, '原始日期 / Original date:', dateStr);
+                                return dateStr;
+                            }
+                        }
+                        // 对每个工序的数据进行日期格式化和处理 needFailureReport 字段
+                        parsedData.IM.forEach(item => {
+                            item.submitDate = formatDate(item.submitDate);
+                            // 处理后台"是否需要填写故障报告"字段（第20列）
+                            // 空值或undefined显示为"待定"，有值则按实际值显示
+                            if (item.needFailureReport === undefined || item.needFailureReport === null || item.needFailureReport === '') {
+                                item.needFailureReport = 'pending';
+                            }
+                        });
+                        parsedData.TF.forEach(item => {
+                            item.submitDate = formatDate(item.submitDate);
+                            // 处理后台"是否需要填写故障报告"字段（第20列）
+                            // 空值或undefined显示为"待定"，有值则按实际值显示
+                            if (item.needFailureReport === undefined || item.needFailureReport === null || item.needFailureReport === '') {
+                                item.needFailureReport = 'pending';
+                            }
+                        });
+                        parsedData.PK.forEach(item => {
+                            item.submitDate = formatDate(item.submitDate);
+                            // 处理后台"是否需要填写故障报告"字段（第20列）
+                            // 空值或undefined显示为"待定"，有值则按实际值显示
+                            if (item.needFailureReport === null || item.needFailureReport === '') {
+                                item.needFailureReport = 'pending';
+                            }
+                        });
+                        
+                        // 新增：筛选"是否需要故障报告"列值为空的记录
+                        const filteredIM = parsedData.IM.filter(item => 
+                            item.needFailureReport === undefined || 
+                            item.needFailureReport === null || 
+                            item.needFailureReport === '' || 
+                            item.needFailureReport === 'pending'
+                        );
+                        
+                        const filteredTF = parsedData.TF.filter(item => 
+                            item.needFailureReport === undefined || 
+                            item.needFailureReport === null || 
+                            item.needFailureReport === '' || 
+                            item.needFailureReport === 'pending'
+                        );
+                        
+                        const filteredPK = parsedData.PK.filter(item => 
+                            item.needFailureReport === undefined || 
+                            item.needFailureReport === null || 
+                            item.needFailureReport === '' || 
+                            item.needFailureReport === 'pending'
+                        );
+                        
+                        console.log('筛选后的数据统计:');
+                        console.log('IM工序 - 原始数据:', parsedData.IM.length, '条，筛选后:', filteredIM.length, '条');
+                        console.log('TF工序 - 原始数据:', parsedData.TF.length, '条，筛选后:', filteredTF.length, '条');
+                        console.log('PK工序 - 原始数据:', parsedData.PK.length, '条，筛选后:', filteredPK.length, '条');
+                        
+                        // 更新各表格数据（使用筛选后的数据）
+                        if (imTable) {
+                            imTable.clear().rows.add(filteredIM).draw();
+                            console.log('IM 表格数据更新完成，行数:', imTable.rows().count());
+                        }
+                        if (tfTable) {
+                            tfTable.clear().rows.add(filteredTF).draw();
+                            console.log('TF 表格数据更新完成，行数:', tfTable.rows().count());
+                        }
+                        if (pkTable) {
+                            pkTable.clear().rows.add(filteredPK).draw();
+                            console.log('PK 表格数据更新完成，行数:', pkTable.rows().count());
+                        }
+                        // 如果没有数据，显示提示
+                        if (filteredIM.length === 0 && filteredTF.length === 0 && filteredPK.length === 0) {
+                            Swal.fire({
+                                icon: 'info',
+                                title: '暂无待处理数据 / No Pending Data',
+                                text: '所有故障报告都已确认是否需要故障报告，暂无待处理项目。 / All failure reports have been confirmed, no pending items.',
+                                confirmButtonText: '确定 / OK'
+                            });
+                        }
+                        // 数据加载完成后关闭加载提示框
+                        Swal.close();
+                    })
+                    .withFailureHandler(function (error) {
+                        console.error('加载故障报告数据失败 / Failed to load failure report data:', error);
+                        alert('加载故障报告数据失败 / Failed to load failure report data: ' + error);
+                        // 加载失败时也关闭加载提示框
+                        Swal.close();
+                    })
+                    .getFilteredFailureReportData();
+            } else {
+                console.error('google.script.run不可用，无法调用后端函数 / google.script.run is not available, cannot call backend function');
+                alert('无法连接到后端服务，请确保在Google Apps Script环境中运行 / Cannot connect to backend service, please ensure running in Google Apps Script environment');
+                // 如果环境不可用，也关闭加载提示框
+                Swal.close();
+            }
+        }
+
+        // 页面加载时获取数据
+        console.log('页面已加载，调用loadProcessData / Page loaded, calling loadProcessData');
+        loadProcessData();
+
+        // 表格行操作事件 - 统一处理所有工序的按钮点击
+        $(document).on('click', '.view-btn', function () {
+            const reportId = $(this).data('id');
+            const process = $(this).data('process');
+            alert(`查看${process}工序故障报告 ${reportId} / View ${process} Process Failure Report ${reportId}`);
+        });
+
+        $(document).on('click', '.edit-btn', function () {
+            const reportId = $(this).data('id');
+            const process = $(this).data('process');
+            alert(`编辑${process}工序故障报告 ${reportId} / Edit ${process} Process Failure Report ${reportId}`);
+        });
+
+        $(document).on('click', '.delete-btn', function () {
+            const reportId = $(this).data('id');
+            const process = $(this).data('process');
+            if (confirm(`确定要删除${process}工序故障报告 ${reportId} 吗？/ Are you sure you want to delete ${process} process failure report ${reportId}?`)) {
+                alert(`删除${process}工序故障报告 ${reportId} / Delete ${process} Process Failure Report ${reportId}`);
+            }
+        });
+
+        // 新增：故障报告确认按钮事件
+        $(document).on('click', '.confirm-btn', function () {
+            const reportId = $(this).data('id');
+            const process = $(this).data('process');
+            console.log('点击确认按钮 / Clicked confirm button:', { reportId, process });
+            
+            // 弹窗确认操作
+            Swal.fire({
+                title: '确认操作 / Confirm Action',
+                text: `确定要将故障报告 ${reportId} 标记为"需要故障报告"吗？/ Are you sure you want to mark failure report ${reportId} as "Need Failure Report"?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#28a745',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '确定 / Confirm',
+                cancelButtonText: '取消 / Cancel',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // 用户确认后，更新对应行的"是否需要故障报告"列显示为"是"
+                    updateFailureReportStatus(reportId, process, true);
+                } else {
+                    console.log('用户取消了确认操作 / User cancelled the confirmation action');
+                }
+            });
+        });
+
+        $(document).on('click', '.no-confirm-btn', function () {
+            const reportId = $(this).data('id');
+            const process = $(this).data('process');
+            console.log('点击不确认按钮 / Clicked no-confirm button:', { reportId, process });
+            
+            // 弹窗确认操作
+            Swal.fire({
+                title: '确认操作 / Confirm Action',
+                text: `确定要将故障报告 ${reportId} 标记为"不需要故障报告"吗？/ Are you sure you want to mark failure report ${reportId} as "No Failure Report"?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#6c757d',
+                cancelButtonColor: '#28a745',
+                confirmButtonText: '确定 / Confirm',
+                cancelButtonText: '取消 / Cancel',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // 用户确认后，更新对应行的"是否需要故障报告"列显示为"否"
+                    updateFailureReportStatus(reportId, process, false);
+                } else {
+                    console.log('用户取消了确认操作 / User cancelled the confirmation action');
+                }
+            });
+        });
+
+        // 新增：更新故障报告状态的函数
+        function updateFailureReportStatus(reportId, process, needReport) {
+            console.log('更新故障报告状态 / Updating failure report status:', { reportId, process, needReport });
+            
+            let targetTable;
+            if (process === 'IM') {
+                targetTable = imTable;
+                console.log('使用 IM 表格 / Using IM table:', targetTable);
+            } else if (process === 'TF') {
+                targetTable = tfTable;
+                console.log('使用 TF 表格 / Using TF table:', targetTable);
+            } else if (process === 'PK') {
+                targetTable = pkTable;
+                console.log('使用 PK 表格 / Using PK table:', targetTable);
+            }
+
+            if (targetTable) {
+                console.log('目标表格存在，开始查找行 / Target table exists, searching for row');
+                console.log('表格总行数 / Total rows in table:', targetTable.rows().count());
+                
+                // 使用 DataTable API 查找对应的行，处理类型不匹配问题
+                const rowIndex = targetTable.rows().indexes().filter(function (idx) {
+                    const rowData = targetTable.row(idx).data();
+                    console.log(`检查行 ${idx} 的数据 / Checking row ${idx} data:`, rowData);
+                    // 处理类型不匹配：将两个值都转换为字符串进行比较
+                    const tableReportNo = String(rowData ? rowData.reportNo : '');
+                    const searchReportId = String(reportId);
+                    console.log(`比较 reportNo: "${tableReportNo}" vs "${searchReportId}"`);
+                    return rowData && tableReportNo === searchReportId;
+                })[0];
+
+                console.log('找到的行索引 / Found row index:', rowIndex);
+
+                if (rowIndex !== undefined) {
+                    // 获取行数据
+                    const rowData = targetTable.row(rowIndex).data();
+                    console.log('原始行数据 / Original row data:', rowData);
+                    // 更新数据
+                    rowData.needFailureReport = needReport;
+                    console.log('更新后的行数据 / Updated row data:', rowData);
+                    
+                    // 使用 DataTable API 更新行数据
+                    targetTable.row(rowIndex).data(rowData).draw(false);
+                    console.log('行数据更新完成 / Row data update completed');
+                    
+                    // 新增：调用后端函数将数据写回到Google Sheets
+                    updateFailureReportInBackend(reportId, process, needReport);
+                } else {
+                    console.error('未找到对应的行 / Row not found for reportId:', reportId);
+                    console.log('表格中所有行的 reportNo:', targetTable.rows().data().pluck('reportNo').toArray());
+                }
+            } else {
+                console.error('目标表格不存在 / Target table not found for process:', process);
+            }
+        }
+
+        // 新增：调用后端更新故障报告状态的函数
+        function updateFailureReportInBackend(reportId, process, needReport) {
+            console.log('调用后端更新故障报告状态 / Calling backend to update failure report status:', { reportId, process, needReport });
+            
+            if (typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined') {
+                // 显示加载提示
+                Swal.fire({
+                    title: '更新中... / Updating...',
+                    text: '正在将故障报告状态写回到后台，请稍候。 / Writing failure report status back to backend, please wait.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                google.script.run
+                    .withSuccessHandler(function (result) {
+                        console.log('后端更新成功 / Backend update successful:', result);
+                        Swal.close();
+                        
+                        // 显示成功提示
+                        Swal.fire({
+                            icon: 'success',
+                            title: '更新成功 / Update Successful',
+                            text: '故障报告状态已成功写回到后台。 / Failure report status has been successfully written back to backend.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    })
+                    .withFailureHandler(function (error) {
+                        console.error('后端更新失败 / Backend update failed:', error);
+                        Swal.close();
+                        
+                        // 显示错误提示
+                        Swal.fire({
+                            icon: 'error',
+                            title: '更新失败 / Update Failed',
+                            text: '故障报告状态写回后台失败: ' + error + ' / Failed to write failure report status back to backend: ' + error,
+                            confirmButtonText: '确定 / OK'
+                        });
+                    })
+                    .updateFailureReportConfirmation(reportId, process, needReport);
+            } else {
+                console.error('google.script.run不可用，无法调用后端函数 / google.script.run is not available, cannot call backend function');
+                Swal.fire({
+                    icon: 'error',
+                    title: '环境错误 / Environment Error',
+                    text: '无法连接到后端服务，请确保在Google Apps Script环境中运行 / Cannot connect to backend service, please ensure running in Google Apps Script environment',
+                    confirmButtonText: '确定 / OK'
+                });
+            }
+        }
+
+        // 标签页切换事件
+        $('#processTabs button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+            // 可以在这里添加标签页切换后的逻辑
+            console.log('切换到标签页:', e.target.textContent);
+        });
+
+        // 显示用户信息 - 已注释
+        // console.log('用户信息 / User Info:', {
+        //     ID: userId,
+        //     Name: userName,
+        //     Process: userProcess,
+        //     Workshop: userWorkshop
+        // });
+    });
+</script>

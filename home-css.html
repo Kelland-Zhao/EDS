@@ -1,0 +1,52 @@
+<style>
+
+  /* body {
+    background: url("http://drive.google.com/uc?id=1WOFc3jGy1-rZMjUI6xmXOnbOe6ARuZSE") center center repeat fixed;
+    background-size: contain;
+  } */
+
+  .container {
+    max-width: 100%;
+    width: 98%;
+  }
+
+  .modal {
+    display: none;
+    /* 默认隐藏 */
+    /*生成绝对定位的元素，相对于浏览器窗口进行定位。*/
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 15%;
+    /*设置弹窗位置*/
+    padding-top: 20px;
+    padding-bottom: 20px;
+    /*浮在全屏上*/
+    width: 80%;
+    height: 80%;
+    /*overflow：auto；如果内容被修剪，则浏览器会显示滚动条，以便查看其余内容。*/
+    overflow: auto;
+  }
+
+  .image {
+    position: absolute;
+    right: 590px;
+    top: 160px;
+    width: 320px;
+    height: 300px;
+  }
+
+  .background {
+    background: rgba(240, 238, 238, 0.897);
+    width: 45%;
+    height: 70%;
+    margin: auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    z-index: 100;
+  }
+  
+</style>

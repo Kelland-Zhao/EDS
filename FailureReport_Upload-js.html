@@ -1,0 +1,644 @@
+<script>
+// 全局变量
+let imTable, tfTable, pkTable;
+
+// 页面加载完成后初始化
+$(document).ready(function() {
+    console.log('故障报告上传页面初始化开始...');
+    
+    // 页面加载时显示一个提示框
+    Swal.fire({
+        title: '加载数据中... / Loading Data...',
+        text: '正在从服务器获取故障报告数据，请稍候。 / Fetching failure report data from server, please wait.',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    initializeTables();
+    loadFailureReportData();
+});
+
+// 初始化DataTables
+function initializeTables() {
+    console.log('初始化DataTables...');
+    
+    // 注塑工序(IM)表格
+    imTable = $('#imTable').DataTable({
+        // language: {
+        //     url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+        // },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[0, 'desc']], // 按故障报告编号降序排列
+        responsive: true,
+        scrollX: true,
+        scrollCollapse: true,
+        columns: [
+            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+            { data: 'workshop', title: '车间 / Workshop' },
+            { data: 'process', title: '工序 / Process' },
+            { data: 'machineNo', title: '机台号 / Machine No.' },
+            { data: 'submitDate', title: '提交日期 / Submit Date' },
+            { data: 'problemDescription', title: '问题描述 / Problem Description' },
+            { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
+            { data: 'uploadDate', title: '上传日期 / Upload Date' },
+            { 
+                data: 'attachments', 
+                title: '附件 / Attachments',
+                render: function(data, type, row) {
+                    if (data && data !== '') {
+                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                    } else {
+                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                    }
+                }
+            },
+            {
+                data: null,
+                title: '操作 / Actions',
+                render: function(data, type, row) {
+                    if (row.attachments && row.attachments !== '') {
+                        // 如果已有附件，显示查看和重新上传按钮
+                        return `
+                            <button class="btn btn-sm btn-info view-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'IM'}">
+                                <i class="fas fa-eye"></i> 查看 / View
+                            </button>
+                            <button class="btn btn-sm btn-warning reupload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'IM'}">
+                                <i class="fas fa-upload"></i> 重新上传 / Re-upload
+                            </button>
+                        `;
+                    } else {
+                        // 如果没有附件，显示上传按钮
+                        return `
+                            <button class="btn btn-sm btn-success upload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'IM'}">
+                                <i class="fas fa-upload"></i> 上传 / Upload
+                            </button>
+                        `;
+                    }
+                }
+            }
+        ],
+        dom: '<"top"lf>rt<"bottom"ip><"clear">',
+        initComplete: function() {
+            console.log('IM表格初始化完成');
+        }
+    });
+
+    // 植磨毛工序(TF)表格
+    tfTable = $('#tfTable').DataTable({
+        // language: {
+        //     url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+        // },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[0, 'desc']], // 按故障报告编号降序排列
+        responsive: true,
+        scrollX: true,
+        scrollCollapse: true,
+        columns: [
+            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+            { data: 'workshop', title: '车间 / Workshop' },
+            { data: 'process', title: '工序 / Process' },
+            { data: 'machineNo', title: '机台号 / Machine No.' },
+            { data: 'submitDate', title: '提交日期 / Submit Date' },
+            { data: 'problemDescription', title: '问题描述 / Problem Description' },
+            { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
+            { data: 'uploadDate', title: '上传日期 / Upload Date' },
+            { 
+                data: 'attachments', 
+                title: '附件 / Attachments',
+                render: function(data, type, row) {
+                    if (data && data !== '') {
+                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                    } else {
+                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                    }
+                }
+            },
+            {
+                data: null,
+                title: '操作 / Actions',
+                render: function(data, type, row) {
+                    if (row.attachments && row.attachments !== '') {
+                        // 如果已有附件，显示查看和重新上传按钮
+                        return `
+                            <button class="btn btn-sm btn-info view-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'TF'}">
+                                <i class="fas fa-eye"></i> 查看 / View
+                            </button>
+                            <button class="btn btn-sm btn-warning reupload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'TF'}">
+                                <i class="fas fa-upload"></i> 重新上传 / Re-upload
+                            </button>
+                        `;
+                    } else {
+                        // 如果没有附件，显示上传按钮
+                        return `
+                            <button class="btn btn-sm btn-success upload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'TF'}">
+                                <i class="fas fa-upload"></i> 上传 / Upload
+                            </button>
+                        `;
+                    }
+                }
+            }
+        ],
+        dom: '<"top"lf>rt<"bottom"ip><"clear">',
+        initComplete: function() {
+            console.log('TF表格初始化完成');
+        }
+    });
+
+    // 包装工序(PK)表格
+    pkTable = $('#pkTable').DataTable({
+        // language: {
+        //     url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+        // },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[0, 'desc']], // 按故障报告编号降序排列
+        responsive: true,
+        scrollX: true,
+        scrollCollapse: true,
+        columns: [
+            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+            { data: 'workshop', title: '车间 / Workshop' },
+            { data: 'process', title: '工序 / Process' },
+            { data: 'machineNo', title: '机台号 / Machine No.' },
+            { data: 'submitDate', title: '提交日期 / Submit Date' },
+            { data: 'problemDescription', title: '问题描述 / Problem Description' },
+            { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
+            { data: 'uploadDate', title: '上传日期 / Upload Date' },
+            { 
+                data: 'attachments', 
+                title: '附件 / Attachments',
+                render: function(data, type, row) {
+                    if (data && data !== '') {
+                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                    } else {
+                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                    }
+                }
+            },
+            {
+                data: null,
+                title: '操作 / Actions',
+                render: function(data, type, row) {
+                    if (row.attachments && row.attachments !== '') {
+                        // 如果已有附件，显示查看和重新上传按钮
+                        return `
+                            <button class="btn btn-sm btn-info view-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'PK'}">
+                                <i class="fas fa-eye"></i> 查看 / View
+                            </button>
+                            <button class="btn btn-sm btn-warning reupload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'PK'}">
+                                <i class="fas fa-upload"></i> 重新上传 / Re-upload
+                            </button>
+                        `;
+                    } else {
+                        // 如果没有附件，显示上传按钮
+                        return `
+                            <button class="btn btn-sm btn-success upload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'PK'}">
+                                <i class="fas fa-upload"></i> 上传 / Upload
+                            </button>
+                        `;
+                    }
+                }
+            }
+        ],
+        dom: '<"top"lf>rt<"bottom"ip><"clear">',
+        initComplete: function() {
+            console.log('PK表格初始化完成');
+        }
+    });
+
+    console.log('所有DataTables初始化完成');
+}
+
+// 日期格式化函数
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        let date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr; // 如果不是有效日期，返回原始字符串
+        let year = date.getFullYear();
+        let month = String(date.getMonth() + 1).padStart(2, '0');
+        let day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        console.error('日期格式化错误 / Date formatting error:', e, '原始日期 / Original date:', dateStr);
+        return dateStr;
+    }
+}
+
+// 加载故障报告数据
+function loadFailureReportData() {
+    console.log('开始加载故障报告数据...');
+    
+    // 调用后端API获取数据
+    google.script.run
+        .withSuccessHandler(function(response) {
+            console.log('获取故障报告数据成功:', response);
+            console.log('后台返回的数据结构:', {
+                hasIM: !!response.IM,
+                hasTF: !!response.TF,
+                hasPK: !!response.PK,
+                IMCount: response.IM ? response.IM.length : 0,
+                TFCount: response.TF ? response.TF.length : 0,
+                PKCount: response.PK ? response.PK.length : 0
+            });
+            if (response.IM && response.IM.length > 0) {
+                console.log('IM数据字段示例:', Object.keys(response.IM[0]));
+                console.log('IM第一条数据:', response.IM[0]);
+            }
+            processFailureReportData(response);
+            // 数据加载完成后关闭加载提示框
+            Swal.close();
+        })
+        .withFailureHandler(function(error) {
+            console.error('获取故障报告数据失败:', error);
+            showError('获取数据失败 / Failed to get data: ' + error.message);
+            // 加载失败时也关闭加载提示框
+            Swal.close();
+        })
+        .getFailureReportProgressData();
+}
+
+// 处理故障报告数据
+function processFailureReportData(data) {
+    try {
+        console.log('处理故障报告数据...');
+        
+        // 清空现有数据
+        imTable.clear().draw();
+        tfTable.clear().draw();
+        pkTable.clear().draw();
+        
+        if (!data || !data.IM || !data.TF || !data.PK) {
+            console.warn('数据格式不正确或为空');
+            return;
+        }
+        
+        // 处理IM工序数据
+        if (data.IM && data.IM.length > 0) {
+            console.log('处理IM工序数据，共', data.IM.length, '条');
+            console.log('IM数据示例:', data.IM[0]); // 调试：查看数据结构
+            const imData = data.IM.map(item => ({
+                failureReportNumber: item.failureReportNumber || '',
+                workshop: item.workshop || '',
+                process: item.process || 'IM',
+                machineNo: item.machineNo || item.machineNumber || '', // 尝试多个可能的字段名
+                submitDate: formatDate(item.submitDate) || '',
+                problemDescription: item.problemDescription || '',
+                assignmentDate: formatDate(item.assignmentDate) || '',
+                uploadDate: formatDate(item.uploadDate) || '',
+                attachments: item.attachments || ''
+            }));
+            console.log('IM数据映射后示例:', imData[0]); // 调试：查看映射结果
+            imTable.rows.add(imData).draw();
+        }
+        
+        // 处理TF工序数据
+        if (data.TF && data.TF.length > 0) {
+            console.log('处理TF工序数据，共', data.TF.length, '条');
+            console.log('TF数据示例:', data.TF[0]); // 调试：查看数据结构
+            const tfData = data.TF.map(item => ({
+                failureReportNumber: item.failureReportNumber || '',
+                workshop: item.workshop || '',
+                process: item.process || 'TF',
+                machineNo: item.machineNo || item.machineNumber || '', // 尝试多个可能的字段名
+                submitDate: formatDate(item.submitDate) || '',
+                problemDescription: item.problemDescription || '',
+                assignmentDate: formatDate(item.assignmentDate) || '',
+                uploadDate: formatDate(item.uploadDate) || '',
+                attachments: item.attachments || ''
+            }));
+            console.log('TF数据映射后示例:', tfData[0]); // 调试：查看映射结果
+            tfTable.rows.add(tfData).draw();
+        }
+        
+        // 处理PK工序数据
+        if (data.PK && data.PK.length > 0) {
+            console.log('处理PK工序数据，共', data.PK.length, '条');
+            console.log('PK数据示例:', data.PK[0]); // 调试：查看数据结构
+            const pkData = data.PK.map(item => ({
+                failureReportNumber: item.failureReportNumber || '',
+                workshop: item.workshop || '',
+                process: item.process || 'PK',
+                machineNo: item.machineNo || item.machineNumber || '', // 尝试多个可能的字段名
+                submitDate: formatDate(item.submitDate) || '',
+                problemDescription: item.problemDescription || '',
+                assignmentDate: formatDate(item.assignmentDate) || '',
+                uploadDate: formatDate(item.uploadDate) || '',
+                attachments: item.attachments || ''
+            }));
+            console.log('PK数据映射后示例:', pkData[0]); // 调试：查看映射结果
+            pkTable.rows.add(pkData).draw();
+        }
+        
+        console.log('故障报告数据处理完成');
+        
+        // 显示统计信息
+        showStatistics(data);
+        
+    } catch (error) {
+        console.error('处理故障报告数据时出错:', error);
+        showError('处理数据时出错 / Error processing data: ' + error.message);
+    }
+}
+
+// 显示统计信息
+function showStatistics(data) {
+    const imCount = data.IM ? data.IM.length : 0;
+    const tfCount = data.TF ? data.TF.length : 0;
+    const pkCount = data.PK ? data.PK.length : 0;
+    const totalCount = imCount + tfCount + pkCount;
+    
+    console.log(`统计信息 - IM: ${imCount}, TF: ${tfCount}, PK: ${pkCount}, 总计: ${totalCount}`);
+    
+    // 可以在页面上显示统计信息
+    // 这里可以根据需要添加统计显示
+}
+
+// 显示错误信息
+function showError(message) {
+    Swal.fire({
+        icon: 'error',
+        title: '错误 / Error',
+        text: message,
+        confirmButtonText: '确定 / OK'
+    });
+}
+
+// 显示成功信息
+function showSuccess(message) {
+    Swal.fire({
+        icon: 'success',
+        title: '成功 / Success',
+        text: message,
+        confirmButtonText: '确定 / OK'
+    });
+}
+
+// 显示确认信息
+function showConfirm(title, text, callback) {
+    Swal.fire({
+        title: title,
+        text: text,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '确定 / Confirm',
+        cancelButtonText: '取消 / Cancel'
+    }).then((result) => {
+        if (result.isConfirmed && callback) {
+            callback();
+        }
+    });
+}
+
+// 事件处理函数
+$(document).on('click', '.upload-btn', function() {
+    const reportId = $(this).data('id');
+    const process = $(this).data('process');
+    console.log('点击上传按钮:', { reportId, process });
+    
+    // 获取按钮所在行的数据
+    const row = $(this).closest('tr');
+    const table = $(this).closest('table').DataTable();
+    const rowData = table.row(row).data();
+    
+    // 显示文件上传对话框
+    showFileUploadDialog(reportId, process, rowData);
+});
+
+$(document).on('click', '.reupload-btn', function() {
+    const reportId = $(this).data('id');
+    const process = $(this).data('process');
+    console.log('点击重新上传按钮:', { reportId, process });
+    
+    // 获取按钮所在行的数据
+    const row = $(this).closest('tr');
+    const table = $(this).closest('table').DataTable();
+    const rowData = table.row(row).data();
+    
+    showConfirm(
+        '确认重新上传 / Confirm Re-upload',
+        `确定要重新上传故障报告 ${reportId} 的附件吗？/ Are you sure you want to re-upload the attachment for failure report ${reportId}?`,
+        () => showFileUploadDialog(reportId, process, rowData)
+    );
+});
+
+$(document).on('click', '.view-btn', function() {
+    const reportId = $(this).data('id');
+    const process = $(this).data('process');
+    console.log('点击查看按钮:', { reportId, process });
+    
+    // 显示附件查看对话框
+    showAttachmentViewDialog(reportId, process);
+});
+
+// 显示文件上传对话框
+function showFileUploadDialog(reportId, process, rowData) {
+    // 从行数据直接获取车间和工序信息
+    const workshop = rowData.workshop || '车间';
+    const processName = rowData.process || process;
+    
+    console.log('显示文件上传对话框:', { reportId, process, workshop, processName, rowData });
+    
+    Swal.fire({
+        title: '上传故障报告附件 / Upload Failure Report Attachment',
+        html: `
+            <!-- 文件选择 -->
+            <div class="mb-3">
+                <label for="fileInput" class="form-label">选择本地文件 / Select Local File:</label>
+                <input type="file" class="form-control" id="fileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
+            </div>
+            
+            <!-- 文件名称预览 -->
+            <div class="mb-3">
+                <label class="form-label">文件名称预览 / File Name Preview:</label>
+                <div class="alert alert-secondary">
+                    <strong id="fileNamePreview">${reportId}_${workshop}_${processName}</strong>
+                    <small class="d-block text-muted mt-1">
+                        文件将自动重命名为：故障报告编号_车间_工序 / File will be automatically renamed to: Failure Report No._Workshop_Process
+                    </small>
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '上传 / Upload',
+        cancelButtonText: '取消 / Cancel',
+        width: '600px',
+        didOpen: () => {
+            // 绑定本地文件选择事件，实时更新文件名称预览
+            const fileInput = document.getElementById('fileInput');
+            const fileNamePreview = document.getElementById('fileNamePreview');
+            
+            fileInput.addEventListener('change', function() {
+                if (this.files[0]) {
+                    const file = this.files[0];
+                    const fileExtension = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '';
+                    fileNamePreview.textContent = `${reportId}_${workshop}_${processName}${fileExtension}`;
+                } else {
+                    fileNamePreview.textContent = `${reportId}_${workshop}_${processName}`;
+                }
+            });
+        },
+        preConfirm: () => {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files[0]) {
+                Swal.showValidationMessage('请选择本地文件 / Please select a local file');
+                return false;
+            }
+            return fileInput.files[0];
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // 处理本地上传，确保传递正确的process参数
+            console.log('确认上传，调用handleFileUpload:', { reportId, process, fileName: result.value.name });
+            handleFileUpload(reportId, process, result.value);
+        }
+    });
+}
+
+// 处理文件上传
+function handleFileUpload(reportId, process, file) {
+    console.log('开始上传文件:', { reportId, process, fileName: file.name, processType: typeof process });
+    
+    // 验证参数
+    if (!reportId || !process || !file) {
+        console.error('参数验证失败:', { reportId, process, file });
+        showError('上传参数错误 / Upload parameters error');
+        return;
+    }
+    
+    // 显示上传进度
+    Swal.fire({
+        title: '上传中... / Uploading...',
+        text: '正在上传文件，请稍候... / Uploading file, please wait...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // 将文件转换为base64格式
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const fileData = e.target.result;
+        
+        console.log('文件读取完成，调用后端上传函数:', { reportId, process, fileName: file.name });
+        
+        // 调用后端的上传函数
+        google.script.run
+            .withSuccessHandler(function(response) {
+                Swal.close();
+                if (response.success) {
+                    showSuccess(`文件上传成功 / File uploaded successfully<br><br><strong>文件名 / Filename:</strong> ${response.details.standardizedFileName}<br><strong>保存位置 / Save Location:</strong> Google Drive 指定文件夹`);
+                    
+                    // 刷新数据
+                    loadFailureReportData();
+                } else {
+                    showError('文件上传失败 / File upload failed: ' + response.message);
+                }
+            })
+            .withFailureHandler(function(error) {
+                Swal.close();
+                console.error('后端上传失败:', error);
+                showError('文件上传失败 / File upload failed: ' + error.message);
+            })
+            .uploadFailureReportAttachment(reportId, process, fileData, file.name, '');
+    };
+    
+    reader.onerror = function() {
+        Swal.close();
+        showError('文件读取失败 / File read failed');
+    };
+    
+    reader.readAsDataURL(file);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 显示附件查看对话框
+function showAttachmentViewDialog(reportId, process) {
+    // 获取附件信息
+    google.script.run
+        .withSuccessHandler(function(response) {
+            if (response.success && response.hasAttachment) {
+                const attachment = response.attachment;
+                Swal.fire({
+                    title: '查看附件 / View Attachment',
+                    html: `
+                        <div class="text-start">
+                            <p><strong>故障报告编号 / Failure Report No.:</strong> ${reportId}</p>
+                            <p><strong>文件名 / Filename:</strong> ${attachment.fileName}</p>
+                            <p><strong>文件描述 / Description:</strong> ${attachment.fileDescription || '无描述 / No description'}</p>
+                            <p><strong>上传日期 / Upload Date:</strong> ${attachment.uploadDate}</p>
+                            <p><strong>保存位置 / Save Location:</strong> Google Drive 指定文件夹</p>
+                            <hr>
+                            <a href="${attachment.fileUrl}" target="_blank" class="btn btn-primary">
+                                <i class="fas fa-external-link-alt"></i> 查看文件 / View File
+                            </a>
+                        </div>
+                    `,
+                    icon: 'info',
+                    confirmButtonText: '确定 / OK',
+                    width: '600px'
+                });
+            } else {
+                Swal.fire({
+                    title: '查看附件 / View Attachment',
+                    text: response.message || '未找到附件信息 / No attachment information found',
+                    icon: 'warning',
+                    confirmButtonText: '确定 / OK'
+                });
+            }
+        })
+        .withFailureHandler(function(error) {
+            Swal.fire({
+                title: '查看附件 / View Attachment',
+                text: '获取附件信息失败 / Failed to get attachment info: ' + error.message,
+                icon: 'error',
+                confirmButtonText: '确定 / OK'
+            });
+        })
+        .getFailureReportAttachmentInfo(reportId);
+}
+
+// 刷新数据
+function refreshData() {
+    console.log('刷新故障报告数据...');
+    loadFailureReportData();
+}
+
+// 页面卸载时清理
+$(window).on('beforeunload', function() {
+    console.log('页面即将卸载，清理资源...');
+    if (imTable) imTable.destroy();
+    if (tfTable) tfTable.destroy();
+    if (pkTable) pkTable.destroy();
+});
+
+
+
+console.log('故障报告上传页面JavaScript加载完成');
+</script>

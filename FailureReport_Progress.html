@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("Kez_bootstrap-datepicker_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+<?!=include("Kez_sweetalert2_js");?>
+    
+    <style>
+        /* 确保表头背景色与TaskManagement.html一致 */
+        .dataTables_wrapper .dataTables_scroll .dataTables_scrollHead .dataTables_scrollHeadInner table thead th,
+        table.dataTable thead th {
+            background-color: #E60012 !important;
+            color: white !important;
+        }
+        
+        /* 确保所有表头都使用相同的背景色 */
+        #imTable thead th,
+        #tfTable thead th,
+        #pkTable thead th {
+            background-color: #E60012 !important;
+            color: white !important;
+        }
+    </style>
+
+<body>
+    <nav class="navbar navbar-expand-lg bg-nav">
+        <div class="container-fluid">
+            <a class="navbar-brand" style="
+                color: white;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: xx-large;
+                font-weight: bold;
+              ">故障报告进度 / Failure Report Progress</a>
+        </div>
+    </nav>
+
+    <br>
+
+    <div class="container mt-2">
+        <div class="card">
+            <div class="card-header">
+                Failure Report Progress / 故障报告进度
+            </div>
+            <div class="card-body">
+                <!-- 故障报告进度功能区域 -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="alert alert-info">
+                            <h5>故障报告进度跟踪 / Failure Report Progress Tracking</h5>
+                            <p>此页面用于跟踪故障报告的完成进度和状态。</p>
+                            <p>This page is used for tracking the completion progress and status of failure reports.</p>
+                            <p>可以查看各工序故障报告的完成情况、上传状态等。</p>
+                            <p>You can view the completion status and upload status of failure reports for each process.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据表格区域 -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6>故障报告进度列表 / Failure Report Progress List</h6>
+                            </div>
+                            <div class="card-body">
+                                <!-- 工序标签页 -->
+                                <ul class="nav nav-tabs" id="processTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="im-tab" data-bs-toggle="tab" data-bs-target="#im-content" type="button" role="tab" aria-controls="im-content" aria-selected="true">
+                                            注塑工序(IM) / Injection Molding
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="tf-tab" data-bs-toggle="tab" data-bs-target="#tf-content" type="button" role="tab" aria-controls="tf-content" aria-selected="false">
+                                            植磨毛工序(TF) / Tufting
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="pk-tab" data-bs-toggle="tab" data-bs-target="#pk-content" type="button" role="tab" aria-controls="pk-content" aria-selected="false">
+                                            包装工序(PK) / Packaging
+                                        </button>
+                                    </li>
+                                </ul>
+                                
+                                <!-- 标签页内容 -->
+                                <div class="tab-content" id="processTabContent">
+                                    <!-- 注塑工序(IM) -->
+                                    <div class="tab-pane fade show active" id="im-content" role="tabpanel" aria-labelledby="im-tab">
+                                        <div class="table-responsive">
+                                            <table id="imTable" class="table table-striped table-bordered" style="width:100%">
+                                                <thead>
+                                                    <tr>
+                                                        <th>故障报告编号 / Failure Report No.</th>
+                                                        <th>车间 / Workshop</th>
+                                                        <th>工序 / Process</th>
+                                                        <th>机台号 / Machine No.</th>
+                                                        <th>提交日期 / Submit Date</th>
+                                                        <th>问题描述 / Problem Description</th>
+                                                        <th>分配日期 / Assignment Date</th>
+                                                        <th>上传日期 / Upload Date</th>
+                                                        <th>附件 / Attachments</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- 数据将通过JavaScript动态加载 -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 植磨毛工序(TF) -->
+                                    <div class="tab-pane fade" id="tf-content" role="tabpanel" aria-labelledby="tf-tab">
+                                        <div class="table-responsive">
+                                            <table id="tfTable" class="table table-striped table-bordered" style="width:100%">
+                                                <thead>
+                                                    <tr>
+                                                        <th>故障报告编号 / Failure Report No.</th>
+                                                        <th>车间 / Workshop</th>
+                                                        <th>工序 / Process</th>
+                                                        <th>机台号 / Machine No.</th>
+                                                        <th>提交日期 / Submit Date</th>
+                                                        <th>问题描述 / Problem Description</th>
+                                                        <th>分配日期 / Assignment Date</th>
+                                                        <th>上传日期 / Upload Date</th>
+                                                        <th>附件 / Attachments</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- 数据将通过JavaScript动态加载 -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 包装工序(PK) -->
+                                    <div class="tab-pane fade" id="pk-content" role="tabpanel" aria-labelledby="pk-tab">
+                                        <div class="table-responsive">
+                                            <table id="pkTable" class="table table-striped table-bordered" style="width:100%">
+                                                <thead>
+                                                    <tr>
+                                                        <th>故障报告编号 / Failure Report No.</th>
+                                                        <th>车间 / Workshop</th>
+                                                        <th>工序 / Process</th>
+                                                        <th>机台号 / Machine No.</th>
+                                                        <th>提交日期 / Submit Date</th>
+                                                        <th>问题描述 / Problem Description</th>
+                                                        <th>分配日期 / Assignment Date</th>
+                                                        <th>上传日期 / Upload Date</th>
+                                                        <th>附件 / Attachments</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- 数据将通过JavaScript动态加载 -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载提示 -->
+    <div id="loadingSpinner" class="position-fixed top-50 start-50 translate-middle" style="display: none; z-index: 9999;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">加载中... / Loading...</span>
+        </div>
+    </div>
+
+
+
+</body>
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("FailureReport_Progress-js") ?>
+
+</html>

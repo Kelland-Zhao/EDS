@@ -1,0 +1,1054 @@
+<script>
+  
+  let timerInterval;
+  let clickNum=0;
+
+  window.onload = function () {
+    document.onkeydown = function () {
+      var e = window.event || arguments[0];
+      if (e.keyCode == 123) {
+        return false;
+      } else if ((e.ctrlKey) && (e.shiftKey) && (e.keyCode == 73)) {
+        return false;
+      }
+    }
+    document.oncontextmenu = function () {
+      return false;
+    }
+  }
+
+  let workshop="";
+  let process="";
+  let info=[];
+
+  // 窗体载入
+  $(document).ready(function () {
+    initializeMaterialCSS();
+    PMend();     //监控触发保养结束按钮
+    PMstart();        //监控触发保养开始按钮
+    var name = sessionStorage.getItem('name');
+    var id = sessionStorage.getItem('id');
+    var userType=sessionStorage.getItem('userType');
+    document.getElementById('name').textContent = name;
+    document.getElementById('id').textContent = '328' + id;
+    document.getElementById('userType').textContent = userType;
+    workshop=sessionStorage.getItem("pmWorkshop");
+    process=sessionStorage.getItem("pmProcess");
+    info=[process,workshop];
+    main(info);
+  });
+
+  // 初始化
+  function initializeMaterialCSS() {
+    $('.parallax').parallax();
+    $('.dropdown-trigger').dropdown();
+    $('select').formSelect();
+    $('.sidenav').sidenav();
+    $('.datepicker').datepicker({format: 'yyyy-mm-dd',autoClose: true});
+    $('.timepicker').timepicker();
+    $('.modal').modal();
+  }
+
+  // 窗体载入时加载
+  function main(info) {
+    let loginInfo = {
+      process: info[0],
+      workshop: info[1],
+      title: info[2]
+    }
+    let data = JSON.parse(sessionStorage.getItem('data'));
+    console.log(data);
+    let PM_Info = {
+      Plan_SD: data[0],
+      workshop: data[1],
+      process: data[2],
+      workcenter: data[3],
+      machine_type: data[4],
+      PM_duration: data[5]
+    }
+    $("#mainDate,#startDate").val(PM_Info.Plan_SD);
+    $("#workshop").val(PM_Info.workshop);
+    $("#process").val(PM_Info.process);
+    $("#workcenter").val(PM_Info.workcenter);
+    showRunning('正在加载保养计划数据……','','',120000,'');
+    google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((result) => {
+      if(result[0]=="OK"){
+        let status = new String();
+        info = JSON.parse(result[1]);
+        let record = info.filter(function (r) {
+          return r[9] == PM_Info.workcenter && r[4] == PM_Info.Plan_SD
+        })
+        if (record == "") {
+          status = "";
+        } else {
+          status = record[0][1];
+        }
+        console.log("测试",record,PM_Info.workcenter,PM_Info.Plan_SD)
+        switch (status) {
+          case "Ongoing":
+            $("#PMstart").prop("disabled", true);
+            $("#status").val("Ongoing");
+            $("#PMno").val(record[0][0]);
+            $("#startDate").val(record[0][5]);
+            $("#startTime").val(record[0][6]);
+            $("#notification").val(record[0][2]);
+            $("#pmPeople").val(record[0][3]);
+            $("#notification").prop("disabled", true);
+            $("#addRow").attr("disabled", false);
+            break;
+          case "Finished":
+            $("#PMstart,#PMend,#saveProgress").prop("disabled", true);
+            $("#status").val("Finished");
+            $("#PMno").val(record[0][0]);
+            $("#startDate").val(record[0][5]);
+            $("#startTime").val(record[0][6]);
+            $("#endDate").val(record[0][7]);
+            $("#endTime").val(record[0][8]);
+            $("#notification").val(record[0][2]);
+            $("#pmPeople").val(record[0][3]);
+            $("#notification").prop("disabled", true);
+            $("#addRow").attr("disabled", true);
+            break;
+          default:
+            $("#status").val("未开始");
+            $("#PMend,#saveProgress").prop("disabled", true);
+            break;
+        }
+        if (status == "Finished" || status == "Ongoing") {
+          showRunning('正在加载已保存的保养任务……','','',120000,'')
+          let PMno = record[0][0];
+          google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultExit) => {
+            if(resultExit[0]=="OK"){
+              let dataTemp = JSON.parse(resultExit[1]);
+              let arrTaskInfoTemp=JSON.parse(dataTemp[0][10]);
+              data=[];
+              for(let m=0;m<arrTaskInfoTemp.length;m++){
+                data.push([dataTemp[0][0],dataTemp[0][1],dataTemp[0][2],dataTemp[0][3],dataTemp[0][4],dataTemp[0][5],dataTemp[0][6],dataTemp[0][7],dataTemp[0][8],dataTemp[0][9]])
+                for(let n in arrTaskInfoTemp[m]){
+                  data[data.length-1].push(arrTaskInfoTemp[m][n]);
+                }
+              }
+              let html = "";
+              data.forEach(function (r) {
+                if (r[10].toString().charAt(0) == "M") {
+                  r[11] = "保养准备会"
+                }
+                else if (r[10].toString().charAt(0) == "T") {
+                  r[11] = "保养过程"
+                }
+                else if (r[10].toString().charAt(0) == "S") {
+                  r[11] = "三班发现"
+                }
+                if (r[20] == true || r[20]=="true" || r[20]=="TRUE" || r[20]=="True") {
+                  r[20] = "checked disabled><span>已完成</span>";
+                }
+                else {
+                  r[20] = "><span> </span>";
+                }
+                if (r[21] == "") {
+                  r[21] = ">" + r[21];
+                }
+                else {
+                  r[21] = "disabled>" + r[21];
+                }
+              });
+              let judgeEditOPC="";
+              let userType=$("#userType").text().toUpperCase();
+              for (i = 0; i < data.length; i++) {
+                if(userType!="IDL"&&userType!="S&C"&&data[i][18].toString().indexOf("OPC")==-1){judgeEditOPC="disabled"}else{judgeEditOPC=""}
+                html += "<tr>"
+                  +
+                  "<td>" + data[i][10] + "</td>"
+                  +
+                  "<td>" + data[i][11] + "</td>"
+                  +
+                  "<td>" + data[i][12] + "</td>"
+                  +
+                  "<td>" + data[i][13] + "</td>"
+                  +
+                  "<td>" + data[i][14] + "</td>"
+                  +
+                  "<td>" + data[i][15] + "</td>"
+                  +
+                  "<td>" + data[i][16] + "</td>"
+                  +
+                  "<td>" + data[i][17] + "</td>"
+                  +
+                  "<td>" + data[i][18] + "</td>"
+                  +
+                  "<td>" + data[i][19] + "</td>"
+                  +
+                  "<td>" + "<label>" + "<input "+judgeEditOPC+"  type='checkbox' " + data[i][20] + "</label>" + "</td>"
+                  +
+                  "<td>" + "<textarea "+judgeEditOPC+" class='materialize-textarea' " + data[i][21] + "</textarea>" + "</td>"
+                  +
+                  "<td>"
+                  +
+                    "<button class='btn-small waves-effect blue' onclick='browserPic(this)' "+judgeEditOPC+">预览<i class='material-icons right'>photo</i></button>"+
+                    "<br>"+
+                    "<input type='text' style='width:100%;border:0;color:blue;font-size:small' value='"+data[i][22]+"' readonly='readonly'>"+
+                    "<br>"+
+                    "<button class='btn-small waves-effect red' onclick='uploadPic(this)' "+judgeEditOPC+">上传<i class='material-icons right'>upload</i></button>"
+                  +
+                  "</td>"
+                  +
+                  "</tr>"
+              }
+              $("#tbody").html(html);
+              $('#table').bootstrapTable({
+                search: true,
+                striped: true,
+                clickToSelect: true,
+                showSearchButton: true,
+              });
+              if ($("#status").val() == "Ongoing") {
+                $("#PMstart").prop("disabled", true)
+                $("#PMend").prop("disabled", false)
+                $("#saveProgress").prop("disabled", false)
+              } else if ($("#status").val() == "未开始") {
+                $("#PMstart").prop("disabled", false)
+                $("#PMend").prop("disabled", true)
+                $("#saveProgress").prop("disabled", true)
+              }
+              showRunResult('success','加载成功','','',2000,false,'');
+            }
+            else{
+              showRunResult('error','加载失败',resultExit[1],'','',true,'联系相关人员');
+            }
+          }).get_existed_PM_tasklist(PMno, PM_Info.workshop, PM_Info.process)
+        }
+        else {
+          showRunning('正在加载标准保养任务……','','',120000,'')
+          google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultStandard) => {
+            console.log("测试",resultStandard)
+            if(resultStandard[0]=="OK"){
+              let data=resultStandard[1];
+              if(data.length<1){
+                showRunResult("error","未找到此保养标准任务","","","",true,"确认保养计划数据正确？");
+                return false;
+              }
+              let html = "";
+              let judgeEditOPC="";
+              let userType=$("#userType").text().toUpperCase();
+              for (i = 0; i < data.length; i++) {
+                if(userType!="IDL"&&userType!="S&C"&&data[i][9].toString().indexOf("OPC")==-1){judgeEditOPC="disabled"}else{judgeEditOPC=""}
+                html += "<tr>"
+                  +
+                  "<td>" + data[i][1] + "</td>"
+                  +
+                  "<td>" + data[i][2] + "</td>"
+                  +
+                  "<td>" + data[i][3] + "</td>"
+                  +
+                  "<td>" + data[i][4] + "</td>"
+                  +
+                  "<td>" + data[i][5] + "</td>"
+                  +
+                  "<td>" + data[i][6] + "</td>"
+                  +
+                  "<td>" + data[i][7] + "</td>"
+                  +
+                  "<td>" + data[i][8] + "</td>"
+                  +
+                  "<td>" + data[i][9] + "</td>"
+                  +
+                  "<td>" + data[i][13] + "</td>"
+                  +
+                  "<td>" + "<label><input type='checkbox' "+judgeEditOPC+"/><span> </span></label>" + "</td>"
+                  +
+                  "<td>" + "<textarea class='materialize-textarea' "+judgeEditOPC+"></textarea>" + "</td>"
+                  +
+                  "<td>"
+                  +
+                    "<button class='btn-small waves-effect blue' onclick='browserPic(this)' "+judgeEditOPC+">预览<i class='material-icons right'>photo</i></button>"+
+                    "<br>"+
+                    "<input type='text' style='width:100%;border:0;color:blue;font-size:small' readonly='readonly'>"+
+                    "<br>"+
+                    "<button class='btn-small waves-effect red' onclick='uploadPic(this)' "+judgeEditOPC+">上传<i class='material-icons right'>upload</i></button>"
+                  +
+                  "</td>"
+                  +
+                  "</tr>"
+              }
+              $("#tbody").html(html);
+              $('#table').bootstrapTable({
+                search: true,
+                striped: true,
+                clickToSelect: true,
+                showSearchButton: true,
+              });
+
+              if ($("#status").val() == "Ongoing") {
+                $("#PMstart").prop("disabled", true);
+
+              } else if ($("#status").val() == "未开始") {
+                $("#PMstart").prop("disabled", false)
+              }
+              $("#addRow").attr("disabled", false);
+              showRunResult('success','标准保养任务加载成功','','',2000,false,'');
+            }
+            else{
+              showRunResult('error','标准保养任务加载失败',resultStandard[1],'','',true,'联系相关人员');
+            }
+          }).get_Tasklist(PM_Info, loginInfo.workshop, loginInfo.process, loginInfo.title);
+        }
+      }
+      else{
+        swal.fire({allowOutsideClick:false,icon:'error',title:'保养任务加载失败',text:result[1],showConfirmButton:true,footer:'<p>联系相关人员</p>'});
+      }
+    }).getPMrecord(PM_Info);
+    /**************************************************************************************/
+    $("#confirmPeople").click(() => {
+      if(timerInterval){clearInterval(timerInterval)}
+      swal.fire({
+        title: "确认保养人员信息",
+        text: "一旦确认本次保养人员信息将无法更改",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+        reverseButtons: true
+      }).then((result) => {
+        if (result.value) {
+          swal.fire({
+            title: '已确认',
+            text: '本次保养已开始',
+            icon: 'success',
+            showConfirmButton: true,
+          })
+          $("#addRow").attr("disabled", false);
+          let PM_duration = PM_Info.PM_duration;
+          let PM_PSD = PM_Info.Plan_SD;
+          let duration = parseInt(PM_duration / 24); //向下取整
+          let workshop = $("#workshop").val();
+          let process = $("#process").val();
+          PM_PSD = new Date(PM_PSD);
+          PM_PSD.setDate(PM_PSD.getDate() + duration);
+          let EED = PM_PSD; //预计保养完成日期
+          let date = new Date();
+          let PMinfo = new Array();
+          $("#startDate").val(formatDateTime(date));
+          $("#startTime").val(formatTime(date));
+          $("#status").val("Ongoing");
+          let PMno = dayjs($("#mainDate").val()).format("YYYYMMDD") + $("#workcenter").val();
+          $("#PMno").val(PMno);
+          $("#PMend,#saveProgress").prop("disabled", false);
+          let PM_Personal_info = $("#PM_People_add").bootstrapTable("getData");
+          let ID = new Array();
+          PM_Personal_info.forEach(function (r) {
+            ID.push(r.ID)
+          })
+          $("#pmPeople").val(JSON.stringify(ID));
+          let TableData = getTableData();
+          let TableDataRecordJson=TableData[0];
+          showRunning('正在保存保养开始数据……','','',120000,'')
+          google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultWrite)=>{
+            if(resultWrite[0]=="OK"){
+              $("#PMstart").prop("disabled", true);
+              showRunResult('success','保养开始数据写入成功','','',2000,false,'');
+            }
+            else{
+              showRunResult('success','保养开始数据写入失败',result[1],'','',true,'联系相关人员');
+            }
+          }).PMgemerate(workshop, process, TableDataRecordJson); //生成保养任务和保养条目
+        }
+        else if (result.dismiss === Swal.DismissReason.cancel) {
+          showRunResult('error','取消','','',2000,false,'');
+        }
+      })
+    })
+    /**************************************************************************************/
+    $("#addTask").click(function () {
+      if(timerInterval){clearInterval(timerInterval)}
+      let status = $("#status").val();
+      let code = new String();
+      if ($("#unite").val() == "" || $("#module").val() == "" || $("#jobContent").val() == "") {
+        swal.fire("信息未填写完整")
+        return false;
+      }
+      swal.fire({
+        allowOutsideClick:false,
+        title: "是否确认提交?",
+        icon: "warning"
+      }).then((willDelete) => {
+        if (willDelete) {
+          if (status == "未开始") {
+            code = "M-" + codeNo();
+          }
+          else if (status == "Ongoing") {
+            code = "T-" + codeNo();
+          }
+          let data = {
+            code: code,
+            machine_type: PM_Info.machine_type,
+            workcenter: PM_Info.workcenter,
+            module: $("#module").val(),
+            jobContent: $("#jobContent").val(),
+            estimateTime: $("#estimateTime").val(),
+            estimatePerson: $("#estimatePerson").val(),
+            date: dayjs().format("YYYY/MM/DD"),
+            PMno: $("#PMno").val(),
+            startDate: $("#startDate").val(),
+            endDate: $("#endDate").val(),
+            startTime: $("#startTime").val(),
+            endTime: $("#endTime").val(),
+            notification: $("#notification").val(),
+            unite: $("#unite").val()
+          }
+          showRunning('正在保存添加的任务……','','',120000,'')
+          google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultAddTask) => {
+            if (resultAddTask[0]=="OK") {
+              $("#table").bootstrapTable("insertRow", {
+                index: 0,
+                row: {
+                  code: code,
+                  unite: $("#unite").val(),
+                  module: $("#module").val(),
+                  failure_mode: "NA",
+                  task_type: "NA",
+                  task_description: $("#jobContent").val(),
+                  frequency: "NA",
+                  status: "NA",
+                  taskType: "NA",
+                  tool: "NA",
+                  finish: "<label> <input type='checkbox'/><span> </span></label>",
+                  remarks: "<textarea class='materialize-textarea'></textarea>",
+                  fileOperations:"<button class='btn-small waves-effect blue' onclick='browserPic(this)'>预览<i class='material-icons right'>photo</i></button>"+
+                    "<br>"+
+                    "<input type='text' style='width:100%;border:0;color:blue;font-size:small' value='' readonly='readonly'>"+
+                    "<br>"+
+                    "<button class='btn-small waves-effect red' onclick='uploadPic(this)'>上传<i class='material-icons right'>upload</i></button>"
+                }
+              })
+              showRunResult('success','新增任务写入成功','','',2000,false,'');
+            }
+            else {
+              showRunResult('error','保养开始数据写入失败',resultAddTask[1],'','',true,'联系相关人员');
+            }
+          }).upload_addTask(PM_Info, data)
+        }
+        else{
+          return false;
+        }
+      });
+    })
+  }
+
+  // 删除行
+  function deleteRow(obj) {
+    $("#PM_People_add").bootstrapTable("remove", {
+      field: "ID",
+      values: $(obj).closest("tr").find("td").eq(0).text()
+    })
+  }
+
+  // 保养开始
+  function PMstart() {
+    let idList = new Array();
+    let nameList = new Array();
+    let name = new String();
+    let id = new String();
+    /**************************************************************************************/
+    $("#PMstart").click(function () {
+      let notification = $("#notification").val();
+      if (notification == "") {
+        showRunResult('error','请输入工单号','','',2000,false,'');
+        return false
+      }
+      else {
+        google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(function (userID) {
+          idList = userID.map(function (r) { return r[0] });
+          nameList = userID.map(function (r) { return r[1] });
+          $("#append_PM_People").prop("disabled", false)
+        }).getUseID();
+      }
+      /**************************************************************************************/
+      $("#workNo").change(() => {
+        id = $("#workNo").val();
+
+        if (id.length == 5) {
+
+          let position = idList.indexOf(id);
+
+          if (position > -1) {
+            name = nameList[position]
+          } else {
+            name = "用户不存在"
+          }
+          $("#PM_name").val(name);
+          M.updateTextFields();
+        }
+      })
+      /**************************************************************************************/
+      $("#append_PM_People").click(() => {
+        if(timerInterval){clearInterval(timerInterval)}
+        let info = { ID: id, name: name, delete: "<a class='btn waves-effect waves-light' onclick = 'deleteRow(this)'>删除</a>" };
+        let data = $("#PM_People_add").bootstrapTable("getData");
+        let ID = new Array();
+        /*********************判断用户名合法性**************************/
+        if (name == "用户不存在" || name == "") {
+          swal.fire({
+            title: "人员信息错误",
+            icon: "error",
+            showConfirmButton: false,
+            timer: 1500
+          })
+          return false;
+        }
+        /*************************************************************/
+        if (data == "") {
+          $("#PM_People_add").bootstrapTable("append", info);
+        } else {
+          for (i = 0; i < data.length; i++) {
+            ID.push(data[i].ID);
+          }
+          let result = ID.filter(function (r) {
+            return r == id
+          })
+          if (result != "") {
+            swal.fire("重复输入人员信息，请核实")
+          } else {
+            $("#PM_People_add").bootstrapTable("append", info);
+          }
+        }
+      })
+    })
+  }
+
+  // 结束保养
+  function PMend() {
+    $("#PMend").click(function () {
+      if(timerInterval){clearInterval(timerInterval)}
+      let TableData = getTableData();
+      let TableDataRecordJson=TableData[0];
+      swal.fire({
+        allowOutsideClick:false,
+        title: "确认结束本次保养？",
+        text: "确认结束后无法更改本次保养相关内容",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: '确认',
+        cancelButtonText: '取消',
+        reverseButtons: true,
+        footer:"<p>共"+"<b style='color:blue'>"+TableDataRecordJson[11]+"</b>条任务；未完成<b style='color:red'>"+TableDataRecordJson[13]+"</b>条任务</p>"
+      }).then((result) => {
+        if (result.value) {
+          $("#endDate").val(formatDateTime(new Date()));
+          $("#endTime").val(formatTime(new Date()));
+          $("#status").val("Finished");
+          TableData = getTableData();
+          TableDataRecordJson=TableData[0];
+          let arrErrorData=judgeTableData(TableData[1]);
+          if(arrErrorData.length>0){
+            showRunResult('error','表格中有数据错误','',arrErrorData.join("<br>"),'',true,'');
+          }
+          else{
+            showRunning('正在保存保养结束任务……','','',120000,'');
+            google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultPmEnd)=>{
+              if(resultPmEnd[0]=="OK"){
+                showRunResult('success','保养结束数据写入成功','','',2000,false,'')
+                $("#saveProgress").prop("disabled",true);
+                $("#PMend").prop("disabled", true);
+                $("#addRow").attr("disabled", true);
+              }
+              else{
+                showRunResult('error','保养结束数据写入失败',result[1],'','',true,'联系相关人员')
+              }
+            }).PMend_writeback(workshop, process, TableDataRecordJson,TableData[1]);
+          }
+        }
+        else {
+          return false;
+        }  
+      });
+    })
+  }
+
+  function getTableData() {   //表格里的数据
+    let jsonName=["任务编号","单元","模块","失效模式","任务类型","任务描述","频率","状态","任务属性","工具"];
+    let arrPmInfoJson =[$("#PMno").val(),$("#status").val(),$("#notification").val(),$("#pmPeople").val(),$("#mainDate").val(),$("#startDate").val(),$("#startTime").val(),$("#endDate").val(), $("#endTime").val(),$("#workcenter").val()];
+    let arrPmInfoLeft=[$("#PMno").val(),$("#status").val(),$("#notification").val(),$("#pmPeople").val(),$("#mainDate").val(),$("#startDate").val(),$("#startTime").val(),$("#endDate").val(), $("#endTime").val(),$("#workcenter").val()];
+    console.log("测试结束时间",arrPmInfoLeft);
+    let arrPmInfo=[];
+    let obj={};
+    let objFalse={};
+    let objRemark={};
+    let arrJson=[];
+    let arrJsonFalse=[];
+    let arrJsonRemark=[];
+    let numTrue=0;
+    let numFalse=0;
+    let numRemark=0;
+    for (i = 0; i < $("#tbody").find("tr").length; i++) {
+      obj={};
+      objFalse={};
+      objRemark={};
+      arrPmInfo.push([$("#PMno").val(),$("#workcenter").val(),$("#startDate").val(),$("#endDate").val(),$("#startTime").val(),$("#endTime").val(),$("#notification").val()]);
+      let c = $("#tbody").find("tr").eq(i).find("input").eq(0).is(":checked");
+      let d = $("#tbody").find("tr").eq(i).find("textarea").val();
+      let rowTaskNo=$("#tbody").find("tr").eq(i).find("td").eq(0).text();
+      for (j = 0; j < $("#tbody").find("tr").eq(0).find("td").length - 3; j++) {
+        let b = $("#tbody").find("tr").eq(i).find("td").eq(j).text();
+        obj[jsonName[j]]=b;
+        arrPmInfo[arrPmInfo.length-1].push(b);
+        if(!c){objFalse[jsonName[j]]=b;}
+        if(d){objRemark[jsonName[j]]=b;}
+      }
+      obj["是否完成"]=c;
+      obj["备注"]=d;
+      obj["图片"]=$("#tbody").find("tr").eq(i).find("input").eq(1).val();
+      if(c){numTrue=numTrue+1}else{numFalse=numFalse+1;objFalse["是否完成"]=c;objFalse["备注"]=d;arrJsonFalse.push(objFalse);}
+      if(d){numRemark=numRemark+1;objRemark["是否完成"]=c;objRemark["备注"]=d;arrJsonRemark.push(objRemark);}
+      arrJson.push(obj);
+      arrPmInfo[arrPmInfo.length-1].push(c);
+      arrPmInfo[arrPmInfo.length-1].push(d);
+      arrPmInfo[arrPmInfo.length-1].push($("#tbody").find("tr").eq(i).find("input").eq(1).val());
+    }
+    let taskNums=numTrue+numFalse;
+    arrPmInfoJson.push(JSON.stringify(arrJson),taskNums,JSON.stringify(arrJsonFalse),numFalse,JSON.stringify(arrJsonRemark),numRemark);
+    return [arrPmInfoJson,arrPmInfo];
+  }
+
+  // 监控触发函数
+  document.getElementById('startDate').addEventListener('change', function () {
+    if(timerInterval){clearInterval(timerInterval)}
+    var planDate = document.getElementById('mainDate').value;
+    var startDate = document.getElementById('startDate').value;
+    if (planDate <= startDate) {
+      return true;
+    }
+    else {
+      swal.fire('请输入正确的开始日期')
+      return false;
+    }
+  })
+
+  // 监控触发函数
+  document.getElementById('endDate').addEventListener('change', function () {
+    if(timerInterval){clearInterval(timerInterval)}
+    var startDate = document.getElementById('startDate').value;
+    var endDate = document.getElementById('endDate').value;
+    if (startDate <= endDate) {
+      return true;
+    }
+    else {
+      swal.fire('请输入正确的完成日期')
+      return false;
+    }
+  })
+
+  // 监控触发函数
+  $("#saveProgress").click(() => {
+    if(timerInterval){clearInterval(timerInterval)}
+    let workshop = $("#workshop").val();
+    let process = $("#process").val();
+    let TableData = getTableData();
+    let TableDataRecordJson=TableData[0];
+    swal.fire({
+      allowOutsideClick:false,
+      title: "保存进度，不结束保养?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: '确认',
+      cancelButtonText: "取消",
+      footer:"<p>共"+"<b style='color:blue'>"+TableDataRecordJson[11]+"</b>条任务；未完成<b style='color:red'>"+TableDataRecordJson[13]+"</b>条任务</p>"
+    }).then((result) => {
+      if (result.value) {
+        let arrErrorData=judgeTableData(TableData[1]);
+        showRunning('正在保存保养进度任务……','','',120000,'');
+        google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultSave) => {
+          if (resultSave[0]=="OK") {
+            showRunResult('success','保养进度数据写入成功','','',2000,false,'')
+            if ($("#PMend").prop("disabled") == true) {
+              $("#aveProgress").prop("disabled", true);
+            }
+          }
+          else {
+            showRunResult('error','保养进度数据写入失败',result[1],'',2000,false,'')
+          }
+        }).uploadTableData(workshop, process, TableDataRecordJson,TableData[1]);
+      }
+      else {
+        return false
+      }
+    });
+  })
+
+  /**============响应点击自定义选择函数============**/
+  $("#customSelect").on("dblclick",function(){
+    let userType=$("#userType").text().toUpperCase();
+    if(userType=="IDL"||userType=="S&C"){
+      let table=$("#tbody");
+      let rows=table.find("tr").length;
+      let rowCheck;
+      if(clickNum%2==0){
+        for(let i=0;i<rows;i++){
+          rowCheck=table.find("tr").eq(i).find("input").eq(0);
+          if(!rowCheck.is(':checked')){
+            rowCheck.prop('checked',true);
+          }
+        }
+      }
+      else{
+        for(let i=0;i<rows;i++){
+          rowCheck=table.find("tr").eq(i).find("input").eq(0);
+          if(rowCheck.is(':checked')){
+            rowCheck.prop('checked',false);
+          }
+        }
+      }
+      clickNum=clickNum+1;
+    }
+  })
+
+  /**============响应点检表操作按钮函数============**/
+  function uploadPic(obj) {
+    let tbody=$("#tbody");
+    let tdSeq=$(obj).parent().index();
+    let trSeq=$(obj).parent().parent().index();
+    console.log(trSeq,tdSeq);
+    $("#photoId").val("");
+    $("#photoFile").val("");
+    $("#photoFileHelp").html("");
+    $("#photoPathName").val("");
+    $("#modalTableRow").val(trSeq);
+    $("#modalPhoto").modal('open');
+  }
+
+  function browserPic(obj) {
+    let tbody=$("#tbody");
+    let tdSeq=$(obj).parent().index();
+    let trSeq=$(obj).parent().parent().index();
+    console.log("Test",trSeq,tdSeq);
+    let picId=$("#tbody").find("tr").eq(trSeq).find("td").eq(tdSeq).find("input").val();
+    if(picId){
+      // window.open("https://drive.google.com/file/d/"+picId+"/preview");
+      // Swal.fire({
+      //   // width:$(window).width()*0.8+'px',
+      //   title: 'XX',
+      //   text: 'YY',
+      //   html:'<img src="https://lh3.googleusercontent.com/u/0/d/"'+picId+'">',    // style="width:'+imgWidth+'px;height:'+imgHeight+'px"
+      //   showCloseButton:false,
+      //   showConfirmButton:true
+      // });
+      $("#preview").prop("src","https://lh3.googleusercontent.com/u/0/d/"+picId)
+      $("#modalViewPic").modal('open');
+    }
+    else{
+      $("#preview").prop("src","");
+      showRunResult('info','','保养人未提供图片','','',true,'');
+    }
+  }
+
+  /**============响应模态框图片文件变更函数============**/
+  $("#photoFile").on("change",function(){
+    let file1,reader1=new FileReader();
+    let fileName=dayjs(new Date()).format("YYYY-MM-DD_HH:mm:ss:SSS");
+    file1=$('#photoFile')[0].files[0];
+    if(!file1){
+      showRunResult('info','','未选择文件','','',true,'')
+      $('#photoId').val("");
+      $('#photoFileHelp').addClass('red-text').html("请选择文件……");
+      return false;
+    }
+    else{
+      let Compressor = window.Compressor;
+      new Compressor(file1, {
+        quality: 0.5,
+        success(result) {
+          showPhotoMessage("正在上传……");
+          reader1.readAsDataURL(result);
+        },
+        error(err) {
+          console.log(err.message);
+        }
+      })
+      reader1.onloadend=function(e){
+        google.script.run.withSuccessHandler(showPhotoMessage).uploadPhotoFileToGoogleDrive(e.target.result,fileName);
+      }
+    }
+  });
+
+  /**============显示图片上传过程信息函数============**/
+  function showPhotoMessage(result){
+    if(timerInterval){clearInterval(timerInterval)}
+    let startTime=120;
+    let e=result;
+    if(e.toString().indexOf('正在上传')!=-1){
+      $('#photoId').val("正在上传……");
+      $('#photoFileHelp').addClass('red-text').html("正在上传……");
+      timerInterval = setInterval(() => {
+        $('#photoFileHelp').removeClass('red-text').html("正在上传……"+startTime.toFixed(0)+"秒");
+        startTime=startTime-1;
+        if(startTime<=1){
+          if(timerInterval){clearInterval(timerInterval)}
+          $('#photoFileHelp').removeClass('red-text').html("尝试点击按钮再上传一次");
+          showRunResult('error','','程序在2分钟内未响应','','',true,'尝试点击按钮再来一次')
+        }
+      }, 1000)
+    }
+    else if(e.toString().indexOf("错误")==-1){
+      $('#photoId').val(e);
+      let html='<a href=https://drive.google.com/file/d/' + e+'/preview target="_blank"'+'>预览图片'+'</a>';
+      $('#photoFileHelp').removeClass('red-text').html(html);
+    }
+    else{
+      $('#photoId').val(e);
+      $('#photoFileHelp').addClass('red-text').html(e);
+    }
+  }
+  /**============响应点击模态框提交按钮函数============**/
+  $("#modalBtnSubmitPhoto").on("click",function(){
+    let trSeq=$("#modalTableRow").val();
+    let tbody=$("#tbody");
+    let picId=$('#photoId').val();
+    if(picId.toString().indexOf("正在上传")!=-1){
+      showRunResult('info','请稍候……','有图片正在上传','','',true,'');
+    }
+    else if(picId.toString().indexOf("错误")!=-1){
+      showRunResult('error','','图片上传出错','','',true,'')
+    }
+    else{
+      tbody.find("tr").eq(trSeq).find("td").eq(12).find("input").val(picId);
+      $("#modalPhoto").modal('close');
+    }
+  });
+ 
+
+  /*============培训文档索引===========*/
+  function todView(){
+    let viewId=$("#id").text().slice(-5);
+    let viewName=$("#name").text();
+    let viewProcess="";
+    window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbzzv6PHu-AaqAL1fwLNZPNg30acgO4Xd4H5atps/exec?ALP=ViewTod&viewSapId="+viewId+"&viewName="+viewName+"&viewProcess="+viewProcess+"&viewSource=EDSPAD");
+  }
+
+  /*============模具管理===========*/
+  function toMoldManager(){
+    let viewId=$("#id").text().slice(-5);
+    let viewName=$("#name").text();
+    let viewProcess="";
+    window.open("https://script.google.com/a/macros/colpal.com/s/AKfycbw1MZrc24Kf40NsBHF3SggBD6sFKbFxalH_4dkXICgqnWJ5SQ2-5b5C2WNvPlLW_cQc6Q/exec?ALP=Login&paraTemp1="+viewName+"&paraTemp2="+viewId);
+  }
+
+  // 
+  function formatDateTime(inputTime) {
+    var date = new Date(inputTime);
+    var y = date.getFullYear();
+    var m = date.getMonth() + 1;
+    m = m < 10 ? ('0' + m) : m;
+    var d = date.getDate();
+    d = d < 10 ? ('0' + d) : d;
+    var h = date.getHours();
+    h = h < 10 ? ('0' + h) : h;
+    return y + '-' + m + '-' + d;
+  }
+
+  // 
+  function formatTime(inputTime) {
+    var date = new Date(inputTime);
+    var h = date.getHours();
+    h = h < 10 ? ('0' + h) : h;
+    var minute = date.getMinutes();
+    var second = date.getSeconds();
+    minute = minute < 10 ? ('0' + minute) : minute;
+    second = second < 10 ? ('0' + second) : second;
+    return h + ':' + minute + ':' + second;
+  };
+
+
+  function codeNo() {
+    let code_new = Math.floor((Math.random() + Math.floor(Math.random() * 9 + 1)) * Math.pow(10, 6));
+    return code_new
+  }
+
+  /*============只允许输入整数或保留两位小数============*/
+  $("#tbody").on("input","td",function(){
+    let tbody=$("#tbody");
+    let tdSeq=$(this).index();
+    let trSeq=$(this).parent().index();
+    if(tdSeq==11){
+      let taskNo=tbody.find("tr").eq(trSeq).find("td").eq(0).text();
+      if(taskNo.toString().indexOf("PDM")!=-1||taskNo.toString().indexOf("DATA")!=-1){
+        keepNumberFormat($(this).find("textarea").eq(0));
+      }
+    }
+  })
+
+  /*============只允许输入整数或保留4位小数============*/
+  function keepNumberFormat(obj){
+    let valueTemp=$(obj).val();
+    valueTemp=valueTemp.replace(/^\D*(\d*(?:\.\d{0,4})?).*$/g,'$1');
+    $(obj).val(valueTemp)
+  }
+
+  /*============判断表格中PDM或带*任务是否符合要求============*/
+  function judgeTableData(arrTableData){
+    let arrError=[];
+    for(let i=0;i<arrTableData.length;i++){
+      if((arrTableData[i][7].toString().indexOf("PDM")!=-1||arrTableData[i][7].toString().indexOf("DATA")!=-1)&&arrTableData[i][18]==""){
+        arrError.push(arrTableData[i][7]+"是PDM任务，备注不能为空且必须为数值");
+      }
+      if((arrTableData[i][7].toString().indexOf("*")!=-1)&&arrTableData[i][19]==""){
+        arrError.push(arrTableData[i][7]+"是带*任务，图片不能为空");
+      }
+    }
+    return arrError;
+  }
+
+  /***双击当前行的第3列和第9列，验证OPC保养结果***/
+  $("#tbody").on("dblclick","td",async function(){
+    let userType=document.getElementById('userType').textContent;
+    let tdIndex=$(this).index();
+    console.log(tdIndex);
+    if(tdIndex==2||tdIndex==8){
+      let trIndex=$(this).parent().index();
+      let thisVal=$(this).text();
+      let thisPrevVal=$(this).prev().text();
+      let trCol8Val=$("#tbody").find("tr").eq(trIndex).find("td").eq(8).text();
+      let verifyWho="";
+      if(userType=="IDL"&&trCol8Val.indexOf("OPC")!=-1){verifyWho="OPC"}else if(userType=="S&C"&&(trCol8Val.indexOf("OPC")!=-1||trCol8Val.indexOf("技术员")!=-1)){verifyWho="技术员&OPC"}
+      if((userType=="IDL"&&trCol8Val.indexOf("OPC")!=-1)||(userType=="S&C"&&(trCol8Val.indexOf("OPC")!=-1||trCol8Val.indexOf("技术员")!=-1))){
+        let html_text='<div>'+
+                          '<input style="border:0;outline:0;text-align:center;width:100%" value="'+'单元：'+thisPrevVal+'；模块：'+thisVal+'" readonly="readonly">'+
+                        '</div>'+
+                        '<div>'+
+                          '<table border="1" align="center" style="width:100%;font-size:small">'+
+                            '<thead>'+
+                              '<tr><th>是否合格</th><th>备注</th></tr>'+
+                            '</thead>'+
+                            '<tbody id="swal-tbody">'+
+                              '<tr><td><label><input name="VerifyOpcOrNot" type="radio" value="Yes"/><span style="margin:0">合格</span></label><label style="margin-left:100px"><input name="VerifyOpcOrNot" type="radio" value="No"/><span style="margin:0">不合格</span></label></td><td><input name="swal-remark" type="text" value="" placeholder="不合格时输入……" disabled></td></tr>'+
+                            '</tbody>'+
+                          '</table>'+
+                        '</div>';
+        let formValues=[];
+        
+        await Swal.fire({
+          width:'80vw',
+          title: '验证'+verifyWho+'保养结果',
+          html: html_text,
+          focusConfirm: true,
+          showCancelButton:true,
+          confirmButtonColor:'#3085d6',
+          cancelButtonColor:'#b8b8b8',
+          confirmButtonText:'提交',
+          cancelButtonText:'返回',
+          onBeforeOpen: () => {
+            $("#swal-tbody").on("click","td",function(){
+              let swalTdIndex=$(this).index();
+              console.log(swalTdIndex);
+              if(swalTdIndex==0){
+                let swalQualifiedOrNot=$("#swal-tbody").find("input[name='VerifyOpcOrNot']:checked").val();
+                console.log(swalQualifiedOrNot)
+                if(swalQualifiedOrNot=="No"){
+                  $("#swal-tbody").find("input[name='swal-remark']").prop("disabled",false);
+                }
+                else{
+                  $("#swal-tbody").find("input[name='swal-remark']").eq(0).val("")
+                  $("#swal-tbody").find("input[name='swal-remark']").prop("disabled",true);
+                }
+              }
+            })
+          },
+          preConfirm: () => {
+            let swalQualifiedOrNot=$("#swal-tbody").find("input[name='VerifyOpcOrNot']:checked").val();
+            let swalRemark=$("#swal-tbody").find("input[name='swal-remark']").eq(0).val();
+            formValues=[swalQualifiedOrNot,swalRemark];
+          }
+        }).then((result)=>{
+          if (result.isConfirmed) {    
+            if (formValues[0]) {
+              let TrData = getTableDataRow(trIndex); 
+              TrData[0].push(formValues[0],formValues[1])
+              showRunning('正在保存'+verifyWho+'保养验证记录……','','',120000,'');
+              google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((result) => {
+                if(result[0]=="OK"){
+                  $("#tbody").find("tr").eq(trIndex).find("td").eq(2).css('background-color', 'green');
+                  $("#tbody").find("tr").eq(trIndex).find("td").eq(8).css('background-color', 'green');
+                  showRunResult('success','成功',verifyWho+'保养验证记录提交成功','','',true,'');
+                }
+                else{
+                  showRunResult('error','失败',verifyWho+'保养验证记录提交失败：'+result[1],'','',true,'');
+                }
+              }).saveVerifyOpcRow(TrData);
+            } 
+            else{
+              showRunResult('info','提示','必须选择合格或不合格','','',true,'');
+            } 
+          }
+        })
+      }
+      else if(userType=="IDL"&&trCol8Val.indexOf("OPC")==-1){
+        showRunResult('info','提示','非OPC保养任务','','',true,'');
+      }
+      else{
+        showRunResult('info','提示','非OPC或技术员保养任务','','',true,'');
+      }
+    }
+  })
+
+  function getTableDataRow(trIndex) {   //表格里当前行的数据
+    let arrPmInfo=[];
+    let numTrue=0;
+    let numFalse=0;
+    let numRemark=0;
+    arrPmInfo.push([$("#PMno").val(),$("#workcenter").val(),$("#startDate").val(),$("#endDate").val(),$("#startTime").val(),$("#endTime").val(),$("#notification").val()]);
+    let c = $("#tbody").find("tr").eq(trIndex).find("input").eq(0).is(":checked");
+    let d = $("#tbody").find("tr").eq(trIndex).find("textarea").val();
+    let rowTaskNo=$("#tbody").find("tr").eq(trIndex).find("td").eq(0).text();
+    for (j = 0; j < $("#tbody").find("tr").eq(trIndex).find("td").length - 3; j++) {
+      let b = $("#tbody").find("tr").eq(trIndex).find("td").eq(j).text();
+      arrPmInfo[arrPmInfo.length-1].push(b);
+    }
+    arrPmInfo[arrPmInfo.length-1].push(c);
+    arrPmInfo[arrPmInfo.length-1].push(d);
+    arrPmInfo[arrPmInfo.length-1].push($("#tbody").find("tr").eq(trIndex).find("input").eq(1).val());
+    return arrPmInfo;
+  }
+
+  /**============显示函数运行状态============**/
+  function showRunning(strTitle,strText,strHtml,times,strFooter){
+    if(timerInterval){clearInterval(timerInterval)}
+    swal.fire({
+      allowOutsideClick:false,
+      icon:'info',
+      title:strTitle,
+      text:strText,
+      html:'窗口将在 <b></b> 秒内自动关闭.',
+      timer:times,
+      footer:strFooter,
+      timerProgressBar:true,
+      onBeforeOpen: () => {
+        if(timerInterval){clearInterval(timerInterval)}
+        Swal.showLoading()
+        const b = Swal.getContent().querySelector('b')
+        timerInterval = setInterval(() => {
+          b.textContent = (Swal.getTimerLeft()/1000).toFixed(0);
+        }, 1000)
+      },
+      onClose:()=>{
+        if(timerInterval){clearInterval(timerInterval)}
+      }
+    }).then((result) => {
+    if (result.dismiss === Swal.DismissReason.timer) {
+      if(timerInterval){clearInterval(timerInterval)}
+      Swal.fire("程序在2分钟内未响应,尝试点击按钮再来一次");
+    }});
+  }
+
+  /**============显示函数运行结果============**/
+  function showRunResult(strIcon,strTitle,strText,strHtml,times,booleanButton,strFooter){
+    if(timerInterval){clearInterval(timerInterval)}
+    swal.fire({allowOutsideClick:false,icon:strIcon,title:strTitle,text:strText,html:strHtml,timer:times,showConfirmButton:booleanButton,footer:strFooter});
+  }
+
+  /**============返回服务器不响应结果============**/
+  function judgeFailure(){
+    if(timerInterval){clearInterval(timerInterval)}
+    swal.fire({allowOutsideClick:false,icon:'error',title:'服务器长时间未响应',showConfirmButton:true,footer:'<p>尝试点击按钮再来一次</p>'});
+  }
+
+</script>

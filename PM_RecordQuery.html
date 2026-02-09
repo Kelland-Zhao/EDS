@@ -1,0 +1,113 @@
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <!-- <title>保养记录查询</title> -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+</head>
+
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("Kez_bootstrap-datepicker_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+
+<style>
+  .swal-wide {
+    width: 80vw !important;
+    max-width: 80vw !important;
+  }
+
+  .firstcol-auto-width {
+    white-space: nowrap;
+    width: auto !important;
+    max-width: 200px;
+    overflow: auto;
+  }
+
+  /* 为表格添加横线显示 */
+  #recordTable,
+  #detailTable {
+    border-collapse: collapse;
+  }
+
+  #recordTable th,
+  #recordTable td,
+  #detailTable th,
+  #detailTable td {
+    border: 1px solid #dee2e6;
+    padding: 8px;
+  }
+
+  #recordTable thead th,
+  #detailTable thead th {
+    border-bottom: 2px solid #dee2e6;
+  }
+
+  #recordTable tbody tr,
+  #detailTable tbody tr {
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  /* 确保表格有完整的边框 */
+  #recordTable,
+  #detailTable {
+    border: 1px solid #dee2e6;
+  }
+</style>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container">
+      <a class="navbar-brand" style="
+        color: white;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: xx-large;
+        font-weight: bold;">保养记录查询/ PM Record Query</a>
+    </div>
+  </nav>
+  <div class="container mt-4">
+
+    <hr style="margin-top:0;margin-bottom:32px; border-top:2px solid #E60012;">
+    <div class="row mb-4">
+      <div class="col-md-3">
+        <label for="startDate" class="form-label">开始日期/ Start Date</label>
+        <input type="date" id="startDate" class="form-control" placeholder="开始日期">
+      </div>
+      <div class="col-md-3">
+        <label for="endDate" class="form-label">结束日期/ End Date</label>
+        <input type="date" id="endDate" class="form-control" placeholder="结束日期">
+      </div>
+      <div class="col-md-3">
+        <label for="deviceSelect" class="form-label">机台号/ Workcenter</label>
+        <select id="deviceSelect" class="form-control"></select>
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <button class="btn btn-primary w-100" id="searchBtn">查询</button>
+      </div>
+    </div>
+    <hr style="margin-top:0;margin-bottom:32px; border-top:2px solid #E60012;">
+    <table id="recordTable" class="table table-striped table-bordered" style="width:100%"></table>
+  </div>
+
+
+</body>
+
+
+
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("Kez_bootstrap-datepicker-js") ?>
+
+<?!=include("PM_RecordQuery-js") ?>
+
+
+</html>

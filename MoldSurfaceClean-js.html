@@ -1,0 +1,537 @@
+<script>
+  $(document).ready(() => {
+    // 1. 页面加载时显示 Loading 弹窗
+    Swal.fire({
+      title: '正在加载数据...',
+      text: '请稍候',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    // 2. 创建 Promise 来并行调用后端函数
+    const getPlanData = new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .getMoldMachineListForCleaning();
+    });
+
+    const getCompletedRecordsPromise = new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .getCompletedRecords();
+    });
+
+    // 3. 等待所有数据都返回后再处理
+            Promise.all([getPlanData, getCompletedRecordsPromise])
+          .then(([planResponse, completedRecords]) => {
+            // 对返回结果进行健壮性检查
+            if (!planResponse || planResponse.length < 2) {
+              throw new Error("从 'Plan' 表获取的数据无效。");
+            }
+            if (completedRecords.error) {
+              throw new Error(completedRecords.message);
+            }
+
+            // 设置全局变量，供列定义使用
+            window.currentCompletedRecords = completedRecords;
+
+        const headers = planResponse[0];
+        const dataRows = planResponse.slice(1);
+
+        const columnIndices = {
+          serialNo: headers.findIndex(h => h.trim() === 'Serial No./ 序列号'),
+          process: headers.findIndex(h => h.trim() === 'Process/ 工序'),
+          workcenter: headers.findIndex(h => h.trim() === 'Workcenter/ 机台号'),
+          planDate: headers.findIndex(h => h.trim() === 'Date/ 日期')
+        };
+
+        for (const key in columnIndices) {
+          if (columnIndices[key] === -1) {
+            const columnNames = {
+              serialNo: 'Serial No./ 序列号',
+              process: 'Process/ 工序',
+              workcenter: 'Workcenter/ 机台号',
+              planDate: 'Date/ 日期'
+            };
+            throw new Error(`在 'Plan' 表头中未找到必需的列: "${columnNames[key]}"`);
+          }
+        }
+
+        // --- 格式化日期列 ---
+        dataRows.forEach(row => {
+          const dateStr = row[columnIndices.planDate];
+          if (dateStr) {
+            try {
+              const date = new Date(dateStr);
+              if (!isNaN(date.getTime())) { // 检查日期是否有效
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                row[columnIndices.planDate] = `${year}-${month}-${day}`;
+              }
+            } catch (e) {
+              console.warn(`无法格式化日期: ${dateStr}`);
+            }
+          }
+        });
+
+        // === 新需求：所有日期都显示，今天的排最前 ===
+        // 不再过滤 dataRows，直接用于表格
+        // 自定义排序规则：今天的日期最前，其次未来，最后过去
+        // 自定义排序函数
+        $.fn.dataTable.ext.order['custom-date-sort'] = function(settings, col) {
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          return this.api().column(col, {order:'index'}).data().map(function(dateStr) {
+            if (!dateStr) return 99999999;
+            const rowDate = new Date(dateStr);
+            rowDate.setHours(0,0,0,0);
+            if (rowDate.getTime() === today.getTime()) return 0; // 今天
+            if (rowDate > today) return rowDate.getTime() - today.getTime() + 1; // 未来
+            return rowDate.getTime() - today.getTime() - 100000000; // 过去
+          });
+        };
+
+        // --- 动态创建列定义 ---
+        let columns = headers.map(header => ({ title: header }));
+
+        columns.push({
+          title: '操作',
+          orderable: false,
+          searchable: false,
+          // 修改：根据记录的状态来渲染按钮
+          render: function (data, type, row) {
+            const serialNo = row[columnIndices.serialNo];
+            const record = window.currentCompletedRecords ? window.currentCompletedRecords[serialNo] : completedRecords[serialNo];
+
+            if (record) {
+              if (record.status === "Done") {
+                return `<button class="btn btn-info btn-sm btn-preview" data-id="${record.fileId}">预览</button>`;
+              } else if (record.status === "Unproduced") {
+                return `<button class="btn btn-secondary btn-sm" disabled>未生产</button>`;
+              }
+            }
+            return '<button class="btn btn-primary btn-sm btn-follow">跟进</button>';
+          }
+        });
+
+        columns.push({
+          title: 'Status/ 状态',
+          orderable: true,
+          searchable: true,
+          // 修改：根据记录的状态来显示不同的徽章，并提供用于排序的原始数据
+          render: function (data, type, row) {
+            const serialNo = row[columnIndices.serialNo];
+            const record = window.currentCompletedRecords ? window.currentCompletedRecords[serialNo] : completedRecords[serialNo];
+
+            // 为排序提供一个数值：0-未完成, 1-未生产, 2-已完成
+            if (type === 'sort') {
+              if (record) {
+                if (record.status === "Done") return 2;
+                if (record.status === "Unproduced") return 1;
+              }
+              return 0; // No Start
+            }
+
+            // 为显示提供HTML内容
+            if (record) {
+              if (record.status === "Done") {
+                return '<span class="badge bg-success">Done/ 已完成</span>';
+              } else if (record.status === "Unproduced") {
+                return '<span class="badge bg-danger">Unproduced/ 未生产</span>';
+              }
+            }
+            return '<span class="badge bg-warning text-dark">No Start/ 未完成</span>';
+          }
+        });
+
+        // 找到“Date/ 日期”列的索引
+        const dateColIdx = columnIndices.planDate;
+
+        // 先格式化所有日期为 yyyy-mm-dd
+        dataRows.forEach(row => {
+          const dateStr = row[5];
+          if (dateStr) {
+            try {
+              const date = new Date(dateStr);
+              if (!isNaN(date.getTime())) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                row[5] = `${year}-${month}-${day}`;
+              }
+            } catch (e) {}
+          }
+        });
+
+        // 排序：今天的最前，未来的其次，过去的最后
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        dataRows.sort((a, b) => {
+          const dateA = new Date(a[5]);
+          const dateB = new Date(b[5]);
+          dateA.setHours(0,0,0,0);
+          dateB.setHours(0,0,0,0);
+
+          if (dateA.getTime() === today.getTime() && dateB.getTime() !== today.getTime()) return -1;
+          if (dateB.getTime() === today.getTime() && dateA.getTime() !== today.getTime()) return 1;
+          if (dateA.getTime() === today.getTime() && dateB.getTime() === today.getTime()) return 0;
+
+          if (dateA > today && dateB <= today) return -1;
+          if (dateB > today && dateA <= today) return 1;
+
+          // 未来日期互比
+          if (dateA > today && dateB > today) return dateA - dateB;
+          // 过去日期互比
+          if (dateA < today && dateB < today) return dateB - dateA;
+
+          // 其它情况
+          return 0;
+        });
+
+        // --- 初始化 DataTables ---
+        const table = $('#data-table').DataTable({
+          data: dataRows,
+          columns: columns,
+          order: [], // 不指定排序，保持当前顺序
+          paging: true,
+          searching: true,
+          language: {
+            url: 'https://cdn.datatables.net/plug-ins/2.0.8/i18n/zh-Hans.json'
+          }
+        });
+
+        // 设置表头样式 - 红色背景，白色文字
+        $('#data-table thead th').css({
+          'background-color': '#E60012',
+          'color': 'white'
+        });
+
+        Swal.close();
+
+        // --- 为“跟进”按钮绑定点击事件 ---
+        $('#data-table tbody').on('click', '.btn-follow', function () {
+          const rowData = table.row($(this).closest('tr')).data();
+
+          const rowInfo = {
+            serialNo: rowData[columnIndices.serialNo],
+            process: rowData[columnIndices.process],
+            workcenter: rowData[columnIndices.workcenter],
+            planDate: rowData[columnIndices.planDate]
+          };
+
+          if (!rowInfo.serialNo || !rowInfo.process || !rowInfo.workcenter || !rowInfo.planDate) {
+            Swal.fire('数据错误', '当前行缺少必需的数据（序列号、工序、机台号或计划日期）。', 'error');
+            return;
+          }
+
+          console.log("点击了'跟进'按钮, 提取的行信息为:", rowInfo);
+
+          Swal.fire({
+            title: '确认操作',
+            text: "是否确认开始模面清洁？",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: '确认开始',
+            cancelButtonText: '取消'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              // 第二个确认弹窗，同时确认设备状态并输入工号
+              Swal.fire({
+                title: '设备状态与人员信息',
+                html: '<input id="swal-technician-id" class="swal2-input" placeholder="请输入技术员工号">',
+                icon: 'warning',
+                showDenyButton: true,
+                showCancelButton: true,
+                confirmButtonText: '已开机并拍照',
+                denyButtonText: '记录为未生产',
+                cancelButtonText: '取消',
+                preConfirm: () => {
+                  // preConfirm 只在点击 confirmButton 时触发
+                  const technicianId = Swal.getPopup().querySelector('#swal-technician-id').value;
+                  if (!technicianId) {
+                    Swal.showValidationMessage('请输入技术员工号');
+                    return false;
+                  }
+                  return technicianId;
+                }
+              }).then((powerOnResult) => {
+                // 如果用户点击了“已开机并拍照”
+                if (powerOnResult.isConfirmed) {
+                  const technicianId = powerOnResult.value; // 从 preConfirm 获取工号
+                  showDataSubmissionModal(rowInfo, technicianId);
+                }
+                // 如果用户点击了“记录为未生产”
+                else if (powerOnResult.isDenied) {
+                  const technicianId = Swal.getPopup().querySelector('#swal-technician-id').value;
+                  if (!technicianId) {
+                    Swal.fire('操作失败', '记录“未生产”状态也需要输入技术员工号。', 'error');
+                    return;
+                  }
+
+                  Swal.fire({
+                    title: '正在记录...',
+                    text: '请稍候，正在记录“未生产”状态。',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                  });
+
+                  const submissionData = { ...rowInfo, technicianId };
+
+                  google.script.run
+                    .withSuccessHandler(response => {
+                      if (response.success) {
+                        Swal.fire('记录成功!', response.message, 'success').then(() => {
+                          // 温和刷新：只重新加载表格数据
+                          refreshTableData();
+                        });
+                      } else {
+                        Swal.fire('记录失败!', response.message, 'error');
+                      }
+                    })
+                    .withFailureHandler(error => {
+                      Swal.fire('记录失败!', '与服务器通信时发生错误: ' + error.message, 'error');
+                    })
+                    .saveCleaningRecord(submissionData);
+                }
+              });
+            }
+          });
+        });
+
+        // --- 为“预览”按钮绑定点击事件 ---
+        $('#data-table tbody').on('click', '.btn-preview', function () {
+          const fileId = $(this).data('id');
+          if (fileId) {
+            Swal.fire({
+              title: '正在获取图片...',
+              allowOutsideClick: false,
+              didOpen: () => { Swal.showLoading(); }
+            });
+
+            google.script.run
+              .withSuccessHandler(imageDataUrl => {
+                if (imageDataUrl.error) {
+                  Swal.fire('错误', imageDataUrl.message, 'error');
+                } else {
+                  Swal.fire({
+                    title: '照片预览',
+                    imageUrl: imageDataUrl,
+                    imageAlt: '清洁完成后的照片'
+                  });
+                }
+              })
+              .withFailureHandler(error => {
+                Swal.fire('错误', '无法从服务器获取图片: ' + error.message, 'error');
+              })
+              .getImageAsBase64(fileId);
+
+          } else {
+            Swal.fire('错误', '找不到文件ID。', 'error');
+          }
+        });
+      })
+      .catch(error => {
+        console.error("加载数据时发生错误:", error);
+        Swal.fire('加载失败!', '获取数据时发生错误: ' + error.message, 'error');
+      });
+
+    // --- 温和刷新表格数据的函数 ---
+    function refreshTableData() {
+      // 显示加载提示
+      Swal.fire({
+        title: '正在更新数据...',
+        text: '请稍候',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      // 重新获取数据
+      const getPlanData = new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .getMoldMachineListForCleaning();
+      });
+
+      const getCompletedRecordsPromise = new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .getCompletedRecords();
+      });
+
+      Promise.all([getPlanData, getCompletedRecordsPromise])
+        .then(([planResponse, completedRecords]) => {
+          if (!planResponse || planResponse.length < 2) {
+            throw new Error("从 'Plan' 表获取的数据无效。");
+          }
+          if (completedRecords.error) {
+            throw new Error(completedRecords.message);
+          }
+
+          const headers = planResponse[0];
+          const dataRows = planResponse.slice(1);
+
+          const columnIndices = {
+            serialNo: headers.findIndex(h => h.trim() === 'Serial No./ 序列号'),
+            process: headers.findIndex(h => h.trim() === 'Process/ 工序'),
+            workcenter: headers.findIndex(h => h.trim() === 'Workcenter/ 机台号'),
+            planDate: headers.findIndex(h => h.trim() === 'Date/ 日期')
+          };
+
+          // 格式化日期
+          dataRows.forEach(row => {
+            const dateStr = row[columnIndices.planDate];
+            if (dateStr) {
+              try {
+                const date = new Date(dateStr);
+                if (!isNaN(date.getTime())) {
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  row[columnIndices.planDate] = `${year}-${month}-${day}`;
+                }
+              } catch (e) {
+                console.warn(`无法格式化日期: ${dateStr}`);
+              }
+            }
+          });
+
+          // 排序：今天的最前，未来的其次，过去的最后
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          dataRows.sort((a, b) => {
+            const dateA = new Date(a[columnIndices.planDate]);
+            const dateB = new Date(b[columnIndices.planDate]);
+            dateA.setHours(0,0,0,0);
+            dateB.setHours(0,0,0,0);
+
+            if (dateA.getTime() === today.getTime() && dateB.getTime() !== today.getTime()) return -1;
+            if (dateB.getTime() === today.getTime() && dateA.getTime() !== today.getTime()) return 1;
+            if (dateA.getTime() === today.getTime() && dateB.getTime() === today.getTime()) return 0;
+
+            if (dateA > today && dateB <= today) return -1;
+            if (dateB > today && dateA <= today) return 1;
+
+            if (dateA > today && dateB > today) return dateA - dateB;
+            if (dateA < today && dateB < today) return dateB - dateA;
+
+            return 0;
+          });
+
+          // 注意：这里不需要重新创建列定义，因为DataTable已经存在
+          // 我们只需要更新数据，列定义保持不变
+          
+          // 但是需要确保completedRecords在全局作用域中可用，因为列定义中的render函数需要访问它
+          // 将completedRecords存储到全局变量中，供列定义使用
+          window.currentCompletedRecords = completedRecords;
+
+          // 更新表格数据 - 使用DataTable API
+          const table = $('#data-table').DataTable();
+          
+          // 清空现有数据
+          table.clear();
+          
+          // 添加新数据 - 直接使用数组格式，因为原始DataTable就是这样初始化的
+          table.rows.add(dataRows);
+          table.draw();
+
+          // 重新设置表头样式 - 确保刷新后样式保持一致
+          $('#data-table thead th').css({
+            'background-color': '#E60012',
+            'color': 'white'
+          });
+
+          Swal.close();
+        })
+        .catch(error => {
+          console.error("刷新数据时发生错误:", error);
+          Swal.fire('刷新失败!', '更新数据时发生错误: ' + error.message, 'error');
+        });
+    }
+
+    // --- 封装拍照和提交弹窗的函数 ---
+    function showDataSubmissionModal(rowInfo, technicianId) {
+      Swal.fire({
+        title: '拍照记录',
+        html: `
+            <div id="photo-container" style="margin-top: 20px;">
+              <input type="file" id="swal-file-input" accept="image/*" capture="environment" style="display:none;">
+              <button id="swal-take-photo-btn" type="button" class="btn btn-secondary w-100">点击拍照</button>
+              <img id="swal-photo-preview" src="#" alt="照片预览" style="display:none;"/>
+            </div>
+          `,
+        confirmButtonText: '数据提交',
+        focusConfirm: false,
+        didOpen: () => {
+          const takePhotoBtn = document.getElementById('swal-take-photo-btn');
+          const fileInput = document.getElementById('swal-file-input');
+          const photoPreview = document.getElementById('swal-photo-preview');
+
+          takePhotoBtn.addEventListener('click', () => fileInput.click());
+
+          fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              photoPreview.src = e.target.result;
+              photoPreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+          });
+        },
+        preConfirm: () => {
+          const photoSrc = document.getElementById('swal-photo-preview').src;
+          if (!photoSrc || photoSrc.endsWith('#')) {
+            Swal.showValidationMessage('请先拍照');
+            return false;
+          }
+          return { photoDataUrl: photoSrc };
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          Swal.fire({
+            title: '正在提交...',
+            text: '请稍候，正在上传文件和记录。',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+          });
+
+          const submissionData = {
+            ...rowInfo,
+            technicianId: technicianId, // 使用传递过来的工号
+            photoDataUrl: result.value.photoDataUrl
+          };
+
+          console.log("最终提交的完整数据:", submissionData);
+
+          google.script.run
+            .withSuccessHandler(response => {
+              if (response.success) {
+                Swal.fire('提交成功!', response.message, 'success').then(() => {
+                  // 温和刷新：只重新加载表格数据
+                  refreshTableData();
+                });
+              } else {
+                Swal.fire('提交失败!', response.message, 'error');
+              }
+            })
+            .withFailureHandler(error => {
+              Swal.fire('提交失败!', '与服务器通信时发生错误: ' + error.message, 'error');
+            })
+            .saveCleaningRecord(submissionData);
+        }
+      });
+    }
+  });
+</script>

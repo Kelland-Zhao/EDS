@@ -1,0 +1,152 @@
+<script>
+
+  // <!--   -->
+  window.onload = function () {
+    document.onkeydown = function () {
+      var e = window.event || arguments[0];
+      if (e.keyCode == 123) {
+        return false;
+      } else if ((e.ctrlKey) && (e.shiftKey) && (e.keyCode == 73)) {
+        return false;
+      }
+    }
+    document.oncontextmenu = function () {
+      return false;
+    }
+  }
+
+  // <!--  -->
+  $(document).ready(function () {
+    initializeMaterialCSS();
+    var workshop="";
+    var process="";
+    var { value: type } = await swal.fire({
+      allowOutsideClick:false,
+      title: '链接部门工序',
+      input: 'select',
+      inputOptions: {
+        TB1_INJ: 'TB1注塑',
+        TB1_TF: 'TB1植磨毛',
+        TB1_PK:'TB1包装',
+        TB2_INJ: 'TB2注塑',
+        TB2_TF: 'TB2植磨毛',
+        TB2_PK:'TB2包装'
+      },
+      inputPlaceholder: '请选择部门工序',
+      showCancelButton: true,
+      inputValidator: (value) => {
+        return new Promise((resolve) => {
+          if (value !== '') {
+            resolve()
+          } else {
+            resolve('请选择部门工序')
+          }
+        })
+      }
+    })
+    if(type){
+      workshop=type.split("_")[0];
+      process=type.split("_")[1];
+      swal.fire({
+        allowOutsideClick:false,
+        icon:'info',
+        title:'正在加载停机计划……',
+        html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+            '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点按钮重新操作一次</p>',
+        confirmButtonText:'等待……不自动关闭再点',
+        showConfirmButton:true,
+        timer:120000,
+        timerProgressBar:true
+      });
+      google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(showData).getStopPlan();
+      loginInfo(workshop,process); //登陆信息初始化
+    }
+  })
+
+  // <!--  -->
+  function initializeMaterialCSS() {
+    $('.modal').modal();
+    $('select').formSelect();
+    $('.sidenav').sidenav();
+    $('.datepicker').datepicker({format: 'yyyy-mm-dd',autoClose: true});
+    $('.dropdown-trigger').dropdown();
+    $('.tabs').tabs();
+  }
+
+  // <!--  -->
+  function loginInfo(workshop,process) {
+    let name = localStorage.getItem('name');
+    $("#name").text(name)
+    let id = localStorage.getItem('id');
+    $("#id").text(id);
+    swal.fire({
+      allowOutsideClick:false,
+      icon:'info',
+      title:'正在加载交接班数据……',
+      html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+          '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点按钮重新操作一次</p>',
+      confirmButtonText:'等待……不自动关闭再点',
+      showConfirmButton:true,
+      timer:120000,
+      timerProgressBar:true
+    });
+    google.script.run.withSuccessHandler((resultStop) => {
+      if(resultStop[0]=="OK"){
+        swal.fire({allowOutsideClick:false,icon:'success',title:'加载成功',showConfirmButton:false,timer:1500});
+      }
+      else{
+        swal.fire({allowOutsideClick:false,icon:'error',title:'加载失败',text:resultStop[1],showConfirmButton:true,footer:'<p>联系相关人员</p>'});
+      }
+    }).getData_TMP_stop_machine(workshop,process);
+  }
+
+  // <!--  -->
+  function showData(data) {
+    data = JSON.parse(data);
+    let dataArray = new Array();
+    for (i = 0; i < data.length; i++) {
+      let dataTable = {};
+      dataTable.applier = data[i][0];
+      dataTable.date = dayjs(data[i][1]).format('L');
+      dataTable.reason = data[i][2];
+      dataTable.workshop = data[i][3];
+      dataTable.mold = data[i][4];
+      dataTable.type = data[i][5];
+      dataTable.start_date = dayjs(data[i][6]).format('L');
+      dataTable.stop_shift = data[i][7];
+      dataTable.workcenter = data[i][8];
+      dataTable.stop_duration = data[i][9];
+      dataTable.plan_status = data[i][10];
+      dataTable.remark = data[i][11];
+      dataTable.mold_des = data[i][12];
+      dataTable.apply_or_not = data[i][13];
+      dataArray.push(dataTable)
+    }
+    /*******************************************************************/
+    $('#dataTable').bootstrapTable({
+      data: dataArray,
+      search: true,
+      striped: true,
+      clickToSelect: true,
+      pagination: true,
+      showExtendedPagination: true,
+      paginationLoop: true,
+      showSearchButton: true,
+      sortName: "date",
+      sortOrder: "desc"
+    });
+  }
+
+  /*============培训文档索引===========*/
+  function todView(){
+    let viewId=$("#id").text().slice(-5);
+    let viewName=$("#name").text();
+    let viewProcess="";
+    window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbzzv6PHu-AaqAL1fwLNZPNg30acgO4Xd4H5atps/exec?ALP=ViewTod&viewSapId="+viewId+"&viewName="+viewName+"&viewProcess="+viewProcess+"&viewSource=EDSPAD");
+  }
+
+  function judgeFailure(){
+    swal.fire({allowOutsideClick:false,icon:'info',title:'服务器长时间未响应',showConfirmButton:true,footer:'<p>建议重新操作一次</p>'});
+  }
+
+</script>

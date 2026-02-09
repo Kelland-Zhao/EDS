@@ -1,0 +1,75 @@
+<html>
+
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 引入必要的CSS和JS库 -->
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("kez_Datatables_css");?>
+  <?!=include("Kez_sweetalert2_js");?>
+  <?!=include("CSS");?>
+</head>
+
+<body>
+  <!-- 顶部导航栏 -->
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <a class="navbar-brand"
+        style="color: white; font-family: Arial, Helvetica, sans-serif; font-size: xx-large; font-weight: bold;">
+        人员分配 / Personnel Assignment
+      </a>
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link active" id="navigateHome" style="color: white; font-size: x-large; cursor: pointer;">
+            导航页 / Navigation Page
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container mt-3">
+    <!-- 任务详情显示区域 -->
+    <h4>任务详情 / Task Details</h4>
+    <div class="row mb-3 p-3 border bg-light rounded">
+      <div class="col-md-4"><strong>开始日期 / Start Date:</strong> <span id="taskDate"></span></div>
+      <div class="col-md-4"><strong>AEM#:</strong> <span id="taskAEM"></span></div>
+      <div class="col-md-4"><strong>设备类型1 / Equip Type 1:</strong> <span id="taskEquip1"></span></div>
+      <div class="col-md-4 mt-2"><strong>设备类型2 / Equip Type 2:</strong> <span id="taskEquip2"></span></div>
+      <div class="col-md-4 mt-2"><strong>自动化类型 / Auto Type:</strong> <span id="taskAuto"></span></div>
+    </div>
+
+    <!-- 已分配人员显示区域 -->
+    <div class="card">
+      <div class="card-header">
+        <h5>已分配人员 / Assigned Personnel</h5>
+      </div>
+      <div class="card-body">
+        <table id="assignedPeopleTable" class="display table table-bordered" style="width:100%"></table>
+      </div>
+    </div>
+
+    <!-- 标准任务清单显示区域 -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h5>标准任务清单 / Standard Task List</h5>
+      </div>
+      <div class="card-body">
+        <table id="standardTaskTable" class="display table table-bordered table-striped" style="width:100%"></table>
+      </div>
+      <div class="card-footer text-end">
+        <!-- 此处按钮的文本和ID已修改 -->
+        <button class="btn btn-success" id="confirmAssignmentBtn">确认人员分配</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+<!-- 引入JS库和页面专属JS -->
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("PersonnelAssignment_js") ?>
+
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统登录</title>
+  <?!= include("Kez_Bootstrap@5.3.1_css"); ?>
+  <?!= include("CSS"); ?>
+</head>
+
+<body style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+  <div class="container">
+    <div class="row">
+      <div class="col-12">
+        <h4 class="text-center p-3 rounded mb-4" style="
+              font-family: Arial, Helvetica, sans-serif;
+              background-color: #E60012;
+              color: white;
+            ">
+          高露洁三笑设备管理系统1.0<br>
+          Colgate Sanxiao Equipment Management System 1.0
+        </h4>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-12">
+        <div class="card shadow">
+          <div class="card-body">
+            <h5 class="card-title mb-4">用户登录 / User Login</h5>
+
+            <div class="mb-3">
+              <input disabled id="Name" placeholder="用户名 / Username" type="text" class="form-control"
+                autocomplete="off" style="cursor: pointer" />
+              <label for="Name" class="form-label">用户名 / Username</label>
+            </div>
+
+            <div class="mb-3">
+              <div class="row">
+                <div class="col-3">
+                  <input disabled placeholder="328" type="text" class="form-control" autocomplete="off"
+                    style="cursor: pointer" />
+                </div>
+                <div class="col-9">
+                  <input id="id" type="text" inputmode="numeric" class="form-control" autocomplete="off"
+                    style="cursor: pointer" />
+                </div>
+              </div>
+              <label class="form-label">工号 / Employee ID</label>
+            </div>
+
+            <div class="mb-3">
+              <input id="pd" type="password" class="form-control" autocomplete="off" style="cursor: auto" />
+              <label for="pd" class="form-label">密码 / Password</label>
+            </div>
+
+            <div class="d-flex justify-content-between">
+              <button id="changePd" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#myModal">
+                <i class="fas fa-key me-2"></i>修改密码 / Change Password
+              </button>
+              <button id="login" class="btn btn-danger">
+                <i class="fas fa-sign-in-alt me-2"></i>登录 / Login
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 密码修改模态框 -->
+  <div class="modal fade" id="myModal" tabindex="-1" aria-labelledby="myModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title" id="myModalLabel">更改密码 / Change Password</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <input type="number" id="id1" class="form-control" placeholder="328工号(后5位)">
+            <label for="id1" class="form-label">328工号(后5位) / Employee ID (Last 5 digits)</label>
+          </div>
+
+          <div class="mb-3">
+            <input type="password" id="oldPd" class="form-control" placeholder="旧密码">
+            <label for="oldPd" class="form-label">旧密码 / Old Password</label>
+          </div>
+
+          <div class="mb-3">
+            <input type="password" id="newPd" class="form-control" placeholder="新密码">
+            <label for="newPd" class="form-label">新密码 / New Password</label>
+          </div>
+
+          <div class="mb-3">
+            <input type="password" id="confirmPd" class="form-control" placeholder="新密码确认">
+            <label for="confirmPd" class="form-label">新密码确认 / Confirm New Password</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消修改 / Cancel</button>
+          <button type="button" class="btn btn-primary" id="confirmChange">确认修改 / Confirm Change</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script> -->
+  <!-- <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script> -->
+  <?!= include("Kez_sweetalert2_js"); ?>
+  <!-- important to ensure script run-->
+  <?!= include("Kez_jquery@3.6.4_js"); ?>
+  <?!= include("Kez_bootstrap@5.3.1_js"); ?>
+  <?!= include("home_new_1.0-js"); ?>
+</body>
+
+</html>

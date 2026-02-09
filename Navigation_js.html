@@ -1,0 +1,175 @@
+<script>
+  $(document).ready(() => {
+    let name = sessionStorage.getItem('Name');
+    let id = sessionStorage.getItem('ID');
+    let process = sessionStorage.getItem('Process');
+    let workshop = sessionStorage.getItem('Workshop');
+    let siWebPage = sessionStorage.getItem('siWebPage');
+    
+    sessionStorage.setItem('ID', id);
+    sessionStorage.setItem('Name', name);
+    sessionStorage.setItem('Process', process);
+    sessionStorage.setItem('Workshop', workshop);
+    sessionStorage.setItem('siWebPage', siWebPage);
+    $("#name").text(name);
+
+    $('#PM').click(() => {
+        $('#pmModal').modal('show');
+    });
+
+    $('#PM_Plan').click(() => {
+        let url = siWebPage + '?v=PM_Plan_1.0'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#pmModal').modal('hide');
+    });
+
+    // --- 此处已更新 ---
+    $('#PM_Task').click(() => {
+        // 跳转到新的 TaskManagement 页面
+        let url = siWebPage + '?v=TaskManagement'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#pmModal').modal('hide'); 
+    });
+
+    $('#PM_Query').click(() => {
+        let url = siWebPage + '?v=PM_RecordQuery'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#pmModal').modal('hide');
+    });
+
+    $('#Handover').click(() => {
+        let url = siWebPage + '?v=Shift_1.0'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+    });
+
+    $('#PonitCheck').click(() => {
+        $('#inspectionModal').modal('show');
+    });
+
+    // 点检执行
+    $('#Inspection_Execute').click(() => {
+        let url = siWebPage + '?v=Inspection2.0'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#inspectionModal').modal('hide');
+    });
+
+    // 点检报告
+    $('#Inspection_Report').click(() => {
+        let url = 'https://colpal.domo.com/page/1025333512/view/114391177';
+        window.open(url);
+        $('#inspectionModal').modal('hide');
+    });
+
+    $('#FailureReport').click(() => {
+        $('#failureReportModal').modal('show');
+    });
+
+    // 故障报告上传
+    $('#FailureReport_Upload').click(() => {
+        // TODO: 跳转到故障报告上传页面
+        let url = siWebPage + '?v=FailureReport_Upload'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#failureReportModal').modal('hide');
+    });
+
+    // 故障报告管理
+    $('#FailureReport_Manage').click(() => {
+        let url = siWebPage + '?v=FailureReport_Manage'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#failureReportModal').modal('hide');
+    });
+
+    // 故障报告查阅
+    $('#FailureReport_View').click(() => {
+        let url = siWebPage + '?v=FailureReport_View'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#failureReportModal').modal('hide');
+    });
+
+    // 故障报告进度
+    $('#FailureReport_Progress').click(() => {
+        let url = siWebPage + '?v=FailureReport_Progress'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#failureReportModal').modal('hide');
+    });
+
+    $('#PPMS').click(() => {
+        let url = 'https://script.google.com/a/colpal.com/macros/s/AKfycbyaKWHcTSogglvVN7sKaTOgDTXOg5IMYUIGKdy7/exec'
+        window.open(url);
+    });
+
+    $('#SEI').click(() => {
+        let url = 'https://script.google.com/a/macros/colpal.com/s/AKfycbx3i7PBxvqejgeGF2LA_XQ4HfOZxII2cku3BzQBtetYHPFEvlNd6egmt4SxAm8lxjkgnA/exec'
+        window.open(url);
+    });
+
+    $('#TLMoC').click(() => {
+        let url = 'https://script.google.com/a/macros/colpal.com/s/AKfycbxpDYL02i5FaFzUDcIoW3siG2U94cvWUUnz_F5x2BO1jnrXoMGzFQH-jw9C4nvZ7FE/exec'
+        window.open(url);
+    });
+
+    $('#SHSP').click(() => {
+        let url = "https://script.google.com/a/colpal.com/macros/s/AKfycbzX8unrThQsGqjz0gpwfTp3Y6HSl_2oyfuqBpw5/exec"
+        window.open(url);
+    });
+
+    $('#MMS').click(() => {
+        let url = "https://script.google.com/a/macros/colpal.com/s/AKfycbw1MZrc24Kf40NsBHF3SggBD6sFKbFxalH_4dkXICgqnWJ5SQ2-5b5C2WNvPlLW_cQc6Q/exec"
+        window.open(url);
+    });
+
+    $('#moldSurfaceCleanButton').on('click', () => {
+        let url = siWebPage + '?v=MoldSurfaceClean'
+            + '&ID=' + encodeURIComponent(id || '') 
+            + '&Name=' + encodeURIComponent(name || '') 
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || ''); 
+        window.open(url); 
+    });
+
+    $('#ProcessSamplingInspection').on('click', () => {
+        let url = siWebPage + '?v=ProcessSamplingInspection'
+            + '&ID=' + encodeURIComponent(id || '') 
+            + '&Name=' + encodeURIComponent(name || '') 
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || ''); 
+        window.open(url); 
+    });
+  });
+</script>

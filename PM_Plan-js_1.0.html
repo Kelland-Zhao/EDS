@@ -1,0 +1,491 @@
+<script>
+  let global_Name = sessionStorage.getItem('Name');
+ let global_Process = sessionStorage.getItem('Process');
+ let global_ID = sessionStorage.getItem('ID');
+ let global_Workshop = sessionStorage.getItem('Workshop');
+ let siWebPage = sessionStorage.getItem('siWebPage');
+ let global_data;
+ sessionStorage.setItem('siWebPage', siWebPage);
+ let table;
+
+ sessionStorage.setItem("Name", global_Name);
+ sessionStorage.setItem("Process", global_Process);
+ sessionStorage.setItem("ID", global_ID);
+ sessionStorage.setItem("Workshop", global_Workshop);
+
+
+ $(document).ready(function () {
+
+  // 2024年新增：记录页面加载开始时间
+  const pageLoadStartTime = performance.now();
+  console.log('页面加载开始时间：', new Date().toLocaleString());
+
+  // 2024年优化：页面加载逻辑
+  // 1. 页面加载时显示 Loading 弹窗（中英双语）
+  Swal.fire({
+    title: '正在加载数据...\nLoading data...',
+    text: '请稍候\nPlease wait',
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+
+  // 2024年优化：调用新的getPlan_weekly函数，只获取当前日期前一周和后三周的数据
+  // 原函数：getPlan_new() - 获取全年数据，加载较慢
+  // 新函数：getPlan_weekly() - 获取4周数据，大幅提升加载速度
+  google.script.run
+    .withSuccessHandler(function(result) {
+      const pageLoadEndTime = performance.now();
+      const loadTime = ((pageLoadEndTime - pageLoadStartTime) / 1000).toFixed(2);
+      console.log(`✅ 页面加载成功！总耗时：${loadTime}秒`);
+      showTable(result);
+    })
+    .withFailureHandler(function(error) {
+      const pageLoadEndTime = performance.now();
+      const loadTime = ((pageLoadEndTime - pageLoadStartTime) / 1000).toFixed(2);
+      console.log(`❌ 页面加载失败！总耗时：${loadTime}秒`);
+      console.error('错误详情：', error);
+      onFailure(error);
+    })
+    .getPlan_weekly();
+
+  $("#table").on("click", ".btn-danger", function () {
+
+   let data = table.row($(this).closest('tr')).data();  // 获取整个行的数据
+
+   console.log("Row Data", data);
+
+   sessionStorage.setItem("data", JSON.stringify(data))
+
+   let PM_SerialNumber = formatDate(data['开始日期']) + data['AEM#'];
+
+   console.log("PM_SerialNumber", PM_SerialNumber)
+
+   sessionStorage.setItem("PM_SerialNumber", PM_SerialNumber);
+
+   let PMStatus = data['保养状态/ PM Status'];
+
+   if (PMStatus.includes('未开始') || PMStatus.includes('进行中') || PMStatus.includes('人员已分配')) {
+
+    console.log("PM not start or ongoing");
+
+    Swal.close();
+    Swal.fire({
+     icon: 'warning',
+     title: '警告/ Warning',
+     text: "无需确认保养结果/ No need to confirm the PM result",
+     confirmButtonText: '确定'
+    })
+
+   } else {
+    console.log("PM has finished");
+    window.open(sessionStorage.getItem("siWebPage") + "?v=PM_Production_Confirm");  // 执行页面跳转
+   }
+
+  });
+
+ });
+
+ function inputKeyInfo() {
+  Swal.close();
+  let htmlContent = `
+  <div class="container mt-2">
+    <div class="row">
+      <div class="col mb-2">
+        <input id="date" type="text" class="form-control datepicker" placeholder="保养日期/ PM Date">
+      </div>
+      <div class="col mb-2">
+        <select id="WeekNo" class="form-control">
+          <option selected disabled>保养周次/ PM Week</option>
+        </select>
+      </div>
+      <div class="col mb-2">
+        <select id="workshop" class="form-control">
+          <option selected disabled>车间/ Workshop</option>
+          <option value="ALL">所有/ All</option>
+          <option value="TB1">TB1</option>
+          <option value="TB2">TB2</option>
+        </select>
+      </div>
+      <div class="col mb-2">
+        <select id="process" class="form-control">
+          <option selected disabled>工序/ Process</option>
+          <option value="ALL">所有/ All</option>
+          <option value="INJ">注塑/ INJ</option>
+          <option value="TF">植磨毛/ TF</option>
+          <option value="PK">包装/ PK</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class = "col-auto">
+        <span>提示：【保养日期】与【保养周次】二者任填其一筛选，避免使用这两个一起筛选</span> 
+      </div>
+    </div>
+  </div>`
+  Swal.fire({
+   title: '输入保养计划查询信息/ Please input the PM inquiry info',
+   width: '50%',
+   html: htmlContent,
+   showConfirmButton: true, // 显示确认按钮
+   confirmButtonText: '确认/ Confirm', // 确认按钮的文本
+   didOpen: () => {
+    // 初始化日期选择器
+    $('.datepicker').datepicker({
+     format: 'yyyy-mm-dd',
+     todayHighlight: true,
+     autoclose: true
+    });
+
+    // 根据 global_Process 设置 #process 选择框的值
+    if (global_Process.includes('INJ')) {
+     $('#process').val('INJ');
+    } else if (global_Process.includes('TF')) {
+     $('#process').val('TF');
+    } else if (global_Process.includes('PK')) {
+     $('#process').val('PK');
+    } else {
+     $('#process').val('ALL');
+    }
+
+    if (global_Workshop.includes('TB1')) {
+     $('#workshop').val('TB1');
+    } else if (global_Process.includes('TB2')) {
+     $('#workshop').val('TB2');
+    } else {
+     $('#workshop').val('ALL');
+    }
+
+    // 更新 select2 插件以显示新设置的值
+    $('#process').select2().trigger('change');
+    $('#workshop').select2().trigger('change');
+    $("#process,#workshop,#WeekNo").select2({
+     theme: 'bootstrap', // 使用 Bootstrap 主题
+     minimumResultsForSearch: -1, // 禁用搜索框
+     dropdownParent: $('.swal2-modal') // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+    });
+    $("#WeekNo").select2({
+     theme: 'bootstrap', // 使用 Bootstrap 主题
+     dropdownParent: $('.swal2-modal') // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+    });
+    let week = [];
+    global_data.Content.forEach((r) => { week.push(r["日历周次"]) })
+    let uniqueWeek = [...new Set(week)];
+    uniqueWeek.sort()
+    $('#WeekNo').select2({
+     data: uniqueWeek,
+     theme: 'bootstrap', // 使用 Bootstrap 主题
+     dropdownParent: $('.swal2-modal'), // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+    });
+   },
+   preConfirm: () => {
+    let process = $("#process").val();
+    let workshop = $("#workshop").val();
+    let date = $("#date").val();
+    let WeekNo = $("#WeekNo").val();
+    return { Process: process, Workshop: workshop, Date: date, WeekNo: WeekNo }
+   }
+  }).then((r) => {
+   if (r.isConfirmed) {
+    let filterInfo = r.value;
+    console.log("filterInfo", filterInfo)
+
+    // 调用函数来更新表格
+    updateTableWithFilter(filterInfo);
+   }
+  })
+
+ }
+
+ // 2024年优化：筛选功能更新
+ // 注意：此函数仍使用前端筛选，数据范围已通过getPlan_weekly()限制为4周
+ function updateTableWithFilter(filterInfo) {
+  const filterStartTime = performance.now();
+  
+  console.log('🔍 开始执行筛选操作...');
+
+  // 清除所有的筛选条件
+  table.search('').columns().search('').draw();
+  // 根据用户选择的信息来设置筛选条件
+  if (filterInfo.Process !== 'ALL') {
+   table.column(3).search(filterInfo.Process).draw();
+  }
+  if (filterInfo.Workshop !== 'ALL') {
+   table.column(2).search(filterInfo.Workshop).draw();
+  }
+  if (filterInfo.Date) {
+   table.column(4).search(filterInfo.Date).draw();
+  }
+  if (filterInfo.WeekNo) {
+   table.column(1).search(filterInfo.WeekNo).draw();
+  }
+  
+  const filterEndTime = performance.now();
+  const filterTime = ((filterEndTime - filterStartTime) / 1000).toFixed(2);
+  console.log(`✅ 筛选操作完成！筛选耗时：${filterTime}秒`);
+ }
+
+ function showTable(obj) {
+  const tableRenderStartTime = performance.now();
+  
+  let head = obj.Head;
+  let data = obj.Content;
+  let record = JSON.parse(obj.Record_obj);
+  
+  console.log(`📊 数据统计：共加载 ${data.length} 条保养计划记录`);
+  
+  // 2024年新增：处理日期范围提示信息
+  // 检查是否有前一周或后三周的数据，如果没有则显示提示
+  if (obj.DateRange) {
+    showDateRangeInfo(obj.DateRange);
+  }
+  
+  let formattedRecords = record.map(item => {
+   if (item['Plan PM Date']) {
+       let date = new Date(item['Plan PM Date']);
+       let year = date.getFullYear();
+       let month = date.getMonth() + 1;
+       let day = date.getDate();
+       month = month < 10 ? '0' + month : month;
+       day = day < 10 ? '0' + day : day;
+       item['Plan PM Date'] = `${year}-${month}-${day}`;
+   }
+   return item;
+  });
+
+  data.forEach((r) => {
+   let mark = r['AEM#'] + r['开始日期'];
+   r["标识"] = mark;
+  });
+
+  formattedRecords.forEach((a) => {
+   let mark2 = a['Workcenter'] + a['Plan PM Date'];
+   a["标识"] = mark2;
+  });
+
+  let recordMap = new Map(formattedRecords.map(item => [item['标识'], item['PmStatus']]));
+  
+  data.forEach(item => {
+   if (recordMap.has(item['标识'])) {
+    item['保养状态/ PM Status'] = recordMap.get(item['标识']);
+   } else {
+    item['保养状态/ PM Status'] = '未开始/ Not Start';
+   }
+  });
+
+  global_data = obj;
+
+  let table_array = [];
+  for (let i = 0; i < head.length; i++) {
+   let obj = {};
+   obj.title = head[i];
+   obj.data = head[i];
+   table_array.push(obj);
+  }
+  table_array.push(
+   { title: "保养状态/ PM Status", data: "保养状态/ PM Status" },
+   { title: "操作/ Operation", data: "操作/ Operation" },
+   { title: "班组确认/ Production Confirm", data: "班组确认/ Production Confirm" }
+  )
+
+  table = $('#table').DataTable({
+   columns: table_array,
+   dom: '<"toolbar">frtip', 
+   columnDefs: [
+    {
+     targets: 15,
+     data: null, 
+     defaultContent: '<button class="btn btn-info btn-sm text-center">跟进</button>',
+     orderable: false,
+     className: 'operation-column text-center' // 添加CSS类名和居中样式
+    },
+    {
+     targets: 16,
+     data: null, 
+     render: function (data, type, row) {
+      let status = row['保养状态/ PM Status'];
+      
+      // 只有已完成状态才显示可用按钮
+      if (status && (status.includes('Finished') || status.includes('已完成'))) {
+        return `<button class="btn btn-sm text-center btn-danger" style="background-color:#FF6F91;color:white;font-weight:bold;">班组确认/ Production Confirm</button>`;
+      } else {
+        // 其他状态显示禁用按钮
+        return `<button class="btn btn-sm text-center" style="background-color:#ccc;color:#666;font-weight:bold;" disabled>班组确认/ Production Confirm</button>`;
+      }
+     },
+     orderable: false,
+     className: 'text-center' // 添加居中样式
+    },
+    {
+     targets: [5],
+     visible: false,
+    },
+    // 对“保养状态/ PM Status”列（第14列，索引为14）进行格式化显示
+    {
+     targets: 14,
+     render: function (data, type, row) {
+      // 排序时返回数值，显示时返回带样式的HTML
+      if (type === 'sort') {
+        if (data && (data.includes('Finished') || data.includes('已完成'))) {
+          return 2;
+        } else if (data && (data.includes('Ongoing') || data.includes('进行中') || data.includes('已添加临时任务') || data.includes('人员已分配'))) {
+          return 1;
+        } else {
+          return 0;
+        }
+      }
+      if (type === 'display' || type === 'filter') {
+        if (data && (data.includes('Finished') || data.includes('已完成'))) {
+          return '<span class="badge bg-success">已完成/ Finished</span>';
+        } else if (data && (data.includes('Ongoing') || data.includes('进行中'))) {
+          return '<span class="badge bg-warning text-dark">进行中/ Ongoing</span>';
+        } else if (data && data.includes('已添加临时任务')) {
+          return '<span class="badge" style="background-color:#9370DB;color:white;">已添加临时任务</span>';
+        } else if (data && data.includes('人员已分配')) {
+          return '<span class="badge" style="background-color:#00BFFF;color:white;">人员已分配</span>';
+        } else if (data && data.includes('未开始')) {
+          return '<span class="badge" style="background-color:#FFB6C1;color:white;">未开始/ Not Start</span>';
+        } else {
+          return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
+        }
+      }
+      return data;
+     },
+     className: 'text-center' // 添加居中样式
+    }
+   ],
+   createdRow: function (row, data, dataIndex) {
+    let statusIndex = 14; 
+    let statusValue = data["保养状态/ PM Status"]; 
+
+    // 确保第15列（操作列）保持默认背景色，使用 !important 确保优先级
+    $(row).children('td').eq(15).attr('style', 'background-color: transparent !important; color: inherit !important;');
+
+    // 只设置第14列（保养状态）单元格的底色
+    if (statusValue && (statusValue.includes('Finished') || statusValue.includes('已完成'))) {
+     $(row).children('td').eq(statusIndex).css({
+      'font-weight': 'bold',
+      'background-color': '#32CD32',//绿色
+      'color': 'white'
+     });
+    } else if (statusValue && (statusValue.includes('Ongoing') || statusValue.includes('进行中'))) {
+     $(row).children('td').eq(statusIndex).css({
+      'font-weight': 'bold',
+      'background-color': '#FFC300',//黄色
+      'color': 'white'
+     });
+    } else if (statusValue && statusValue.includes('已添加临时任务')) {
+     $(row).children('td').eq(statusIndex).css({
+      'font-weight': 'bold',
+      'background-color': '#9370DB',//中紫色
+      'color': 'white'
+     });
+    } else if (statusValue && statusValue.includes('人员已分配')) {
+     $(row).children('td').eq(statusIndex).css({
+      'font-weight': 'bold',
+      'background-color': '#00BFFF',//天蓝色
+      'color': 'white'
+     });
+    } else if (statusValue && statusValue.includes('未开始')) {
+     $(row).children('td').eq(statusIndex).css({
+      'font-weight': 'bold',
+      'background-color': '#FFB6C1',//红色
+      'color': 'white'
+     });
+    }
+   }
+  });
+  $("div.toolbar").html('<button id="resetFilters" class="btn btn-secondary">重置筛选</button>');
+  $('#table thead th').css({
+   'background-color': '#E60012',
+   'color': 'white'
+  });
+  table.clear().draw();
+  table.rows.add(data).draw();
+
+  $('#resetFilters').on('click', function () {
+   inputKeyInfo();
+  });
+
+  inputKeyInfo();
+  
+  // 2024年新增：记录表格渲染完成时间
+  const tableRenderEndTime = performance.now();
+  const tableRenderTime = ((tableRenderEndTime - tableRenderStartTime) / 1000).toFixed(2);
+  console.log(`🎯 表格渲染完成！渲染耗时：${tableRenderTime}秒`);
+
+  // --- 此处逻辑已修复 ---
+  $("#table").on("click", ".btn-info", function () {
+   let data = table.row($(this).closest('tr')).data();
+   sessionStorage.setItem("data", JSON.stringify(data))
+   console.log("本行数据为：", data);
+
+   const status = data['保养状态/ PM Status'];
+
+   // 1. 检查是否为“未开始”状态
+   if (status.includes("未开始")) {
+    sessionStorage.setItem('PM_Stauts', "Not Start"); // 正确设置为 "Not Start"
+    let url = siWebPage + '?v=PM_Task_1.0';
+    window.open(url);
+   // 2. 检查是否为其他可跟进的状态
+   } else if (status.includes("进行中") || status.includes("人员已分配") || status.includes("已添加临时任务")) {
+    sessionStorage.setItem('PM_Stauts', "Ongoing"); // 将所有其他情况统一设置为 "Ongoing"
+    let url = siWebPage + '?v=PM_Task_1.0';
+    window.open(url);
+   } else {
+    // 对于“已完成”等其他状态，不执行任何操作
+    return false
+   }
+  })
+ }
+
+ function onFailure(error) {
+  console.error("❌ 页面加载发生错误：" + error.message);
+  console.error("错误堆栈：", error.stack);
+ }
+
+ // 2024年新增：显示日期范围提示信息
+ // 功能：当某时间段无保养计划时，在页面上显示提示信息
+ // 参数：dateRange - 包含hasLastWeekData和hasNextThreeWeeksData的对象
+ function showDateRangeInfo(dateRange) {
+   let messages = [];
+   
+   if (!dateRange.hasLastWeekData) {
+     messages.push("前一周无保养计划");
+   }
+   
+   if (!dateRange.hasNextThreeWeeksData) {
+     messages.push("后三周无保养计划");
+   }
+   
+   if (messages.length > 0) {
+     let messageHtml = `
+       <div class="alert alert-warning alert-dismissible fade show" role="alert" style="margin-top: 10px;">
+         <i class="fas fa-exclamation-triangle"></i>
+         <strong>数据提示：</strong> 
+         ${messages.join('，')}
+         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+       </div>
+     `;
+     
+     // 在指定的提示区域显示信息
+     $('#dateRangeInfo').html(messageHtml);
+     
+     // 5秒后自动隐藏提示信息，避免长时间占用页面空间
+     setTimeout(() => {
+       $('.alert-warning').fadeOut('slow');
+     }, 5000);
+   }
+ }
+
+ function formatDate(dateString) {
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}${month}${day}`;
+ }
+
+</script>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("Kez_bootstrap-datepicker_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+<?!=include("Kez_sweetalert2_js");?>
+    
+    <style>
+        /* 确保表头背景色与TaskManagement.html一致 */
+        .dataTables_wrapper .dataTables_scroll .dataTables_scrollHead .dataTables_scrollHeadInner table thead th,
+        table.dataTable thead th {
+            background-color: #E60012 !important;
+            color: white !important;
+        }
+        
+        /* 确保所有表头都使用相同的背景色 */
+        #imTable thead th,
+        #tfTable thead th,
+        #pkTable thead th {
+            background-color: #E60012 !important;
+            color: white !important;
+        }
+    </style>
+
+<body>
+    <nav class="navbar navbar-expand-lg bg-nav">
+        <div class="container-fluid">
+            <a class="navbar-brand" style="
+                color: white;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: xx-large;
+                font-weight: bold;
+              ">故障报告管理 / Failure Report Management</a>
+        </div>
+    </nav>
+
+    <br>
+
+    <div class="container mt-2">
+        <div class="card">
+            <div class="card-header">
+                Failure Report Management / 故障报告管理
+            </div>
+            <div class="card-body">
+                <!-- 故障报告管理功能区域 -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="alert alert-info">
+                            <h5>故障报告管理功能/ Failure Report Management Functions</h5>
+                            <p>此页面用于管理故障报告是否需要书写的判定。</p>
+                            <p>This page is used for managing whether failure reports need to be written or not.</p>
+                            <p>注塑工序(IM)故障时间大于240min，原则需要书写故障报告。</p>
+                            <p>IM process failure time greater than 240min, failure report should be written in principle.</p>
+                            <p>植磨毛工序(TF)故障时间大于120min，原则需要书写故障报告。</p>
+                            <p>TF process failure time greater than 120min, failure report should be written in principle.</p>
+                            <p>包装工序(PK)故障时间大于60min，原则需要书写故障报告。</p>
+                            <p>PK process failure time greater than 60min, failure report should be written in principle.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据表格区域 -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6>故障报告列表 / Failure Report List</h6>
+                            </div>
+                            <div class="card-body">
+                                <!-- 工序标签页 -->
+                                <ul class="nav nav-tabs" id="processTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="im-tab" data-bs-toggle="tab" data-bs-target="#im-content" type="button" role="tab" aria-controls="im-content" aria-selected="true">
+                                            注塑工序(IM) / Injection Molding
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="tf-tab" data-bs-toggle="tab" data-bs-target="#tf-content" type="button" role="tab" aria-controls="tf-content" aria-selected="false">
+                                            植磨毛工序(TF) / Tufting
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="pk-tab" data-bs-toggle="tab" data-bs-target="#pk-content" type="button" role="tab" aria-controls="pk-content" aria-selected="false">
+                                            包装工序(PK) / Packaging
+                                        </button>
+                                    </li>
+                                </ul>
+                                
+                                <!-- 标签页内容 -->
+                                <div class="tab-content" id="processTabContent">
+                                    <!-- IM工序内容 -->
+                                    <div class="tab-pane fade show active" id="im-content" role="tabpanel" aria-labelledby="im-tab">
+                                        <div class="mt-3">
+                                            <div class="table-responsive">
+                                                <table id="imTable" class="display table table-bordered table-striped table-hover" style="width:100%">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>编号 / Report No.</th>
+                                                            <th>机台号 / Machine No.</th>
+                                                            <th>问题描述 / Problem Description</th>
+                                                            <th>状态 / Status</th>
+                                                            <th>维修时间 / Repair Time</th>
+                                                            <th>提交日期 / Submit Date</th>
+                                                            <th>车间 / Workshop</th>
+                                                            <th>工序 / Process</th>
+                                                            <th>故障报告确认 / Failure Report Confirmation</th>
+                                                            <th>是否需要故障报告 / Need Failure Report</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <!-- IM数据将通过JavaScript动态加载 -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- TF工序内容 -->
+                                    <div class="tab-pane fade" id="tf-content" role="tabpanel" aria-labelledby="tf-tab">
+                                        <div class="mt-3">
+                                            <div class="table-responsive">
+                                                <table id="tfTable" class="display table table-bordered table-striped table-hover" style="width:100%">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>编号 / Report No.</th>
+                                                            <th>机台号 / Machine No.</th>
+                                                            <th>问题描述 / Problem Description</th>
+                                                            <th>状态 / Status</th>
+                                                            <th>维修时间 / Repair Time</th>
+                                                            <th>提交日期 / Submit Date</th>
+                                                            <th>车间 / Workshop</th>
+                                                            <th>工序 / Process</th>
+                                                            <th>故障报告确认 / Failure Report Confirmation</th>
+                                                            <th>是否需要故障报告 / Need Failure Report</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <!-- TF数据将通过JavaScript动态加载 -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- PK工序内容 -->
+                                    <div class="tab-pane fade" id="pk-content" role="tabpanel" aria-labelledby="pk-tab">
+                                        <div class="mt-3">
+                                            <div class="table-responsive">
+                                                <table id="pkTable" class="display table table-bordered table-striped table-hover" style="width:100%">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>编号 / Report No.</th>
+                                                            <th>机台号 / Machine No.</th>
+                                                            <th>问题描述 / Problem Description</th>
+                                                            <th>状态 / Status</th>
+                                                            <th>维修时间 / Repair Time</th>
+                                                            <th>提交日期 / Submit Date</th>
+                                                            <th>车间 / Workshop</th>
+                                                            <th>工序 / Process</th>
+                                                            <th>故障报告确认 / Failure Report Confirmation</th>
+                                                            <th>是否需要故障报告 / Need Failure Report</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <!-- PK数据将通过JavaScript动态加载 -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入JavaScript文件 -->
+    <?!=include("Kez_jquery@3.6.4_js") ?>
+    <?!=include("Kez_datatables@1.13.6_js") ?>
+    <?!=include("Kez_bootstrap@5.3.1_js") ?>
+    <?!=include("FailureReport_Manage-js") ?>
+
+</body>
+
+</html>

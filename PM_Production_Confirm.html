@@ -1,0 +1,165 @@
+<html>
+
+<head>
+	<base target="_top">
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("Kez_bootstrap-datepicker_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+
+<body>
+	<nav class="navbar navbar-expand-lg">
+		<div class="container-fluid">
+			<a class="navbar-brand" style="
+				color: white;
+				font-family: Arial, Helvetica, sans-serif;
+				font-size: xx-large;
+				font-weight: bold;
+			  ">保养班组确认/ PM Production Team confirmation</a>
+
+			<div class="collapse navbar-collapse" id="navbarSupportedContent">
+				<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="<?!=webPage?>?v=Shift_1.0">交接班/ Shift
+							Handover</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">点检/ Inspection</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="https://script.google.com/a/colpal.com/macros/s/AKfycbyaKWHcTSogglvVN7sKaTOgDTXOg5IMYUIGKdy7/exec">工艺参数管理/
+							PPMS</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="https://script.google.com/a/colpal.com/macros/s/AKfycbzX8unrThQsGqjz0gpwfTp3Y6HSl_2oyfuqBpw5/exec">二手备件/
+							Sec-Hand Spare
+							Parts</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">文档索引/ Document
+							Library</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">模具管理/ Mold
+							Management</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="https://script.google.com/a/macros/colpal.com/s/AKfycbx3i7PBxvqejgeGF2LA_XQ4HfOZxII2cku3BzQBtetYHPFEvlNd6egmt4SxAm8lxjkgnA/exec">特种设备检查/
+							Special
+							Equipment
+							Inspection</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">任务清单变更管理/ Tasklist
+							MoC</a>
+					</li>
+				</ul>
+			</div>
+		</div>
+	</nav>
+
+	<div class="container">
+		<div class="row mt-5">
+			<div class="col-6">
+				<div class="input-group mt-3">
+					<span class="col-6 input-group-text">工号/ Work Number</span>
+					<input type="text" id="workingNunber" class="col-6 form-control"
+						placeholder="请输入工号/ Please Input your working Number" style="text-align: center;">
+				</div>
+			</div>
+			<div class="col-6">
+				<div class="input-group mt-3">
+					<span class="col-4 input-group-text">姓名/ Name</span>
+					<input type="text" id="Name" class="col-auto form-control" placeholder="自动生成/ Auto Generate"
+						style="text-align: center;" readonly>
+
+				</div>
+			</div>
+
+		</div>
+
+		<div class="row mt-5">
+			<div class="col-auto">
+				<span class="col-4 ">留样图片上传/ Samples Image Upload</span>
+			</div>
+			<div class="col-auto">
+				<input type="file" accept="image/*" capture="camera" id="take-photo" class="form-control" />
+			</div>
+		</div>
+
+
+		<div class="row mt-5">
+			<div class="col-auto">
+				<label>保养样品是否异常/ PM Samples Abnormal?</label>
+			</div>
+			<div class="col-1 form-check form-check-inline">
+				<input class="form-check-input" type="radio" id="EquM_Y" name="EquM" value="Abnormal" checked>
+				<label class="form-check-label" for="EquM_Y">
+					异常/ Abnormal
+				</label>
+			</div>
+			<div class="col-1 form-check form-check-inline">
+				<input class="form-check-input" type="radio" id="EquM_N" name="EquM" value="Normal">
+				<label class="form-check-label" for="EquM_N">
+					正常/ Normal
+				</label>
+			</div>
+		</div>
+
+		<div class="row mt-5">
+
+			<textarea class="form-control" id="SamplesDescruption" rows="1"
+				placeholder="样品问题描述/ Abnromal Samples Description" style="height: 200px;"></textarea>
+		</div>
+
+
+		<div class="row mt-5">
+			<div class="col-4">
+				<button type="button" class="btn w-100" id="accept"
+					style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold; ">接受/
+					Accept</button>
+			</div>
+			<div class="col-4">
+				<button type="button" class="btn w-100" id="refuse"
+					style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold; ">拒绝/
+					Refuse</button>
+			</div>
+			<div class="col-4">
+				<button type="button" class="btn w-100" id="acceptWdeviation"
+					style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold; ">偏差接受/
+					Accept
+					with Deviation</button>
+			</div>
+
+		</div>
+
+	</div>
+
+
+
+
+
+</body>
+
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("Kez_bootstrap-datepicker-js") ?>
+
+<?!=include("PM_Procduction_Confirm-js") ?>
+
+</html>

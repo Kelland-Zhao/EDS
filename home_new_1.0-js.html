@@ -1,0 +1,170 @@
+<script>
+  let pageLoadComplete = false;
+  let webPageLoaded = false;
+  let userInfoLoaded = false;
+
+  $(document).ready(() => {
+    // 2024年新增：记录页面加载开始时间
+    const pageLoadStartTime = performance.now();
+    console.log('🔧 页面开始加载...');
+    
+    // 2024年优化：页面加载时显示 Loading 弹窗（中英双语）
+    Swal.fire({
+      title: '正在加载数据...\nLoading data...',
+      text: '请稍候\nPlease wait',
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      showCancelButton: false,
+      showCloseButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    google.script.run.withSuccessHandler(htmlGetReleaseWebPage).getReleaseWebPage();
+    // google.script.run.withSuccessHandler(getName).getUseID();
+    google.script.run.withSuccessHandler(login).getIDinfo();
+    // 延迟初始化Bootstrap，避免与SweetAlert冲突
+    setTimeout(() => {
+      initializeBootstrap();
+    }, 100);
+  })
+
+  function htmlGetReleaseWebPage(result) {
+    sessionStorage.setItem("siWebPage", result)
+    webPageLoaded = true;
+    checkPageLoadComplete();
+  }
+
+  function initializeBootstrap() {
+    // Bootstrap 5 不需要手动初始化大部分组件
+    // 模态框会自动初始化，但我们可以确保它们正常工作
+    console.log('Bootstrap components initialized');
+  }
+
+  // 检查页面加载是否完成
+  function checkPageLoadComplete() {
+    if (webPageLoaded && userInfoLoaded && !pageLoadComplete) {
+      pageLoadComplete = true;
+      showPageLoadComplete();
+    }
+  }
+
+  // 显示页面加载完成提示
+  function showPageLoadComplete() {
+    // 先关闭loading弹窗
+    Swal.close();
+    
+    // 显示加载完成提示
+    Swal.fire({
+      title: '页面加载完成 / Page Loaded',
+      text: '系统已准备就绪，请输入工号开始使用 / System ready, please enter your ID to start',
+      icon: 'success',
+      timer: 3000,
+      showConfirmButton: false,
+      timerProgressBar: true
+    });
+  }
+
+  // 移除查询功能的事件处理
+  // $("#viewData").click(() => {
+  //   window.open(sessionStorage.getItem("siWebPage") + "?v=ViewHistory")
+  // })
+
+  function login(userID) {
+    // console.log('userID', userID);
+    let id = '';
+    let name = '';
+    let PWD = '';
+    let process = '';
+    let workshop = '';
+    
+    userInfoLoaded = true;
+    checkPageLoadComplete();
+
+    $("#id").change(() => {
+      id = $("#id").val();
+      if (id.length == 5) {
+        let user = userID.filter((r) => {
+          return r.ID == id;
+        })
+        if (user.length > 0) {
+          console.log('user', user);
+          sessionStorage.setItem('ID', user[0].ID);
+          sessionStorage.setItem('Name', user[0].Name);
+          sessionStorage.setItem('PWD', user[0].PWD);
+          sessionStorage.setItem('Process', user[0].Process);
+          sessionStorage.setItem('Workshop', user[0].Workshop);
+          name = user[0].Name;
+          PWD = user[0].PWD;
+          process = user[0].Process;
+          workshop = user[0].Workshop;
+          $("#login").prop("disabled", false);
+          // google.script.run.writeUserLogInformation(id, name);//有问题
+        } else {
+          name = "用户不存在"
+          console.log(name);
+        }
+        $("#Name").val(name);
+        // Bootstrap不需要手动更新文本字段
+      } else {
+        $("#Name").val("请输入正确的工号");
+        // Bootstrap不需要手动更新文本字段
+      }
+    })
+
+
+    $("#login").click(() => {
+      let pd = $("#pd").val();
+      // console.log('id', id, 'pd', pd, 'PWD', PWD)
+      if (id == '') {
+        swal.fire('请输入328工号');
+        return false;
+      }
+      else {
+        if (pd == '') {
+          swal.fire('请输入密码');
+          return false;
+        }
+        else {
+          if (pd == PWD) {
+            window.open(sessionStorage.getItem("siWebPage")
+              + "?v=Navigation"
+              + '&ID=' + encodeURIComponent(id)
+              + '&Name=' + encodeURIComponent(name)
+              + '&Process=' + encodeURIComponent(process)
+              + '&Workshop=' + encodeURIComponent(workshop)
+            );//+"&webPage="+sessionStorage.getItem("siWebPage")
+            $("#Name,#id,#pd").val("");
+            // console.log('Pass')
+          } else {
+            swal.fire('密码错误/ Password Error');
+            return false;
+          }
+        }
+      }
+
+    })
+
+  }
+
+  // 删除不再需要的Materialize相关函数
+  // function modal() { ... }
+  // function closeModal() { ... }
+  // window.onclick = function (event) { ... }
+
+  // <!--  -->
+  $("#confirmChange").click(() => {
+    let id = $("#id1").val();
+    let oldPd = $("#oldPd").val();
+    let new_Pd = $("#newPd").val();
+    let confirmPd = $("#confirmPd").val();
+    let info = [id, oldPd, new_Pd, confirmPd];
+    google.script.run.withSuccessHandler((a) => {
+      swal.fire(a)
+    }).changePassword(info);
+
+    $("#id1,#oldPd,#newPd,#confirmPd").val("");
+  })
+
+</script>

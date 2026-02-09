@@ -1,0 +1,429 @@
+<script>
+  $(document).ready(function () {
+    // 2024年新增：记录页面加载开始时间
+    const pageLoadStartTime = performance.now();
+    console.log('页面加载开始时间：', new Date().toLocaleString());
+
+    // 设置开始日期和结束日期为当天
+    var today = new Date();
+    var yyyy = today.getFullYear();
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var dd = String(today.getDate()).padStart(2, '0');
+    var todayStr = yyyy + '-' + mm + '-' + dd;
+    $('#startDate').val(todayStr);
+    $('#endDate').val(todayStr);
+
+    // 数据加载提示（中英双语）
+    Swal.fire({
+      title: '正在加载数据...\nLoading data...',
+      text: '请稍候\nPlease wait',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    google.script.run
+      .withSuccessHandler(function (data) {
+        const pageLoadEndTime = performance.now();
+        const loadTime = ((pageLoadEndTime - pageLoadStartTime) / 1000).toFixed(2);
+        console.log(`✅ 页面加载成功！总耗时：${loadTime}秒`);
+        
+        console.log(data);
+        // 数据加载完成，关闭弹窗
+        Swal.close();
+        if (data && Array.isArray(data.Head) && Array.isArray(data.Content)) {
+          try {
+            const tableRenderStartTime = performance.now();
+            console.log(`📊 数据统计：共加载 ${data.Content.length} 条保养记录`);
+            
+            $('#recordTable').empty();
+                        // 需要剔除的列索引（6/7/8/9/13/15/16/18/19列，数组下标为5/6/7/8/12/14/15/17/18）
+            const excludeIdx = [5, 6, 7, 8, 12, 14, 15, 17, 18];
+          // 过滤表头
+          const filteredHead = data.Head.filter((h, idx) => !excludeIdx.includes(idx));
+          // 只显示第二列包含“已完成”或“Finish”的条目
+          const colName = filteredHead[1];
+          const detailColName = filteredHead.find(h => h.includes('任务明细'));
+          const filteredContent = data.Content.map(row => {
+            let newRow = {};
+            filteredHead.forEach(h => {
+              let val = row[h];
+              if (val === undefined) {
+                // 忽略大小写和空格匹配
+                const realKey = Object.keys(row).find(k => k.replace(/\s/g, '').toLowerCase() === h.replace(/\s/g, '').toLowerCase());
+                val = realKey ? row[realKey] : '';
+              }
+              newRow[h] = val;
+            });
+            return newRow;
+          }).filter(row => {
+            const col2 = filteredHead[1];
+            const val = row[col2] ? row[col2].toString() : '';
+            return val.includes('已完成') || val.includes('Finish');
+          });
+          // 生成表头映射表（中英文对照）
+          const headMap = {
+            "PM No.": "保养编号 / PM No.",
+            "PmStatus": "保养状态 / PM Status",
+            "Notification": "工单号 / Notification",
+            "PM People": "保养人员 / PM People",
+            "Plan PM Date": "计划保养日期 / Plan PM Date",
+            "Workcenter": "机台号 / Workcenter",
+            "任务明细": "任务明细 / Task Details",
+            "总任务数量": "总任务数量 / Total Tasks",
+            "任务未完成数量": "未完成任务数 / Unfinished Tasks",
+            "班组交接": "班组交接 / Team Handover",
+            "保养确认人": "保养确认人 / PM Confirmer",
+            "保养任务报告": "保养任务报告 / PM Task Report"
+          };
+          // 生成表头
+          let thead = '<thead><tr>';
+          filteredHead.forEach(h => { thead += `<th>${headMap[h] || h}</th>`; });
+          thead += '</tr></thead>';
+          // DataTable列定义
+          const columns = filteredHead.map((h, idx) => {
+            if (h === detailColName) {
+              return {
+                title: headMap[h] || h,
+                data: null,
+                className: 'text-center', // 居中显示
+                render: function (data, type, row) {
+                  return `<button class='btn btn-info btn-sm detail-btn'>详细情况</button>`;
+                }
+              };
+            } else if (h === 'PM People') {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                render: function (data, type, row) {
+                  if (!data) return '';
+                  let arr = [];
+                  if (Array.isArray(data)) {
+                    arr = data;
+                  } else if (typeof data === 'string' && data.trim().startsWith('[')) {
+                    try {
+                      arr = JSON.parse(data);
+                    } catch (e) {
+                      arr = [data];
+                    }
+                  } else {
+                    arr = data.toString().split(/[\/，,]/).map(s => s.trim()).filter(Boolean);
+                  }
+                  return arr.map(item => `<div>${item}</div>`).join('');
+                }
+              };
+            } else if (h === '班组交接') {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                render: function (data, type, row) {
+                  // 解析内容为对象
+                  let status = '', workNumber = '', name = '';
+                  if (typeof data === 'string') {
+                    // 将{name=曹瑛, sampleStatus=Normal, workNumber=69039}转为对象
+                    const obj = {};
+                    data.replace(/[{}]/g, '').split(',').forEach(pair => {
+                      const [k, v] = pair.split('=');
+                      if (k && v !== undefined) obj[k.trim()] = v.trim();
+                    });
+                    status = obj['sampleStatus'] || '';
+                    workNumber = obj['workNumber'] || '';
+                    name = obj['name'] || '';
+                  }
+                  
+                  // 处理样品状态显示，如果包含Normal则显示为带底色的按钮样式
+                  let displayStatus = status;
+                  if (status && status.includes('Normal')) {
+                    displayStatus = '<span class="badge" style="background-color:#32CD32;color:white;font-weight:bold;">正常/ Normal</span>';
+                  }
+                  
+                  return `样品状态：${displayStatus}<br>工号：${workNumber}<br>姓名：${name}`;
+                }
+              };
+            } else if (h === 'PmStatus') {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                render: function (data, type, row) {
+                  if (type === 'display' || type === 'filter') {
+                    if (data && (data.includes('Finished') || data.includes('已完成'))) {
+                      return '<span class="badge bg-success">已完成/ Done</span>';
+                    } else if (data && (data.includes('Ongoing') || data.includes('进行中'))) {
+                      return '<span class="badge bg-warning text-dark">进行中/ Ongoing</span>';
+                    } else if (data && data.includes('未开始')) {
+                      return '<span class="badge" style="background-color:#FFB6C1;color:white;">未开始/ Not Start</span>';
+                    } else if (data && data.includes('人员已分配')) {
+                      return '<span class="badge" style="background-color:#00BFFF;color:white;">人员已分配/ Personnel Assigned</span>';
+                    } else if (data && data.includes('已添加临时任务')) {
+                      return '<span class="badge" style="background-color:#9370DB;color:white;">已添加临时任务</span>';
+                    } else {
+                      return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
+                    }
+                  }
+                  return data;
+                }
+              };
+            } else if (h === 'Notification') {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                render: function (data, type, row) {
+                  if (!data) return '';
+                  if (Array.isArray(data)) {
+                    return data.map(s => `<div>${s}</div>`).join('');
+                  }
+                  return data.toString().split(/[\/\t]/).map(s => `<div>${s.trim()}</div>`).join('');
+                }
+              };
+            } else if (h === '保养任务报告') {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                className: 'text-center',
+                render: function (data, type, row) {
+                  if (typeof data === 'string' && data.startsWith('http')) {
+                    return `<a href="${data}" target="_blank" class="btn btn-success btn-sm">附件</a>`;
+                  } else {
+                    return '<span style="color:#888;">无报告</span>';
+                  }
+                }
+              };
+            } else if (h === '保养确认人') {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                render: function (data, type, row) {
+                  if (!data || typeof data !== 'string' || !data.includes('confirmed by:')) {
+                    return '<span style="color:#888;">未确认</span>';
+                  }
+                  // 解析格式：2025-07-24 15:19:02 confirmed by: 33017/范朝锋
+                  const match = data.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) confirmed by: (\d+)\/(.+)$/);
+                  if (match) {
+                    const date = match[1];
+                    const time = match[2];
+                    const workNo = match[3];
+                    const name = match[4];
+                    return `确认日期：${date}<br>确认时间：${time}<br>工号：${workNo}<br>姓名：${name}`;
+                  } else {
+                    return data;
+                  }
+                }
+              };
+            } else if (idx === 0) {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                className: 'firstcol-auto-width',
+                render: function (data, type, row) {
+                  return (data !== undefined && data !== null && data !== '') ? data : (row && row[h] ? row[h] : '');
+                }
+              };
+            } else {
+              return {
+                title: headMap[h] || h,
+                data: h,
+                render: function (data) {
+                  // 0要显示为'0'，其它空值显示为空
+                  return (data === 0) ? '0' : (data || '');
+                }
+              };
+            }
+          });
+          if ($.fn.DataTable.isDataTable('#recordTable')) {
+            $('#recordTable').DataTable().destroy();
+          }
+          const table = $('#recordTable').DataTable({
+            data: filteredContent,
+            columns: columns,
+            language: {
+              url: 'https://cdn.datatables.net/plug-ins/2.0.8/i18n/zh-Hans.json'
+            },
+            initComplete: function () {
+              $('#recordTable thead th').css({
+                'background-color': '#E60012',
+                'color': 'white'
+              });
+            }
+          });
+          // 事件委托，点击“详细情况”按钮弹窗显示内容
+          $('#recordTable tbody').off('click').on('click', '.detail-btn', function () {
+            const rowData = table.row($(this).closest('tr')).data();
+            const detailContent = rowData[detailColName];
+            let tableData = [];
+            let columns = [];
+            let isJson = false;
+            try {
+              // 尝试解析为JSON数组
+              const parsed = JSON.parse(detailContent);
+              if (Array.isArray(parsed)) {
+                tableData = parsed;
+                // 自动生成表头
+                if (parsed.length > 0 && typeof parsed[0] === 'object') {
+                  columns = Object.keys(parsed[0]).map(k => ({ title: k, data: k }));
+                } else {
+                  columns = [{ title: '内容', data: null, render: d => d }];
+                }
+                isJson = true;
+              }
+            } catch (e) { }
+            if (!isJson) {
+              // 不是JSON，按行分割
+              tableData = (detailContent || '').toString().split(/\r?\n/).filter(line => line.trim()).map(line => ({ content: line }));
+              columns = [{ title: '内容', data: 'content' }];
+            } else if (tableData.length > 0 && typeof tableData[0] === 'object') {
+              // 如果是对象数组，处理imageContent和字段名映射
+              const fieldMapping = {
+                'taskStatus': 'Task Status',
+                'valueAndNote': '数值记录&备注',
+                'image': '图片'
+              };
+              
+              // 过滤掉"Task Status"字段，无论是否为空都不显示
+              const validFields = Object.keys(tableData[0]).filter(k => {
+                // 如果字段名是"Task Status"，则过滤掉
+                if (k === 'Task Status') {
+                  return false;
+                }
+                return true;
+              });
+              
+              columns = validFields.map(k => {
+                if (k === 'imageContent') {
+                  return {
+                    title: k,
+                    data: k,
+                    render: function (data, type, row) {
+                      return data ? '见链接' : '';
+                    }
+                  };
+                } else if (fieldMapping[k] === 'Task Status' || fieldMapping[k] === '是否完成' || k === 'Task Status' || k === '是否完成') {
+                  return {
+                    title: fieldMapping[k] || k,
+                    data: k,
+                    render: function (data) {
+                      return data === true || data === 'true' ? '√' : '×';
+                    }
+                  };
+                } else {
+                  return { 
+                    title: fieldMapping[k] || k, 
+                    data: k 
+                  };
+                }
+              });
+            }
+            Swal.fire({
+              title: '任务明细内容',
+              html: `<table id="detailTable" class="table table-bordered table-striped" style="width:100%"></table>`,
+              didOpen: () => {
+                $('#detailTable').DataTable({
+                  data: tableData,
+                  columns: columns,
+                  searching: false,
+                  paging: false,
+                  info: false,
+                  ordering: false,
+                  language: {
+                    emptyTable: '无数据'
+                  }
+                });
+                // 设置表头样式与主表一致
+                $('#detailTable thead th').css({
+                  'background-color': '#E60012',
+                  'color': 'white'
+                });
+              },
+              customClass: {
+                popup: 'swal-wide'
+              }
+            });
+          });
+          // 获取设备编号选项（第10列，filteredHead[8]）
+          // 获取Workcenter列名
+          const workcenterCol = filteredHead.find(h => h === 'Workcenter');
+          const deviceSet = new Set(filteredContent.map(row => row[workcenterCol]).filter(Boolean));
+          const deviceOptions = Array.from(deviceSet).map(val => ({ id: val, text: val }));
+          // 1. 确保select有空option
+          $('#deviceSelect').empty().append('<option value=""></option>');
+          // 2. 初始化select2
+          $('#deviceSelect').select2({
+            data: deviceOptions,
+            placeholder: '请选择机台号',
+            allowClear: true,
+            width: '100%',
+            language: 'zh-CN'
+          });
+          // 3. 保证初始无选中项，显示placeholder
+          $('#deviceSelect').val(null).trigger('change');
+          // 保存原始数据供筛选用
+          let allTableData = filteredContent;
+
+          // 2024年新增：记录表格渲染完成时间
+          const tableRenderEndTime = performance.now();
+          const tableRenderTime = ((tableRenderEndTime - tableRenderStartTime) / 1000).toFixed(2);
+          console.log(`🎯 表格渲染完成！渲染耗时：${tableRenderTime}秒`);
+
+          // 查询按钮筛选逻辑
+          $('#searchBtn').off('click').on('click', function () {
+            const filterStartTime = performance.now();
+            console.log('🔍 开始执行筛选操作...');
+            
+            const startDate = $('#startDate').val();
+            const endDate = $('#endDate').val();
+            const device = $('#deviceSelect').val();
+            // 获取列名
+            const planDateCol = filteredHead.find(h => h.includes('Plan PM Date'));
+            const workcenterCol = filteredHead.find(h => h.includes('Workcenter'));
+            // 过滤
+            let filtered = allTableData.filter(row => {
+              let pass = true;
+              // 日期范围
+              if (startDate) {
+                pass = pass && row[planDateCol] && row[planDateCol] >= startDate;
+              }
+              if (endDate) {
+                pass = pass && row[planDateCol] && row[planDateCol] <= endDate;
+              }
+              // 机台号
+              if (device) {
+                pass = pass && row[workcenterCol] && row[workcenterCol] == device;
+              }
+              return pass;
+            });
+            // 刷新表格
+            const table = $('#recordTable').DataTable();
+            table.clear();
+            table.rows.add(filtered);
+            table.draw();
+            
+            const filterEndTime = performance.now();
+            const filterTime = ((filterEndTime - filterStartTime) / 1000).toFixed(2);
+            console.log(`✅ 筛选操作完成！筛选耗时：${filterTime}秒`);
+          });
+        } catch (e) {
+          const errorEndTime = performance.now();
+          const errorTime = ((errorEndTime - pageLoadStartTime) / 1000).toFixed(2);
+          console.error(`❌ 渲染表格异常！总耗时：${errorTime}秒`);
+          console.error('错误详情:', e);
+          alert('渲染表格异常: ' + e);
+        }
+      } else {
+        const errorEndTime = performance.now();
+        const errorTime = ((errorEndTime - pageLoadStartTime) / 1000).toFixed(2);
+        console.error(`❌ 后端返回数据为空或格式不正确！总耗时：${errorTime}秒`);
+        console.log('后端返回:', data);
+        alert('后端返回数据为空或格式不正确');
+      }
+    })
+    .withFailureHandler(function(error) {
+      const errorEndTime = performance.now();
+      const errorTime = ((errorEndTime - pageLoadStartTime) / 1000).toFixed(2);
+      console.error(`❌ 页面加载失败！总耗时：${errorTime}秒`);
+      console.error('错误详情:', error);
+      Swal.close();
+      alert('数据加载失败：' + error.message);
+    })
+    .getMasterPMData();
+  });
+</script>

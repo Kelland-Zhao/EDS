@@ -1,0 +1,222 @@
+<script>
+
+  window.onload = function () {
+    document.onkeydown = function () {
+      var e = window.event || arguments[0];
+      if (e.keyCode == 123) {
+        return false;
+      } else if ((e.ctrlKey) && (e.shiftKey) && (e.keyCode == 73)) {
+        return false;
+      }
+    }
+    document.oncontextmenu = function () {
+      return false;
+    }
+  }
+  
+  const arrTaskItem=["保养","点检"];
+  const arrTaskMachine=[9,8];
+  const arrTaskNo=[0,0];
+  const arrTaskList=[10,10];
+  const arrPointCheckMachineType=[-1,3]
+  const arrTaskTableWidth=[
+                           [8,8,8,8,8,17,6,6,6,6,6,6,4,3],
+                           [8,8,20,8,8,8,6,6,6,6,6,3,4,3]       
+                          ]
+  let arrTaskInfo=[];
+
+
+  // 窗体载入
+  $(document).ready(function () {
+    initializeMaterialCSS();
+    $("#task").select2({
+      placeholder: "任务",
+      minimumResultsForSearch: Infinity,  //隐藏搜索框
+    })
+    $("#years").select2({
+      placeholder: "年份",
+      minimumResultsForSearch: Infinity,  //隐藏搜索框
+    })
+    $("#workshop").select2({
+      placeholder: "车间",
+      minimumResultsForSearch: Infinity,  //隐藏搜索框
+    })
+    $("#process").select2({
+      placeholder: "工序",
+      minimumResultsForSearch: Infinity,  //隐藏搜索框
+    })
+  });
+
+  $("#getCheckList").click(()=>{
+    let task=$("#task").val();
+    let years=$("#years").val();
+    let workshop=$("#workshop").val();
+    let process=$("#process").val();
+    console.log(task&&years&&workshop&&process)
+    swal.fire({
+      allowOutsideClick:false,
+      icon:'info',
+      title:'正在加载检索数据……',
+      html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+          '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点按钮重新操作一次</p>',
+      confirmButtonText:'等待……不自动关闭再点',
+      showConfirmButton:true,
+      timer:120000,
+      timerProgressBar:true
+    });
+    if(task&&years&&workshop&&process){
+      google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((result)=>{
+        if(result[0]=="OK"){
+          arrTaskInfo=result[1];
+          let arrMachine=Array.from(new Set(arrTaskInfo.map(v=>{return v[arrTaskMachine[arrTaskItem.indexOf(task)]]})));
+          let arrSelectMachine=[];
+          for (i = 0; i < arrMachine.length; i++) {
+            arrSelectMachine.push({ id: arrMachine[i], text: arrMachine[i] });
+          }
+          $("#workcenter").empty();
+          $("#workcenter").select2({
+            placeholder: "机台",
+            data: arrSelectMachine
+          })
+          if(task=="点检"){
+            $("#machineType").prop("disabled",false);
+          }
+          $("#workcenter").prop("disabled",false);
+          $("#numbering").prop("disabled",false);
+          $("#viewTask").prop("disabled",false);
+          $("#getCheckList").prop("disabled",true);
+          swal.fire({allowOutsideClick:false,icon: "success",text: "检索成功",showConfirmButton: false,timer: 1500});
+        }
+        else{
+          swal.fire("检索失败："+result[1])
+        }
+      }).getTaskCheckList(task,years,workshop,process);
+    }
+  })
+
+  $("#workcenter").change(()=>{
+    let task=$("#task").val();
+    let workcenter=$("#workcenter").val();
+    if(task&&arrTaskInfo.length>0){
+      if(task=="点检"){
+        $('#machineType').empty();
+        $('#machineType').append('<option value="">类型</option>')
+        let arrMachineType=Array.from(new Set(arrTaskInfo.filter(v=>{return v[arrTaskMachine[arrTaskItem.indexOf(task)]]==workcenter}).map(v=>{return v[arrPointCheckMachineType[arrTaskItem.indexOf(task)]]})));
+        console.log("测试",arrMachineType);
+        let arrSelectMachineType=[];
+        for (i = 0; i < arrMachineType.length; i++) {
+          arrSelectMachineType.push({ id: arrMachineType[i], text: arrMachineType[i] });
+        }
+        $("#machineType").select2({
+          placeholder: "类型(仅点检)",
+          data: arrSelectMachineType
+        })
+        $("#machineType").change(()=>{
+          let machineType=$("#machineType").val();
+          $('#numbering').empty();
+          $('#numbering').append('<option value="">编号</option>')
+          let arrNumbering=Array.from(new Set(arrTaskInfo.filter(v=>{return v[arrTaskMachine[arrTaskItem.indexOf(task)]]==workcenter&&v[arrPointCheckMachineType[arrTaskItem.indexOf(task)]]==machineType}).map(v=>{return v[arrTaskNo[arrTaskItem.indexOf(task)]]})));
+          let arrSelectNumbering=[];
+          for (i = 0; i < arrNumbering.length; i++) {
+            arrSelectNumbering.push({ id: arrNumbering[i], text: arrNumbering[i] });
+          }
+          $("#numbering").select2({
+            placeholder: "编号",
+            data: arrSelectNumbering
+          })
+        })
+      }
+      else{
+        $('#numbering').empty();
+        $('#numbering').append('<option value="">编号</option>')
+        let arrNumbering=Array.from(new Set(arrTaskInfo.filter(v=>{return v[arrTaskMachine[arrTaskItem.indexOf(task)]]==workcenter}).map(v=>{return v[arrTaskNo[arrTaskItem.indexOf(task)]]})));
+        let arrSelectNumbering=[];
+        for (i = 0; i < arrNumbering.length; i++) {
+          arrSelectNumbering.push({ id: arrNumbering[i], text: arrNumbering[i] });
+        }
+        $("#numbering").select2({
+          placeholder: "编号",
+          data: arrSelectNumbering
+        })
+      }
+    }
+  })
+
+  $("#viewTask").click(()=>{
+    let numbering=$("#numbering").val();
+    let task=$("#task").val();
+    let machineType=$("#machineType").val();
+    $("#thead").empty();
+    $("#tbody").empty();
+    if(numbering){
+      let arrAllNumbering=[];
+      let position=-1;
+      if(task=="点检"){
+        arrAllNumbering=arrTaskInfo.map(v=>{return v[arrTaskNo[arrTaskItem.indexOf(task)]]+v[arrPointCheckMachineType[arrTaskItem.indexOf(task)]]});
+        position=arrAllNumbering.indexOf(numbering+machineType);
+      }
+      else{
+        arrAllNumbering=arrTaskInfo.map(v=>{return v[arrTaskNo[arrTaskItem.indexOf(task)]]});
+        position=arrAllNumbering.indexOf(numbering);
+      }
+      if(position!=-1){
+        let taskInfo=JSON.parse(arrTaskInfo[position][arrTaskList[arrTaskItem.indexOf(task)]]);
+        let arrHead=[];
+        let arrBody=[];
+        let strThead="<tr>";
+        let strBody="";
+        let k=0;
+        for(let i=0;i<taskInfo.length;i++){
+          arrBody.push([]);
+          strBody=strBody+"<tr>";
+          k=0;
+          for(let j in taskInfo[i]){
+            if(i==0){
+              arrHead.push(j);
+              strThead=strThead+"<th style='width:"+arrTaskTableWidth[arrTaskItem.indexOf(task)][k]+"%'>"+j+"</th>";
+            }
+            arrBody[arrBody.length-1].push([taskInfo[i][j]]);
+            strBody=strBody+"<td>"+taskInfo[i][j]+"</td>";
+            k=k+1;
+          }
+          strBody=strBody+"</tr>";
+        }
+        strThead=strThead+"</tr>";
+        $("#thead").html(strThead);
+        $("#tbody").html(strBody);
+        $("#part2").css("display", "block")
+        console.log(strThead,strBody);
+      }
+    }
+  })
+
+  $("#resetSearch").click(()=>{
+    $("#workcenter").empty();
+    $("#numbering").empty();
+    $("#workcenter").prop("disabled",true);
+    $("#machineType").prop("disabled",true);
+    $("#numbering").prop("disabled",true);
+    $("#viewTask").prop("disabled",true);
+    $("#getCheckList").prop("disabled",false);
+    $("#part2").css("display", "none");
+    $('#thead').empty();
+    $("#tbody").empty();
+  })
+
+  // 初始化
+  function initializeMaterialCSS() {
+    $('.parallax').parallax();
+    $('.dropdown-trigger').dropdown();
+    $('select').formSelect();
+    $('.sidenav').sidenav();
+    $('.datepicker').datepicker({format: 'yyyy-mm-dd',autoClose: true});
+    $('.timepicker').timepicker();
+    $('.modal').modal();
+  }
+
+  
+  function judgeFailure(){
+    swal.fire({allowOutsideClick:false,icon:'info',title:'服务器长时间未响应',showConfirmButton:true,footer:'<p>建议重新操作一次</p>'});
+  }
+
+</script>

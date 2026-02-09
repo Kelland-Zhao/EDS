@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>系统登录</title>
+    <!-- <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" />
+    <link href="https://cdn.shopify.com/s/files/1/1775/8583/t/1/assets/admin-materialize.min.css?0" rel="stylesheet" /> -->
+    <?!= include("zj_material_Integrated_css"); ?>
+    <?!= include("zj_Login_Admin_Materialize_CSS"); ?>
+    <?!= include("home-css"); ?>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="row" style="margin-top: 5%; margin-bottom: 5px">
+        <div class="col s8 offset-s2">
+          <h4
+            class="center-align card-panel"
+            style="
+              font-family: Roboto;
+              background-color: rgb(218, 41, 28);
+              color: white;
+            "
+          >
+            高露洁设备管理系统
+          </h4>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col s8 offset-s2">
+          <div class="card card-login">
+            <div
+              class="card-login-splash"
+              style="
+                background-image: url(https://lh3.googleusercontent.com/u/0/d/1cB5RUvu26OL9vMrJHJHtnYWjCpHUO7np);
+                background-size: cover;
+              "
+            ></div>
+            <div class="card-content">
+              <span class="card-title">用户登录</span>
+              <!-- <form _lpchecked="1"> -->
+              <div class="input-field">
+                <input
+                  disabled
+                  id="Name"
+                  placeholder="用户名"
+                  type="text"
+                  class="validate"
+                  autocomplete="off"
+                  style="cursor: pointer"
+                />
+              </div>
+
+              <div class="row">
+                <div class="col s2 input-field">
+                  <input
+                    disabled
+                    placeholder="328"
+                    type="text"
+                    class="validate"
+                    autocomplete="off"
+                    style="cursor: pointer"
+                  />
+                </div>
+
+                <div class="col s10 input-field">
+                  <input
+                    id="id"
+                    type="text"
+                    inputmode="numeric"
+                    class="validate"
+                    autocomplete="off"
+                    style="cursor: pointer"
+                  />
+                  <label for="id" class="">工号</label>
+                </div>
+              </div>
+
+              <div class="input-field">
+                <input
+                  id="pd"
+                  type="password" 
+                  class="validate"
+                  autocomplete="off"
+                  style="cursor: auto"
+                />
+                <label for="pd" class="">密码</label>
+              </div>
+             
+             <div>
+              <a
+                class="modal-trigger left"
+                id='changePd'
+                href="#myModal"
+                >修改密码?</a
+              >
+           
+              <a
+                class="right"
+                href="https://script.google.com/a/colpal.com/macros/s/AKfycbzX8unrThQsGqjz0gpwfTp3Y6HSl_2oyfuqBpw5/exec" target="_blank"
+                >二手备件</a
+              >
+              </div>
+
+              <br>
+              <br>
+
+              <div>
+                <button
+                  id="viewData"
+                  class="btn red waves-effect waves-light left"
+                  style="margin-top: 10px"
+                >
+                  <i class="material-icons right">check</i>查询
+                </button>
+                <button
+                  id="login"
+                  class="btn red waves-effect waves-light right"
+                  style="margin-top: 10px"
+                >
+                  <i class="material-icons right">send</i>登录
+                </button>
+              </div>
+
+              <!-- </form> -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="myModal" class="modal">
+      <div class="container">
+        <div class="modal-content">
+          <h6 class='card-panel teal lighten-2' style='text-align:center'> 更改密码</h6>
+          <div class='input-field'>
+            <input type="number" id="id1" style="text-align:center" class="input-field col s6">
+            <label for="id1">328工号(后5位)</label>
+          </div>
+
+          <div class='input-field'>
+            <input type="password" id="oldPd" style="text-align:center" class="col s6">
+            <label for="oldPd">旧密码</label>
+          </div>
+
+          <div class='input-field'>
+            <input type="password" id="newPd" style="text-align:center" class="validate">
+            <label for="newPd">新密码</label>
+          </div>
+
+          <div class='input-field'>
+            <input type="password" id="confirmPd" style="text-align:center" class="validate">
+            <label for="confirmPd">新密码确认</label>
+          </div>
+
+          <div class="row">
+            <div class='col s3 offset-s4'>
+              <button class=" btn waves-effect waves-light btn-small" type="submit" id="confirmChange">确认修改</button>
+            </div>
+
+            <div class='col s4'>
+              <button class=" waves-effect waves-light btn-small" id='cancelChange'>取消修改</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script> -->
+    <!-- <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script> -->
+    <!-- important to ensure script run-->
+    <?!= include("zj_material_Integrated_js");?>
+    <?!= include("home-js"); ?>
+  </body>
+</html>

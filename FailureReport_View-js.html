@@ -1,0 +1,402 @@
+<script>
+$(document).ready(function() {
+    // 全局变量
+    let imTable, tfTable, pkTable;
+    
+    // 页面加载完成后初始化
+    initPage();
+    
+    /**
+     * 初始化页面
+     */
+    function initPage() {
+        // 页面加载时显示一个提示框
+        Swal.fire({
+            title: '加载数据中... / Loading Data...',
+            text: '正在从服务器获取故障报告数据，请稍候。 / Fetching failure report data from server, please wait.',
+            allowOutsideClick: false,
+            didOpen: function() {
+                Swal.showLoading();
+            }
+        });
+        
+        // 初始化DataTable
+        initDataTables();
+        
+        // 加载数据
+        loadFailureReportViewData();
+    }
+    
+    /**
+     * 初始化所有DataTable
+     */
+    function initDataTables() {
+        // 初始化IM工序表格
+        imTable = $('#imTable').DataTable({
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+            order: [[0, 'desc']], // 按故障报告编号降序排列
+            responsive: true,
+            scrollX: true,
+            scrollCollapse: true,
+            columns: [
+                { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+                { data: 'workshop', title: '车间 / Workshop' },
+                { data: 'process', title: '工序 / Process' },
+                { data: 'machineNo', title: '机台号 / Machine No.' },
+                { data: 'submitDate', title: '提交日期 / Submit Date' },
+                { data: 'problemDescription', title: '问题描述 / Problem Description' },
+                { data: 'assignDate', title: '分配日期 / Assignment Date' },
+                { data: 'uploadDate', title: '上传日期 / Upload Date' },
+                { data: 'attachment', title: '附件 / Attachments' }
+            ],
+            columnDefs: getColumnDefs(),
+            dom: '<"top"lf>rt<"bottom"ip><"clear">'
+        });
+
+        // 初始化TF工序表格
+        tfTable = $('#tfTable').DataTable({
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+            order: [[0, 'desc']], // 按故障报告编号降序排列
+            responsive: true,
+            scrollX: true,
+            scrollCollapse: true,
+            columns: [
+                { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+                { data: 'workshop', title: '车间 / Workshop' },
+                { data: 'process', title: '工序 / Process' },
+                { data: 'machineNo', title: '机台号 / Machine No.' },
+                { data: 'submitDate', title: '提交日期 / Submit Date' },
+                { data: 'problemDescription', title: '问题描述 / Problem Description' },
+                { data: 'assignDate', title: '分配日期 / Assignment Date' },
+                { data: 'uploadDate', title: '上传日期 / Upload Date' },
+                { data: 'attachment', title: '附件 / Attachments' }
+            ],
+            columnDefs: getColumnDefs(),
+            dom: '<"top"lf>rt<"bottom"ip><"clear">'
+        });
+
+        // 初始化PK工序表格
+        pkTable = $('#pkTable').DataTable({
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+            order: [[0, 'desc']], // 按故障报告编号降序排列
+            responsive: true,
+            scrollX: true,
+            scrollCollapse: true,
+            columns: [
+                { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+                { data: 'workshop', title: '车间 / Workshop' },
+                { data: 'process', title: '工序 / Process' },
+                { data: 'machineNo', title: '机台号 / Machine No.' },
+                { data: 'submitDate', title: '提交日期 / Submit Date' },
+                { data: 'problemDescription', title: '问题描述 / Problem Description' },
+                { data: 'assignDate', title: '分配日期 / Assignment Date' },
+                { data: 'uploadDate', title: '上传日期 / Upload Date' },
+                { data: 'attachment', title: '附件 / Attachments' }
+            ],
+            columnDefs: getColumnDefs(),
+            dom: '<"top"lf>rt<"bottom"ip><"clear">'
+        });
+    }
+
+    /**
+     * 日期格式化函数
+     */
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        try {
+            let date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr; // 如果不是有效日期，返回原始字符串
+            let year = date.getFullYear();
+            let month = String(date.getMonth() + 1).padStart(2, '0');
+            let day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        } catch (e) {
+            console.error('日期格式化错误 / Date formatting error:', e, '原始日期 / Original date:', dateStr);
+            return dateStr;
+        }
+    }
+
+    /**
+     * 获取列定义配置
+     */
+    function getColumnDefs() {
+        return [
+            {
+                targets: 0, // 故障报告编号列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return data || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 1, // 车间列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return data || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 2, // 工序列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return data || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 3, // 机台号列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return data || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 4, // 提交日期列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return formatDate(data) || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 5, // 问题描述列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        if (data && data.length > 50) {
+                            return '<span title="' + data + '">' + data.substring(0, 50) + '...</span>';
+                        }
+                        return data || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 6, // 分配日期列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return formatDate(data) || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 7, // 上传日期列
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return formatDate(data) || '-';
+                    }
+                    return data;
+                }
+            },
+            {
+                targets: 8, // 附件列 - 超链接版本
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        if (data && data !== '') {
+                            // 检查是否包含HYPERLINK公式
+                            if (data.includes('=HYPERLINK')) {
+                                // 解析HYPERLINK公式
+                                const hyperlinkMatch = data.match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
+                                if (hyperlinkMatch) {
+                                    const url = hyperlinkMatch[1];
+                                    const displayText = hyperlinkMatch[2];
+                                    
+                                    // 去掉文件扩展名
+                                    const fileName = displayText.replace(/\.[^/.]+$/, '');
+                                    
+                                    console.log('HYPERLINK解析成功:');
+                                    console.log('  URL:', url);
+                                    console.log('  原始显示文本:', displayText);
+                                    console.log('  处理后文件名:', fileName);
+                                    
+                                    // 返回超链接
+                                    return '<a href="' + url + '" target="_blank" class="text-info" title="点击打开文件">' +
+                                           '<i class="fas fa-file-alt me-1"></i>' + fileName +
+                                           '</a>';
+                                } else {
+                                    console.warn('HYPERLINK公式解析失败:', data);
+                                    return '<span class="text-warning" title="公式解析失败: ' + data + '">' +
+                                           '<i class="fas fa-exclamation-triangle me-1"></i>公式解析失败' +
+                                           '</span>';
+                                }
+                            } else {
+                                // 不是HYPERLINK公式，直接显示原始数据
+                                console.log('非HYPERLINK公式数据:', data);
+                                return '<span class="text-info" title="原始数据: ' + data + '">' +
+                                       '<i class="fas fa-file-alt me-1"></i>' + data +
+                                       '</span>';
+                            }
+                        } else {
+                            return '<span class="text-muted">无附件</span>';
+                        }
+                    }
+                    return data;
+                }
+            }
+        ];
+    }
+    
+    /**
+     * 加载故障报告数据
+     */
+    function loadFailureReportViewData() {
+        // 调用后端函数获取数据
+        google.script.run
+            .withSuccessHandler(onDataLoadSuccess)
+            .withFailureHandler(onDataLoadFailure)
+            .getFailureReportViewData();
+    }
+    
+    /**
+     * 数据加载成功回调
+     */
+    function onDataLoadSuccess(data) {
+        // 解析后端返回的JSON字符串
+        let parsedData;
+        try {
+            parsedData = JSON.parse(data);
+        } catch (parseError) {
+            console.error('JSON解析失败 / JSON parsing failed:', parseError);
+            showError('数据解析失败 / Data parsing failed', '无法解析服务器返回的数据 / Unable to parse server data');
+            Swal.close();
+            return;
+        }
+        
+        if (parsedData && parsedData.success) {
+            // 清空所有表格数据
+            imTable.clear();
+            tfTable.clear();
+            pkTable.clear();
+            
+            // 按工序分类数据
+            const imData = [];
+            const tfData = [];
+            const pkData = [];
+            
+            if (parsedData.reports && parsedData.reports.length > 0) {
+                parsedData.reports.forEach(function(report, index) {
+                    const tableRow = {
+                        failureReportNumber: report.failureReportNumber || '',
+                        workshop: report.workshop || '',
+                        process: report.process || '',
+                        machineNo: report.machineNo || '',
+                        submitDate: report.submitDate || '',
+                        problemDescription: report.problemDescription || '',
+                        assignDate: report.assignDate || '',
+                        uploadDate: report.uploadDate || '',
+                        attachment: report.attachment || ''
+                    };
+                    
+                    // 根据工序分配到对应表格
+                    switch (report.process) {
+                        case 'IM':
+                            imData.push(tableRow);
+                            break;
+                        case 'TF':
+                            tfData.push(tableRow);
+                            break;
+                        case 'PK':
+                            pkData.push(tableRow);
+                            break;
+                        default:
+                            console.warn('未知工序 / Unknown process:', report.process);
+                    }
+                });
+                
+                // 向各表格添加数据
+                if (imData.length > 0) {
+                    imTable.rows.add(imData).draw();
+                }
+                
+                if (tfData.length > 0) {
+                    tfTable.rows.add(tfData).draw();
+                }
+                
+                if (pkData.length > 0) {
+                    pkTable.rows.add(pkData).draw();
+                }
+                
+                console.log('数据加载完成: 总计 ' + parsedData.reports.length + ' 条记录');
+            } else {
+                console.log('没有找到故障报告数据 / No failure report data found');
+            }
+        } else {
+            console.error('数据加载失败 / Data loading failed:', parsedData.message);
+            showError('数据加载失败 / Data loading failed', parsedData.message || '未知错误 / Unknown error');
+        }
+        
+        // 隐藏加载遮罩
+        Swal.close();
+    }
+    
+    /**
+     * 数据加载失败回调
+     */
+    function onDataLoadFailure(error) {
+        console.error('数据加载失败 / Data loading failed:', error);
+        showError('数据加载失败 / Data loading failed', error.message || '未知错误 / Unknown error');
+        Swal.close();
+    }
+    
+    /**
+     * 显示错误信息
+     */
+    function showError(title, message) {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message,
+            confirmButtonText: '确定 / OK'
+        });
+    }
+    
+    /**
+     * 显示成功信息
+     */
+    function showSuccess(title, message) {
+        Swal.fire({
+            icon: 'success',
+            title: title,
+            text: message,
+            confirmButtonText: '确定 / OK'
+        });
+    }
+    
+    /**
+     * 刷新数据
+     */
+    function refreshData() {
+        Swal.fire({
+            title: '加载数据中... / Loading Data...',
+            text: '正在从服务器获取故障报告数据，请稍候。 / Fetching failure report data from server, please wait.',
+            allowOutsideClick: false,
+            didOpen: function() {
+                Swal.showLoading();
+            }
+        });
+        loadFailureReportViewData();
+    }
+    
+    // 为每个表格添加刷新按钮
+    $('.dataTables_wrapper .dataTables_filter').each(function() {
+        $(this).after(
+            '<button class="btn btn-outline-primary btn-sm ms-2" onclick="refreshData()">' +
+            '<i class="fas fa-sync-alt"></i> 刷新 / Refresh</button>'
+        );
+    });
+    
+    // 将refreshData函数设为全局函数
+    window.refreshData = refreshData;
+});
+</script>

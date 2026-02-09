@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 引入必要的CSS和JS库 -->
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("kez_Datatables_css");?>
+  <?!=include("Kez_sweetalert2_js");?>
+  <?!=include("CSS");?>
+</head>
+<body>
+  <!-- 顶部导航栏 -->
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <a class="navbar-brand" style="color: white; font-family: Arial, Helvetica, sans-serif; font-size: xx-large; font-weight: bold;">
+        任务清单编辑 / Task List Edit
+      </a>
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link active" id="navigateHome" style="color: white; font-size: x-large; cursor: pointer;">
+            导航页 / Navigation Page
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container mt-3">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5>编辑任务清单 / Edit Task List (<span id="taskIdentifier" class="text-primary"></span>)</h5>
+            <button class="btn btn-primary" id="addNewTaskBtn">新增任务 / Add New Task</button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">在这里，您可以修改、删除或新增保养任务。所有修改将在点击下方的“保存更改”按钮后生效。</p>
+            <table id="taskEditTable" class="display table table-bordered table-striped" style="width:100%">
+                <!-- 表格内容将由JavaScript动态生成 -->
+            </table>
+        </div>
+        <div class="card-footer text-end">
+            <button class="btn btn-success" id="saveChangesBtn">保存更改 / Save Changes</button>
+        </div>
+    </div>
+  </div>
+
+</body>
+
+<!-- 引入JS库和页面专属JS -->
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("TaskEdit_js") ?>
+
+</html>

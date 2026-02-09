@@ -1,0 +1,304 @@
+<script>
+$(document).ready(() => {
+  let global_UserID = []; // 用于存储所有用户ID和姓名
+
+  // --- 页面加载时显示一个提示框 ---
+  Swal.fire({
+    title: '加载数据中...',
+    text: '正在从服务器获取任务列表，请稍候。',
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+
+  // --- 页面加载时，预先获取所有用户的信息 ---
+  google.script.run.withSuccessHandler(function(users) {
+    if (users) {
+      users.forEach(user => {
+        // 假设第1列是工号(WorkingCode)，第2列是姓名(Name)
+        global_UserID.push({ WorkingCode: user[0], Name: user[1] });
+      });
+    }
+  }).getUseID();
+
+  // 从 session Storage 中获取Web App的基础URL
+  const siWebPage = sessionStorage.getItem('siWebPage');
+
+  // --- 从后端获取数据并填充表格 ---
+  google.script.run.withSuccessHandler(function(data) {
+    Swal.close(); // 关闭加载提示框
+
+    if (data && data.Content) {
+
+      // --- 数据筛选逻辑 ---
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // 计算三周后的日期
+      const threeWeeksLater = new Date(today);
+      threeWeeksLater.setDate(today.getDate() + 21); // 21天 = 3周
+
+      // 解析Record_obj数据
+      const recordObj = JSON.parse(data.Record_obj || '[]');
+      
+      // 交叉比对和状态判断
+      const enrichedContent = data.Content.map(planItem => {
+        // 生成序列号：开始日期+AEM#
+        let serialNumber = '';
+        if (planItem['开始日期'] && planItem['AEM#']) {
+          // 将日期格式化为YYYYMMDD
+          const dateParts = planItem['开始日期'].split('-');
+          if (dateParts.length === 3) {
+            const year = dateParts[0];
+            const month = dateParts[1].padStart(2, '0');
+            const day = dateParts[2].padStart(2, '0');
+            serialNumber = `${year}${month}${day}${planItem['AEM#']}`;
+          }
+        }
+        
+        // 查找匹配的记录
+        const matchingRecord = recordObj.find(record => 
+          record['PM No.'] === serialNumber
+        );
+        
+        // 状态判断逻辑 - 使用数组存储多个状态
+        let taskStatuses = [];
+        
+        // 人员分配状态
+        if (!matchingRecord || (matchingRecord && !(matchingRecord['PmStatus'] || '').includes('人员已分配'))) {
+          taskStatuses.push('人员未分配 / Personnel Unassigned');
+        } else if (matchingRecord && (matchingRecord['PmStatus'] || '').includes('人员已分配')) {
+          taskStatuses.push('人员已分配 / Personnel Assigned');
+        }
+        
+        // 任务编辑状态
+        if (!matchingRecord || (matchingRecord && !(matchingRecord['PmStatus'] || '').includes('已添加临时任务'))) {
+          taskStatuses.push('任务未编辑 / Task Unedited');
+        } else if (matchingRecord && (matchingRecord['PmStatus'] || '').includes('已添加临时任务')) {
+          taskStatuses.push('任务已编辑 / Task Edited');
+        }
+        
+        return {
+          ...planItem,
+          taskStatus: taskStatuses.join(', '), // 用逗号分隔多个状态
+          taskStatuses: taskStatuses // 保留数组形式便于渲染
+        };
+      });
+
+      const filteredContent = enrichedContent.filter(item => {
+        const dateParts = item['开始日期'].split('-');
+        const startDate = new Date(dateParts[0], parseInt(dateParts[1], 10) - 1, dateParts[2]);
+        startDate.setHours(0, 0, 0, 0);
+        
+        // 修改时间条件：明天及后续三周内
+        const dateCondition = startDate > today && startDate <= threeWeeksLater;
+        const statusCondition = item['状态'] !== '取消';
+        const categoryCondition = item['类别'] && item['类别'].includes('PM');
+        const uvCondition = item['机型'] && !item['机型'].includes('UV');
+        return dateCondition && statusCondition && categoryCondition && uvCondition;
+      });
+      // --- 筛选结束 ---
+
+      // 获取所有唯一工序并填充筛选器
+      const processes = [...new Set(filteredContent.map(item => item['工序']))].sort();
+      const processFilter = $('#processFilter');
+      
+      // 清空现有选项（保留"所有工序"选项）
+      processFilter.find('option:not(:first)').remove();
+      
+      // 添加工序选项
+      processes.forEach(process => {
+        if (process && process.trim()) { // 确保工序不为空
+          processFilter.append(`<option value="${process}">${process}</option>`);
+        }
+      });
+
+      // 初始化DataTables表格
+      const table = $('#taskManagementTable').DataTable({
+        data: filteredContent, // 使用筛选后的数据
+        columns: [
+            { title: "车间", data: "车间" },
+            { title: "工序", data: "工序" },
+            { title: "开始日期", data: "开始日期" },
+            { title: "AEM#", data: "AEM#" },
+            { title: "保养类型", data: "保养类型" },
+            { title: "机型", data: "机型" },
+            { title: "设备类型1", data: "设备类型1" },
+            { title: "设备类型2", data: "设备类型2" },
+            { title: "自动化类型", data: "自动化类型" },
+            { 
+              title: "任务状态 / Task Status",
+              data: "taskStatus",
+              render: function(data, type, row) {
+                let badges = [];
+                if (row.taskStatuses.includes('人员未分配 / Personnel Unassigned')) {
+                  badges.push('<span class="badge bg-secondary">人员未分配 / Personnel Unassigned</span>');
+                }
+                if (row.taskStatuses.includes('人员已分配 / Personnel Assigned')) {
+                  badges.push('<span class="badge bg-primary">人员已分配 / Personnel Assigned</span>');
+                }
+                if (row.taskStatuses.includes('任务未编辑 / Task Unedited')) {
+                  badges.push('<span class="badge bg-warning">任务未编辑 / Task Unedited</span>');
+                }
+                if (row.taskStatuses.includes('任务已编辑 / Task Edited')) {
+                  badges.push('<span class="badge bg-success">任务已编辑 / Task Edited</span>');
+                }
+                return badges.join(' '); // 多个badge用空格分隔
+              }
+            },
+            { 
+              title: "操作",
+              data: null, // 此列不直接绑定数据
+              defaultContent: '<button class="btn btn-success btn-sm me-1 assign-btn">人员分配</button><button class="btn btn-warning btn-sm edit-btn">任务编辑</button>',
+              orderable: false // 此列不可排序
+            }
+        ],
+        order: [[2, 'asc']], // 按“开始日期”升序排列
+        pageLength: 25,
+        responsive: true
+      });
+
+      // 设置表格头部的样式
+      $('#taskManagementTable thead th').css({
+        'background-color': '#E60012',
+        'color': 'white'
+      });
+
+      // 添加 badges 样式
+      $('<style>').prop('type', 'text/css').html("\n  .badge {\n    font-size: 0.75rem;\n    padding: 0.375rem 0.75rem;\n    border-radius: 0.375rem;\n  }\n  .bg-secondary { background-color: #6c757d !important; }\n  .bg-primary { background-color: #0d6efd !important; }\n  .bg-warning { background-color: #ffc107 !important; color: #000 !important; }\n  .bg-success { background-color: #198754 !important; }\n").appendTo('head');
+
+      // 添加工序筛选事件处理
+      $('#processFilter').on('change', function() {
+        const selectedProcess = $(this).val();
+        console.log('选择的工序:', selectedProcess); // 调试信息
+        
+        if (selectedProcess === '') {
+          // 显示所有工序
+          table.search('').columns().search('').draw();
+          console.log('显示所有工序');
+        } else {
+          // 筛选特定工序 - 使用更可靠的方法
+          table.search('').columns().search('').column(1).search(selectedProcess).draw();
+          console.log('筛选工序:', selectedProcess);
+        }
+      });
+
+      // --- 为“人员分配”按钮添加事件委托 ---
+      $('#taskManagementTable tbody').on('click', '.assign-btn', function () {
+        const rowData = table.row($(this).closest('tr')).data();
+        openPersonnelAssignmentModal(rowData);
+      });
+
+      // --- 此处逻辑已修改 ---
+      // 为“任务编辑”按钮添加事件委托，并通过sessionStorage传递数据
+      $('#taskManagementTable tbody').on('click', '.edit-btn', function () {
+        const rowData = table.row($(this).closest('tr')).data();
+        const siWebPage = sessionStorage.getItem('siWebPage');
+        if (siWebPage) {
+            // 将被编辑任务的完整数据存入sessionStorage
+            sessionStorage.setItem('taskToEdit', JSON.stringify(rowData));
+            let url = siWebPage + '?v=TaskEdit';
+            window.open(url, '_blank'); // 在新标签页中打开任务编辑页面
+        } else {
+            alert('无法找到应用地址！');
+        }
+      });
+
+    } else {
+      Swal.fire('加载失败', '未能从服务器获取有效数据。', 'error');
+    }
+  }).withFailureHandler(function(error) {
+    Swal.fire('加载失败', error.message, 'error');
+  }).getPlan_new();
+
+  function openPersonnelAssignmentModal(taskData) {
+    const htmlContent = `
+      <div class="container-fluid">
+        <div class="row align-items-end">
+          <div class="col-md-4">
+            <label for="workingCode" class="form-label">工号 / Working Code</label>
+            <input type="number" id="workingCode" class="form-control" placeholder="请输入5位工号">
+          </div>
+          <div class="col-md-4">
+            <label for="userName" class="form-label">姓名 / Name</label>
+            <input type="text" id="userName" class="form-control" readonly>
+          </div>
+          <div class="col-md-4">
+            <button type="button" class="btn btn-primary w-100" id="addPmPeople">添加人员 / Add</button>
+          </div>
+        </div>
+        <div class="row mt-3">
+          <div class="col-12">
+            <table id="pmPeopleTable" class="display table table-bordered" style="width:100%"></table>
+          </div>
+        </div>
+      </div>`;
+
+    Swal.fire({
+      title: '本次保养人员选择',
+      html: htmlContent,
+      width: '80%',
+      showConfirmButton: true,
+      confirmButtonText: '人员确认',
+      didOpen: () => {
+        const peopleTable = $("#pmPeopleTable").DataTable({
+          columns: [
+            { title: "工号 / Working Code", data: "WorkingCode" },
+            { title: "姓名 / Name", data: "Name" },
+            { 
+              title: "操作 / Operation", 
+              data: null,
+              defaultContent: '<button class="btn btn-danger btn-sm delete-btn">删除</button>',
+              orderable: false
+            }
+          ],
+          dom: 'rt'
+        });
+
+        $('#workingCode').on('input', function() {
+          const number = $(this).val();
+          if (number.length === 5 && $.isNumeric(number)) {
+            const user = global_UserID.find(u => u.WorkingCode == number);
+            $('#userName').val(user ? user.Name : '未找到');
+          } else {
+            $('#userName').val('');
+          }
+        });
+
+        $('#addPmPeople').on('click', function() {
+          const code = $('#workingCode').val();
+          const name = $('#userName').val();
+          if (code && name && name !== '未找到') {
+            const existingData = peopleTable.rows().data().toArray();
+            if (existingData.some(p => p.WorkingCode === code)) {
+              Swal.showValidationMessage('该人员已添加！');
+              return;
+            }
+            peopleTable.row.add({ WorkingCode: code, Name: name }).draw(false);
+            $('#workingCode, #userName').val('');
+          }
+        });
+
+        $('#pmPeopleTable tbody').on('click', '.delete-btn', function() {
+          peopleTable.row($(this).parents('tr')).remove().draw();
+        });
+      },
+      preConfirm: () => {
+        const assignedPeople = $("#pmPeopleTable").DataTable().rows().data().toArray();
+        if (assignedPeople.length === 0) {
+          Swal.showValidationMessage('请至少分配一名人员！');
+        }
+        return assignedPeople;
+      }
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        sessionStorage.setItem('taskToAssign', JSON.stringify(taskData));
+        sessionStorage.setItem('peopleToAssign', JSON.stringify(result.value));
+        let url = siWebPage + '?v=PersonnelAssignment';
+        window.open(url, '_blank');
+      }
+    });
+  }
+});
+</script>

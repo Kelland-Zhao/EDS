@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    /* 确保操作列保持默认背景色 */
+    .operation-column {
+      background-color: transparent !important;
+      color: inherit !important;
+    }
+
+    /* 确保第15列不受其他样式影响，只影响表格内容，不影响表头 */
+    #table tbody tr td:nth-child(16) {
+      background-color: transparent !important;
+      color: inherit !important;
+    }
+
+    /* 确保表头保持原来的红色背景色 */
+    #table thead th {
+      background-color: #E60012 !important;
+      color: white !important;
+    }
+
+    /* 确保第14、15、16列内容居中显示 */
+    #table tbody tr td:nth-child(15),
+    #table tbody tr td:nth-child(16),
+    #table tbody tr td:nth-child(17) {
+      text-align: center !important;
+    }
+
+    /* 确保badge标签在单元格内居中 */
+    #table tbody tr td:nth-child(15) .badge {
+      display: inline-block;
+      text-align: center;
+    }
+  </style>
+</head>
+
+
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("Kez_bootstrap-datepicker_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+<?!=include("CSS");?>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container">
+      <a class="navbar-brand" style="
+        color: white;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: xx-large;
+        font-weight: bold;">保养计划 / PM Plan</a>
+    </div>
+  </nav>
+  <div class="container mt-4">
+
+
+
+
+    <!-- 日期范围提示区域 -->
+    <div id="dateRangeInfo"></div>
+
+    <table id="table" class="display table table-bordered table-striped table-hover" style="width:100%">
+      <thead>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+</body>
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("Kez_bootstrap-datepicker-js") ?>
+
+<?!=include("PM_Plan-js_1.0") ?>
+
+</html>

@@ -1,0 +1,331 @@
+<script>
+  
+  window.onload = function () {
+    document.onkeydown = function () {
+      var e = window.event || arguments[0];
+      if (e.keyCode == 123) {
+        return false;
+      }
+      else if ((e.ctrlKey) && (e.shiftKey) && (e.keyCode == 73)) {
+        return false;
+      }
+    }
+    document.oncontextmenu = function () {
+      return false;
+    }
+  }
+
+  $(document).ready(async function () {
+    initializeMaterialCSS();
+    var name = sessionStorage.getItem('name');
+    var id = sessionStorage.getItem('id');
+    document.getElementById('name').textContent = name;
+    document.getElementById('id').textContent = '328' + id;
+
+    var workshop="";
+    var process="";
+    var { value: type } = await swal.fire({
+      allowOutsideClick:false,
+      title: '链接部门工序',
+      input: 'select',
+      inputOptions: {
+        TB1_INJ: 'TB1注塑',
+        TB1_TF: 'TB1植磨毛',
+        TB1_PK:'TB1包装',
+        TB2_INJ: 'TB2注塑',
+        TB2_TF: 'TB2植磨毛',
+        TB2_PK:'TB2包装'
+      },
+      inputPlaceholder: '请选择部门工序',
+      showCancelButton: true,
+      inputValidator: (value) => {
+        return new Promise((resolve) => {
+          if (value !== '') {
+            resolve()
+          } else {
+            resolve('请选择部门工序')
+          }
+        })
+      }
+    })
+    if(type){
+      workshop=type.split("_")[0];
+      process=type.split("_")[1];
+      sessionStorage.setItem("pmWorkshop",workshop);
+      sessionStorage.setItem("pmProcess",process);
+      swal.fire({
+        allowOutsideClick:false,
+        icon:'info',
+        title:'正在加载数据……',
+        html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+             '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点按钮重新操作一次</p>',
+        confirmButtonText:'等待……不自动关闭再点',
+        showConfirmButton:true,
+        timer:120000,
+        timerProgressBar:true
+      });
+      google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(main).getData_MaintenanceReport_Manage(workshop,process);
+    }
+    else{
+      swal.fire({
+        allowOutsideClick:false,
+        title: "操作取消",
+        icon: "info",
+        text:"若需重新操作，请刷新此页面",
+        showConfirmButton: true
+      })
+    }
+  });
+
+
+  /**********************************************************************************/
+  function initializeMaterialCSS() {
+    $('.modal').modal();
+    $('select').formSelect();
+    $('.sidenav').sidenav();
+    $('.datepicker').datepicker({
+      format: 'yyyy/mm/dd',
+      autoClose: true
+    });
+    $('.dropdown-trigger').dropdown();
+    $('.tabs').tabs();
+  }
+  
+  /******************************* main ********************************************/
+  function main(result) {
+    if(result[0]=="OK"){
+      let obj=JSON.parse(result[1]);
+      let data_undistribution = new Array();
+      let userID = obj.user.filter((r) => { return r[0] == $("#id").text().substr(3, 5) });
+      switch (obj.process) {
+        case "INJ":
+          data_undistribution = obj.shift.filter((r) => {
+            return r[7] >= 120 && r[19] == "" && r[5] == "已解决"
+          });
+          break;
+        case "TF":
+          data_undistribution = obj.shift.filter((r) => {
+            return r[7] >= 90 && r[19] == "" && r[5] == "已解决"
+          });
+          break;
+        case "PK":
+          data_undistribution = obj.shift.filter((r) => {
+            return r[7] >= 30 && r[19] == "" && r[5] == "已解决"
+          });
+          break;
+      }
+      if (userID[0][15] != "S&C") { $("#PART1").hide() }
+      let arr_shiftUndistribution = new Array();
+      data_undistribution.forEach((r) => {
+        arr_shiftUndistribution.push({
+          code: r[0],
+          issue: r[3],
+          ownner: r[6],
+          workcenter: r[2],
+          duration: r[7],
+          workshop: r[14],
+          process: r[15]
+        })
+      })
+      
+      let data_report = new Array();
+      let arr_report = new Array();
+      
+      if (userID[0][24] == "Y") {
+        data_report = obj.shift.filter((r) => {
+            return r[19] == "待完成" || r[19] == "待审核" || r[19] == "已完成"
+        })
+      } 
+      else {
+        data_report = obj.shift.filter((r) => {
+            return r[19] == "待完成" || r[19] == "已完成"
+        })
+      }
+
+      data_report.forEach((r) => {
+        arr_report.push({
+          code: r[0],
+          issue: r[3],
+          ownner: r[6],
+          workcenter: r[2],
+          duration: r[7],
+          workshop: r[14],
+          process: r[15],
+          status: r[19]
+        })
+      })
+
+      let unFinished = 0;
+      data_report.forEach((r) => { if (r[19] == "待完成") { unFinished = unFinished + 1 } })
+      if (unFinished == 0) {
+        $("#nav-mobile").find("span").hide()
+      }
+      else {
+        $("#nav-mobile").find("span").show()
+        $("#nav-mobile").find("span").text(unFinished)
+      }
+      
+      $("#MaintenanceReportDistribution").bootstrapTable({
+        data: arr_shiftUndistribution,
+        pagination: true,
+        sortName: "code",
+        sortOrder: "desc"
+      })
+
+      $("#MaintenanceReporttoBeFinished").bootstrapTable({
+          data: arr_report,
+          pagination: true,
+          sortName: "code",
+          sortOrder: "desc"
+      })
+      let id = sessionStorage.getItem("id");
+      let user_info = obj.user.filter((r) => {
+        return r[0] == id
+      });
+
+
+      $("#delete").click(() => {
+        let data = $("#MaintenanceReportDistribution").bootstrapTable("getSelections");
+        let info = { data: data, user: user_info }
+        swal.fire({
+          allowOutsideClick:false,
+          icon:'info',
+          title:'正在加载数据……',
+          html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+              '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点点按钮重新操作一次</p>',
+          confirmButtonText:'等待……不自动关闭再点',
+          showConfirmButton:true,
+          timer:120000,
+          timerProgressBar:true
+        });
+        google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((result) => {
+          if (result[0]=="OK") {
+            let code = new Array()
+            data.forEach((r) => {
+              code.push(r.code)
+            })
+            $("#MaintenanceReportDistribution").bootstrapTable('remove', {
+                field: 'code',
+                values: code
+            })
+            swal.fire({allowOutsideClick:false,title: "操作成功",icon: "success",timer: 1500,showConfirmButton: false});
+          }
+          else {
+            swal.fire({allowOutsideClick:false,title: "删除失败",text:result[1],icon: "warning",showConfirmButton: true,footer:"<p>联系相关人员</p>"});
+          }
+        }).delete_MaintenanceReport(info)
+      })
+
+      $("#add").click(() => {
+        let data = $("#MaintenanceReportDistribution").bootstrapTable("getSelections");
+        let info = { data: data, user: user_info }
+        swal.fire({
+          allowOutsideClick:false,
+          icon:'info',
+          title:'正在加载数据……',
+          html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+              '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点确定重新操作一次</p>',
+          showConfirmButton:true,
+          timer:120000,
+          timerProgressBar:true
+        });
+        google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((result) => {
+          if (result[0]=="OK") {
+            let code = new Array()
+            data.forEach((r) => {
+              code.push(r.code)
+            })
+            $("#MaintenanceReportDistribution").bootstrapTable('remove', {
+              field: 'code',
+              values: code
+            })
+            data.forEach((r) => {
+              $("#MaintenanceReporttoBeFinished").bootstrapTable("insertRow", {
+                index: 0,
+                row: {
+                  code: r.code,
+                  workshop: r.workshop,
+                  process: r.process,
+                  workcenter: r.workcenter,
+                  issue: r.issue,
+                  duration: r.duration,
+                  ownner: r.ownner,
+                  status: "待完成"
+                }
+              })
+            })
+            swal.fire({allowOutsideClick:false,title: "操作成功",icon: "success",timer: 1500,showConfirmButton: false});
+          }
+          else {
+            swal.fire({allowOutsideClick:false,title: "添加失败",text:result[1],icon: "error",showConfirmButton: true,footer:"<p>联系相关人员</p>"});
+          }
+        }).add_MaintenanceReport(info)
+      });
+      swal.fire({allowOutsideClick:false,icon:'success',title:'加载成功',showConfirmButton:false,timer:2000});
+    }
+    else{
+      swal.fire({allowOutsideClick:false,icon:'error',title:'加载失败',text:result[1],showConfirmButton:true,footer:'<p>联系相关人员</p>'});
+    }
+  }
+
+  window.operateEvents = {
+    'click #editor': function (e, value, row, index) {
+      let loginAem = row.workcenter;
+      let loginDes = row.issue;
+      let errorId = row.code;
+      let loginWorkshop = row.workshop;
+      let loginProcess = row.process;
+      let errorDuration = row.duration;
+      window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbx_G0C1PK8ar0gY-cAnyWzn8Xa9iVrfoDokMBdRYA/exec?autoSubmitLogin=Submit_AutoLogin" +
+                  '&' + 'errorId=' + errorId +
+                  '&' + 'loginWorkshop=' + loginWorkshop +
+                  '&' + 'loginProcess=' + loginProcess +
+                  '&' + 'loginAem=' + loginAem +
+                  '&' + 'loginId=' + sessionStorage.getItem('id') +
+                  '&' + 'loginName=' + sessionStorage.getItem('name') +
+                  '&' + 'errorDuration=' + errorDuration +
+                  '&' + 'loginDes=' + loginDes
+      );
+    },
+    'click #audit': function (e, value, row, index) {
+      let loginName = sessionStorage.getItem("name");
+      window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbx_G0C1PK8ar0gY-cAnyWzn8Xa9iVrfoDokMBdRYA/exec?autoConfirmLogin=Confirm_AutoLogin" +
+                  '&' + 'loginName=' + loginName
+      );
+    },
+    'click #view': function (e, value, row, index) {
+      let errorId = row.code;
+      window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbx_G0C1PK8ar0gY-cAnyWzn8Xa9iVrfoDokMBdRYA/exec?autoViewLogin=View_AutoLogin" +
+          '&' + 'errorId=' + errorId
+      );
+    }
+  }
+
+  function buttoninTable2(value, row, index) {
+    if (row.status == "待完成") {
+      return [
+        "<button id='editor' class='btn-floating' >填写",
+        "</button>"
+      ].join("")
+    }
+
+    if (row.status == "待审核") {
+      return [
+        "<button id='audit' class='btn-floating' >审核",
+        "</button>"
+      ].join("")
+    }
+
+    if (row.status == "已完成") {
+      return [
+        "<button id='view' class='btn-floating' >查看",
+        "</button>"
+      ].join("")
+    }
+  }
+
+  function judgeFailure(){
+    swal.fire({allowOutsideClick:false,icon:'info',title:'服务器长时间未响应',showConfirmButton:true,footer:'<p>建议重新操作一次</p>'});
+  }
+
+</script>

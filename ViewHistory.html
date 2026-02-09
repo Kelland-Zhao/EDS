@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<base target="_top">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<!-- <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> -->
+	<!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"> -->
+  <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-material-ui@3.1.4/material-ui.min.css"> -->
+  <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css" integrity="sha512-aOG0c6nPNzGk+5zjwyJaoRUgCdOrfSDhmMID2u4+OIslr0GjpLKo7Xm0Ao3xmpM4T8AmIouRkqwj1nrdVsLKEQ==" crossorigin="anonymous"> -->
+	<!-- <link rel="stylesheet" href="https://unpkg.com/bootstrap-table@1.16.0/dist/themes/materialize/bootstrap-table-materialize.min.css"> -->
+	<!-- <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/css/select2.min.css" rel="stylesheet" /> -->
+  <?!=include("zj_material_Integrated_css");?>
+	<?!=include("CSS");?>
+</head>
+
+<body>
+	<div id="part1" style="float: left; border-radius: 25px; background-color: #ff8a80; padding: 1rem; width: 98%; margin: 0.1rem 1%; ">
+    <div style="float:left ;margin: 0 0.1rem; width: 8%; ">
+      <select id="task" class="browser-default" style="float: left; height: 38px ">
+        <option value="">任务</option>
+        <option value="保养">保养</option>
+        <option value="点检">点检</option>
+      </select>
+    </div>
+
+    <div class="input-field" style="float: left;margin:0 0.1rem; width: 10%;">
+      <select id="years" class="browser-default" style="float: left; height: 38px ">
+        <option value="">年份</option>
+        <option value="2023">2023</option>
+        <option value="2022">2022</option>
+        <option value="2021">2021</option>
+      </select>
+    </div>
+
+    <div class="input-field" style="float: left; margin:0 0.1rem; width: 8%;">
+      <select id="workshop" class="browser-default" style="float: left; height: 38px ">
+        <option value="">车间</option>
+        <option value="TB1">TB1</option>
+        <option value="TB2">TB2</option>
+      </select>
+    </div>
+
+    <div class="input-field" style="float: left; margin:0 0.1rem; width: 8%;">
+      <select id="process" class="browser-default" style="float: left; height: 38px ">
+        <option value="">工序</option>
+        <option value="INJ">INJ</option>
+        <option value="TF">TF</option>
+        <option value="PK">PK</option>
+      </select>
+    </div>
+
+    <div style="float: left; margin:0 0.1rem; width: 8%;">
+      <button class="waves-effect waves-light btn" id="getCheckList">检索</button>
+    </div>
+
+    <div style="float: right; margin:0 0.1rem; width: 8%;">
+      <button class="waves-effect waves-light btn" id="resetSearch">重置</button>
+    </div>
+
+    <div style="float: right; margin:0 0.1rem; width: 8%;">
+      <button class="waves-effect waves-light btn" id="viewTask" disabled>查询</button>
+    </div>
+
+    <div style="float: right; margin: 0 0.1rem; width: 15%;">
+      <select id="numbering" class="browser-default" style="float: left; height: 38px " disabled>
+        <option value="">编号</option>
+      </select>
+    </div>
+
+    <div style="float: right; margin: 0 0.1rem; width: 10%;">
+      <select id="machineType" class="browser-default" style="float: left; height: 38px " disabled>
+        <option value="">类型(仅点检)</option>
+      </select>
+    </div>
+
+    <div style="float: right; margin: 0 0.1rem; width:10%;">
+      <select id="workcenter" class="browser-default" style="float: left; height: 38px " disabled>
+        <option value="">机台</option>
+      </select>
+    </div>
+
+    
+  </div>
+
+  <div id="part2" style=" float: left; border-radius: 25px; background-color: #ff8a80; padding: 2rem; width: 98%; margin: 0.5rem 1%; display: none;">
+    
+    <div style="width: 98%; float: left;margin:0 1rem 5%">
+      <table id="table" style="background-color: white;">
+        <thead id="thead">
+        </thead>
+        <tbody id="tbody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</body>
+  <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script> -->
+  <!-- <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script> -->
+  <!-- <script src="js/materialize.min.js"></script> -->
+  <!-- <script src="https://momentjs.com/downloads/moment.js"></script> -->
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script> -->
+  <!-- <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script> -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@9/dist/sweetalert2.min.js"></script> -->
+  <!-- <script src="https://unpkg.com/bootstrap-table@1.16.0/dist/bootstrap-table.min.js"></script> -->
+  <!-- <script src="https://unpkg.com/bootstrap-table@1.16.0/dist/themes/materialize/bootstrap-table-materialize.min.js"></script> -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/js/select2.min.js"></script> -->
+  <?!=include("zj_material_Integrated_js");?>
+  <?!=include("ViewHistory-js") ?>
+
+</html>

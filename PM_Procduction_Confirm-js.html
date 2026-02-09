@@ -1,0 +1,752 @@
+<script>
+  let global_Name = sessionStorage.getItem('Name');
+  let global_Process = sessionStorage.getItem('Process');
+  let global_ID = sessionStorage.getItem('ID');
+  let global_Workshop = sessionStorage.getItem('Workshop');
+  let global_siWebPage = sessionStorage.getItem('siWebPage');
+  let global_UserID = [];
+  let global_PM_SerialNumber = sessionStorage.getItem("PM_SerialNumber");
+  let global_data = sessionStorage.getItem("data");
+
+  // 获取存储在sessionStorage中的任务详情和计划确认信息
+  const storedTaskDetails = sessionStorage.getItem('PM_Task_Details');
+  const storedPlannerConfirmation = sessionStorage.getItem('PM_Planner_Confirmation');
+
+  console.log('从sessionStorage获取的任务详情:', storedTaskDetails);
+  console.log('从sessionStorage获取的计划确认信息:', storedPlannerConfirmation);
+
+  function getData(key) {
+
+    try {
+
+      const jsonData = JSON.parse(key);// 尝试解析为JSON
+
+      return jsonData; // 如果解析成功，返回解析后的对象
+
+    } catch (error) {
+
+      console.log("数据不是有效的JSON字符串。返回原始会话存储值。");// 如果抛出错误，则不是一个合法的JSON字符串
+
+      console.log('key', key)
+
+      return key; // 返回原始值
+    }
+  }
+
+  // sessionStorage.setItem('siWebPage', global_siWebPage);
+
+  $(document).ready(function () {
+
+    global_data = getData(global_data)
+
+    // 检查是否有新的PM任务，如果是，清理旧的PM Planner确认信息
+    const lastPMSerialNumber = sessionStorage.getItem('Last_PM_SerialNumber');
+    if (lastPMSerialNumber !== global_PM_SerialNumber) {
+      sessionStorage.removeItem('PM_Planner_Confirmation');
+      sessionStorage.removeItem('PM_Task_Details'); // 同时清理旧的任务数据
+      sessionStorage.setItem('Last_PM_SerialNumber', global_PM_SerialNumber);
+    }
+
+    let status = "Loading";
+
+    sweetAlert(status);
+
+    google.script.run.withSuccessHandler((r) => {
+
+      r.forEach(element => {
+
+        let obj = {};
+
+        obj.workNumber = element[0];
+
+        obj.name = element[1];
+
+        global_UserID.push(obj)
+
+      });
+
+      status = "Loading Success";
+
+      sweetAlert(status);
+
+    }).getUseID();
+
+  });
+
+  $("#workingNunber").on("input", function (r) {
+
+    let workingNunber = $("#workingNunber").val().trim();
+
+    if (workingNunber.length === 5) {
+
+      let result = global_UserID.filter((r) => {
+
+        return r['workNumber'] == workingNunber;
+      })
+
+      if (result.length == 0) {
+
+        $("#Name").val("该用户不存在/ Account does not exist")
+      } else {
+
+        $("#Name").val(result[0].name)
+      }
+
+
+    } else {
+
+      $("#Name").val('')
+    }
+
+  })
+
+  function sweetAlert(status, id) {
+
+    if (status == "Loading") {
+
+      Swal.fire({
+        title: '页面加载中/ Page Loading',
+        text: '页面加载中，请稍后.../ Page loading, please wait...',
+        icon: 'info',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+      });
+
+    } else if (status == "Loading Success") {
+
+      Swal.close();
+      Swal.fire({
+        title: '加载成功/ Loading Success',
+        icon: 'success'
+      });
+    } else if (status == "No Data") {
+
+      Swal.fire({
+        icon: 'warning',
+        title: '警告/ Warning',
+        text: "【" + id + "】" + "输入异常",
+        confirmButtonText: '确定'
+      })
+    } else if (status == "Confirm to Submit?") {
+
+      return Swal.fire({
+        title: "确认提交？/ Confirm to submit?",
+        text: "一旦提交将无法修改/ Once submitted, changes will not be allowed",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "确认/ Confirmed",
+        cancelButtonText: "取消/ Cancel"
+      }).then(function (result) {
+
+        if (result.isConfirmed) {
+
+          return true
+
+        } else {
+
+          return false
+        }
+      })
+    } else if (status == "Upload Success") {
+      Swal.close();
+      Swal.fire({
+        title: '数据上传成功/ Data Loading Success',
+        icon: 'success'
+      });
+    } else if (status == "Upload Success & PDF Report Generated") {
+      Swal.close();
+      Swal.fire({
+        title: '上传成功并生成PDF报告/ Upload Success & PDF Report Generated',
+        text: '数据已成功上传，PDF报告已生成/ Data uploaded successfully and PDF report has been generated',
+        icon: 'success',
+        confirmButtonText: '确定/ OK'
+      });
+    } else if (status == "Upload Success but PDF Generation Failed") {
+      Swal.close();
+      Swal.fire({
+        title: '上传成功但PDF生成失败/ Upload Success but PDF Generation Failed',
+        text: '数据已成功上传，但PDF报告生成失败/ Data uploaded successfully but PDF report generation failed',
+        icon: 'warning',
+        confirmButtonText: '确定/ OK'
+      });
+    } else if (status == "Upload Fail") {
+      Swal.close();
+      Swal.fire({
+        title: '数据上传失败/ Data Loading Fail',
+        icon: 'warning'
+      });
+    }
+
+  }
+
+  function checkEmpty(id) {
+
+    let element = $(`#${id}`).val().trim();
+
+    return element.length
+
+  }
+
+  $("#accept").on("click", function () {
+
+    let id = ['workingNunber', 'Name'];
+
+    let selectedValue = $('input[name="EquM"]:checked').val();
+
+    let emptyArray = "";
+
+    let emptyCheck_total = false;
+
+    let emptyCheck_1 = false;
+
+    let emptyCheck_2 = false;
+
+    if (selectedValue != 'Normal') {
+
+      emptyArray += "保养样品是否异常";
+
+      emptyCheck_1 = false;
+
+    } else {
+
+      emptyCheck_1 = true;
+
+    }
+
+    id.forEach((r) => {
+
+      let length = checkEmpty(r);
+
+      if (length == 0) {
+
+        emptyCheck_2 = false;
+
+        emptyArray = emptyArray + " / " + r;
+
+        let status = "No Data";
+
+      } else {
+
+        emptyCheck_2 = true;
+      }
+    })
+
+    if (emptyCheck_1 == true && emptyCheck_2 == true) {
+
+      let status = "Confirm to Submit?";
+
+      sweetAlert(status).then(function (result) {
+        if (result == true) {
+
+          status = "Loading";
+
+          sweetAlert(status);
+
+          //******回调函数解决异步函数问题******//
+          dataCollect(selectedValue, function (data) {
+
+            console.log('data', data);
+
+            google.script.run.withSuccessHandler((r) => {
+              let status;
+              if (r == true) {
+
+                // 生成PDF报告
+                generatePMReport(data, selectedValue, function (pdfSuccess, pdfUrl) {
+                  if (pdfSuccess) {
+                    status = 'Upload Success & PDF Report Generated';
+                    console.log('PDF URL for accept button:', pdfUrl);
+                  } else {
+                    status = 'Upload Success but PDF Generation Failed';
+                  }
+                  sweetAlert(status);
+                });
+
+              } else {
+
+                console.log(r);
+
+                status = 'Upload Fail';
+                sweetAlert(status);
+              }
+
+            }).Production_Confirm_Info_Fill(data, global_PM_SerialNumber, global_data);
+          });
+
+        }
+      })
+
+    } else {
+
+      let status = "No Data";
+
+      sweetAlert(status, emptyArray);
+
+      throw new Error("中断运行");
+
+    }
+  })
+
+  $("#refuse").on("click", function () {
+
+    let id = ['workingNunber', 'Name', 'take-photo', 'SamplesDescruption'];
+
+    let selectedValue = $('input[name="EquM"]:checked').val();
+
+    let emptyArray = "";
+
+    let emptyCheck_total = false;
+
+    let emptyCheck_1 = false;
+
+    let emptyCheck_2 = false;
+
+    if (selectedValue == 'Normal') {
+
+      emptyArray += "保养样品是否异常";
+
+      emptyCheck_1 = false;
+
+    } else {
+
+      emptyCheck_1 = true;
+
+    }
+
+    id.forEach((r) => {
+
+      let length = checkEmpty(r);
+
+      if (length == 0) {
+
+        emptyCheck_2 = false;
+
+        emptyArray = emptyArray + " / " + r;
+
+        let status = "No Data";
+
+      } else {
+
+        emptyCheck_2 = true;
+      }
+    })
+
+    if (emptyCheck_1 == true && emptyCheck_2 == true) {
+
+      let status = "Confirm to Submit?";
+
+      sweetAlert(status).then(function (result) {
+        if (result == true) {
+
+          status = "Loading";
+
+          sweetAlert(status);
+
+          //******回调函数解决异步函数问题******//
+          dataCollect(selectedValue, function (data) {
+
+            google.script.run.withSuccessHandler((r) => {
+              let status;
+              if (r == true) {
+
+                // 生成PDF报告
+                generatePMReport(data, selectedValue, function (pdfSuccess, pdfUrl) {
+                  if (pdfSuccess) {
+                    status = 'Upload Success & PDF Report Generated';
+                    console.log('PDF URL for refuse button:', pdfUrl);
+                  } else {
+                    status = 'Upload Success but PDF Generation Failed';
+                  }
+                  sweetAlert(status);
+                });
+
+              } else {
+
+                console.log(r);
+
+                status = 'Upload Fail';
+                sweetAlert(status);
+              }
+
+            }).Production_Confirm_Info_Fill(data, global_PM_SerialNumber, global_data);
+          });
+
+        }
+      })
+
+
+
+    } else {
+
+      let status = "No Data";
+
+      sweetAlert(status, emptyArray);
+
+      throw new Error("中断运行");
+
+    }
+
+
+
+  })
+
+  $("#acceptWdeviation").on("click", function () {
+
+    let id = ['workingNunber', 'Name', 'take-photo', 'SamplesDescruption'];
+
+    let selectedValue = $('input[name="EquM"]:checked').val();
+
+    let emptyArray = "";
+
+    let emptyCheck_total = false;
+
+    let emptyCheck_1 = false;
+
+    let emptyCheck_2 = false;
+
+    if (selectedValue == 'Normal') {
+
+      emptyArray += "保养样品是否异常";
+
+      emptyCheck_1 = false;
+
+    } else {
+
+      emptyCheck_1 = true;
+
+    }
+
+    id.forEach((r) => {
+
+      let length = checkEmpty(r);
+
+      if (length == 0) {
+
+        emptyCheck_2 = false;
+
+        emptyArray = emptyArray + " / " + r;
+
+        let status = "No Data";
+
+      } else {
+
+        emptyCheck_2 = true;
+      }
+    })
+
+    selectedValue = "PassWithDeviation";
+
+    if (emptyCheck_1 == true && emptyCheck_2 == true) {
+
+      let status = "Confirm to Submit?";
+
+      sweetAlert(status).then(function (result) {
+        if (result == true) {
+
+          status = "Loading";
+
+          sweetAlert(status);
+
+          //******回调函数解决异步函数问题******//
+          dataCollect(selectedValue, function (data) {
+
+            google.script.run.withSuccessHandler((r) => {
+
+              let obj = {};
+
+              obj['编号'] = (getCurrentDateTime() + "-" + "0").toString();
+              obj['班次'] = '长白班/ Day Shift';
+              obj['机台号'] = global_data['AEM#'];
+              obj['问题描述'] = '保养遗留问题/ PM Issues Left: 【 ' + $("#SamplesDescruption").val() + ' 】';
+              obj['处理过程'] = '';
+              obj['状态'] = '未解决/ Unsolved	';
+              obj['维修人'] = 'NA';
+              obj['维修时间'] = 'NA';
+              obj['故障代码'] = 'NA';
+              obj['工单号'] = '';
+              obj['车间'] = global_data['车间'];
+              obj['先前编号'] = '';
+              obj['提交日期'] = getCurrentDate().toString();
+              obj['是否转保养'] = '';
+              obj['填写人'] = data[0]['name'];
+              obj['工序'] = global_data['工序'];;
+              obj['参与人数'] = '';
+              obj['机型'] = '';
+              obj['是否跟随'] = '否';
+              obj['是否已安排PM跟进'] = '';
+              obj['是否需要填写故障报告'] = '';
+              obj['判断是否最后'] = '';
+
+              // console.log('obj', obj)
+              google.script.run.withSuccessHandler((result) => {
+                let status;
+
+                if (r == true) {
+
+                  // 生成PDF报告
+                  generatePMReport(data, selectedValue, function (pdfSuccess, pdfUrl) {
+                    if (pdfSuccess) {
+                      status = 'Upload Success & PDF Report Generated';
+                      console.log('PDF URL for acceptWdeviation button:', pdfUrl);
+                    } else {
+                      status = 'Upload Success but PDF Generation Failed';
+                    }
+                    sweetAlert(status);
+                  });
+
+                } else {
+
+                  console.log(r);
+
+                  status = 'Upload Fail';
+                  sweetAlert(status);
+                }
+
+              }).submitFailure(obj)
+
+            }).Production_Confirm_Info_Fill(data, global_PM_SerialNumber, global_data);
+
+          });
+
+        }
+      })
+
+    } else {
+
+      let status = "No Data";
+
+      sweetAlert(status, emptyArray);
+
+      throw new Error("中断运行");
+
+    }
+  })
+
+  function dataCollect(selectedValue, callback) {
+
+    let workNumber = $("#workingNunber").val();
+
+    let name = $("#Name").val();
+
+    let sampleStatus = selectedValue;
+
+    let imageSample;
+
+    let samplesDescruption;
+
+    let data;
+
+    let pro_info = { workNumber: workNumber, name: name, sampleStatus: sampleStatus };
+
+    if (sampleStatus == "Normal") {
+
+      imageSample = 'NA';
+
+      samplesDescruption = 'NA';
+
+      data = [pro_info, samplesDescruption, imageSample];
+
+      callback(data);
+
+    } else {
+
+      let fileInput = document.getElementById('take-photo');
+
+      let file = fileInput.files[0]; // 获取选中的文件对象
+
+      let reader = new FileReader();
+
+      reader.readAsDataURL(file);
+
+      reader.onload = function (e) {
+
+        imageSample = e.target.result.split(',')[1];
+
+        samplesDescruption = $("#SamplesDescruption").val();
+
+        data = [pro_info, samplesDescruption, imageSample];
+
+        callback(data);
+      }
+    }
+  }
+
+  function getCurrentDateTime() {
+    var now = new Date();
+    var year = now.getFullYear();
+    var month = ('0' + (now.getMonth() + 1)).slice(-2); // 月份是从0开始的
+    var day = ('0' + now.getDate()).slice(-2);
+    var hours = ('0' + now.getHours()).slice(-2);
+    var minutes = ('0' + now.getMinutes()).slice(-2);
+    var seconds = ('0' + now.getSeconds()).slice(-2);
+
+    // 返回标准时间格式 "2025-01-20 19:38:02"
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  function getCurrentDate() {
+    var now = new Date();
+
+    var year = now.getFullYear();
+    var month = ('0' + (now.getMonth() + 1)).slice(-2); // 月份是从0开始的
+    var day = ('0' + now.getDate()).slice(-2);
+
+    return year + '/' + month + '/' + day;
+  }
+
+    // 生成PM保养任务报告PDF
+  function generatePMReport(data, confirmationStatus, callback) {
+    try {
+      // 准备PDF报告数据
+      let reportData = {
+        pmSerialNumber: global_PM_SerialNumber,
+        pmData: global_data,
+        confirmationData: data,
+        confirmationStatus: confirmationStatus,
+        confirmationTime: getCurrentDateTime(),
+        targetFolderId: "1MyQwrX6eCVz3rmrBKJ1Je_Myy5-6LuKw", // Google Drive文件夹ID
+        pmPlannerConfirmation: storedPlannerConfirmation ? JSON.parse(storedPlannerConfirmation) : null,// 添加PM Planner确认信息
+        // 直接传递解析后的任务详情数组，使其与后端代码匹配
+        taskDetails: (function() {
+          try {
+            if (!storedTaskDetails) return [];
+            
+            const taskData = JSON.parse(storedTaskDetails);
+            if (!taskData || !Array.isArray(taskData) || taskData.length === 0) return [];
+            
+            console.log('正在准备任务明细数据，共', taskData.length, '条记录');
+            
+            // 创建包含表头的任务数据表格
+            // 注意：这里的格式需要与后端期望的格式一致 - 第一行是表头，后面是数据
+            const headers = ['任务编号', '任务描述', '执行人员', '完成状态', '备注'];
+            
+            // 从数据中提取所需字段，构建符合后端期望的数据格式
+            const rows = taskData.map((task, index) => {
+              // 尝试从多种可能的字段名中提取数据
+              const taskNo = task['Task No'] || task['任务编号'] || task['Task Item'] || `Task ${index + 1}`;
+              const taskDesc = task['Task Description'] || task['任务描述'] || task['Standard'] || '';
+              // 根据taskStatus的值确定完成状态
+              const taskStatus = task.taskStatus === true || task['Task Status'] === true ? '✓ 已完成' : '✗ 未完成';
+              // 优先从数值记录&备注或valueAndNote字段提取备注信息
+              const taskNotes = task.valueAndNote || task['数值记录&备注'] || task['备注'] || task['Result'] || task['Notes'] || '';
+              // 只从执行人员字段提取执行人员信息
+              const taskResource = task['执行人员'] || 'N/A';
+              
+              return [taskNo, taskDesc, taskResource, taskStatus, taskNotes];
+            });
+            
+            // 添加表头作为第一行
+            return [headers, ...rows];
+          } catch (error) {
+            console.error('处理任务明细数据出错:', error);
+            return [];
+          }
+        })()
+      };
+
+      // 直接生成PDF
+      console.log('最终PDF生成前的reportData:', reportData);
+
+      generatePDFWithData(reportData, callback);
+
+    } catch (error) {
+      console.error('准备PDF报告数据时出错:', error);
+      callback(false, null);
+    }
+  }
+
+  // 辅助函数：使用提供的数据生成PDF
+  function generatePDFWithData(reportData, callback) {
+    google.script.run
+      .withSuccessHandler(function (result) {
+        console.log('PDF报告生成结果:', result);
+        if (result && result.success) {
+          console.log('PDF报告已保存到:', result.fileUrl);
+          // 调用函数将PDF链接保存到后台数据
+          savePDFLinkToBackend(global_PM_SerialNumber, result.fileUrl);
+          callback(true, result.fileUrl);
+        } else {
+          console.error('PDF报告生成失败:', result);
+          callback(false, null);
+        }
+      })
+      .withFailureHandler(function (error) {
+        console.error('PDF报告生成错误:', error);
+        callback(false, null);
+      })
+      .generatePMTaskReport(reportData);
+  }
+
+  // 将PDF链接保存到后台数据的U列
+  function savePDFLinkToBackend(pmSerialNumber, pdfUrl) {
+    if (!pmSerialNumber || !pdfUrl) {
+      console.error('保存PDF链接失败: 缺少必要参数');
+      return;
+    }
+
+    console.log('正在保存PDF链接到后台数据...');
+    
+    const dataToSave = {
+      pmSerialNumber: pmSerialNumber,
+      pdfUrl: pdfUrl,
+      saveTime: getCurrentDateTime(),
+      pmData: global_data  // 添加PM数据，包含工序和车间信息
+    };
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        console.log('PDF链接保存成功:', result);
+      })
+      .withFailureHandler(function(error) {
+        console.error('PDF链接保存失败:', error);
+      })
+      .savePDFLinkToSheet(dataToSave);
+  }
+
+  // 辅助函数：使用提供的数据生成PDF
+  function generatePDFWithData(reportData, callback) {
+    google.script.run
+      .withSuccessHandler(function (result) {
+        console.log('PDF报告生成结果:', result);
+        if (result && result.success) {
+          console.log('PDF报告已保存到:', result.fileUrl);
+          // 调用函数将PDF链接保存到后台数据
+          savePDFLinkToBackend(global_PM_SerialNumber, result.fileUrl);
+          callback(true, result.fileUrl);
+        } else {
+          console.error('PDF报告生成失败:', result);
+          callback(false, null);
+        }
+      })
+      .withFailureHandler(function (error) {
+        console.error('PDF报告生成错误:', error);
+        callback(false, null);
+      })
+      .generatePMTaskReport(reportData);
+  }
+
+  // 将PDF链接保存到后台数据的U列
+  function savePDFLinkToBackend(pmSerialNumber, pdfUrl) {
+    if (!pmSerialNumber || !pdfUrl) {
+      console.error('保存PDF链接失败: 缺少必要参数');
+      return;
+    }
+
+    console.log('正在保存PDF链接到后台数据...');
+    
+    const dataToSave = {
+      pmSerialNumber: pmSerialNumber,
+      pdfUrl: pdfUrl,
+      saveTime: getCurrentDateTime()
+    };
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        console.log('PDF链接保存成功:', result);
+      })
+      .withFailureHandler(function(error) {
+        console.error('PDF链接保存失败:', error);
+      })
+      .savePDFLinkToSheet(dataToSave);
+  }
+</script>

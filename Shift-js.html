@@ -1,0 +1,543 @@
+<script>
+
+  let timerInterval;
+
+  $(document).ready(async function () {
+    initializeMaterialCSS();
+    var name = sessionStorage.getItem('name');
+    var id = sessionStorage.getItem('id');
+    document.getElementById('name').textContent = name;
+    document.getElementById('id').textContent = '328' + id;
+    var workshop="";
+    var process="";
+    var { value: type } = await swal.fire({
+      allowOutsideClick:false,
+      title: '链接部门工序',
+      input: 'select',
+      inputOptions: {
+        TB1_INJ: 'TB1注塑',
+        TB1_TF: 'TB1植磨毛',
+        TB1_PK:'TB1包装',
+        TB2_INJ: 'TB2注塑',
+        TB2_TF: 'TB2植磨毛',
+        TB2_PK:'TB2包装'
+      },
+      inputPlaceholder: '请选择部门工序',
+      showCancelButton: true,
+      inputValidator: (value) => {
+        return new Promise((resolve) => {
+          if (value !== '') {
+            resolve()
+          } else {
+            resolve('请选择部门工序')
+          }
+        })
+      }
+    })
+    if(type){
+      workshop=type.split("_")[0];
+      process=type.split("_")[1];
+      showRunning('正在加载交接班数据……','','',120000,'')
+      google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(main).getData_shift(workshop,process);
+    }
+    else{
+      console.log("取消")
+    }
+  });
+
+  function initializeMaterialCSS() {
+    $('select').formSelect();
+    $('.sidenav').sidenav();
+    $('.datepicker').datepicker();
+    $('.dropdown-trigger').dropdown();
+    $('.tabs').tabs();
+    $('.modal').modal();
+    $("#workshop").select2({
+      placeholder: "车间",
+      width: "resolve",
+      minimumResultsForSearch: Infinity //隐藏搜索框
+    });
+    $("#process").select2({
+      placeholder: "工序",
+      minimumResultsForSearch: Infinity //隐藏搜索框
+    })
+    $("#resultUpdate,#result").select2({
+      placeholder: "状态选择",
+      minimumResultsForSearch: Infinity //隐藏搜索框
+    })
+    $("#shiftUpdate,#shift").select2({
+      placeholder: "班次选择",
+      width: "resolve",
+      minimumResultsForSearch: Infinity //隐藏搜索框
+    })
+    $("#followStatus").select2({
+      placeholder: "是否跟随",
+      width:"100%",
+      minimumResultsForSearch: Infinity //隐藏搜索框
+    })
+  }
+
+  function main(result) {
+    if(result[0]=="OK"){
+      let data=JSON.parse(result[1]);
+      let code = sessionStorage.getItem('id');
+      let user = data.userID.filter((r) => { return r[0] == code });
+      let recordProcess=data.loginProcess;
+      if(recordProcess=="INJ"){
+        $("#divFollowStatus").show();
+      }
+      else{
+        $("#divFollowStatus").hide();
+      }
+      let data_shift = data.shift;
+      let data_shift_solved = data_shift.filter((r) => { return r[5] == "已解决" });
+      let data_shift_unsolved = data_shift.filter((r) => { return r[5] == "未解决" });
+      let machine_info = data.machine_info.filter((r) => { return r[5] == recordProcess });
+      let errorCode = data.errorCode.filter((r) => { return r[0] == recordProcess });
+      let userID = data.userID;
+      let arr_workcenter = new Array();
+      machine_info.forEach((r) => {
+        arr_workcenter.push({
+          id: r[0],
+          text: r[0]
+        })
+      })
+      let arr_errorCode = new Array();
+      errorCode.forEach((r) => {
+        arr_errorCode.push({
+          id: r[4],
+          text: r[4]
+        })
+      })
+      let arr_ownner = new Array();
+      userID.forEach((r) => {
+        arr_ownner.push({
+          id: r[1],
+          text: r[1]
+        })
+      })
+      $("#errorCode,#errorCode_update").select2({
+        placeholder: "请输入代码",
+        data: arr_errorCode,
+        allowClear: true
+      });
+      $("#workcenter").select2({
+        placeholder: "机台号",
+        data: arr_workcenter,
+        allowClear: true
+      });
+      $("#owner,#ownerUpdate").select2({
+        placeholder: "维修人",
+        data: arr_ownner,
+        allowClear: true
+      })
+      $("#handover").select2({
+        placeholder: "交接人",
+        data: arr_ownner,
+        allowClear: true
+      })
+
+      /************************************************************************/
+      let data_report = data_shift.filter((r) => {
+        return r[19] == "待完成" || r[19] == "待审核" || r[19] == "已完成"
+      })
+      let unFinished = 0;
+      data_report.forEach((r) => { if (r[19] == "待完成") { unFinished = unFinished + 1; } })
+      if (unFinished == 0) {
+        $("#nav-mobile").find("span").hide()
+      } else {
+        $("#nav-mobile").find("span").show()
+        $("#nav-mobile").find("span").text(unFinished)
+      }
+      /***********************************************************************/
+      let arr_shift_solved = new Array();
+      data_shift_solved.forEach((r) => {
+        arr_shift_solved.push({
+          issueNo:r[0],
+          date: dayjs(r[11]).format("YYYY/MM/DD"),
+          shift: r[1],
+          workcenter: r[2],
+          issue: r[3].replace(/】/g,"】<br>"),
+          processMethod: r[4].replace(/\{([^}]*)\}/g,"<br>"),
+          owner: r[6].replace(/\n/g,"<br>"),
+          repairDuration: r[7],
+          errorCode: r[8].replace(/\n/g,"<br>"),
+          status: r[5]
+        })
+      })
+
+      let arr_shift_unsolved = new Array();
+      data_shift_unsolved.forEach((r) => {
+        arr_shift_unsolved.push({
+          issueNo:r[0],
+          date: dayjs(r[11]).format("YYYY/MM/DD"),
+          shift: r[1],
+          workcenter: r[2],
+          issue: r[3].replace(/】/g,"】<br>"),
+          processMethod: r[4].replace(/\{([^}]*)\}/g,"<br>"),
+          owner: r[6].replace(/\n/g,"<br>"),
+          repairDuration: r[7],
+          errorCode: r[8].replace(/\n/g,"<br>"),
+          handover: r[10].replace(/\n/g,"<br>")
+        })
+      })
+      
+      window.operateEvents = {
+        "click #followUp": function (e, value, row, index) {
+          $("#modal1").removeAttr("tabindex")//fix bug 【弹出框中select2无法输入】 原因：select2 tabindex属性与modal tabindex属性冲突
+          $("#issueNo").val(row.issueNo);
+          $("#code").val(row.date);
+          $("#workcenterUpdate").val(row.workcenter);
+          $("#issueUpdate").val(row.issue);
+          if ($("#name").text() == "李华" ||
+            $("#name").text() == "丁志伟" ||
+            $("#name").text() == "季勇" ||
+            $("#name").text() == "赵阳" ||
+            $("#name").text() == "韩善明" ||
+            $("#name").text() == "雍军" ||
+            $("#name").text() == "王鹏" ||
+            $("#name").text() == "李卫卫" ||
+            $("#name").text() == "贾海龙" ||
+            $("#name").text() == "孙亮" ||
+            $("#name").text() == "赵凯" ||
+            $("#name").text() == "罗红兵" ||
+            $("#name").text() == "关宏伟"  ||
+            $("#name").text() == "袁建兵" ||
+            $("#name").text() == "夏宜春")  {
+
+            $("#toPM").css("display", "block")
+          } else {
+            $("#toPM").css("display", "none")
+          }
+          M.updateTextFields();
+        }
+      }
+
+      $("#solved").bootstrapTable({
+        data: arr_shift_solved,
+        pagination: true,
+        search: true,
+        sortName: "date",//排序
+        sortOrder: "desc",
+        pageSize: 5
+      })
+
+      $("#unsolved").bootstrapTable({
+        data: arr_shift_unsolved,
+        pagination: true,
+        search: true,
+        sortName: "date",
+        sortOrder: "desc",
+        pageSize: 5
+      })
+      /*********************************************************************************************/
+      $("#confirm").click(() => {
+        showRunning('正在加载交接班数据……','','',120000,'')
+        google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(mainSelect).getData_select($("#workshop").val(),$("#process").val());
+        function mainSelect(resultSelect){
+          if(resultSelect[0]=="OK"){
+            let data=JSON.parse(resultSelect[1]);
+            $("#solved,#unsolved").bootstrapTable("destroy")
+            data_shift = data.shift;
+            data_shift_solved = data_shift.filter((r) => { return r[5] == "已解决" });
+            data_shift_unsolved = data_shift.filter((r) => { return r[5] == "未解决" });
+            arr_shift_solved = new Array();
+            data_shift_solved.forEach((r) => {
+              arr_shift_solved.push({
+                issueNo:r[0],
+                date: dayjs(r[11]).format("YYYY/MM/DD"),
+                shift: r[1],
+                workcenter: r[2],
+                issue: r[3].replace(/】/g,"】<br>"),
+                processMethod: r[4].replace(/\{([^}]*)\}/g,"<br>"),
+                owner: r[6].replace(/\n/g,"<br>"),
+                repairDuration: r[7],
+                errorCode: r[8].replace(/\n/g,"<br>"),
+                status: r[5]
+              })
+            })
+            arr_shift_unsolved = new Array();
+            data_shift_unsolved.forEach((r) => {
+              arr_shift_unsolved.push({
+                issueNo:r[0],
+                date: dayjs(r[11]).format("YYYY/MM/DD"),
+                shift: r[1],
+                workcenter: r[2],
+                issue: r[3].replace(/】/g,"】<br>"),
+                processMethod: r[4].replace(/\{([^}]*)\}/g,"<br>"),
+                owner: r[6].replace(/\n/g,"<br>"),
+                repairDuration: r[7],
+                errorCode: r[8].replace(/\n/g,"<br>"),
+                handover: r[10].replace(/\n/g,"<br>"),
+              })
+            })
+            $("#solved").bootstrapTable({
+              data: arr_shift_solved,
+              pagination: true,
+              search: true,
+              sortName: "date",//排序
+              sortOrder: "desc",
+              pageSize: 5
+            })
+            $("#unsolved").bootstrapTable({
+              data: arr_shift_unsolved,
+              pagination: true,
+              search: true,
+              sortName: "date",
+              sortOrder: "desc",
+              pageSize: 5
+            })
+            showRunResult('success','加载成功','','',2000,false,'')
+          }
+          else{
+            showRunResult('error','加载失败','','','',true,'联系相关人员')
+          }
+        }
+      })
+      /*************************************************************************/
+      $("#submit").click(() => {
+        let machine_item = data.machine_info.filter((r) => { return r[0] == $("#workcenter").val() })
+        let obj_data = {
+          code: dayjs(new Date()).format("YYYYMMDDhhmmss").toString(),
+          shift: $("#shift").val(),
+          workcenter: $("#workcenter").val(),
+          issue: $("#issue").val(),
+          processMethod: $("#processMethod").val(),
+          status: $("#result").val(),
+          owner: $("#owner").val(),
+          repairDuration: $("#repairDuration").val(),
+          errorCode: $("#errorCode").val(),
+          workorder: $("#workorder").val(),
+          handover: $("#handover").val(),
+          submitDate: dayjs(new Date()).format("YYYY/MM/DD").toString(),
+          result: false,
+          submitPerson: $("#name").text(),
+          No_repairPerson: $("#No_repairPerson").val(),
+          machine_type: machine_item[0][6],
+          followStatus:$("#followStatus").val()
+        }
+        if (
+          obj_data.shift == "" ||
+          obj_data.workcenter == "" ||
+          obj_data.issue == "" ||
+          obj_data.processMethod == "" ||
+          obj_data.status == "" ||
+          obj_data.owner == "" ||
+          obj_data.repairDuration == "" ||
+          obj_data.errorCode == "" ||
+          obj_data.submitPerson == "" ||
+          obj_data.No_repairPerson == "" ||
+          ((obj_data.machine_type.indexOf("IM")!=-1||obj_data.machine_type.indexOf("DEC")!=-1)&&obj_data.followStatus=="")
+        ) {
+          swal.fire({
+            allowOutsideClick:false,
+            icon: "error",
+            text: "提交内容不完整，请确认",
+            showConfirmButton: true,
+          })
+          return false
+        }
+        swal.fire({
+          allowOutsideClick:false,
+          title: "是否确认提交",
+          icon: "warning",
+          showCancelButton: true
+        }).then((result) => {
+          if (result.isConfirmed) {
+            showRunning('正在保存交接班数据……','','',120000,'')
+            google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultSave) => {
+              if (resultSave[0]=="OK") {
+                swal.fire({allowOutsideClick:false,icon: "success",timer: 1500,text: "保存成功",showConfirmButton: false,})
+                $("#shift,#workcenter,#errorCode,#result,#owner,#repairDuration,#workorder,#handover,#issue,#processMethod,#No_repairPerson,#followStatus").val("").trigger("change") //select2 清空选项
+                M.updateTextFields();
+              }
+              else {
+                swal.fire({allowOutsideClick:false,icon: "error",timer: 1500,text: "保存失败，请联系工程师",showConfirmButton:true})
+                return false
+              }
+            }).upload_shift(obj_data);
+            if (obj_data.status == "已解决") {
+              $("#solved").bootstrapTable("insertRow", {
+                index: 0,
+                row: {
+                  issueNo:obj_data.code,
+                  date: obj_data.submitDate,
+                  shift: obj_data.shift,
+                  workcenter: obj_data.workcenter,
+                  issue: obj_data.issue.replace(/】/g,"】<br>"),
+                  processMethod: obj_data.processMethod,
+                  owner: obj_data.owner,
+                  repairDuration: obj_data.repairDuration,
+                  errorCode: obj_data.errorCode,
+                  status: obj_data.status
+                }
+              })
+            } else if (obj_data.status == "未解决") {
+              $("#unsolved").bootstrapTable("insertRow", {
+                index: 0,
+                row: {
+                  issueNo:obj_data.code,
+                  date: obj_data.submitDate,
+                  shift: obj_data.shift,
+                  workcenter: obj_data.workcenter,
+                  issue: obj_data.issue.replace(/】/g,"】<br>"),
+                  processMethod: obj_data.processMethod,
+                  owner: obj_data.owner,
+                  handover: obj_data.handover,
+                  errorCode: obj_data.errorCode,
+                  repairDuration: obj_data.repairDuration
+                }
+              })
+            } else {
+              console.log("error");
+            }
+          }
+        })
+      })
+      /*************************************************************/
+      $("#modalSubmit").click(() => {
+        let machine_item = data.machine_info.filter((r) => { return r[0] == $("#workcenterUpdate").val() })
+        let obj_submit = {
+          issueNo:$("#issueNo").val().toString(),
+          result: $("#toPM").find("input").is(":checked"),
+          date: $("#code").val().toString(),
+          workcenter: $("#workcenterUpdate").val(),
+          workorder: $("#workorderUpdate").val(),
+          handover: $("#handoverUpdate").val(),
+          shift: $("#shiftUpdate").val(),
+          ownner: $("#ownerUpdate").val(),
+          repairDuration: $("#durationUpdate").val(),
+          errorCode: $("#errorCode_update").val(),
+          processMethod: $("#processMethod_update").val(),
+          status: $("#resultUpdate").val(),
+          issue: $("#issueUpdate").val().toString().replace("<br>","\n"),
+          submitDate: dayjs(new Date()).format("YYYY/MM/DD"),
+          submitPerson: $("#name").text(),
+          No_repairPerson: $("#No_repairPersonUpdate").val(),
+          machine_type: machine_item[0][6]
+        }
+        if (
+          obj_submit.date == "" ||
+          obj_submit.workcenter == "" ||
+          obj_submit.shift == "" ||
+          obj_submit.ownner == "" ||
+          obj_submit.repairDuration == "" ||
+          obj_submit.errorCode == "" ||
+          obj_submit.processMethod == "" ||
+          obj_submit.status == "" ||
+          obj_submit.No_repairPerson == ""
+        ) {
+          swal.fire({
+            allowOutsideClick:false,
+            icon: "error",
+            text: "信息不完整",
+            showConfirmButton: true,
+          })
+          return false
+        }
+
+        swal.fire({
+          allowOutsideClick:false,
+          title: "是否确认提交",
+          icon: "warning",
+          showCancelButton: true
+        }).then((result) => {
+          if (result.isConfirmed) {
+            showRunning('正在保存交接班数据……','','',120000,'')
+            google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultModalSave) => {
+              if (resultModalSave[0]=="OK") {
+                swal.fire({allowOutsideClick:false,icon: "success",timer: 1500,text: "保存成功",showConfirmButton: false})
+                if (obj_submit.status == "已解决") {
+                  $("#unsolved").bootstrapTable("remove", {
+                    field: "issueNo",
+                    values: obj_submit.issueNo
+                  })
+                  $("#solved").bootstrapTable("insertRow", {
+                    index: 0,
+                    row: {
+                      issueNo:obj_submit.issueNo,
+                      date: obj_submit.submitDate,
+                      shift: obj_submit.shift,
+                      workcenter: obj_submit.workcenter,
+                      issue: obj_submit.issue.replace(/】/g,"】<br>"),
+                      processMethod: obj_submit.processMethod,
+                      owner: obj_submit.ownner,
+                      repairDuration: obj_submit.repairDuration,
+                      errorCode: obj_submit.errorCode,
+                      status: obj_submit.status
+                    }
+                  })
+                }
+              }
+              else {
+                showRunResult('error','保存失败',resultModalSave[1],'','',true,'');
+                return false
+              }
+            }).upload_shift_modal(obj_submit)
+          }
+        })
+      });
+      showRunResult('success','加载成功','','',2000,false,'')
+    }
+    else{
+      showRunResult('error','加载失败',result[1],'','',true,'联系相关人员')
+    }
+  }
+
+  /*============培训文档索引===========*/
+  function todView(){
+    let viewId=$("#id").text().slice(-5);
+    let viewName=$("#name").text();
+    let viewProcess="";
+    window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbzzv6PHu-AaqAL1fwLNZPNg30acgO4Xd4H5atps/exec?ALP=ViewTod&viewSapId="+viewId+"&viewName="+viewName+"&viewProcess="+viewProcess+"&viewSource=EDSPAD");
+  }
+
+  function operateFormatter(value, row, index) {
+    return [
+      "<button class='btn-small waves-effect  modal-trigger' href='#modal1' id = 'followUp'>编辑<i class='material-icons right'>edit</i></button>"
+    ].join('')
+  }
+
+  /**============显示函数运行状态============**/
+  function showRunning(strTitle,strText,strHtml,times,strFooter){
+    if(timerInterval){clearInterval(timerInterval)}
+    swal.fire({
+      allowOutsideClick:false,
+      icon:'info',
+      title:strTitle,
+      text:strText,
+      html:'窗口将在 <b></b> 秒内自动关闭.',
+      timer:times,
+      footer:strFooter,
+      timerProgressBar:true,
+      onBeforeOpen: () => {
+        if(timerInterval){clearInterval(timerInterval)}
+        Swal.showLoading()
+        const b = Swal.getContent().querySelector('b')
+        timerInterval = setInterval(() => {
+          b.textContent = (Swal.getTimerLeft()/1000).toFixed(0);
+        }, 1000)
+      },
+      onClose:()=>{
+        if(timerInterval){clearInterval(timerInterval)}
+      }
+    }).then((result) => {
+    if (result.dismiss === Swal.DismissReason.timer) {
+      if(timerInterval){clearInterval(timerInterval)}
+      Swal.fire("程序在2分钟内未响应,尝试点击按钮再来一次");
+    }});
+  }
+
+  /**============显示函数运行结果============**/
+  function showRunResult(strIcon,strTitle,strText,strHtml,times,booleanButton,strFooter){
+    if(timerInterval){clearInterval(timerInterval)}
+    swal.fire({allowOutsideClick:false,icon:strIcon,title:strTitle,text:strText,html:strHtml,timer:times,showConfirmButton:booleanButton,footer:strFooter});
+  }
+
+  /**============返回服务器不响应结果============**/
+  function judgeFailure(){
+    if(timerInterval){clearInterval(timerInterval)}
+    swal.fire({allowOutsideClick:false,icon:'error',title:'服务器长时间未响应',showConfirmButton:true,footer:'<p>尝试点击按钮再来一次</p>'});
+  }
+  
+</script>

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+</head>
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+
+
+
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container">
+      <a class="navbar-brand" style="
+        color: white;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: xx-large;
+        font-weight: bold;">交接班 / Handover</a>
+    </div>
+  </nav>
+  <div class="container mt-3 mb-3">
+    <h3 style="display: none;">沟通事项/ Communication Item</h3>
+    <div class="row mt-3" style="display: none;">
+      <div class="card col-3 mx-2" style="height: 300px">
+        <h6 class="card-head mt-3" style="font-family: Helvetica; font-weight: bold">质量/ Quality</h6>
+        <hr class="border border-danger border-2 opacity-30" />
+        <div class="card-body">
+          <p class="card-text">test</p>
+        </div>
+      </div>
+
+      <div class="card col-3 mx-2" style="height: 300px">
+        <h6 class="card-head mt-3" style="font-family: Helvetica; font-weight: bold">
+          安全/ Safety
+        </h6>
+        <hr class="border border-danger border-2 opacity-30" />
+        <div class="card-body">
+          <p class="card-text">test</p>
+        </div>
+      </div>
+
+
+
+      <div class="card col-3 mx-2 d-flex flex-column" style="height: 300px;">
+        <h6 class="card-head mt-3" style="font-family: Helvetica; font-weight: bold">
+          其他/ Others
+        </h6>
+        <hr class="border border-danger border-2 opacity-30" />
+        <div class="card-body d-flex flex-column justify-content-between">
+          <p class="card-text">test</p>
+          <!-- 底部按钮容器 -->
+          <div class="mt-2 d-flex justify-content-center align-items-end">
+            <button id="saveBtn" class="btn btn-primary me-2">保存</button>
+            <button id="clearBtn" class="btn btn-secondary">清除</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="card col-2 mx-2" style="height: 300px">
+        <h6 class="card-head mt-3" style="font-family: Helvetica; font-weight: bold">
+          阅读确认/ Read & Confirm
+        </h6>
+        <hr class="border border-danger border-2 opacity-30" />
+        <button type="button" class="btn btn-primary mb-1">
+          A班已读/ A shift read
+        </button>
+        <button type="button" class="btn btn-secondary mb-1">
+          B班已读/ B shift read
+        </button>
+        <button type="button" class="btn btn-success mb-1">
+          C班已读/ C shift read
+        </button>
+        <button type="button" class="btn btn-danger mb-1">
+          D班已读/ D shift read
+        </button>
+        <button type="button" class="btn btn-warning mb-1">
+          模具组已读/ Mold Group read
+        </button>
+      </div>
+    </div>
+    <h3 class="mt-3">交接班记录/ Handover Record</h3>
+    <div class="row mt-3">
+      <div class="col-auto">
+        <input type="file" accept="image/*" capture="camera" id="take-photo" class="form-control" />
+      </div>
+      <div class="col-auto">
+        <button type="button" class="btn btn-success mb-1" id="upload">上传</button>
+      </div>
+    </div>
+    <hr style="margin-top:32px;margin-bottom:32px; border-top:2px solid #E60012;">
+    <h3 class="mt-3 mb-0">故障记录/ Failure Record</h3>
+    <div class="mt-3">
+      <div class="row">
+        <div class="col-3" id="htmlSelect">
+          <div class="col-auto mb-2">
+            <select id="workcenter" class="form-select">
+              <option selected disabled>机台号/ Workcenter</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2" style="display:none">
+            <select id="workshop" class="form-select">
+              <option selected disabled>车间/ Workshop</option>
+              <option value="TB1">TB1</option>
+              <option value="TB2">TB2</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="shift" class="form-select">
+              <option selected disabled>班次/ Shift</option>
+              <option value="A班">A班/ A Shift</option>
+              <option value="B班">B班/ B Shift</option>
+              <option value="C班">C班/ C Shift</option>
+              <option value="D班">D班/ D Shift</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="owner" class="form-select">
+              <option selected disabled>维修人/ Maintenance Owner</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="errorCode" class="form-control">
+              <option selected disabled>故障代码/ Failure Code</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="Status" class="form-select">
+              <option selected disabled>状态/ Status</option>
+              <option value="已解决/ Solved">已解决/ Solved</option>
+              <option value="未解决/ Unsolved">未解决/ Unsolved</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-3" id="htmlInput">
+          <div class="col-auto mb-2">
+            <div class="input-group">
+              <input type="number" class="form-control" placeholder="维修时间/Maintenance Time" id="MaintenanceDuration" />
+              <span class="input-group-text">分钟/ mins</span>
+            </div>
+          </div>
+          <div class="col-auto mb-2">
+            <input type="number" step="1" class="form-control" id="Workorder" placeholder="工单号/ Workorder">
+          </div>
+          <div class="col-auto mb-2">
+            <textarea class="form-control" id="Description" rows="3" placeholder="故障描述/ Failure Description"></textarea>
+          </div>
+        </div>
+        <div class="col-6" id="htmlFailureprocess">
+          <h5 class="col-auto mb-2">故障处理/ Failure Process</h5>
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>设备维修/ Equipment Maintenance?</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="EquM_Y" name="EquM" checked>
+              <label class="form-check-label" for="EquM_Y">
+                是/ Yes
+              </label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="EquM_N" name="EquM">
+              <label class="form-check-label" for="EquM_N">
+                否/ No
+              </label>
+            </div>
+            <div class="col-5">
+              <textarea class="form-control" id="EquMDescription" rows="1"
+                placeholder="设备维修描述/ Equipment Maintenance Description"></textarea>
+            </div>
+          </div>
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>模具维修/ Mold Maintenance?</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="MoldM_Y" name="MoldM" checked>
+              <label class="form-check-label" for="MoldM_Y">
+                是/ Yes
+              </label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="MoldM_N" name="MoldM">
+              <label class="form-check-label" for="MoldM_N">
+                否/ No
+              </label>
+            </div>
+            <div class="col-5">
+              <textarea class="form-control" id="MoldMDescription" rows="1"
+                placeholder="模具维修描述/ Eold Maintenance Description"></textarea>
+            </div>
+          </div>
+          <div class="row align-items-center mb-2">
+            <!-- <div class="row align-items-center" style="border: 2px solid yellow;"> -->
+            <div class="col-4">
+              <label>自动化维修/ Automation Maintenance?</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="AutoM_Y" name="AutoM" checked>
+              <label class="form-check-label" for="AutoM_Y">
+                是/ Yes
+              </label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="AutoM_N" name="AutoM">
+              <label class="form-check-label" for="AutoM_N">
+                否/ No
+              </label>
+            </div>
+            <div class="col-5">
+              <textarea class="form-control" id="AutoMDescription" rows="1"
+                placeholder="自动化维修描述/ Automation Maintenance Description"></textarea>
+            </div>
+          </div>
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>工艺调整/ Process Adjustment?</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="ProcessAD_Y" name="ProcessAD" checked>
+              <label class="form-check-label" for="ProcessAD_Y">
+                是/ Yes
+              </label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="ProcessAD_N" name="ProcessAD">
+              <label class="form-check-label" for="ProcessAD_N">
+                否/ No
+              </label>
+            </div>
+            <div class="col-5">
+              <textarea class="form-control" id="ProcessADDes" rows="1"
+                placeholder="工艺调整描述/ Process Adjustment Description"></textarea>
+            </div>
+          </div>
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>是否有热流道跟从/ Follow the Hot Runner?</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="Follow_Y" name="Follow">
+              <label class="form-check-label" for="Follow_Y">
+                是/ Yes
+              </label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="Follow_N" name="Follow" checked>
+              <label class="form-check-label" for="Follow_N">
+                否/ No
+              </label>
+            </div>
+            <div class="col-5">
+              <div class="input-group-container">
+                <div class="input-group">
+                  <input type="number" step="1" class="form-control follow-cavity" placeholder="跟从穴号/ Follow Cavity"
+                    id="followone">
+                  <div class="arrow">&rarr;</div>
+                  <input type="number" step="1" class="form-control followed-cavity"
+                    placeholder="被跟从穴号/ Followed Cavity" id="followedone">
+                </div>
+                <button type="button" class="btn btn-primary add-input-group">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-3">
+      <button id="submitFailure" class="btn btn-primary">提交故障记录/ Submit Failure History</button>
+    </div>
+
+    <!-- </div> -->
+    <hr style="margin-top:32px;margin-bottom:32px; border-top:2px solid #E60012;">
+    <h3 class="mt-3">故障历史/ Failure History</h3>
+    <div class="mt-2">
+      <div class="row">
+        <h5 class="mt-2">数据筛选/ Data Filter</h5>
+        <div class="col-2">
+          <select id="Workshop" class="form-select">
+            <option selected disabled>车间/ Workshop</option>
+            <option value="ALL" disabled>所有/ All</option>
+            <option value="TB1">TB1</option>
+            <option value="TB2">TB2</option>
+          </select>
+        </div>
+        <div class="col-2">
+          <select id="Process" class="form-select">
+            <option selected disabled>工序/ Process</option>
+            <option value="ALL" disabled>所有/ All</option>
+            <option value="INJ">注塑/ INJ</option>
+            <option value="TF">植磨毛/ TF</option>
+            <option value="PK">包装/ PK</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="mt-3">
+      <table id="Failure_History_Table" class="display table table-bordered table-striped table-hover"
+        style="width:100%">
+      </table>
+    </div>
+  </div>
+
+</body>
+
+
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("Shift_1.0-js") ?>
+
+</html>

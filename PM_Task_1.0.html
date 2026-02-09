@@ -1,0 +1,216 @@
+<html>
+
+<head>
+	<base target="_top">
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("Kez_bootstrap-datepicker_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+
+<body>
+	<nav class="navbar navbar-expand-lg">
+		<div class="container-fluid">
+			<a class="navbar-brand" style="
+				color: white;
+				font-family: Arial, Helvetica, sans-serif;
+				font-size: xx-large;
+				font-weight: bold;
+			  ">保养任务/ PM Task</a>
+
+			<div class="collapse navbar-collapse" id="navbarSupportedContent">
+				<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="<?!=webPage?>?v=Shift_1.0">交接班/ Shift
+							Handover</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">点检/ Inspection</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="https://script.google.com/a/colpal.com/macros/s/AKfycbyaKWHcTSogglvVN7sKaTOgDTXOg5IMYUIGKdy7/exec">工艺参数管理/
+							PPMS</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="https://script.google.com/a/colpal.com/macros/s/AKfycbzX8unrThQsGqjz0gpwfTp3Y6HSl_2oyfuqBpw5/exec">二手备件/
+							Sec-Hand Spare
+							Parts</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">文档索引/ Document
+							Library</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">模具管理/ Mold
+							Management</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page"
+							href="https://script.google.com/a/macros/colpal.com/s/AKfycbx3i7PBxvqejgeGF2LA_XQ4HfOZxII2cku3BzQBtetYHPFEvlNd6egmt4SxAm8lxjkgnA/exec">特种设备检查/
+							Special
+							Equipment
+							Inspection</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link active nav-css text-white" aria-current="page" href="#">任务清单变更管理/ Tasklist
+							MoC</a>
+					</li>
+				</ul>
+			</div>
+		</div>
+	</nav>
+
+	<div class="container">
+		<div class="row mt-3">
+			<div class="col-4">
+				<div class="input-group mt-3">
+					<span class="col-6 input-group-text">计划保养时间/ Plan PM Date</span>
+					<input type="text" id="planPmDate" class="col-6 form-control" placeholder="计划保养时间/ Plan PM Date"
+						aria-label="Plan PM Date" aria-describedby="PM_Date" style="text-align: center;" readonly>
+				</div>
+			</div>
+			<div class="col-4">
+				<div class="input-group mt-3">
+					<span class="col-4 input-group-text">保养内容/ PM Content</span>
+					<input type="text" id="workcenter" class="col-auto form-control" placeholder="机台号/ Workcenter"
+						aria-label="Workcenter" aria-describedby="Workcenter" style="text-align: center;" readonly>
+					<input type="text" id="Machine1" class="col-auto form-control" placeholder="设备1/ Machine1"
+						aria-label="设备1/ Machine1" aria-describedby="设备1/ Machine1" style="text-align: center;"
+						readonly>
+					<input type="text" id="Machine2" class="col-auto form-control" placeholder="设备2/ Machine2"
+						aria-label="设备2/ Machine2" aria-describedby="设备2/ Machine2" style="text-align: center;"
+						readonly>
+					<input type="text" id="Auto" class="col-auto form-control" placeholder="自动化/ Automation"
+						aria-label="自动化/ Automation" aria-describedby="自动化/ Automation" style="text-align: center;"
+						readonly>
+				</div>
+			</div>
+			<div class="col-4">
+				<div class="input-group mt-3">
+					<span class="col-5 input-group-text">计划保养时间/ Plan PM Hours</span>
+					<input type="text" id="planPmHours" class="col-7 form-control" placeholder="计划保养时间/ Plan PM Hours"
+						aria-label="Plan PM Hours" aria-describedby="planPmHours" style="text-align: center;" readonly>
+				</div>
+			</div>
+		</div>
+
+		<div class="row mt-3">
+			<div class="col-4">
+				<div class="input-group">
+					<span class="col-6 input-group-text">保养状态/ PM Status</span>
+					<input type="text" id="PmStatus" aria-label="保养状态/ PM Status" class="col-6 form-control"
+						placeholder="未开始/Not Start" style="text-align: center;" readonly>
+				</div>
+			</div>
+			<div class="col-4">
+				<div class="input-group">
+					<span class="col-4 input-group-text">保养号/ PM No.</span>
+					<input type="text" id="PmNo" aria-label="保养号/ PM No." class="col-8 form-control"
+						placeholder="保养号/ PM No." style="text-align: center;" readonly>
+				</div>
+			</div>
+			<div class="col-4">
+				<div class="input-group">
+					<span class="col-5 input-group-text">保养人员/ PM People</span>
+					<input type="text" id="PmPeople" aria-label="保养人员/ PM People" class="col-7 form-control"
+						placeholder="保养人员/ PM People" style="text-align: center;" readonly>
+				</div>
+			</div>
+		</div>
+
+
+		<div class="row mt-3">
+			<div class="col-6">
+				<div class="input-group">
+					<span class="input-group-text">保养开始/ PM Start</span>
+					<input type="text" id="PmStartDate" aria-label="开始日期/Start Date" class="form-control"
+						placeholder="开始日期/Start Date" style="text-align: center;" readonly>
+					<input type="text" id="PmStartTime" aria-label="开始时间/Start Time" class="form-control"
+						placeholder="开始时间/Start Time" style="text-align: center;" readonly>
+					<button type="button" class="btn" id="PmStart"
+						style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">开始保养/
+						Start PM</button>
+
+				</div>
+			</div>
+			<div class="col-6">
+				<div class="input-group">
+					<span class="input-group-text">保养结束/ PM End</span>
+					<input type="text" aria-label="结束日期/End Date" class="form-control" placeholder="结束日期/End Date"
+						style="text-align: center;" id="PmEndDate" readonly>
+					<input type="text" aria-label="结束时间/End Time" class="form-control" placeholder="结束时间/End Time"
+						style="text-align: center;" id="PmEndTime" readonly>
+					<button type="button" class="btn" id="PmEnd"
+						style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">结束保养/
+						End PM</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="row mt-3">
+			<div class="col-4">
+				<div class="input-group">
+					<span class="input-group-text">设备号/ Equipment</span>
+					<input type="text" id="Equipment" class="form-control" placeholder="设备号/ Equipment"
+						aria-label="设备号/ Equipment" aria-describedby="设备号/ Equipment" style="text-align: center;" readonly>
+				</div>
+			</div>
+			<div class="col-8 d-flex justify-content-end">
+				<div class="col-auto me-1">
+					<button type="button" class="btn" id="AddTemTask"
+						style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">增加临时保养任务/
+						Add Temporary Task</button>
+				</div>
+				<div class="col-auto">
+					<button type="button" class="btn" id="Submit_wo_End"
+						style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">提交但不结束保养/
+						Submit w/o PM End</button>
+				</div>
+			</div>
+		</div>
+		<button type="button" class="btn" id="Test"
+			style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold; display: none;">Test_PdMData</button>
+
+		<div class="row mt-3">
+			<div class="col-12 d-flex justify-content-end">
+				<button type="button" class="btn btn-secondary" id="TestImageUploadBtn" style="margin-bottom: 10px; display: none;">测试图片上传</button>
+				<button type="button" class="btn btn-info" id="TestCheckboxValidationBtn" style="margin-bottom: 10px; display: none;">测试选中框验证</button>
+			</div>
+		</div>
+
+		<div class="row mt-5"> <!-- 添加 mt-3 类来增加额外的上边距 -->
+			<div class="col-12">
+				<div class="table-responsive">
+					<table id="table_tasklist" class="display table table-bordered table-striped table-hover "
+						style="width:100%"></table>
+				</div>
+			</div>
+		</div>
+
+	</div>
+
+
+
+
+
+</body>
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("Kez_bootstrap-datepicker-js") ?>
+
+<?!=include("PM_Task-js_1.0") ?>
+
+</html>

@@ -1,0 +1,915 @@
+<script>
+  let globalWorkcenter = [];
+  let globalName = [];
+  let globalErrorCode = [];
+  let global_Name = sessionStorage.getItem('Name');
+  let global_Process = sessionStorage.getItem('Process');
+  
+  // 页面加载状态跟踪
+  let pageLoadComplete = false;
+  let selectItemLoaded = false;
+  let tableDataLoaded = false;
+
+  $(document).ready(function () {
+    Swal.fire({
+      title: '正在加载数据...\nLoading data...',
+      text: '请稍候\nPlease wait',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    google.script.run.withSuccessHandler(showSelectItem).SelectItem();
+    google.script.run.withSuccessHandler(showTablehead).getAllshiftData();
+    inputInitialization();
+
+  });
+
+  // 检查页面是否完全加载完成
+  function checkPageLoadComplete() {
+    if (selectItemLoaded && tableDataLoaded && !pageLoadComplete) {
+      pageLoadComplete = true;
+      Swal.close();
+      Swal.fire({
+        title: '页面加载完成 / Page Loaded',
+        text: '请填写交接班记录和故障信息',
+        icon: 'success',
+        timer: 3000,
+        showConfirmButton: false
+      });
+    }
+  }
+
+  function inputInitialization() {
+    // 页面加载时初始化输入框的状态
+    toggleInputBasedOnRadio('EquM_Y', 'EquM_N', 'EquMDescription');
+    toggleInputBasedOnRadio('MoldM_Y', 'MoldM_N', 'MoldMDescription');
+    toggleInputBasedOnRadio('AutoM_Y', 'AutoM_N', 'AutoMDescription');
+    toggleInputBasedOnRadio('ProcessAD_Y', 'ProcessAD_N', 'ProcessADDes');
+    if ($('#Follow_Y').is(':checked')) {
+      $('.follow-cavity, .followed-cavity').prop('disabled', false);
+      $('.add-input-group').prop('disabled', false);
+    } else {
+      $('.follow-cavity, .followed-cavity').prop('disabled', true);
+      $('.add-input-group').prop('disabled', true);
+    }
+  }
+
+  function submitFailure(id) {
+    let obj = {};
+    // 初始化跟从穴号和被跟从穴号的字符串
+    let followCavities = [];
+    let followedCavities = [];
+
+    if (id == 'submitFailure') {
+      obj['编号'] = (getCurrentDateTime() + "-" + "0").toString();
+      obj['班次'] = $("#shift").val();
+      obj['机台号'] = $("#workcenter").val();
+      obj['问题描述'] = $("#Description").val();
+      obj['处理过程'] = "【设备】：" + $("#EquMDescription").val() + "\n" + "【模具】：" + $("#MoldMDescription").val() + "\n" + "【自动化】：" + $("#AutoMDescription").val() + "\n" + "【工艺】：" + $("#ProcessADDes").val();
+      obj['状态'] = $("#Status").val();
+      obj['维修人'] = $("#owner").val();
+      obj['维修时间'] = $("#MaintenanceDuration").val();
+      obj['故障代码'] = $("#errorCode").val();
+      obj['工单号'] = $("#Workorder").val();
+      obj['车间'] = $("#workshop").val();
+      obj['先前编号'] = ''
+      // 遍历所有跟从穴号输入框并收集它们的值
+      $('.follow-cavity').each(function () {
+        followCavities.push('#' + $(this).val());
+      });
+      // 遍历所有被跟从穴号输入框并收集它们的值
+      $('.followed-cavity').each(function () {
+        followedCavities.push('#' + $(this).val());
+      });
+
+      // console.log('submitFailure');
+    } else if (id == 'ModalSubmit') {
+
+      let codeValue = $('#Code2').val();// 获取 Code2 的值
+      let newCode = '';
+      if (codeValue.includes('-')) {// 检查 codeValue 是否包含 '-'
+        let parts = codeValue.split('-');
+        let lastNumber = parseInt(parts[parts.length - 1], 10) + 1;
+        newCode = parts.slice(0, -1).join('-') + '-' + lastNumber;
+      } else {
+        newCode = codeValue + '-1';
+      }
+      obj['先前编号'] = codeValue;
+      obj['编号'] = newCode;
+      obj['班次'] = $("#shift2").val();
+      obj['机台号'] = $("#workcenter2").val();
+      obj['问题描述'] = $("#Description2").val();
+      obj['处理过程'] = "【设备】：" + $("#EquMDescription2").val() + "\n" + "【模具】：" + $("#MoldMDescription2").val() + "\n" + "【自动化】：" + $("#AutoMDescription2").val() + "\n" + "【工艺】：" + $("#ProcessADDes2").val();
+      obj['状态'] = $("#Status2").val();
+      obj['维修人'] = $("#owner2").val();
+      obj['维修时间'] = $("#MaintenanceDuration2").val();
+      obj['故障代码'] = $("#errorCode2").val();
+      obj['工单号'] = $("#Workorder2").val();
+      obj['车间'] = $("#workshop2").val();
+      // 遍历所有跟从穴号输入框并收集它们的值
+      $('.follow-cavity2').each(function () {
+        followCavities.push('#' + $(this).val());
+      });
+      // 遍历所有被跟从穴号输入框并收集它们的值
+      $('.followed-cavity2').each(function () {
+        followedCavities.push('#' + $(this).val());
+      });
+      // console.log('ModalSubmit');
+    } else {
+      console.log('Error')
+    }
+
+    obj['是否跟随'] = '';
+    if (/\d/.test(followCavities)) {
+      obj['是否跟随'] += '是： ';
+      for (let i = 0; i < followCavities.length; i++) {
+        obj['是否跟随'] += followCavities[i];
+        obj['是否跟随'] += '跟随';
+        obj['是否跟随'] += followedCavities[i] + ';';
+      }
+
+    } else {
+      obj['是否跟随'] = '否';
+    }
+
+    // obj['编号'] = (getCurrentDateTime() + "-" + "0").toString();
+    obj['交接人'] = '';
+    obj['提交日期'] = getCurrentDate().toString();
+    obj['是否转保养'] = '';
+    obj['填写人'] = global_Name;
+    obj['工序'] = global_Process;
+    obj['参与人数'] = '';
+    obj['机型'] = '';
+    obj['是否已安排PM跟进'] = '';
+    obj['是否需要填写故障报告'] = '';
+    obj['判断是否最后'] = '';
+    console.log(obj)
+
+    Swal.fire({
+      title: '数据上传中/ Data Uploading',
+      icon: 'info',
+      allowOutsideClick: false,
+      showConfirmButton: false
+    });
+    google.script.run.withSuccessHandler((r) => {
+      console.log(r)
+      if (r[1] == true) {
+        Swal.close();
+        Swal.fire({
+          title: '保存成功/ Saving Success',
+          icon: 'success'
+        });
+        addNewRow(obj);
+        console.log("清空数据")
+        $('#workcenter').val("机台号/ Workcenter").trigger('change');
+        $("#shift").val("班次/ Shift").trigger("change");
+        $("#owner").val("维修人/ Maintenance Owner").trigger("change");
+        $("#errorCode").val("故障代码/ Failure Code").trigger("change");
+        $("#Status").val("状态/ Status").trigger("change");
+        $("#MaintenanceDuration,#Workorder,#Description,#EquMDescription,#MoldMDescription,#AutoMDescription,#ProcessADDes,#followone,#followedone").val("");
+        $('#EquM_Y,#MoldM_Y,#AutoM_Y,#ProcessAD_Y,#Follow_N').prop('checked', true);
+
+
+      } else {
+        Swal.close();
+        Swal.fire({
+          icon: "error",
+          title: "保存失败，请联系工程师"
+        })
+      }
+    }).submitFailure(obj)
+  }
+
+  $("#submitFailure").click(function () {
+    let id = $(this).attr('id');
+    let checkResult = checkNotEmpty(id);
+    // console.log('checkResult_submitFailure', checkResult);
+    if (checkResult == true) {
+      submitFailure(id);
+    }
+
+  })
+
+  function addNewRow(obj) {
+    console.log(obj)
+    let table = $("#Failure_History_Table").DataTable();
+    table.row.add(obj).draw();
+  }
+
+  function showSelectItem(result) {
+    // console.log(result);
+    let process = sessionStorage.getItem('Process');
+    console.log('当前工序:', process);
+    
+    // 设置SelectItem加载完成状态
+    selectItemLoaded = true;
+
+    let workcenter = [];
+    result[0].forEach((r) => {
+      let item = {};
+      item.id = r.workcenter;
+      item.text = r.workcenter;
+      workcenter.push(item);
+    })
+    globalWorkcenter = workcenter;
+
+    let name = [];
+    // console.log(result[1]);
+    result[1].forEach((r) => {
+      if (r.process == process) {
+        let item = {};
+        item.id = r.name;
+        item.text = r.name;
+        name.push(item);
+      }
+    })
+    globalName = name;
+    // console.log(globalName);
+
+    // 处理新的故障代码数据结构
+    let errorCode = [];
+    let filteredErrorCode = result[2].filter((r) => {
+      // INJ 和 IM 都表示注塑工序
+      if (process === "INJ" && r.Process === "IM") {
+        return true;
+      }
+      if (process === "IM" && r.Process === "IM") {
+        return true;
+      }
+      return r.Process === process;
+    });
+    
+    // 如果找到匹配的工序，使用过滤后的数据；否则使用所有数据
+    let errorCodeToUse = filteredErrorCode.length > 0 ? filteredErrorCode : result[2];
+    
+    errorCodeToUse.forEach((r) => {
+      let item = {};
+      item.id = r.UPDT_Local;  // 使用UPDT (Local Language)列
+      item.text = r.UPDT_Local;  // 使用UPDT (Local Language)列
+      errorCode.push(item);
+    });
+    
+    globalErrorCode = errorCode;
+    console.log('故障代码数量:', errorCode.length);
+    console.log('当前工序:', process);
+    console.log('是否找到匹配工序:', filteredErrorCode.length > 0);
+    console.log('工序匹配说明: INJ和IM都表示注塑工序');
+    
+    // 检查页面是否完全加载完成
+    checkPageLoadComplete();
+
+    $("#Status,#shift,#workshop,#Workshop,#Process").select2({
+      theme: 'bootstrap', // 使用 Bootstrap 主题
+      minimumResultsForSearch: -1 // 禁用搜索框
+    });
+    $('#workcenter').select2({
+      data: workcenter,
+      theme: 'bootstrap' // 使用 Bootstrap 主题
+    });
+    $('#errorCode').select2({
+      data: errorCode,
+      theme: 'bootstrap' // 使用 Bootstrap 主题
+    });
+
+    $('#owner').select2({
+      data: name,
+      theme: 'bootstrap' // 使用 Bootstrap 主题
+    });
+
+    $("#workcenter").on("change", function () {
+      let workcenter = $("#workcenter").val();
+      let item = result[0].filter((r) => { return r.workcenter == workcenter });
+      console.log(item)
+      if (item == "") {
+        $("#workshop").val("车间/ Workshop").trigger('change');
+      } else {
+        $("#workshop").val(item[0].workshop).trigger('change');
+      }
+
+      // console.log("workshop_modal", item)
+    })
+  }
+
+  function showTablehead(obj) {
+    // 设置表格数据加载完成状态
+    tableDataLoaded = true;
+    let name = global_Name;
+    let id = sessionStorage.getItem('ID');
+    let process = global_Process;
+    let workshop = sessionStorage.getItem('Workshop');
+    console.log('Name', name, 'ID', id, 'Process', process, 'Workshop', workshop);
+    $("#Workshop").val(workshop).trigger('change');
+    $("#Process").val(process).trigger('change');
+    let head = obj.Head;
+    let content = obj.Content;
+    let TableHtml = '<thead><tr>';
+    for (let i = 0; i < head.length; i++) {
+      TableHtml += "<th  style='background-color:#E60012; color:white'>" + head[i] + "</th>";
+    };
+    TableHtml += "<th  style='background-color:#E60012; color:white'>" + '跟进项' + "</th>";
+    TableHtml += "</tr></thead>";
+    $("#Failure_History_Table").html(TableHtml);
+    // console.log(content)
+    content.forEach((r) => {
+      // 你的 ISO 8601 格式的日期时间字符串
+      let isoDateString = r['提交日期'];
+      // 使用 Date 对象解析字符串
+      let date = new Date(isoDateString);
+      // 获取年、月、日
+      let year = date.getFullYear(); // 2023
+      let month = date.getMonth() + 1; // 月份是从 0 开始的，所以这里要 +1
+      let day = date.getDate(); // 26
+      // 如果月份和日期是一位数，则在前面补0
+      month = month < 10 ? '0' + month : month;
+      day = day < 10 ? '0' + day : day;
+      // 组合成 "年-月-日" 格式的字符串
+      let formattedDate = year + '-' + month + '-' + day;
+      // console.log(formattedDate); // 输出 "2023-11-26"
+      r['提交日期'] = formattedDate;
+      r['处理过程'] = extractTextBetweenBraces(r['处理过程']);
+    })
+    let table_array = [];
+    for (let i = 0; i < head.length; i++) {
+      let obj = {};
+      obj.data = head[i];
+      table_array.push(obj);
+    }
+    console.log('table_array', table_array)
+    let table = $("#Failure_History_Table").DataTable({
+      columns: table_array,
+      columnDefs: [
+        {
+          targets: [0, 1, 9, 10, 12, 13, 14, 15, 16, 17, 18, 21], // 隐藏指定列，新增12(是否转保养)和18(是否已安排PM跟进)
+          visible: false,
+        },
+        { "width": "300px", "targets": [3, 4] },
+        // 对"状态"列进行格式化显示（状态列是第6列，索引为5）
+        {
+          targets: 5,
+          render: function (data, type, row) {
+            // 排序时返回数值，显示时返回带样式的HTML
+            if (type === 'sort') {
+              if (data && data.includes('已解决')) {
+                return 2;
+              } else if (data && data.includes('未解决')) {
+                return 1;
+              } else {
+                return 0;
+              }
+            }
+            if (type === 'display' || type === 'filter') {
+              if (data && data.includes('已解决')) {
+                return '<span class="badge bg-success">已解决/ Solved</span>';
+              } else if (data && data.includes('未解决')) {
+                return '<span class="badge bg-danger">未解决/ Unsolved</span>';
+              } else {
+                return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
+              }
+            }
+            return data;
+          },
+          className: 'text-center' // 添加居中样式
+        },
+        {
+          targets: 22, // 指向最后一列
+          data: null, // 这里不绑定具体的数据字段
+          defaultContent: '<button class="btn btn-info btn-sm">跟进</button>', // 设置默认内容为跟进按钮
+          orderable: false // 使这列不可排序
+        }
+      ],
+      order: [
+        [5, 'asc'], // 对第6列进行升序排序，优先显示未解决
+        [11, 'desc'] // 对第12列进行降序排序
+      ],
+      createdRow: function (row, data, dataIndex) {
+        // 缓存 jQuery 对象以避免重复查询
+        let $row = $(row);
+        let $failureProcessCell = $row.find('td').eq(2);
+        let $statusCell = $row.find('td').eq(3);
+        let $followUpButton = $row.find('button');
+
+        // 处理过程列的换行
+        let failureProcess = data['处理过程'];
+        if (failureProcess.includes('\n')) {
+          failureProcess = failureProcess.replace(/\n/g, '<br>');
+        }
+        $failureProcessCell.html(failureProcess);
+
+        // 状态列的样式
+        let status = data['状态'];
+        if (status.includes('已解决')) {
+          $statusCell.css('font-weight', 'bold').addClass('text-success');
+          $followUpButton.prop('disabled', true);
+        } else if (status.includes('未解决')) {
+          $statusCell.css('font-weight', 'bold').addClass('text-danger');
+        }
+      }
+    });
+    table.clear().draw();
+    table.rows.add(content).draw();
+    // 获取#Workshop和#Process的值
+    let workshopValue = $("#Workshop").val();
+    let processValue = $("#Process").val();
+    if (workshopValue != 'ALL') {
+      // 如果#Workshop有值，则对应列进行筛选
+      if (workshopValue) {
+        table.column(14).search(workshopValue).draw();
+      }
+    }
+
+    if (processValue != 'ALL') {
+      // 如果#Process有值，则对应列进行筛选
+      if (processValue) {
+        table.column(15).search(processValue).draw();
+      }
+    }
+    // 为第一个下拉菜单添加事件监听器
+    $('#Workshop').on('change', function () {
+      table.column(14).search(this.value).draw(); // 车间
+    });
+    // 为第一个下拉菜单添加事件监听器
+    $('#Process').on('change', function () {
+      table.column(15).search(this.value).draw(); // 工序
+      // console.log("test")
+    });
+
+    // 使用事件委托为动态生成的 '跟进' 按钮绑定点击事件
+    $('#Failure_History_Table tbody').on('click', '.btn-info', function () {
+      // 获取点击按钮所在行的数据
+      let data = table.row($(this).closest('tr')).data();
+      let htmlContent = `
+      <div class="mt-3">
+        <div class="row justify-content-center">
+          <div class="col-3">
+            <div class="col-auto mb-2">
+              <select id="workcenter2" class="form-select">
+                <option selected disabled>机台号/ Workcenter</option>
+              </select>
+            </div>
+            <div class="col-auto mb-2" style="display:none">
+              <input class="form-control" placeholder="编号/Code"
+                  id="Code2" />
+            </div>
+            <div class="col-auto mb-2" style="display:none">
+              <select id="workshop2" class="form-select">
+                <option selected disabled>车间/ Workshop</option>
+                <option value="TB1">TB1</option>
+                <option value="TB2">TB2</option>
+              </select>
+            </div>
+            <div class="col-auto mb-2">
+              <select id="shift2" class="form-select">
+                <option selected disabled>班次/ Shift</option>
+                <option value="A班">A班/ A Shift</option>
+                <option value="B班">B班/ B Shift</option>
+                <option value="C班">C班/ C Shift</option>
+                <option value="D班">D班/ D Shift</option>
+              </select>
+            </div>
+            <div class="col-auto mb-2">
+              <select id="owner2" class="form-select">
+                <option selected disabled>维修人/ Maintenance Owner</option>
+              </select>
+            </div>
+            <div class="col-auto mb-2">
+              <select id="errorCode2" class="form-control">
+                <option selected disabled>故障代码/ Failure Code</option>
+              </select>
+            </div>
+            <div class="col-auto mb-2">
+              <select id="Status2" class="form-select">
+                <option selected disabled>状态/ Status</option>
+                <option value="已解决/ Solved">已解决/ Solved</option>
+                <option value="未解决/ Unsolved">未解决/ Unsolved</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-3">
+            <div class="col-auto mb-2">
+              <div class="input-group">
+                <input type="number" class="form-control" placeholder="维修时间/Maintenance Time"
+                  id="MaintenanceDuration2" />
+                <span class="input-group-text">分钟/ mins</span>
+              </div>
+            </div>
+            <div class="col-auto mb-2">
+              <input type="number" step="1" class="form-control" id="Workorder2" placeholder="工单号/ Workorder">
+            </div>
+            <div class="col-auto mb-2">
+              <textarea class="form-control" id="Description2" rows="4"
+                placeholder="故障描述/ Failure Description"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="row justify-content-center">
+          <div class="col-6 ">
+            <h5 class="col-auto mb-2">故障处理/ Failure Process</h5>
+            <div class="row align-items-center mb-2">
+              <div class="col-4">
+                <label>设备维修/ Equipment Maintenance?</label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="EquM_Y2" name="EquM2" checked>
+                <label class="form-check-label" for="EquM_Y2">
+                  是/ Yes
+                </label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="EquM_N2" name="EquM2">
+                <label class="form-check-label" for="EquM_N2">
+                  否/ No
+                </label>
+              </div>
+              <div class="col-5">
+                <textarea class="form-control" id="EquMDescription2" rows="1"
+                  placeholder="设备维修描述/ Equipment Maintenance Description"></textarea>
+              </div>
+            </div>
+            <div class="row align-items-center mb-2">
+              <div class="col-4">
+                <label>模具维修/ Mold Maintenance?</label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="MoldM_Y2" name="MoldM2" checked>
+                <label class="form-check-label" for="MoldM_Y2">
+                  是/ Yes
+                </label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="MoldM_N2" name="MoldM2">
+                <label class="form-check-label" for="MoldM_N2">
+                  否/ No
+                </label>
+              </div>
+              <div class="col-5">
+                <textarea class="form-control" id="MoldMDescription2" rows="1"
+                  placeholder="模具维修描述/ Eold Maintenance Description"></textarea>
+              </div>
+            </div>
+            <div class="row align-items-center mb-2">
+              <div class="col-4">
+                <label>自动化维修/ Automation Maintenance?</label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="AutoM_Y2" name="AutoM2" checked>
+                <label class="form-check-label" for="AutoM_Y2">
+                  是/ Yes
+                </label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="AutoM_N2" name="AutoM2">
+                <label class="form-check-label" for="AutoM_N2">
+                  否/ No
+                </label>
+              </div>
+              <div class="col-5">
+                <textarea class="form-control" id="AutoMDescription2" rows="1"
+                  placeholder="自动化维修描述/ Automation Maintenance Description"></textarea>
+              </div>
+            </div>
+            <div class="row align-items-center mb-2">
+              <div class="col-4">
+                <label>工艺调整/ Process Adjustment?</label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="ProcessAD_Y2" name="ProcessAD2" checked>
+                <label class="form-check-label" for="ProcessAD_Y2">
+                  是/ Yes
+                </label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="ProcessAD_N2" name="ProcessAD2">
+                <label class="form-check-label" for="ProcessAD_N2">
+                  否/ No
+                </label>
+              </div>
+              <div class="col-5">
+                <textarea class="form-control" id="ProcessADDes2" rows="1"
+                  placeholder="工艺调整描述/ Process Adjustment Description"></textarea>
+              </div>
+            </div>
+            <div class="row align-items-center mb-2">
+              <div class="col-4">
+                <label>是否有热流道跟从/ Follow the Hot Runner?</label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="Follow_Y2" name="Follow2">
+                <label class="form-check-label" for="Follow_Y2">
+                  是/ Yes
+                </label>
+              </div>
+              <div class="col-1 form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="Follow_N2" name="Follow2" checked>
+                <label class="form-check-label" for="Follow_N2">
+                  否/ No
+                </label>
+              </div>
+              <div class="col-5">
+                  <div class="input-group-container">
+                    <div class="input-group">
+                    <input type="number" step="1" class="form-control follow-cavity2" placeholder="跟从穴号/ Follow Cavity">
+                    <div class="arrow">&rarr;</div>
+                    <input type="number" step="1" class="form-control followed-cavity2" placeholder="被跟从穴号/ Followed Cavity">
+                  </div>
+                  <button type="button" class="btn btn-primary add-input-group2">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      `
+      Swal.fire({
+        title: '跟进记录/ Tracking Record',
+        html: htmlContent,
+        width: '100%',
+        showConfirmButton: true, // 显示确认按钮
+        confirmButtonText: '提交故障记录/ Update the Failure Record', // 确认按钮的文本
+        didOpen: () => {
+          // console.log('初始化')
+          $("#Status2,#shift2,#workshop2").select2({
+            theme: 'bootstrap', // 使用 Bootstrap 主题
+            minimumResultsForSearch: -1, // 禁用搜索框
+            dropdownParent: $('.swal2-modal') // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+          });
+          $('#workcenter2').select2({
+            data: globalWorkcenter,
+            theme: 'bootstrap', // 使用 Bootstrap 主题
+            dropdownParent: $('.swal2-modal'), // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+            disabled: true
+          });
+          $('#errorCode2').select2({
+            data: globalErrorCode,
+            theme: 'bootstrap', // 使用 Bootstrap 主题
+            dropdownParent: $('.swal2-modal') // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+          });
+          $('#owner2').select2({
+            data: globalName,
+            theme: 'bootstrap', // 使用 Bootstrap 主题
+            dropdownParent: $('.swal2-modal') // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+          });
+          Swal.getConfirmButton().setAttribute('id', 'ModalSubmit');
+          // console.log('record', data['机台号']);
+          $('#workcenter2').val(data['机台号'].replace(/\n/g, '')).trigger('change');
+          $('#workshop2').val(data['车间']).trigger('change');
+          $('#Description2').val(data['问题描述']).prop('readonly', true);
+          $('#Code2').val(data['编号']).prop('readonly', true)
+
+          // 为 "+" 按钮添加点击事件处理器
+          $('.add-input-group2').click(function () {
+            var newInputGroup = $('<div class="input-group mb-2">' +
+              '<input type="number" class="form-control follow-cavity2" placeholder="跟从穴号/ Follow Cavity" />' +
+              '<div class="arrow">&rarr;</div>' +
+              '<input type="number" class="form-control followed-cavity2" placeholder="被跟从穴号/ Followed Cavity" />' +
+              '</div>');
+            // 将新的输入组添加到容器中
+            $(this).closest('.input-group-container').append(newInputGroup);
+          });
+        },
+        preConfirm: () => {
+          let id = Swal.getConfirmButton().id;
+          let checkResult = checkNotEmpty(id);
+          // console.log('checkResult_Failure_History_Table', checkResult);
+          if (checkResult == true) {
+            submitFailure(id);
+          }
+        }
+      });
+
+      // 页面加载时初始化输入框的状态
+      toggleInputBasedOnRadio('EquM_Y2', 'EquM_N2', 'EquMDescription2');
+      toggleInputBasedOnRadio('MoldM_Y2', 'MoldM_N2', 'MoldMDescription2');
+      toggleInputBasedOnRadio('AutoM_Y2', 'AutoM_N2', 'AutoMDescription2');
+      toggleInputBasedOnRadio('ProcessAD_Y2', 'ProcessAD_N2', 'ProcessADDes2');
+      if ($('#Follow_Y2').is(':checked')) {
+        $('.follow-cavity2, .followed-cavity2').prop('disabled', false);
+        $('.add-input-group2').prop('disabled', false);
+      } else {
+        $('.follow-cavity2, .followed-cavity2').prop('disabled', true);
+        $('.add-input-group2').prop('disabled', true);
+      }
+      console.log('跟进操作:', data);
+
+    });
+    
+    // 检查页面是否完全加载完成
+    checkPageLoadComplete();
+  }
+
+  function checkNotEmpty(id) {
+    // 定义需要检查的固定字段ID
+    const fixedFields = [
+      'workcenter',
+      'workshop',
+      'shift',
+      'owner',
+      'errorCode',
+      'Status',
+      'MaintenanceDuration',
+      'Description'
+    ];
+    // 根据id确定是否需要在ID后添加'2'
+    const suffix = id === 'ModalSubmit' ? '2' : '';
+    // 检查固定字段是否非空
+    let allFixedFieldsFilled = fixedFields.every(field => {
+      let value = $(`#${field}${suffix}`).val() || '';
+      return value.trim() !== '';
+    });
+    // console.log('allFixedFieldsFilled', allFixedFieldsFilled)
+
+    // 创建一个对象，包含所有“是”选项的选择器及其对应的描述输入框选择器
+    const yesOptionsWithDescriptions = {
+      [`#EquM_Y${suffix}`]: `#EquMDescription${suffix}`,    // 设备维修/ Equipment Maintenance
+      [`#MoldM_Y${suffix}`]: `#MoldMDescription${suffix}`,   // 模具维修/ Mold Maintenance
+      [`#AutoM_Y${suffix}`]: `#AutoMDescription${suffix}`,   // 自动化维修/ Automation Maintenance
+      [`#ProcessAD_Y${suffix}`]: `#ProcessADDes${suffix}`, // 工艺调整/ Process Adjustment
+      [`#Follow_Y${suffix}`]: `.follow-cavity${suffix}, .followed-cavity${suffix}`   // 是否有热流道跟从/ Follow the Hot Runner
+    };
+    // 检查是否至少有一个“是”选项被选中
+    const atLeastOneYes = Object.keys(yesOptionsWithDescriptions).some(selector => $(selector).is(':checked'));
+
+    // console.log('atLeastOneYes', atLeastOneYes)
+    // 检查所有被选中的“是”选项后面的描述输入框是否不为空
+    const allDescriptionsFilled = Object.entries(yesOptionsWithDescriptions).every(([yesSelector, descSelector]) => {
+      // 如果“是”选项被选中，检查对应的描述输入框是否不为空
+      if ($(yesSelector).is(':checked')) {
+        // 对于热流道跟从的特殊处理，需要检查两个输入框
+        if (yesSelector === `#Follow_Y${suffix}`) {
+          return $(descSelector).toArray().every(input => $(input).val().trim() !== '');
+        }
+        // 对于其他描述输入框，只需要检查对应的一个输入框
+        return $(descSelector).val().trim() !== '';
+      }
+      return true; // 如果“是”选项未被选中，则不需要检查描述输入框，返回 true
+    });
+    // console.log('allDescriptionsFilled', allDescriptionsFilled)
+
+    // 如果所有字段都已填写
+    if (allFixedFieldsFilled && atLeastOneYes && allDescriptionsFilled) {
+      console.log('数据填写完整', true);
+      return true;
+    } else {
+      // 如果有字段未填写，显示错误提示
+      Swal.fire({
+        icon: "error",
+        title: "请将数据填写完整/ Please fill in the data completely",
+        timer: 2000
+      });
+      console.log('数据未填写完整', false);
+      return false;
+    }
+  }
+
+  function extractTextBetweenBraces(input) {
+    // 将输入转换为字符串
+    var text = String(input);
+
+    // 正则表达式匹配所有大括号中的文本
+    var regex = /{([^}]+)}/g;
+    var matches = text.match(regex);
+
+    // 检查是否有至少两对大括号
+    if (matches && matches.length >= 2) {
+      // 提取第一对和第二对大括号之间的文本
+      var firstBraceEndIndex = text.indexOf(matches[0]) + matches[0].length;
+      var secondBraceStartIndex = text.indexOf(matches[1]);
+      var extractedText = text.substring(firstBraceEndIndex, secondBraceStartIndex).trim();
+      return extractedText;
+    } else {
+      // 如果没有两对大括号，返回原始文本
+      return text;
+    }
+  }
+
+  function getCurrentDateTime() {
+    var now = new Date();
+    var year = now.getFullYear();
+    var month = ('0' + (now.getMonth() + 1)).slice(-2); // 月份是从0开始的
+    var day = ('0' + now.getDate()).slice(-2);
+    var hours = ('0' + now.getHours()).slice(-2);
+    var minutes = ('0' + now.getMinutes()).slice(-2);
+    var seconds = ('0' + now.getSeconds()).slice(-2);
+
+    return '' + year + month + day + hours + minutes + seconds;
+  }
+
+  function getCurrentDate() {
+    var now = new Date();
+
+    var year = now.getFullYear();
+    var month = ('0' + (now.getMonth() + 1)).slice(-2); // 月份是从0开始的
+    var day = ('0' + now.getDate()).slice(-2);
+
+    return year + '/' + month + '/' + day;
+  }
+
+  $("#upload").click(function () {
+    // console.log('上传');
+    Swal.fire({
+      title: '数据上传中/ Data Uploading',
+      icon: 'info',
+      allowOutsideClick: false,
+      showConfirmButton: false
+    });
+    var fileInput = document.getElementById('take-photo');
+    var file = fileInput.files[0]; // 获取选中的文件对象
+    if (file) {
+      // 读取文件内容为一个数据URL
+      let currentDateTime = getCurrentDateTime();
+      let filename = currentDateTime + '_' + global_Process + '_' + global_Name;
+      // console.log('filename', filename);
+      let reader = new FileReader();
+      reader.onload = function (e) {
+        var dataURL = reader.result;
+        var base64 = dataURL.split(',')[1]; // 获取base64编码部分
+
+        // 调用Google Apps Script的uploadFileToDrive函数来处理文件上传
+        google.script.run.withSuccessHandler(function (response) {
+          Swal.close();
+          // 清空输入框
+          fileInput.value = '';
+          Swal.fire({
+            title: '保存成功/ Saving Success',
+            icon: 'success'
+          });
+          console.log('文件上传成功:', response);
+          // 这里可以添加上传成功后的逻辑
+        }).withFailureHandler(function (error) {
+          Swal.close();
+          Swal.fire({
+            icon: "error",
+            title: "文件上传失败"
+          })
+          console.error('文件上传失败:', error);
+          // 这里可以添加上传失败后的逻辑
+        }).uploadFileToDrive(base64, filename, file.type);
+      };
+      reader.readAsDataURL(file); // 开始读取文件
+    } else {
+      alert('请选择一个文件上传。');
+    }
+  })
+
+  $('.add-input-group').click(function () {
+    var newInputGroup = $('<div class="input-group">' +
+      '<input type="number" step="1" class="form-control follow-cavity" placeholder="跟从穴号/ Follow Cavity">' +
+      '<div class="arrow">&rarr;</div>' +
+      '<input type="number" step="1" class="form-control followed-cavity" placeholder="被跟从穴号/ Followed Cavity">' +
+      '</div>');
+    $(this).before(newInputGroup);
+  });
+
+  function toggleInputBasedOnRadio(radioYesId, radioNoId, inputId) {
+    if ($('#' + radioYesId).is(':checked')) {
+      $('#' + inputId).prop('disabled', false); // 启用输入框
+    } else if ($('#' + radioNoId).is(':checked')) {
+      $('#' + inputId).prop('disabled', true); // 禁用输入框
+    }
+  }
+
+  // 使用事件委托为所有单选按钮组添加事件监听器
+  $(document).on('change', `input[type=radio][name=EquM], 
+  input[type=radio][name=MoldM], 
+  input[type=radio][name=AutoM], 
+  input[type=radio][name=ProcessAD], 
+  input[type=radio][name=Follow],
+  input[type=radio][name=EquM2], 
+  input[type=radio][name=MoldM2], 
+  input[type=radio][name=AutoM2], 
+  input[type=radio][name=ProcessAD2], 
+  input[type=radio][name=Follow2]`, handleRadioButtonChange);
+
+  // 定义一个函数来处理单选按钮的变化
+  function handleRadioButtonChange() {
+    let name = $(this).attr('name');
+    let suffix = name.endsWith('2') ? '2' : ''; // 检查是否有后缀 '2'
+    name = name.replace('2', ''); // 移除后缀 '2' 以获取基本名称
+
+    switch (name) {
+      case 'EquM':
+        toggleInputBasedOnRadio(`EquM_Y${suffix}`, `EquM_N${suffix}`, `EquMDescription${suffix}`);
+        break;
+      case 'MoldM':
+        toggleInputBasedOnRadio(`MoldM_Y${suffix}`, `MoldM_N${suffix}`, `MoldMDescription${suffix}`);
+        break;
+      case 'AutoM':
+        toggleInputBasedOnRadio(`AutoM_Y${suffix}`, `AutoM_N${suffix}`, `AutoMDescription${suffix}`);
+        break;
+      case 'ProcessAD':
+        toggleInputBasedOnRadio(`ProcessAD_Y${suffix}`, `ProcessAD_N${suffix}`, `ProcessADDes${suffix}`);
+        break;
+      case 'Follow':
+        // 特殊情况，因为这里控制的是两个输入框
+        if ($(`#Follow_Y${suffix}`).is(':checked')) {
+          $(`.follow-cavity${suffix}, .followed-cavity${suffix}`).prop('disabled', false); // 启用输入框
+          $(`.add-input-group${suffix}`).prop('disabled', false); // 启用按钮
+        } else {
+          $(`.follow-cavity${suffix}, .followed-cavity${suffix}`).prop('disabled', true); // 禁用输入框
+          $(`.add-input-group${suffix}`).prop('disabled', true); // 禁用按钮
+        }
+        break;
+    }
+  }
+</script>

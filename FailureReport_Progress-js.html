@@ -1,0 +1,360 @@
+<script>
+// 全局变量
+let imTable, tfTable, pkTable;
+
+// 页面加载完成后初始化
+$(document).ready(function() {
+    console.log('故障报告进度页面初始化开始...');
+    
+    // 页面加载时显示一个提示框
+    Swal.fire({
+        title: '加载数据中... / Loading Data...',
+        text: '正在从服务器获取故障报告进度数据，请稍候。 / Fetching failure report progress data from server, please wait.',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    initializeTables();
+    loadFailureReportProgressData();
+});
+
+// 初始化DataTables
+function initializeTables() {
+    console.log('初始化DataTables...');
+    
+    // 注塑工序(IM)表格
+    imTable = $('#imTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+        },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[0, 'desc']], // 按故障报告编号降序排列
+        responsive: true,
+        scrollX: true,
+        scrollCollapse: true,
+        columns: [
+            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+            { data: 'workshop', title: '车间 / Workshop' },
+            { data: 'process', title: '工序 / Process' },
+            { data: 'machineNo', title: '机台号 / Machine No.' },
+            { data: 'submitDate', title: '提交日期 / Submit Date' },
+            { data: 'problemDescription', title: '问题描述 / Problem Description' },
+            { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
+            { data: 'uploadDate', title: '上传日期 / Upload Date' },
+            { 
+                data: 'attachments', 
+                title: '附件 / Attachments',
+                render: function(data, type, row) {
+                    if (data && data !== '') {
+                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                    } else {
+                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                    }
+                }
+            }
+        ],
+        dom: '<"top"lf>rt<"bottom"ip><"clear">',
+        initComplete: function() {
+            console.log('IM表格初始化完成');
+        }
+    });
+
+    // 植磨毛工序(TF)表格
+    tfTable = $('#tfTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+        },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[0, 'desc']], // 按故障报告编号降序排列
+        responsive: true,
+        scrollX: true,
+        scrollCollapse: true,
+        columns: [
+            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+            { data: 'workshop', title: '车间 / Workshop' },
+            { data: 'process', title: '工序 / Process' },
+            { data: 'machineNo', title: '机台号 / Machine No.' },
+            { data: 'submitDate', title: '提交日期 / Submit Date' },
+            { data: 'problemDescription', title: '问题描述 / Problem Description' },
+            { data: 'assignDate', title: '分配日期 / Assignment Date' },
+            { data: 'uploadDate', title: '上传日期 / Upload Date' },
+            { 
+                data: 'attachments', 
+                title: '附件 / Attachments',
+                render: function(data, type, row) {
+                    if (data && data !== '') {
+                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                    } else {
+                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                    }
+                }
+            }
+        ],
+        dom: '<"top"lf>rt<"bottom"ip><"clear">',
+        initComplete: function() {
+            console.log('TF表格初始化完成');
+        }
+    });
+
+    // 包装工序(PK)表格
+    pkTable = $('#pkTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
+        },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[0, 'desc']], // 按故障报告编号降序排列
+        responsive: true,
+        scrollX: true,
+        scrollCollapse: true,
+        columns: [
+            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
+            { data: 'workshop', title: '车间 / Workshop' },
+            { data: 'process', title: '工序 / Process' },
+            { data: 'machineNo', title: '机台号 / Machine No.' },
+            { data: 'submitDate', title: '提交日期 / Submit Date' },
+            { data: 'problemDescription', title: '问题描述 / Problem Description' },
+            { data: 'assignDate', title: '分配日期 / Assignment Date' },
+            { data: 'uploadDate', title: '上传日期 / Upload Date' },
+            { 
+                data: 'attachments', 
+                title: '附件 / Attachments',
+                render: function(data, type, row) {
+                    if (data && data !== '') {
+                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                    } else {
+                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                    }
+                }
+            }
+        ],
+        dom: '<"top"lf>rt<"bottom"ip><"clear">',
+        initComplete: function() {
+            console.log('PK表格初始化完成');
+        }
+    });
+
+    console.log('所有DataTables初始化完成');
+}
+
+// 日期格式化函数
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        let date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr; // 如果不是有效日期，返回原始字符串
+        let year = date.getFullYear();
+        let month = String(date.getMonth() + 1).padStart(2, '0');
+        let day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch (e) {
+        console.error('日期格式化错误 / Date formatting error:', e, '原始日期 / Original date:', dateStr);
+        return dateStr;
+    }
+}
+
+// 加载故障报告进度数据
+function loadFailureReportProgressData() {
+    console.log('开始加载故障报告进度数据...');
+    
+    // 调用后端API获取数据
+    google.script.run
+        .withSuccessHandler(function(response) {
+            console.log('获取故障报告进度数据成功:', response);
+            processFailureReportProgressData(response);
+            // 数据加载完成后关闭加载提示框
+            Swal.close();
+        })
+        .withFailureHandler(function(error) {
+            console.error('获取故障报告进度数据失败:', error);
+            showError('获取数据失败 / Failed to get data: ' + error.message);
+            // 加载失败时也关闭加载提示框
+            Swal.close();
+        })
+        .getFailureReportProgressData();
+}
+
+// 处理故障报告进度数据
+function processFailureReportProgressData(data) {
+    try {
+        console.log('处理故障报告进度数据...');
+        
+        // 清空现有数据
+        imTable.clear().draw();
+        tfTable.clear().draw();
+        pkTable.clear().draw();
+        
+        if (!data || !data.IM || !data.TF || !data.PK) {
+            console.warn('数据格式不正确或为空');
+            return;
+        }
+        
+        // 处理IM工序数据
+        if (data.IM && data.IM.length > 0) {
+            console.log('处理IM工序数据，共', data.IM.length, '条');
+            const imData = data.IM.map(item => ({
+                failureReportNumber: item.failureReportNumber || '',
+                workshop: item.workshop || '',
+                process: item.process || 'IM',
+                machineNo: item.machineNo || '',
+                submitDate: formatDate(item.submitDate) || '',
+                problemDescription: item.problemDescription || '',
+                assignmentDate: formatDate(item.assignmentDate) || '',
+                uploadDate: formatDate(item.uploadDate) || '',
+                attachments: item.attachments || ''
+            }));
+            imTable.rows.add(imData).draw();
+        }
+        
+        // 处理TF工序数据
+        if (data.TF && data.TF.length > 0) {
+            console.log('处理TF工序数据，共', data.TF.length, '条');
+            const tfData = data.TF.map(item => ({
+                failureReportNumber: item.failureReportNumber || '',
+                workshop: item.workshop || '',
+                process: item.process || 'TF',
+                machineNo: item.machineNo || '',
+                submitDate: formatDate(item.submitDate) || '',
+                problemDescription: item.problemDescription || '',
+                assignmentDate: formatDate(item.assignmentDate) || '',
+                uploadDate: formatDate(item.uploadDate) || '',
+                attachments: item.attachments || ''
+            }));
+            tfTable.rows.add(tfData).draw();
+        }
+        
+        // 处理PK工序数据
+        if (data.PK && data.PK.length > 0) {
+            console.log('处理PK工序数据，共', data.PK.length, '条');
+            const pkData = data.PK.map(item => ({
+                failureReportNumber: item.failureReportNumber || '',
+                workshop: item.workshop || '',
+                process: item.process || 'PK',
+                machineNo: item.machineNo || '',
+                submitDate: formatDate(item.submitDate) || '',
+                problemDescription: item.problemDescription || '',
+                assignmentDate: formatDate(item.assignmentDate) || '',
+                uploadDate: formatDate(item.uploadDate) || '',
+                attachments: item.attachments || ''
+            }));
+            pkTable.rows.add(pkData).draw();
+        }
+        
+        console.log('故障报告进度数据处理完成');
+        
+        // 显示统计信息
+        showStatistics(data);
+        
+    } catch (error) {
+        console.error('处理故障报告进度数据时出错:', error);
+        showError('处理数据时出错 / Error processing data: ' + error.message);
+    }
+}
+
+// 显示统计信息
+function showStatistics(data) {
+    const imCount = data.IM ? data.IM.length : 0;
+    const tfCount = data.TF ? data.TF.length : 0;
+    const pkCount = data.PK ? data.PK.length : 0;
+    const totalCount = imCount + tfCount + pkCount;
+    
+    console.log(`统计信息 - IM: ${imCount}, TF: ${tfCount}, PK: ${pkCount}, 总计: ${totalCount}`);
+    
+    // 可以在页面上显示统计信息
+    // 这里可以根据需要添加统计显示
+}
+
+
+
+// 显示错误信息
+function showError(message) {
+    Swal.fire({
+        icon: 'error',
+        title: '错误 / Error',
+        text: message,
+        confirmButtonText: '确定 / OK'
+    });
+}
+
+// 显示成功信息
+function showSuccess(message) {
+    Swal.fire({
+        icon: 'success',
+        title: '成功 / Success',
+        text: message,
+        confirmButtonText: '确定 / OK'
+    });
+}
+
+// 返回上一页
+function goBack() {
+    if (window.history.length > 1) {
+        window.history.back();
+    } else {
+        // 如果没有历史记录，跳转到导航页
+        google.script.run
+            .withSuccessHandler(function(url) {
+                if (url) {
+                    window.top.location.href = url;
+                }
+            })
+            .withFailureHandler(function(error) {
+                console.error('获取导航页URL失败:', error);
+                // 默认跳转
+                window.top.location.href = 'Navigation.html';
+            })
+            .getNavigationUrl();
+    }
+}
+
+// 刷新数据
+function refreshData() {
+    console.log('刷新故障报告进度数据...');
+    loadFailureReportProgressData();
+}
+
+// 导出数据
+function exportData(process) {
+    console.log('导出', process, '工序数据...');
+    
+    let table;
+    let fileName;
+    
+    switch(process) {
+        case 'IM':
+            table = imTable;
+            fileName = '故障报告进度_IM工序_' + new Date().toISOString().split('T')[0];
+            break;
+        case 'TF':
+            table = tfTable;
+            fileName = '故障报告进度_TF工序_' + new Date().toISOString().split('T')[0];
+            break;
+        case 'PK':
+            table = pkTable;
+            fileName = '故障报告进度_PK工序_' + new Date().toISOString().split('T')[0];
+            break;
+        default:
+            console.error('未知的工序类型:', process);
+            return;
+    }
+    
+    // 使用DataTables的导出功能
+    if (table) {
+        table.button('.buttons-excel').trigger();
+    }
+}
+
+// 页面卸载时清理
+$(window).on('beforeunload', function() {
+    console.log('页面即将卸载，清理资源...');
+    if (imTable) imTable.destroy();
+    if (tfTable) tfTable.destroy();
+    if (pkTable) pkTable.destroy();
+});
+
+console.log('故障报告进度页面JavaScript加载完成');
+</script>

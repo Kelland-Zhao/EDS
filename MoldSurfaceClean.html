@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    /* 确保表头保持红色背景色 */
+    #data-table thead th {
+      background-color: #E60012 !important;
+      color: white !important;
+    }
+    
+    /* 确保操作列保持默认背景色 */
+    .operation-column {
+      background-color: transparent !important;
+      color: inherit !important;
+    }
+    
+    /* 确保状态列内容居中显示 */
+    #data-table tbody tr td:nth-child(6),
+    #data-table tbody tr td:nth-child(7) {
+      text-align: center !important;
+    }
+    
+    /* 确保badge标签在单元格内居中 */
+    #data-table tbody tr td:nth-child(7) .badge {
+      display: inline-block;
+      text-align: center;
+    }
+  </style>
+  <?!=include("Kez_datatables@1.11.5_css");?>
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("kez_Datatables_css");?>
+  <?!=include("Kez_Select2@4.0.13_css");?>
+  <?!=include("Kez_Select2-bootstrap_css");?>
+  <?!=include("CSS");?>
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <a class="navbar-brand" style="
+                color: white;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: xx-large;
+                font-weight: bold;
+            ">模面清洁/ Mold Surface Clean</a>
+
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">保养/ PM</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">点检/ Inspection</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">工艺参数管理/ PPMS</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">二手备件/ Sec-Hand Spare Parts</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">文档索引/ Document Library</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">模具管理/ Mold Management</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">特种设备检查/ Special Equipment
+              Inspection</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active nav-css text-white" aria-current="page" href="#">任务清单变更管理/ Tasklist MoC</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- DataTables 的容器，一个标准的 table 结构 -->
+    <table id="data-table" class="table table-striped" style="width:100%">
+      <!-- 表头将由 JS 动态生成 -->
+    </table>
+  </div>
+</body>
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("MoldSurfaceClean-js") ?>
+
+</html>

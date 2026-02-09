@@ -1,0 +1,2364 @@
+<script>
+  let globalWorkcenter = [];
+  let globalName = [];
+  let globalMachineType = [];
+  let globalMachineInfo = []; // 保存machine_info数据，用于机台号选择后自动匹配
+  let globalTasklist = []; // 保存tasklist数据，避免重复获取
+  let globalUserData = []; // 保存user数据
+  let globalNIMWorkcenters = []; // NIM机台号原始列表（INJ工序专用）
+  let globalExcludedCombinations = []; // 当周已检查的"机台号+任务类型"组合（所有工序）
+  let globalPointCheckInfo = []; // PointCheckInfo 完整数据（INJ工序专用）
+  let globalCurrentYearWeek = ""; // 当前周次（从后端获取）
+  let global_Name = sessionStorage.getItem('Name');
+  let global_Process = sessionStorage.getItem('Process');
+  let global_ID = sessionStorage.getItem('ID');
+  let global_Workshop = sessionStorage.getItem('Workshop');
+  let siWebPage = sessionStorage.getItem('siWebPage');
+  let timerInterval; // 用于图片上传倒计时
+  let photoUploadTimer; // 用于图片上传倒计时
+
+  $(document).ready(function () {
+    const pageLoadStartTime = performance.now();
+
+    // 初始化页面：设置当前日期
+    initializePage();
+
+    // 先显示工序选择弹窗
+    showProcessSelectionDialog().then(function(process) {
+      loadData(process);
+    });
+  });
+
+  // 加载数据的函数
+  function loadData(process) {
+    // 保存process到全局变量，用于判断是否是INJ工序
+    window.currentProcess = process;
+    const pageLoadStartTime = performance.now();
+
+    Swal.fire({
+      title: '正在加载数据...\nLoading data...',
+      text: '请稍候\nPlease wait',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    // 页面加载时获取基础数据以初始化选择器
+    google.script.run
+      .withSuccessHandler(function (result) {
+
+        
+        const pageLoadEndTime = performance.now();
+        const loadTime = ((pageLoadEndTime - pageLoadStartTime) / 1000).toFixed(2);
+
+        // 关闭加载提示
+        Swal.close();
+        Swal.fire({
+          title: '页面加载完成 / Page Loaded',
+          text: '请选择车间和工序，然后点击"获取点检清单"按钮',
+          icon: 'info',
+          timer: 3000,
+          showConfirmButton: false
+        });
+
+        // 初始化选择器（使用默认的车间和工序）
+        if (result && result.length > 1) {
+          setupSelectOptions(result);
+        }
+
+        // 更新检查日期字段的背景色（因为已经设置了默认值）
+        updateSelectBackground('#inspectionDate');
+      })
+      .withFailureHandler(function (error) {
+        const pageLoadEndTime = performance.now();
+        const loadTime = ((pageLoadEndTime - pageLoadStartTime) / 1000).toFixed(2);
+
+        // 关闭加载提示
+        Swal.close();
+        Swal.fire({
+          title: '页面加载完成 / Page Loaded',
+          text: '请选择车间和工序，然后点击"获取点检清单"按钮',
+          icon: 'info',
+          timer: 3000,
+          showConfirmButton: false
+        });
+      })
+      .getData_PointCheck_Inspection2(process);
+  }
+
+  function initializePage() {
+    // 设置当前日期
+    const today = new Date();
+    const formattedDate = today.getFullYear() + '-' +
+      String(today.getMonth() + 1).padStart(2, '0') + '-' +
+      String(today.getDate()).padStart(2, '0');
+    $('#inspectionDate').val(formattedDate);
+
+    // 初始化时清空姓名字段，让placeholder显示
+    $('#employeeName').val('');
+    // 车间和工序改为手动选择，不需要初始化清空
+
+  }
+
+  // 显示工序选择弹窗
+  function showProcessSelectionDialog() {
+    return new Promise(function(resolve) {
+      Swal.fire({
+        title: '请选择工序<br>Please Select Process',
+        html: '<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">' +
+          '<button id="processBtn_INJ" class="btn btn-primary w-100" style="padding: 15px; font-size: 16px;">注塑/ INJ</button>' +
+          '<button id="processBtn_TF" class="btn btn-primary w-100" style="padding: 15px; font-size: 16px;">植磨毛/ TF</button>' +
+          '<button id="processBtn_PK" class="btn btn-primary w-100" style="padding: 15px; font-size: 16px;">包装/ PK</button>' +
+          '</div>',
+        showConfirmButton: false,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => {
+          // 绑定按钮点击事件
+          $('#processBtn_INJ').on('click', function () {
+            Swal.close();
+            resolve('INJ');
+          });
+          $('#processBtn_TF').on('click', function () {
+            Swal.close();
+            resolve('TF');
+          });
+          $('#processBtn_PK').on('click', function () {
+            Swal.close();
+            resolve('PK');
+          });
+        }
+      });
+    });
+  }
+
+  function showInspectionData(result) {
+    Swal.close();
+    Swal.fire({
+      title: '加载成功/ Loading Success',
+      icon: 'success',
+      timer: 2000,
+      showConfirmButton: false
+    });
+
+    // 设置筛选选项
+    setupSelectOptions(result);
+  }
+
+  function setupSelectOptions(data) {
+    try {
+      data = JSON.parse(data[1]);
+    } catch (e) {
+      return;
+    }
+    let userData = [];
+    if (data.user) {
+      data.user.forEach((r) => {
+        userData.push({ id: r[0], text: r[0] });
+      });
+    }
+
+
+    // 设置机台选项
+    let workcenter = [];
+    let workcenterSet = new Set(); // 用于去重
+
+    if (window.currentProcess === "INJ" && data.workcenter_list !== undefined) {
+      workcenter = data.workcenter_list || [];
+      if (data.origin_machine_info) {
+        globalMachineInfo = data.origin_machine_info;
+      }
+    } else if (data.workcenter_list && data.workcenter_list.length > 0) {
+      workcenter = data.workcenter_list;
+      if (data.origin_machine_info) {
+        globalMachineInfo = data.origin_machine_info;
+      }
+    } else {
+    if (data.machine_info) {
+      globalMachineInfo = data.origin_machine_info;
+
+      data.machine_info.forEach((r, index) => {
+        let machineCode = r[3]; // 机台号
+        if (machineCode && !workcenterSet.has(machineCode)) {
+          let item = {};
+          item.id = machineCode;
+          item.text = machineCode;
+          workcenter.push(item);
+          workcenterSet.add(machineCode);
+        }
+      });
+    }
+
+    // 从current_PointCheckInfo中添加机台号
+    if (data.current_PointCheckInfo && Array.isArray(data.current_PointCheckInfo)) {
+      data.current_PointCheckInfo.forEach((item) => {
+        let machineCode = item["机台号"];
+        if (machineCode && machineCode.toString().trim() !== '' && !workcenterSet.has(machineCode.toString().trim())) {
+          let workcenterItem = {};
+          workcenterItem.id = machineCode.toString().trim();
+          workcenterItem.text = machineCode.toString().trim();
+          workcenterItem.secondInfo = item["选项描述"] || '';
+          workcenter.push(workcenterItem);
+          workcenterSet.add(machineCode.toString().trim());
+        }
+      });
+    }
+
+    // 从history_PointCheckInfo中添加机台号
+    if (data.history_PointCheckInfo && Array.isArray(data.history_PointCheckInfo)) {
+      data.history_PointCheckInfo.forEach((item) => {
+        let machineCode = item["机台号"];
+        if (machineCode && machineCode.toString().trim() !== '' && !workcenterSet.has(machineCode.toString().trim())) {
+          let workcenterItem = {};
+          workcenterItem.id = machineCode.toString().trim();
+          workcenterItem.text = machineCode.toString().trim();
+          workcenterItem.secondInfo = item["选项描述"] || '';
+          workcenter.push(workcenterItem);
+          workcenterSet.add(machineCode.toString().trim());
+        }
+      });
+      }
+    }
+
+    globalWorkcenter = workcenter;
+
+    // 设置点检人选项
+    let name = [];
+    if (data.user_info) {
+      data.user_info.forEach((r) => {
+        if (r.Process === global_Process) {
+          let item = {};
+          item.id = r.Name;
+          item.text = r.Name;
+          name.push(item);
+        }
+      });
+    }
+    globalName = name;
+
+    // 设置任务类型选项（从MachineList的第三列Machine_Type获取）
+    let machineType = [];
+    if (data.tasklist) {
+      // 保存tasklist到全局变量，避免重复获取（用于检查频次和点检清单详情）
+      globalTasklist = data.tasklist;
+      // 保存user数据到全局变量
+      globalUserData = data.user;
+    }
+    
+    // 保存 INJ 工序的新数据
+    if (data.nimWorkcenters_raw) {
+      globalNIMWorkcenters = data.nimWorkcenters_raw;
+    }
+    if (data.excludedCombinations) {
+      globalExcludedCombinations = data.excludedCombinations;
+    }
+    if (data.pointCheckInfo) {
+      globalPointCheckInfo = data.pointCheckInfo;
+    }
+    if (data.currentYearWeek) {
+      globalCurrentYearWeek = data.currentYearWeek;
+    }
+    
+    // 从globalMachineInfo的第三列（索引2）提取任务类型，去重
+    if (globalMachineInfo && globalMachineInfo.length > 0) {
+      let uniqueTypes = [...new Set(globalMachineInfo.map(r => r[2]).filter(type => type && type.trim() !== ''))];
+      
+      uniqueTypes.forEach((type) => {
+        let item = {};
+        item.id = type;
+        item.text = type;
+        machineType.push(item);
+      });
+    }
+    globalMachineType = machineType;
+
+
+    try {
+      $("#shift,#frequency,#inspectorType,#workshopDisplay,#processDisplay").select2({
+        theme: 'bootstrap',
+        minimumResultsForSearch: Infinity,
+        // 添加配置以避免与 Google Apps Script 自动填充冲突
+        dropdownParent: $('body'),
+        // 禁用自动完成
+        autocomplete: 'off'
+      });
+    } catch (e) {
+    }
+
+
+    try {
+      $('#employeeId').select2({
+        data: userData,
+        theme: 'bootstrap',
+        placeholder: "工号/ Employee ID",
+        width: '100%',
+        dropdownParent: $('body'),
+        autocomplete: 'off'
+      });
+    } catch (e) {
+    }
+
+
+    // try {
+    //   // 保存当前机台号的值，防止被清空
+    //   let currentWorkcenterValue = $('#workcenter').val();
+
+    //   $('#workcenter').select2({
+    //     data: workcenter,
+    //     theme: 'bootstrap',
+    //     templateResult: formatOption,
+    //     width: '100%',
+    //     placeholder: "机台号/ Workcenter",
+    //     dropdownParent: $('body'),
+    //     autocomplete: 'off'
+    //   });
+
+    //   // 恢复之前选择的机台号值
+    //   if (currentWorkcenterValue) {
+    //     $('#workcenter').val(currentWorkcenterValue).trigger('change');
+    //   }
+    // } catch (e) {
+    // }
+
+    // try {
+    //   $('#machineType').select2({
+    //     data: machineType,
+    //     theme: 'bootstrap',
+    //     width: '100%',
+    //     dropdownParent: $('body'),
+    //     autocomplete: 'off'
+    //   });
+    // } catch (e) {
+    // }
+
+
+    // 初始化选择框背景色提示功能
+    initSelectBackgroundHighlight();
+
+    // 更新所有选择框的背景色状态
+    updateAllSelectBackgrounds();
+
+    // 工号选择变化事件
+    $("#employeeId").on("change", function () {
+      let selectedId = $("#employeeId").val();
+      if (selectedId && data.user) {
+        let userItem = data.user.find((r) => r[0] === selectedId);
+        if (userItem) {
+          $("#employeeName").val(userItem[1]); // 设置姓名
+          // 更新姓名字段的背景色
+          updateSelectBackground('#employeeName');
+          // 车间和工序改为手动选择，不再自动填充
+        }
+      } else {
+        // 如果没有选择工号，清空姓名字段以显示placeholder
+        $("#employeeName").val('');
+        // 更新姓名字段的背景色
+        updateSelectBackground('#employeeName');
+      }
+    });
+
+    // ========== 互相锁定逻辑：点检人类型 → 任务类型 → 机台号 → 车间 → 工序 ==========
+    
+    // 辅助函数：恢复频次字段到默认状态
+    function resetFrequencyToDefault() {
+      let $frequency = $("#frequency");
+      if ($frequency.hasClass('select2-hidden-accessible') || $frequency.data('select2')) {
+        $frequency.select2('destroy');
+      }
+      $frequency.empty();
+      $frequency.append($('<option>', {
+        value: '',
+        text: '检查频次/ Frequency',
+        selected: true,
+        disabled: true
+      }));
+      $frequency.select2({
+        theme: 'bootstrap',
+        minimumResultsForSearch: Infinity,
+        dropdownParent: $('body'),
+        autocomplete: 'off'
+      });
+      
+      // 重置背景色为默认状态
+      $frequency.next('.select2-container').find('.select2-selection--single').removeClass('selected');
+    }
+    
+    // 将前端选择值映射为所有等价值（用于匹配后台数据）
+    function getInspectorTypeEquivalents(selectedValue) {
+      if (!selectedValue) return [];
+      const mapping = {
+        '技术员/ Technician': ['技术员', '技术员/ Technician'],
+        '操作员/ OPC': ['OPC', '操作员/ OPC']
+      };
+      return mapping[selectedValue] || [selectedValue];
+    }
+    
+    // 通用过滤函数：根据已选择的字段从 globalMachineInfo 中筛选匹配的记录
+    function filterFieldsBySelection() {
+      let selectedInspectorType = $("#inspectorType").val();
+      let selectedMachineType = $("#machineType").val();
+      let selectedWorkcenter = $("#workcenter").val();
+      let selectedWorkshop = $("#workshopDisplay").val();
+      
+      // 获取点检人类型的所有等价值
+      let inspectorTypeEquivalents = getInspectorTypeEquivalents(selectedInspectorType);
+      
+      // 从 globalMachineInfo 中筛选匹配的记录
+      let matchedMachines = globalMachineInfo.filter((r) => {
+        if (selectedInspectorType && !inspectorTypeEquivalents.includes(r[4])) return false;
+        if (selectedMachineType && r[2] != selectedMachineType) return false;
+        if (selectedWorkcenter && r[3] != selectedWorkcenter) return false;
+        if (selectedWorkshop && r[1] != selectedWorkshop) return false;
+        return true;
+      });
+      
+      return matchedMachines;
+    }
+    
+    // 更新机台号选项的函数：基于 workcenter_list 进行过滤（不自动填充）
+    function updateWorkcenterOptions(matchedMachineCodes) {
+      if (matchedMachineCodes && matchedMachineCodes.length > 0) {
+        // 从 globalWorkcenter（workcenter_list）中筛选匹配的机台号
+        let filteredWorkcenters = globalWorkcenter.filter(wc => matchedMachineCodes.includes(wc.id));
+        let currentValue = $("#workcenter").val(); // 保存当前值
+        
+        // 如果当前值为空或null，确保不会自动选择
+        if (!currentValue || currentValue === null || currentValue === '') {
+          currentValue = null;
+        }
+        
+        $('#workcenter').empty();
+        // 在数据前面添加一个空的placeholder选项
+        let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }, ...filteredWorkcenters];
+        
+        $('#workcenter').select2({
+          data: dataWithPlaceholder,
+          theme: 'bootstrap',
+          templateResult: formatOption,
+          width: '100%',
+          placeholder: "机台号/ Workcenter",
+          dropdownParent: $('body'),
+          autocomplete: 'off',
+          minimumResultsForSearch: Infinity
+        });
+        
+        // 如果当前值在新选项中，保持选择；否则清空（不自动填充）
+        if (currentValue && filteredWorkcenters.some(wc => wc.id === currentValue)) {
+          $("#workcenter").val(currentValue).trigger('change');
+        } else {
+          // 明确设置为空值，确保显示placeholder
+          $("#workcenter").val('').trigger('change');
+        }
+      } else {
+        // 即使没有数据也添加placeholder选项
+        let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }];
+        
+        $('#workcenter').empty();
+        $('#workcenter').select2({
+          data: dataWithPlaceholder,
+          theme: 'bootstrap',
+          templateResult: formatOption,
+          width: '100%',
+          placeholder: "机台号/ Workcenter",
+          dropdownParent: $('body'),
+          autocomplete: 'off',
+          minimumResultsForSearch: Infinity
+        });
+        $("#workcenter").val('').trigger('change');
+      }
+    }
+    
+    // 1. 点检人类型变化 → 基于 MachineList 自动调整任务类型/机台号/车间/工序
+    $("#inspectorType").on("change", function () {
+      let selectedInspectorType = $(this).val();
+      
+      // 清空后续字段
+      $("#machineType").val(null).trigger('change');
+      $("#workcenter").val(null).trigger('change');
+      $("#workshopDisplay").val(null).trigger('change');
+      $("#processDisplay").val(null).trigger('change');
+      
+      // 恢复频次字段到默认状态
+      resetFrequencyToDefault();
+      
+      if (selectedInspectorType) {
+        let matchedMachines = filterFieldsBySelection();
+        
+        // 过滤任务类型
+        let uniqueMachineTypes = [...new Set(matchedMachines.map(r => r[2]).filter(v => v && v.trim() !== ''))];
+        if (uniqueMachineTypes.length > 0) {
+          updateSelect2Options('#machineType', uniqueMachineTypes, '任务类型/ Task Type');
+        } else {
+          updateSelect2Options('#machineType', [], '任务类型/ Task Type');
+        }
+        
+        // 过滤机台号（基于 workcenter_list）
+        let uniqueWorkcenters = [...new Set(matchedMachines.map(r => r[3]).filter(v => v && v.trim() !== ''))];
+        updateWorkcenterOptions(uniqueWorkcenters);
+        
+        // 过滤车间
+        let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+        if (uniqueWorkshops.length > 0) {
+          updateSelectOptions('#workshopDisplay', uniqueWorkshops, '车间/ Workshop');
+        } else {
+          updateSelectOptions('#workshopDisplay', [], '车间/ Workshop');
+        }
+        
+        // 过滤工序
+        let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+        if (uniqueProcesses.length > 0) {
+          updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
+        } else {
+          updateSelectOptions('#processDisplay', [], '工序/ Process');
+        }
+      } else {
+        // 如果点检人类型为空，恢复所有选项
+        updateSelect2Options('#machineType', globalMachineType.map(item => item.text), '任务类型/ Task Type');
+        $('#workcenter').empty();
+        $('#workcenter').select2({
+          data: globalWorkcenter,
+          theme: 'bootstrap',
+          templateResult: formatOption,
+          width: '100%',
+          placeholder: "机台号/ Workcenter",
+          dropdownParent: $('body'),
+          autocomplete: 'off',
+          minimumResultsForSearch: Infinity
+        });
+        let allWorkshops = [...new Set(globalMachineInfo.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+        updateSelectOptions('#workshopDisplay', allWorkshops, '车间/ Workshop');
+        let allProcesses = [...new Set(globalMachineInfo.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+        updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
+      }
+    });
+    
+    // 2. 任务类型变化 → 在已选点检人类型基础上，进一步缩小机台号/车间/工序
+    $("#machineType").on("change", function () {
+      let selectedMachineType = $(this).val();
+      
+      // 清空后续字段
+      $("#workcenter").val(null).trigger('change');
+      $("#workshopDisplay").val(null).trigger('change');
+      $("#processDisplay").val(null).trigger('change');
+      $("#frequency").val(null).trigger('change');
+      
+      if (selectedMachineType) {
+        // 在已选点检人类型基础上过滤
+        let matchedMachines = filterFieldsBySelection();
+        
+        // ========== 新逻辑：INJ 工序的机台号动态过滤 ==========
+        if (window.currentProcess === "INJ") {
+          // INJ 工序：根据任务类型动态过滤 NIM 和 IM 机台号
+          
+          // 1. NIM 机台号过滤
+          let nimWorkcenters = [];
+          if (globalNIMWorkcenters && globalNIMWorkcenters.length > 0) {
+            // 从 MachineList 筛选该任务类型的机台号
+            let machineTypeWorkcenters = matchedMachines
+              .filter(r => r[2] === selectedMachineType)
+              .map(r => r[3]);
+            
+            // 与 NIM 机台号取交集
+            let nimIntersection = globalNIMWorkcenters.filter(wc => 
+              machineTypeWorkcenters.includes(wc)
+            );
+            
+            // 排除当周该任务类型已检查的机台号
+            let excludedForThisType = globalExcludedCombinations
+              .filter(combo => combo.machineType === selectedMachineType)
+              .map(combo => combo.workcenter);
+            
+            let nimFiltered = nimIntersection.filter(wc => 
+              !excludedForThisType.includes(wc)
+            );
+            
+            nimWorkcenters = nimFiltered.map(wc => ({
+              id: wc,
+              text: wc,
+              secondInfo: "",
+              uniqueKey: wc // NIM 机台号使用机台号本身作为唯一键
+            }));
+          }
+          
+          // 2. IM 机台号过滤
+          let imWorkcenters = [];
+          if (globalPointCheckInfo && globalPointCheckInfo.length > 0) {
+            
+            // 从 PointCheckInfo 筛选该任务类型的条目
+            let filteredByTaskType = globalPointCheckInfo.filter(item => {
+              let taskType = item["机型"] ? item["机型"].toString().trim() : "";
+              return taskType === selectedMachineType;
+            });
+            
+            
+            let filteredByStatus = filteredByTaskType.filter(item => {
+              // 筛选"是否已做"≠"已做"
+              let status = item["是否已做"] ? item["是否已做"].toString().trim() : "";
+              return status !== "已做";
+            });
+            
+            // 交叉验证排除：检查 PointCheckInfo 中"未做"或"为空"的记录是否已在 INJ-TB1/TB2 中提交
+            // 如果已提交（存在于 globalExcludedCombinations 中），则排除该记录
+            let filteredByExcluded = filteredByStatus.filter(item => {
+              let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
+              let status = item["是否已做"] ? item["是否已做"].toString().trim() : "";
+              
+              // 只对"未做"或"状态为空"的记录进行交叉验证
+              if (status === "未做" || status === "") {
+                // 检查该机台号+任务类型组合是否已在 TB1/TB2 中存在
+                if (globalExcludedCombinations && globalExcludedCombinations.length > 0) {
+                  let isExcluded = globalExcludedCombinations.some(combo => 
+                    combo.workcenter === machineCode && combo.machineType === selectedMachineType
+                  );
+                  // 如果在 TB1/TB2 中已存在，则排除（返回 false）
+                  if (isExcluded) {
+                    return false;
+                  }
+                }
+              }
+              
+              // 其他情况保留
+              return true;
+            });
+            
+            
+            imWorkcenters = filteredByExcluded
+              .map(item => {
+                let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
+                let status = item["是否已做"] ? item["是否已做"].toString().trim() : "";
+                let yearWeek = item["年周"] ? item["年周"].toString().trim() : "";
+                let startDate = item["开始日期"] ? item["开始日期"].toString().trim() : "";
+                let startShift = item["开始班次"] ? item["开始班次"].toString().trim() : "";
+                
+                let result = {
+                  id: machineCode, // 实际的机台号
+                  text: machineCode,
+                  secondInfo: "",
+                  uniqueKey: machineCode // 用于去重的唯一键
+                };
+                
+                // 如果是"未做"，添加红色备注
+                if (status === "未做" && machineCode) {
+                  if (yearWeek && startDate && startShift) {
+                    result.secondInfo = yearWeek + "_" + startDate + "_" + startShift;
+                    // 为不同周次的未做记录创建唯一键
+                    result.uniqueKey = machineCode + "_" + yearWeek;
+                  }
+                }
+                
+                return result;
+              })
+              .filter(item => item.id);
+            
+          }
+          
+          // 3. 合并 NIM 和 IM 机台号
+          let allWorkcenters = [...nimWorkcenters, ...imWorkcenters];
+          
+          // 4. 去重（基于 uniqueKey，确保不同周次的未做记录都显示）
+          let workcenterMap = new Map();
+          allWorkcenters.forEach(wc => {
+            // 使用 uniqueKey 进行去重
+            // 对于 IM 未做记录：uniqueKey = 机台号_年周（不同周次视为不同选项）
+            // 对于 NIM 和 IM 已做记录：uniqueKey = 机台号
+            let key = wc.uniqueKey || wc.id;
+            
+            if (!workcenterMap.has(key)) {
+              workcenterMap.set(key, wc);
+            }
+          });
+          let uniqueWorkcenters = Array.from(workcenterMap.values());
+          
+          // 5. 更新机台号下拉框
+          if (uniqueWorkcenters.length > 0) {
+            // 在数据前面添加一个空的placeholder选项
+            let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }, ...uniqueWorkcenters];
+            
+            $('#workcenter').empty();
+            $('#workcenter').select2({
+              data: dataWithPlaceholder,
+              theme: 'bootstrap',
+              templateResult: formatOption,
+              width: '100%',
+              placeholder: "机台号/ Workcenter",
+              dropdownParent: $('body'),
+              autocomplete: 'off',
+              minimumResultsForSearch: Infinity
+            });
+            // 确保不自动选择第一个选项，保持placeholder状态
+            $("#workcenter").val('').trigger('change');
+          } else {
+            // 即使没有数据也添加placeholder选项
+            let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }];
+            
+            $('#workcenter').empty();
+            $('#workcenter').select2({
+              data: dataWithPlaceholder,
+              theme: 'bootstrap',
+              templateResult: formatOption,
+              width: '100%',
+              placeholder: "机台号/ Workcenter",
+              dropdownParent: $('body'),
+              autocomplete: 'off',
+              minimumResultsForSearch: Infinity
+            });
+            // 确保显示placeholder
+            $("#workcenter").val('').trigger('change');
+          }
+        } else {
+          // 非 INJ 工序（TF、PK）：应用当周已检查排除逻辑
+          let uniqueWorkcenters = [...new Set(matchedMachines.map(r => r[3]).filter(v => v && v.trim() !== ''))];
+          
+          // 如果有当周已检查组合数据，进行排除
+          if (globalExcludedCombinations && globalExcludedCombinations.length > 0) {
+            // 排除当周该任务类型已检查的机台号
+            let excludedForThisType = globalExcludedCombinations
+              .filter(combo => combo.machineType === selectedMachineType)
+              .map(combo => combo.workcenter);
+            
+            uniqueWorkcenters = uniqueWorkcenters.filter(wc => 
+              !excludedForThisType.includes(wc)
+            );
+          }
+          
+          updateWorkcenterOptions(uniqueWorkcenters);
+        }
+        
+        // 过滤车间
+        let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+        if (uniqueWorkshops.length > 0) {
+          updateSelectOptions('#workshopDisplay', uniqueWorkshops, '车间/ Workshop');
+        } else {
+          updateSelectOptions('#workshopDisplay', [], '车间/ Workshop');
+        }
+        
+        // 过滤工序
+        let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+        if (uniqueProcesses.length > 0) {
+          updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
+        } else {
+          updateSelectOptions('#processDisplay', [], '工序/ Process');
+        }
+        
+        // 更新检查频次选项
+      let effectiveTasks = globalTasklist.filter(r => {
+          let status = r[12];
+        return status && status.toString().trim() === "生效/ Effective";
+      });
+
+      let matchedTasks = effectiveTasks.filter(task => {
+          return task[0] === selectedMachineType;
+      });
+
+      // 辅助函数：显示错误信息到检查频次下拉框
+      function showFrequencyError(errorMessage) {
+        let $frequency = $("#frequency");
+        $frequency.empty();
+        $frequency.append($('<option>', {
+          value: '',
+          text: errorMessage,
+          selected: true,
+          disabled: true
+        }));
+        if ($frequency.hasClass('select2-hidden-accessible') || $frequency.data('select2')) {
+          $frequency.select2('destroy');
+          $frequency.select2({
+            theme: 'bootstrap',
+            minimumResultsForSearch: Infinity,
+            dropdownParent: $('body'),
+            autocomplete: 'off'
+          });
+        }
+        
+        // 错误状态下重置背景色
+        $frequency.next('.select2-container').find('.select2-selection--single').removeClass('selected');
+      }
+
+      if (matchedTasks.length > 0) {
+        // 获取第一个匹配任务的任务清单
+        let firstTask = matchedTasks[0];
+        try {
+          // 解析任务清单 JSON（格式为数组）
+          let tasklistArray = JSON.parse(firstTask[1]);
+          
+          // 检查是否为数组
+          if (!Array.isArray(tasklistArray)) {
+            showFrequencyError('任务清单格式错误：不是数组 / Tasklist is not an array');
+            return;
+          }
+          
+          // 检查数组是否为空
+          if (tasklistArray.length === 0) {
+            showFrequencyError('任务清单为空 / Tasklist is empty');
+            return;
+          }
+          
+          // 取第一个元素
+          let firstItem = tasklistArray[0];
+          
+          // 检查第一个元素是否有 Frequency 属性
+          if (!firstItem.hasOwnProperty('Frequency') || !firstItem.Frequency) {
+            showFrequencyError('任务清单缺少频次字段 / Frequency field is missing');
+            return;
+          }
+          
+          // 直接使用 Frequency 属性值作为检查频次
+          let frequencyValue = firstItem.Frequency;
+          
+          // 动态创建频次选项
+          let $frequency = $("#frequency");
+          if ($frequency.hasClass('select2-hidden-accessible') || $frequency.data('select2')) {
+            $frequency.select2('destroy');
+          }
+          $frequency.empty();
+          
+          // 添加从任务清单获取的频次值作为唯一选项
+          $frequency.append($('<option>', {
+            value: frequencyValue,
+            text: frequencyValue,
+            selected: true
+          }));
+          
+          // 重新初始化 Select2
+          $frequency.select2({
+            theme: 'bootstrap',
+            minimumResultsForSearch: Infinity,
+            dropdownParent: $('body'),
+            autocomplete: 'off'
+          });
+          
+          // 更新背景色为绿色，表示已获取到值
+          updateSelectBackground('#frequency');
+          
+        } catch (e) {
+          // JSON 解析失败
+          showFrequencyError('任务清单解析失败 / JSON parsing failed: ' + e.message);
+        }
+      } else {
+        // 如果在 Tasklist_history 中没有找到对应的任务清单
+        showFrequencyError('无对应任务清单 / No Corresponding Tasklist');
+      }
+      } else {
+        // 如果任务类型为空，恢复所有选项（基于已选点检人类型）
+        let selectedInspectorType = $("#inspectorType").val();
+        if (selectedInspectorType) {
+          // 如果有点检人类型，基于点检人类型恢复
+          let inspectorTypeEquivalents = getInspectorTypeEquivalents(selectedInspectorType);
+          let matchedMachines = globalMachineInfo.filter((r) => inspectorTypeEquivalents.includes(r[4]));
+          let uniqueWorkcenters = [...new Set(matchedMachines.map(r => r[3]).filter(v => v && v.trim() !== ''))];
+          updateWorkcenterOptions(uniqueWorkcenters);
+          let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+          updateSelectOptions('#workshopDisplay', uniqueWorkshops, '车间/ Workshop');
+          let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+          updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
+        } else {
+          // 如果没有点检人类型，恢复所有选项
+          $('#workcenter').empty();
+          $('#workcenter').select2({
+            data: globalWorkcenter,
+            theme: 'bootstrap',
+            templateResult: formatOption,
+            width: '100%',
+            placeholder: "机台号/ Workcenter",
+            dropdownParent: $('body'),
+            autocomplete: 'off',
+            minimumResultsForSearch: Infinity
+          });
+          let allWorkshops = [...new Set(globalMachineInfo.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+          updateSelectOptions('#workshopDisplay', allWorkshops, '车间/ Workshop');
+          let allProcesses = [...new Set(globalMachineInfo.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+          updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
+        }
+        
+        // 恢复频次字段到默认状态
+        resetFrequencyToDefault();
+      }
+    });
+
+    // 3. 机台号变化 → 在已选点检人类型+任务类型基础上，进一步缩小车间/工序
+    $("#workcenter").on("change", function () {
+      let selectedWorkcenter = $(this).val();
+      
+      // 保存完整的选项信息（包括 uniqueKey 和 secondInfo），用于后续精确移除
+      // 只在机台号有值且已初始化为 Select2 时才尝试获取 select2 数据
+      if (selectedWorkcenter && $(this).hasClass('select2-hidden-accessible')) {
+        try {
+          let selectedData = $(this).select2('data');
+          let selectedOption = selectedData && selectedData.length > 0 ? selectedData[0] : null;
+          if (selectedOption && selectedOption.uniqueKey) {
+            // 将选中的 uniqueKey 和 secondInfo 保存到元素的 data 属性中
+            $(this).data('selectedUniqueKey', selectedOption.uniqueKey);
+            $(this).data('selectedSecondInfo', selectedOption.secondInfo || '');
+          } else {
+            $(this).data('selectedUniqueKey', selectedWorkcenter);
+            $(this).data('selectedSecondInfo', '');
+          }
+        } catch (e) {
+          // 如果出错，使用机台号本身作为唯一键
+          $(this).data('selectedUniqueKey', selectedWorkcenter);
+          $(this).data('selectedSecondInfo', '');
+        }
+      } else {
+        // 机台号为空或未初始化 Select2，清空保存的数据
+        $(this).data('selectedUniqueKey', '');
+        $(this).data('selectedSecondInfo', '');
+      }
+
+      // 清空后续字段（检查频次不受机台号影响，不清空）
+      $("#workshopDisplay").val(null).trigger('change');
+      $("#processDisplay").val(null).trigger('change');
+      
+      if (selectedWorkcenter) {
+        // 在已选点检人类型+任务类型基础上过滤
+        let matchedMachines = filterFieldsBySelection();
+
+        // 过滤车间
+        let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+        
+        
+        if (uniqueWorkshops.length > 0) {
+          updateSelectOptions('#workshopDisplay', uniqueWorkshops, '车间/ Workshop');
+          // 机台号确定后，车间唯一，直接自动选中
+          $('#workshopDisplay').val(uniqueWorkshops[0]).trigger('change');
+          updateSelectBackground('#workshopDisplay');
+        } else {
+          updateSelectOptions('#workshopDisplay', [], '车间/ Workshop');
+        }
+        
+        // 过滤工序
+        let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+        
+        
+        if (uniqueProcesses.length > 0) {
+          updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
+          // 机台号确定后，工序唯一，直接自动选中
+          $('#processDisplay').val(uniqueProcesses[0]).trigger('change');
+          updateSelectBackground('#processDisplay');
+        } else {
+          updateSelectOptions('#processDisplay', [], '工序/ Process');
+        }
+        
+      } else {
+        // 如果机台号为空，恢复所有选项（基于已选点检人类型+任务类型）
+        let selectedInspectorType = $("#inspectorType").val();
+        let selectedMachineType = $("#machineType").val();
+        
+        
+        if (selectedInspectorType || selectedMachineType) {
+          let inspectorTypeEquivalents = getInspectorTypeEquivalents(selectedInspectorType);
+          let matchedMachines = globalMachineInfo.filter((r) => {
+            if (selectedInspectorType && !inspectorTypeEquivalents.includes(r[4])) return false;
+            if (selectedMachineType && r[2] != selectedMachineType) return false;
+            return true;
+          });
+        let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+        let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+        
+        
+          updateSelectOptions('#workshopDisplay', uniqueWorkshops, '车间/ Workshop');
+          // 如果车间选项唯一，自动选中
+          if (uniqueWorkshops.length === 1) {
+            $('#workshopDisplay').val(uniqueWorkshops[0]).trigger('change');
+            updateSelectBackground('#workshopDisplay');
+          }
+          
+          updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
+          // 如果工序选项唯一，自动选中
+          if (uniqueProcesses.length === 1) {
+            $('#processDisplay').val(uniqueProcesses[0]).trigger('change');
+            updateSelectBackground('#processDisplay');
+          }
+        } else {
+          // 如果都没有选择，恢复所有选项
+          let allWorkshops = [...new Set(globalMachineInfo.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+          let allProcesses = [...new Set(globalMachineInfo.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+          
+          
+          updateSelectOptions('#workshopDisplay', allWorkshops, '车间/ Workshop');
+          // 如果车间选项唯一，自动选中
+          if (allWorkshops.length === 1) {
+            $('#workshopDisplay').val(allWorkshops[0]).trigger('change');
+            updateSelectBackground('#workshopDisplay');
+          }
+          
+          updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
+          // 如果工序选项唯一，自动选中
+          if (allProcesses.length === 1) {
+            $('#processDisplay').val(allProcesses[0]).trigger('change');
+            updateSelectBackground('#processDisplay');
+          }
+        }
+      }
+    });
+    
+    // 4. 车间变化 → 在已选点检人类型+任务类型+机台号基础上，进一步缩小工序
+    $("#workshopDisplay").on("change", function () {
+      let selectedWorkshop = $(this).val();
+      
+      // 清空后续字段（检查频次不受车间影响，不清空）
+      $("#processDisplay").val(null).trigger('change');
+      
+      if (selectedWorkshop) {
+        // 在已选点检人类型+任务类型+机台号基础上过滤
+        let matchedMachines = filterFieldsBySelection();
+        
+        // 过滤工序
+        let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+        if (uniqueProcesses.length > 0) {
+          updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
+        } else {
+          updateSelectOptions('#processDisplay', [], '工序/ Process');
+        }
+        } else {
+        // 如果车间为空，恢复所有选项（基于已选点检人类型+任务类型+机台号）
+        let selectedInspectorType = $("#inspectorType").val();
+        let selectedMachineType = $("#machineType").val();
+        let selectedWorkcenter = $("#workcenter").val();
+        if (selectedInspectorType || selectedMachineType || selectedWorkcenter) {
+          let inspectorTypeEquivalents = getInspectorTypeEquivalents(selectedInspectorType);
+          let matchedMachines = globalMachineInfo.filter((r) => {
+            if (selectedInspectorType && !inspectorTypeEquivalents.includes(r[4])) return false;
+            if (selectedMachineType && r[2] != selectedMachineType) return false;
+            if (selectedWorkcenter && r[3] != selectedWorkcenter) return false;
+            return true;
+          });
+          let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+          updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
+      } else {
+          // 如果都没有选择，恢复所有选项
+          let allProcesses = [...new Set(globalMachineInfo.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+          updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
+        }
+      }
+    });
+
+    // 更新普通下拉框选项的函数
+    function updateSelectOptions(selector, values, placeholder) {
+      let $select = $(selector);
+      let currentValue = $select.val();
+      let isSelect2 = $select.hasClass('select2-hidden-accessible') || $select.data('select2');
+
+      // 如果字段使用了 Select2，需要先销毁
+      if (isSelect2) {
+        $select.select2('destroy');
+      }
+
+      // 清空所有选项
+      $select.empty();
+
+      // 添加 placeholder 选项
+      $select.append($('<option>', {
+        value: '',
+        text: placeholder,
+        selected: true,
+        disabled: true
+      }));
+
+      // 添加新选项
+      values.forEach(value => {
+        $select.append($('<option>', {
+          value: value,
+          text: value
+        }));
+      });
+
+      // 如果字段使用了 Select2，重新初始化
+      if (isSelect2) {
+        $select.select2({
+          theme: 'bootstrap',
+          minimumResultsForSearch: Infinity,
+          dropdownParent: $('body'),
+          autocomplete: 'off'
+        });
+      }
+
+      // 如果当前值在新选项中，保持选择；否则清空
+      if (currentValue && values.includes(currentValue)) {
+        $select.val(currentValue).trigger('change');
+      } else {
+        $select.val(null).trigger('change');
+      }
+    }
+
+    // 更新 Select2 下拉框选项的函数
+    function updateSelect2Options(selector, values, placeholder) {
+      let $select = $(selector);
+      let currentValue = $select.val();
+
+      // 构建 Select2 数据格式
+      let select2Data = values.map(value => ({
+        id: value,
+        text: value
+      }));
+
+      // 更新 Select2 数据
+      $select.empty();
+      $select.select2({
+        data: select2Data,
+        theme: 'bootstrap',
+        width: '100%',
+        placeholder: placeholder,
+        dropdownParent: $('body'),
+        autocomplete: 'off'
+      });
+
+      // 如果当前值在新选项中，保持选择
+      if (currentValue && values.includes(currentValue)) {
+        $select.val(currentValue).trigger('change');
+      } else {
+        $select.val(null).trigger('change');
+      }
+    }
+
+  }
+
+  function formatOption(option) {
+    if (!option.id) { return option.text; }
+    let secondInfo = option.secondInfo;
+    let $result = $('<span>' + option.text + '</span><span class="second-info" style="margin-left:10px;color:red;font-size:xx-small">' + '' + '</span>');
+    if (secondInfo) {
+      $result = $('<span>' + option.text + '</span><span class="second-info" style="margin-left:10px;color:red;font-size:xx-small">' + secondInfo + '</span>');
+    } else {
+      $result = $('<span>' + option.text + '</span><span class="second-info" style="margin-left:10px;color:red;font-size:xx-small">' + '' + '</span>');
+    }
+    return $result;
+  }
+
+  function inspectionNo() {
+    let workcenter = $("#workcenter").val();
+
+    // 获取当前日期
+    let now = new Date();
+
+    // 格式化日期为 YYYYMMDD
+    let year = now.getFullYear();
+    let month = String(now.getMonth() + 1).padStart(2, '0');
+    let day = String(now.getDate()).padStart(2, '0');
+    let dateStr = year + month + day; // 20250102
+
+    // 计算年周 (YYYYWXX)
+    let yearWeek = getYearWeek(now); // 2025W01
+
+    // 组合序列号：日期 + 年周 + workcenter (与PointCheck格式一致)
+    let inspectionNo = dateStr + yearWeek + workcenter;
+
+    return inspectionNo;
+  }
+
+  // 计算年周的函数
+  function getYearWeek(date) {
+    // 截掉时分秒保留整数天
+    let d = new Date(date || new Date());
+    // 设置日期为当前周周四
+    d.setDate(d.getDate() + (4 - (d.getDay() || 7)));
+    let year = d.getFullYear();
+    let firstDate = new Date(year, 0, 1);
+    firstDate.setDate(firstDate.getDate() + (4 - (firstDate.getDay() || 7)));
+    // 当年第一天早于周四 第一周延后七天
+    if (firstDate.getFullYear() < year) {
+      firstDate.setDate(firstDate.getDate() + 7);
+    }
+    // 计算当前周和第一周之间周数差
+    let weekNum = Math.ceil(((d - firstDate) / 86400000 + 1) / 7);
+    weekNum = weekNum < 10 ? "0" + weekNum : weekNum;
+    return year + "W" + weekNum;
+  }
+
+  function achieveInspection() {
+    let selectedTaskType = $("#machineType").val();
+
+    // 获取用户选择的车间和工序
+    const selectedWorkshop = $('#workshopDisplay').val();
+    const selectedProcess = $('#processDisplay').val();
+
+    // 验证选择
+    if (!selectedWorkshop || !selectedProcess) {
+      Swal.fire({
+        title: '请选择车间和工序 / Please Select Workshop and Process',
+        text: '请先选择车间和工序，然后再获取点检清单',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    // 更新全局变量
+    global_Workshop = selectedWorkshop;
+    global_Process = selectedProcess;
+
+
+    processInspectionTasks(selectedTaskType);
+
+  }
+
+  // 处理点检任务数据的函数
+  function processInspectionTasks(selectedTaskType) {
+    // 重新过滤生效的任务
+    let effectiveTasks = globalTasklist.filter(r => {
+      let status = r[12]; // 第12个元素（索引12）
+      return status && status.toString().trim() === "生效/ Effective";
+    });
+
+    // 基于任务类型进行匹配
+    let matchedTasks = effectiveTasks.filter(task => {
+      return task[0] === selectedTaskType; // 第一个元素匹配任务类型
+    });
+
+    if (matchedTasks.length > 0) {
+
+      // 在"获取点检清单"按钮下方添加提交按钮
+      let submitButton = $('#submitInspectionResults');
+      if (submitButton.length === 0) {
+        // 如果按钮不存在，创建它
+        let submitContainer = $('<div class="mb-2"></div>');
+        submitButton = $('<button type="button" class="btn btn-success w-100" id="submitInspectionResults">' +
+          '<i class="fas fa-check-circle me-2"></i>提交检查结果 / Submit Inspection Results' +
+          '</button>');
+        submitContainer.append(submitButton);
+
+        // 将提交按钮添加到"获取点检清单"按钮的下方
+        $('#achieveInspection').parent().after(submitContainer);
+      } else {
+        // 如果按钮已存在，显示它
+        submitButton.show();
+      }
+
+      // 展示所有匹配任务的第二个元素（点检详细任务）
+
+      // 提取所有第二个元素并解析JSON数据
+      let inspectionDetails = matchedTasks.map(task => {
+        try {
+          // 解析JSON字符串
+          let jsonData = JSON.parse(task[1]);
+          return jsonData;
+        } catch (e) {
+          return null;
+        }
+      }).filter(item => item !== null);
+
+      // 显示表格
+      displayInspectionTable(inspectionDetails);
+
+      // 关闭加载提示并显示成功消息
+      Swal.close();
+      Swal.fire({
+        title: '加载成功/ Loading Success',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+    } else {
+
+      // 隐藏提交按钮
+      $('#submitInspectionResults').hide();
+
+      // 关闭加载提示并显示无数据消息
+      Swal.close();
+      Swal.fire({
+        icon: 'info',
+        title: '未找到匹配任务/ No Matching Tasks',
+        text: '未找到任务类型"' + selectedTaskType + '"的匹配任务。\nNo matching tasks found for task type "' + selectedTaskType + '".\n\n可用的任务类型: ' + [...new Set(effectiveTasks.map(r => r[0]))].join(', '),
+        confirmButtonText: '确定/ OK'
+      });
+    }
+  }
+
+  // 显示点检任务表格
+  function displayInspectionTable(data) {
+    if (!data || data.length === 0) {
+      return;
+    }
+
+    // 清空之前的表格
+    $('#inspectionTableContainer').remove();
+
+    // 创建表格容器
+    let tableContainer = $('<div id="inspectionTableContainer" class="mt-4"></div>');
+
+    // 创建表格标题
+    let tableTitle = $('<h4 class="mb-3">点检任务详情 / Inspection Task Details</h4>');
+
+    // 创建表格（参考FailureReport_Manage.html的样式）
+    let table = $('<table id="inspectionTable" class="display table table-bordered table-striped table-hover" style="width:100%"></table>');
+
+    // 获取所有唯一的属性名作为表头
+    let allKeys = [];
+    data.forEach(item => {
+      if (Array.isArray(item)) {
+        item.forEach(obj => {
+          if (typeof obj === 'object' && obj !== null) {
+            Object.keys(obj).forEach(key => {
+              if (!allKeys.includes(key)) {
+                allKeys.push(key);
+              }
+            });
+          }
+        });
+      } else if (typeof item === 'object' && item !== null) {
+        Object.keys(item).forEach(key => {
+          if (!allKeys.includes(key)) {
+            allKeys.push(key);
+          }
+        });
+      }
+    });
+
+    // 定义需要折叠的列（从Resource到Tool）
+    const collapsibleColumns = ['Resource', 'Frequency', 'Process', 'Method', 'Unit', 'Tool'];
+    const mainColumns = allKeys.filter(key => !collapsibleColumns.includes(key));
+    const detailColumns = allKeys.filter(key => collapsibleColumns.includes(key));
+
+    // 创建表头（参考FailureReport_Manage.html的红色表头样式）
+    let thead = $('<thead></thead>');
+    let headerRow = $('<tr></tr>');
+
+    // 添加主要数据列
+    mainColumns.forEach(key => {
+      headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">' + key + '</th>');
+    });
+
+    // 添加折叠列组
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">详细信息 / Details</th>');
+
+    // 添加操作列
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">结果 / Result</th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">备注 / Remarks</th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">是否解决 / Resolved</th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">操作 / Actions</th>');
+
+    thead.append(headerRow);
+    table.append(thead);
+
+    // 创建表体
+    let tbody = $('<tbody></tbody>');
+
+    data.forEach((item, index) => {
+      if (Array.isArray(item)) {
+        // 如果是数组，遍历数组中的每个对象
+        item.forEach((obj, objIndex) => {
+          if (typeof obj === 'object' && obj !== null) {
+            let row = $('<tr></tr>');
+            let rowId = 'task_' + index + '_' + objIndex;
+
+            // 添加主要数据列
+            mainColumns.forEach(key => {
+              let cellValue = obj[key] || '';
+              row.append('<td>' + cellValue + '</td>');
+            });
+
+            // 添加折叠详细信息列
+            let detailInfo = '';
+            detailColumns.forEach(key => {
+              let cellValue = obj[key] || '';
+              if (cellValue) {
+                detailInfo += '<div><strong>' + key + ':</strong> ' + cellValue + '</div>';
+              }
+            });
+            row.append('<td><button class="btn btn-sm btn-outline-info detail-toggle" data-row-id="' + rowId + '">+</button><div class="detail-content" style="display:none;">' + detailInfo + '</div></td>');
+
+            // 结果列 - 单选按钮
+            row.append('<td>' +
+              '<div class="btn-group" role="group" data-row-id="' + rowId + '">' +
+              '<input type="radio" class="btn-check result-radio" name="result_' + rowId + '" id="normal_' + rowId + '" value="正常/Normal">' +
+              '<label class="btn btn-outline-success btn-sm" for="normal_' + rowId + '">正常</label>' +
+              '<input type="radio" class="btn-check result-radio" name="result_' + rowId + '" id="abnormal_' + rowId + '" value="异常/Abnormal">' +
+              '<label class="btn btn-outline-danger btn-sm" for="abnormal_' + rowId + '">异常</label>' +
+              '</div>' +
+              '</td>');
+
+            // 备注列 - 文本输入
+            row.append('<td>' +
+              '<textarea class="form-control form-control-sm remarks-text" data-row-id="' + rowId + '" rows="2" placeholder="请输入备注/Enter remarks"></textarea>' +
+              '</td>');
+
+            // 是否解决列 - 单选按钮
+            row.append('<td>' +
+              '<div class="btn-group" role="group" data-row-id="' + rowId + '">' +
+              '<input type="radio" class="btn-check resolved-radio" name="resolved_' + rowId + '" id="yes_' + rowId + '" value="是/Yes">' +
+              '<label class="btn btn-outline-success btn-sm" for="yes_' + rowId + '">是</label>' +
+              '<input type="radio" class="btn-check resolved-radio" name="resolved_' + rowId + '" id="no_' + rowId + '" value="否/No">' +
+              '<label class="btn btn-outline-danger btn-sm" for="no_' + rowId + '">否</label>' +
+              '</div>' +
+              '</td>');
+
+            // 操作列 - 按钮
+            row.append('<td>' +
+              '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '">预览/Preview</button>' +
+              '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '">上传/Upload</button>' +
+              '<input type="hidden" class="photo-id-input" data-row-id="' + rowId + '" value="">' +
+              '</td>');
+
+            tbody.append(row);
+          }
+        });
+      } else if (typeof item === 'object' && item !== null) {
+        // 如果是对象，直接处理
+        let row = $('<tr></tr>');
+        let rowId = 'task_' + index;
+
+        // 添加主要数据列
+        mainColumns.forEach(key => {
+          let cellValue = item[key] || '';
+          row.append('<td>' + cellValue + '</td>');
+        });
+
+        // 添加折叠详细信息列
+        let detailInfo = '';
+        detailColumns.forEach(key => {
+          let cellValue = item[key] || '';
+          if (cellValue) {
+            detailInfo += '<div><strong>' + key + ':</strong> ' + cellValue + '</div>';
+          }
+        });
+        row.append('<td><button class="btn btn-sm btn-outline-info detail-toggle" data-row-id="' + rowId + '">+</button><div class="detail-content" style="display:none;">' + detailInfo + '</div></td>');
+
+        // 结果列 - 单选按钮
+        row.append('<td>' +
+          '<div class="btn-group" role="group" data-row-id="' + rowId + '">' +
+          '<input type="radio" class="btn-check result-radio" name="result_' + rowId + '" id="normal_' + rowId + '" value="正常/Normal">' +
+          '<label class="btn btn-outline-success btn-sm" for="normal_' + rowId + '">正常</label>' +
+          '<input type="radio" class="btn-check result-radio" name="result_' + rowId + '" id="abnormal_' + rowId + '" value="异常/Abnormal">' +
+          '<label class="btn btn-outline-danger btn-sm" for="abnormal_' + rowId + '">异常</label>' +
+          '</div>' +
+          '</td>');
+
+        // 备注列 - 文本输入
+        row.append('<td>' +
+          '<textarea class="form-control form-control-sm remarks-text" data-row-id="' + rowId + '" rows="2" placeholder="请输入备注/Enter remarks"></textarea>' +
+          '</td>');
+
+        // 是否解决列 - 单选按钮
+        row.append('<td>' +
+          '<div class="btn-group" role="group" data-row-id="' + rowId + '">' +
+          '<input type="radio" class="btn-check resolved-radio" name="resolved_' + rowId + '" id="yes_' + rowId + '" value="是/Yes">' +
+          '<label class="btn btn-outline-success btn-sm" for="yes_' + rowId + '">是</label>' +
+          '<input type="radio" class="btn-check resolved-radio" name="resolved_' + rowId + '" id="no_' + rowId + '" value="否/No">' +
+          '<label class="btn btn-outline-danger btn-sm" for="no_' + rowId + '">否</label>' +
+          '</div>' +
+          '</td>');
+
+        // 操作列 - 按钮
+        row.append('<td>' +
+          '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '">预览/Preview</button>' +
+          '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '">上传/Upload</button>' +
+          '<input type="hidden" class="photo-id-input" data-row-id="' + rowId + '" value="">' +
+          '</td>');
+
+        tbody.append(row);
+      }
+    });
+
+    table.append(tbody);
+
+    // 组装完整内容（参考FailureReport_Manage.html的响应式结构）
+    tableContainer.append(tableTitle);
+    let responsiveDiv = $('<div class="table-responsive"></div>');
+    responsiveDiv.append(table);
+    tableContainer.append(responsiveDiv);
+
+    // 添加到页面中（在分割线之后）
+    // 找到分割线hr元素，在其后插入表格
+    $('.container hr').after(tableContainer);
+
+    // 绑定按钮事件
+    bindTableEvents();
+
+    // 绑定提交按钮事件
+    $('#submitInspectionResults').on('click', function () {
+      submitInspectionResults();
+    });
+
+    // 初始化 DataTables
+    $('#inspectionTable').DataTable({
+      responsive: true,
+      pageLength: 50,
+      language: {
+        "lengthMenu": "显示 _MENU_ 条记录",
+        "zeroRecords": "没有找到记录",
+        "info": "第 _PAGE_ 页 ( 总共 _PAGES_ 页 )",
+        "infoEmpty": "无记录",
+        "infoFiltered": "(从 _MAX_ 条记录过滤)",
+        "search": "搜索:",
+        "paginate": {
+          "first": "首页",
+          "last": "末页",
+          "next": "下页",
+          "previous": "上页"
+        }
+      }
+    });
+  }
+
+  // 绑定表格操作事件
+  function bindTableEvents() {
+    // 预览按钮事件
+    $(document).on('click', '.save-btn', function () {
+      let rowId = $(this).data('row-id');
+      let result = $('.result-radio[name="result_' + rowId + '"]:checked').val() || '';
+      let remarks = $('.remarks-text[data-row-id="' + rowId + '"]').val();
+      let resolved = $('.resolved-radio[name="resolved_' + rowId + '"]:checked').val() || '';
+      let photoId = getPhotoIdFromTask(rowId);
+
+      // 如果有图片，优先预览图片
+      if (photoId) {
+        previewImage(rowId);
+      } else {
+        // 否则显示任务数据预览
+        Swal.fire({
+          icon: 'info',
+          title: '任务预览/Task Preview',
+          html: '<div style="text-align: left;">' +
+            '<p><strong>结果 / Result:</strong> ' + (result || '未选择 / Not Selected') + '</p>' +
+            '<p><strong>备注 / Remarks:</strong> ' + (remarks || '无 / None') + '</p>' +
+            '<p><strong>是否解决 / Resolved:</strong> ' + (resolved || '未选择 / Not Selected') + '</p>' +
+            '<p><strong>图片 / Image:</strong> 未上传 / Not Uploaded</p>' +
+            '</div>',
+          confirmButtonText: '确定/OK'
+        });
+      }
+    });
+
+    // 上传按钮事件
+    $(document).on('click', '.reset-btn', function () {
+      let rowId = $(this).data('row-id');
+      uploadImage(rowId);
+    });
+
+    // 折叠按钮事件
+    $(document).on('click', '.detail-toggle', function () {
+      let rowId = $(this).data('row-id');
+      let button = $(this);
+      let content = button.next('.detail-content');
+
+      if (content.is(':visible')) {
+        content.slideUp();
+        button.text('+');
+        button.removeClass('btn-outline-danger').addClass('btn-outline-info');
+      } else {
+        content.slideDown();
+        button.text('-');
+        button.removeClass('btn-outline-info').addClass('btn-outline-danger');
+      }
+    });
+  }
+
+  // 验证基础信息字段
+  function validateBasicFields() {
+    let errors = [];
+
+    // 验证工号
+    if (!$('#employeeId').val() || $('#employeeId').val().trim() === '') {
+      errors.push('工号/ Employee ID 未选择');
+    }
+
+    // 验证姓名
+    if (!$('#employeeName').val() || $('#employeeName').val().trim() === '') {
+      errors.push('姓名/ Name 未填写');
+    }
+
+    // 验证车间
+    if (!$('#workshopDisplay').val() || $('#workshopDisplay').val().trim() === '') {
+      errors.push('车间/ Workshop 未选择');
+    }
+
+    // 验证工序
+    if (!$('#processDisplay').val() || $('#processDisplay').val().trim() === '') {
+      errors.push('工序/ Process 未选择');
+    }
+
+    // 验证频次
+    if (!$('#frequency').val() || $('#frequency').val().trim() === '') {
+      errors.push('检查频次/ Frequency 未选择');
+    }
+
+    // 验证任务类型（机型）
+    if (!$('#machineType').val() || $('#machineType').val().trim() === '') {
+      errors.push('任务类型/ Task Type 未选择');
+    }
+
+    // 验证机台号
+    if (!$('#workcenter').val() || $('#workcenter').val().trim() === '') {
+      errors.push('机台号/ Workcenter 未选择');
+    } else if ($('#workcenter').val().length < 3) {
+      errors.push('机台号/ Workcenter 长度必须大于等于3位');
+    }
+
+    // 验证班次（用户手动选择）
+    if (!$('#shift').val() || $('#shift').val().trim() === '') {
+      errors.push('班次/ Shift 未选择');
+    }
+
+    return errors;
+  }
+
+  // 提交检查结果
+  function submitInspectionResults() {
+    // 检查是否已获取检查清单
+    if ($('#inspectionTable').length === 0 || $('#inspectionTable tbody tr').length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: '请先获取检查清单 / Please Get Inspection List First',
+        text: '请先点击"获取点检清单"按钮获取检查任务',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    // 1. 验证所有必填字段
+    let basicValidationErrors = validateBasicFields();
+    if (basicValidationErrors.length > 0) {
+      Swal.fire({
+        icon: 'error',
+        title: '基础信息填写不完整 / Basic Information Incomplete',
+        html: '<div style="text-align: left;">' +
+          '<p><strong>请完成以下必填项：</strong></p>' +
+          '<ul style="margin-left: 20px;">' + basicValidationErrors.map(msg => '<li style="margin-bottom: 5px;">' + msg + '</li>').join('') + '</ul>' +
+          '</div>',
+        confirmButtonText: '确定 / OK',
+        width: '500px'
+      });
+      return;
+    }
+
+    // 收集所有任务的数据
+    let allTasks = [];
+    let hasErrors = false;
+    let errorMessages = [];
+    let totalTasks = 0;
+    let completedTasks = 0;
+
+    // 遍历所有表格行
+    $('#inspectionTable tbody tr').each(function () {
+      let row = $(this);
+      let rowId = '';
+
+      // 获取行ID（从按钮或输入框中获取）
+      let resultRadio = row.find('.result-radio:checked');
+      if (resultRadio.length > 0) {
+        rowId = resultRadio.attr('name').replace('result_', '');
+      } else {
+        // 如果没有选中的单选按钮，尝试从其他元素获取rowId
+        let detailToggle = row.find('.detail-toggle');
+        if (detailToggle.length > 0) {
+          rowId = detailToggle.data('row-id');
+        }
+      }
+
+      if (rowId) {
+        totalTasks++;
+
+        // 从表格中获取完整的任务信息
+        let cells = row.find('td');
+        let taskData = {
+          rowId: rowId,
+          unit: cells.eq(0).text().trim() || '',           // 单元
+          parts: cells.eq(1).text().trim() || '',          // 部位及内容
+          standard: cells.eq(2).text().trim() || '',       // 检查标准
+          tool: cells.eq(3).text().trim() || '',           // 使用工具
+          method: cells.eq(4).text().trim() || '',         // 方法
+          status: cells.eq(5).text().trim() || '',         // 设备状态
+          frequency: cells.eq(6).text().trim() || '',      // 检查频率
+          pointChecker: cells.eq(7).text().trim() || '',    // 点检人
+          result: $('.result-radio[name="result_' + rowId + '"]:checked').val() || '',
+          remarks: $('.remarks-text[data-row-id="' + rowId + '"]').val() || '',
+          resolved: $('.resolved-radio[name="resolved_' + rowId + '"]:checked').val() || '',
+          photoId: getPhotoIdFromTask(rowId) || ''
+        };
+
+        // 验证必填字段 - 所有点检条目都必须选择检查结果
+        if (!taskData.result || taskData.result.trim() === '') {
+          hasErrors = true;
+          errorMessages.push('任务 ' + rowId + ' 的检查结果未选择（请选择正常或异常）');
+        } else {
+          completedTasks++;
+
+          // 只有当结果为异常时，才需要验证"是否解决"字段
+          if (taskData.result.includes('异常')) {
+            if (!taskData.resolved || taskData.resolved.trim() === '') {
+              hasErrors = true;
+              errorMessages.push('任务 ' + rowId + ' 异常问题必须选择解决状态（请选择是或否）');
+            }
+          }
+        }
+
+        // 2. 验证异常问题的处理规则
+        if (taskData.result && taskData.result.includes('异常')) {
+          if (taskData.resolved && taskData.resolved.includes('是')) {
+            // 异常且已解决：必须填写备注
+            if (!taskData.remarks || taskData.remarks.trim() === '') {
+              hasErrors = true;
+              errorMessages.push('任务 ' + rowId + ' 异常且已解决，必须填写备注');
+            }
+          } else if (taskData.resolved && taskData.resolved.includes('否')) {
+            // 异常且未解决：必须填写备注和上传照片
+            if (!taskData.remarks || taskData.remarks.trim() === '') {
+              hasErrors = true;
+              errorMessages.push('任务 ' + rowId + ' 异常且未解决，必须填写备注');
+            }
+            if (!taskData.photoId || taskData.photoId.trim() === '') {
+              hasErrors = true;
+              errorMessages.push('任务 ' + rowId + ' 异常且未解决，必须上传照片');
+            }
+          }
+        }
+
+        allTasks.push(taskData);
+      }
+    });
+
+    // 额外验证：确保所有任务都有检查结果
+    if (totalTasks > 0 && completedTasks < totalTasks) {
+      hasErrors = true;
+      errorMessages.unshift('共有 ' + totalTasks + ' 个点检任务，其中 ' + (totalTasks - completedTasks) + ' 个任务未选择检查结果');
+    }
+
+    // 调试：如果没有任务被处理，说明表格结构有问题
+    if (totalTasks === 0) {
+      hasErrors = true;
+      errorMessages.unshift('未找到任何点检任务，请确保已正确获取点检清单');
+    }
+
+    // 如果有验证错误，显示错误信息
+    if (hasErrors) {
+      Swal.fire({
+        icon: 'error',
+        title: '提交失败 / Submit Failed',
+        html: '<div style="text-align: left;">' +
+          '<p><strong>请完成以下必填项：</strong></p>' +
+          '<ul style="margin-left: 20px;">' + errorMessages.map(msg => '<li style="margin-bottom: 5px;">' + msg + '</li>').join('') + '</ul>' +
+          '<p style="color: #666; font-size: 14px; margin-top: 15px;"><strong>重要提醒：</strong>所有点检条目都必须选择检查结果（正常或异常），不能有任何遗漏。异常问题必须选择解决状态，异常且已解决的问题必须填写备注，异常且未解决的问题必须填写备注和上传照片。</p>' +
+          '</div>',
+        confirmButtonText: '确定 / OK',
+        width: '600px'
+      });
+      return;
+    }
+
+    // 显示确认对话框
+    Swal.fire({
+      title: '确认提交 / Confirm Submission',
+      text: '确定要提交 ' + allTasks.length + ' 个任务的检查结果吗？',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '确定提交 / Confirm Submit',
+      cancelButtonText: '取消 / Cancel',
+      confirmButtonColor: '#28a745',
+      cancelButtonColor: '#6c757d'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // 显示提交进度
+        Swal.fire({
+          title: '正在提交... / Submitting...',
+          text: '请稍候，正在保存检查结果',
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        // 构建主要对象
+        let obj = {
+          code: inspectionNo(),                    // 使用inspectionNo函数生成
+          workshop: $('#workshopDisplay').val(),   // 车间
+          process: $('#processDisplay').val(),     // 工序
+          machinetype: $("#machineType").val(),   // 任务类型
+          frequency: $("#frequency").val(),       // 频次
+          pointChecker: $("#inspectorType").val(), // 点检人（inspectorType）
+          ownner: $('#employeeName').val(),        // 检查人（姓名）
+          date: dayjs(new Date()).format("YYYY/MM/DD-HH:mm"), // 检查日期时间
+          workcenter: $("#workcenter").val(),     // 机台号
+          checkTeam: $('#shift').val()             // 班次
+        };
+
+        // 构建表格数据 - 按照PointCheck的格式
+        let tableData = new Array();
+        let arrJson = [];
+        let arrJsonFalseSolved = [];
+        let arrJsonFalseNoSolved = [];
+        let arrJsonRemark = [];
+        let numTrue = 0;
+        let numFalseSolved = 0;
+        let numFalseNoSolved = 0;
+        let numRemark = 0;
+
+        // 处理每个任务的数据
+        for (let i = 0; i < allTasks.length; i++) {
+          let taskData = allTasks[i];
+          let taskNo = (i + 1).toString();
+          for (let l = taskNo.length; l < 3; l++) {
+            taskNo = "0" + taskNo;
+          }
+          taskNo = $('#processDisplay').val() + "PC" + taskNo;
+
+          // 构建行数据 - 按照PointCheck的格式：[任务编号, 单元, 部位及内容, 检查标准, 使用工具, 方法, 设备状态, 检查频率, 点检人, 检查状态, 备注, 是否解决, 图片]
+          let rowData = [
+            taskNo,                    // 任务编号
+            taskData.unit || '',       // 单元
+            taskData.parts || '',      // 部位及内容
+            taskData.standard || '',   // 检查标准
+            taskData.tool || '',       // 使用工具
+            taskData.method || '',     // 方法
+            taskData.status || '',     // 设备状态
+            taskData.frequency || '',  // 检查频率
+            taskData.pointChecker || '', // 点检人
+            taskData.result || '',     // 检查状态 (正常/Normal 或 异常/Abnormal)
+            taskData.remarks || '',    // 备注
+            taskData.resolved || '',   // 是否解决 (是/Yes 或 否/No)
+            taskData.photoId || ''     // 图片ID
+          ];
+          tableData.push(rowData);
+
+          // 构建JSON对象
+          let objAll = {
+            "编号": taskNo,
+            "检查结果": taskData.result,
+            "备注": taskData.remarks,
+            "解决状态": taskData.resolved,
+            "图片": taskData.photoId
+          };
+
+          // 分类统计
+          if (taskData.result && taskData.result.includes('正常')) {
+            numTrue++;
+          } else if (taskData.result && taskData.result.includes('异常')) {
+            if (taskData.resolved && taskData.resolved.includes('是')) {
+              numFalseSolved++;
+              arrJsonFalseSolved.push(objAll);
+            } else if (taskData.resolved && taskData.resolved.includes('否')) {
+              numFalseNoSolved++;
+              arrJsonFalseNoSolved.push(objAll);
+            }
+          }
+
+          if (taskData.remarks && taskData.remarks.trim() !== '') {
+            numRemark++;
+            arrJsonRemark.push(objAll);
+          }
+
+          arrJson.push(objAll);
+        }
+
+        let taskNums = numTrue + numFalseSolved + numFalseNoSolved;
+
+        // 添加tableData到obj对象中
+        obj.tableData = tableData;
+
+        // 构建arrPmInfoJson数组 - 按照PointCheck的正确顺序
+        let arrPmInfoJson = [
+          obj.code, obj.workshop, obj.process, obj.machinetype,
+          obj.frequency, obj.pointChecker, obj.ownner, obj.date,
+          obj.workcenter, obj.checkTeam,
+          JSON.stringify(arrJson),           // 完整任务JSON
+          taskNums,                          // 总任务数
+          JSON.stringify(arrJsonFalseSolved), // 已解决异常JSON
+          numFalseSolved,                    // 已解决异常数量
+          JSON.stringify(arrJsonFalseNoSolved), // 未解决异常JSON
+          numFalseNoSolved,                  // 未解决异常数量
+          JSON.stringify(arrJsonRemark),     // 备注JSON
+          numRemark                          // 备注数量
+        ];
+
+
+        // 设置超时处理
+        let timeoutId = setTimeout(() => {
+          Swal.close();
+          Swal.fire({
+            icon: 'warning',
+            title: '提交超时 / Submission Timeout',
+            text: '提交时间过长，请检查网络连接或重试',
+            confirmButtonText: '确定 / OK'
+          });
+        }, 300000); // 5分钟超时
+
+        // 调用后端函数提交数据
+        google.script.run
+          .withSuccessHandler((result) => {
+            clearTimeout(timeoutId); // 清除超时定时器
+            handleSubmitSuccess(result);
+          })
+          .withFailureHandler((error) => {
+            clearTimeout(timeoutId); // 清除超时定时器
+            handleSubmitError(error);
+          })
+          .submitInspectionResults(obj, arrPmInfoJson);
+      }
+    });
+  }
+
+  // 提交成功处理
+  function handleSubmitSuccess(result) {
+    // 先关闭加载模态框
+    Swal.close();
+
+    if (result && result[0] === "OK") {
+      // 获取刚刚提交的机台号
+      let submittedWorkcenter = $("#workcenter").val();
+      
+      // 显示成功提示
+      Swal.fire({
+        icon: 'success',
+        title: '提交成功 / Submit Success',
+        text: '检查结果已成功提交！可以继续选择其他机台进行点检',
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+      // 从机台号选项中移除刚刚提交的机台号
+      if (submittedWorkcenter) {
+        removeWorkcenterFromOptions(submittedWorkcenter);
+      }
+
+      // 清空任务类型及其后续选项
+      $("#machineType").val(null).trigger('change');
+      $("#workcenter").val('').trigger('change');
+      $("#workshopDisplay").val(null).trigger('change');
+      $("#processDisplay").val(null).trigger('change');
+      $("#frequency").val(null).trigger('change');
+
+      // 清空点检任务表格
+      $('#inspectionTableContainer').remove();
+      $('#submitInspectionResults').hide();
+
+      // 更新选择框背景色状态
+      updateAllSelectBackgrounds();
+    } else {
+      Swal.fire({
+        icon: 'error',
+        title: '提交失败 / Submit Failed',
+        text: result ? result[1] : '未知错误',
+        confirmButtonText: '确定 / OK'
+      });
+    }
+  }
+
+  // 提交失败处理
+  function handleSubmitError(error) {
+    // 先关闭加载模态框
+    Swal.close();
+
+    Swal.fire({
+      icon: 'error',
+      title: '服务器长时间未响应 / Server Timeout',
+      text: '提交过程中发生错误，请重试',
+      confirmButtonText: '确定 / OK',
+      footer: '<p>尝试点击按钮再来一次</p>'
+    });
+  }
+
+  // 从机台号选项中移除指定机台号
+  function removeWorkcenterFromOptions(workcenterToRemove) {
+    if (!workcenterToRemove) return;
+
+    // 获取保存的完整选项信息
+    let selectedUniqueKey = $("#workcenter").data('selectedUniqueKey');
+    let selectedSecondInfo = $("#workcenter").data('selectedSecondInfo');
+    
+    // 从 globalWorkcenter 中移除
+    globalWorkcenter = globalWorkcenter.filter(wc => wc.id !== workcenterToRemove);
+    
+    // 从 globalNIMWorkcenters 中移除（如果存在）
+    if (globalNIMWorkcenters && globalNIMWorkcenters.length > 0) {
+      globalNIMWorkcenters = globalNIMWorkcenters.filter(wc => wc !== workcenterToRemove);
+    }
+    
+    // 从 globalPointCheckInfo 中精确标记为已完成（基于机台号+年周）
+    if (globalPointCheckInfo && globalPointCheckInfo.length > 0) {
+      globalPointCheckInfo.forEach(item => {
+        let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
+        
+        // 如果有 secondInfo（年周_日期_班次），说明是未做记录，需要精确匹配
+        if (selectedSecondInfo && machineCode === workcenterToRemove) {
+          let yearWeek = item["年周"] ? item["年周"].toString().trim() : "";
+          let startDate = item["开始日期"] ? item["开始日期"].toString().trim() : "";
+          let startShift = item["开始班次"] ? item["开始班次"].toString().trim() : "";
+          let itemSecondInfo = yearWeek + "_" + startDate + "_" + startShift;
+          
+          // 只标记匹配的特定周次记录为已做
+          if (itemSecondInfo === selectedSecondInfo) {
+            item["是否已做"] = "已做";
+          }
+        } else if (!selectedSecondInfo && machineCode === workcenterToRemove) {
+          // 如果没有 secondInfo，说明是 NIM 或已做记录，标记所有该机台号的记录
+          item["是否已做"] = "已做";
+        }
+      });
+    }
+
+    // 注意：由于任务类型也会被清空，这里不需要重新触发任务类型变化事件
+    // 机台号选项会在下次选择任务类型时重新加载
+  }
+
+  function clearForm() {
+    // 清空表单
+    $("#employeeId").val("").trigger('change');
+    $('#workcenter').val("机台号/ Workcenter").trigger('change');
+    $("#shift").val("班次/ Shift").trigger("change");
+    // $("#owner").val("点检人/ Inspector").trigger("change"); // 暂时注释，因为HTML中没有对应的元素
+    $("#inspectorType").val("点检人类型/ Inspector Type").trigger("change");
+    $("#machineType").val("任务类型/ Task Type").trigger("change");
+    $("#frequency").val("检查频次/ Frequency").trigger("change");
+
+  }
+
+  function checkNotEmpty() {
+    // 检查所有必填字段
+    let errors = [];
+
+    // 验证工号
+    if (!$('#employeeId').val() || $('#employeeId').val().trim() === '') {
+      errors.push('工号/ Employee ID 未选择');
+    }
+
+    // 验证姓名
+    if (!$('#employeeName').val() || $('#employeeName').val().trim() === '') {
+      errors.push('姓名/ Name 未填写');
+    }
+
+    // 验证车间
+    if (!$('#workshopDisplay').val() || $('#workshopDisplay').val().trim() === '') {
+      errors.push('车间/ Workshop 未选择');
+    }
+
+    // 验证工序
+    if (!$('#processDisplay').val() || $('#processDisplay').val().trim() === '') {
+      errors.push('工序/ Process 未选择');
+    }
+
+    // 验证频次
+    if (!$('#frequency').val() || $('#frequency').val().trim() === '') {
+      errors.push('检查频次/ Frequency 未选择');
+    }
+
+    // 验证任务类型（机型）
+    if (!$('#machineType').val() || $('#machineType').val().trim() === '') {
+      errors.push('任务类型/ Task Type 未选择');
+    }
+
+    // 验证机台号
+    if (!$('#workcenter').val() || $('#workcenter').val().trim() === '') {
+      errors.push('机台号/ Workcenter 未选择');
+    } else if ($('#workcenter').val().length < 3) {
+      errors.push('机台号/ Workcenter 长度必须大于等于3位');
+    }
+
+    // 验证班次（用户手动选择）
+    if (!$('#shift').val() || $('#shift').val().trim() === '') {
+      errors.push('班次/ Shift 未选择');
+    }
+
+    // 如果有验证错误，显示错误信息
+    if (errors.length > 0) {
+      Swal.fire({
+        icon: 'error',
+        title: '基础信息填写不完整 / Basic Information Incomplete',
+        html: '<div style="text-align: left;">' +
+          '<p><strong>请完成以下必填项：</strong></p>' +
+          '<ul style="margin-left: 20px;">' + errors.map(msg => '<li style="margin-bottom: 5px;">' + msg + '</li>').join('') + '</ul>' +
+          '<p style="color: #666; font-size: 14px; margin-top: 15px;">请完成所有必填字段后再获取点检清单</p>' +
+          '</div>',
+        confirmButtonText: '确定 / OK',
+        width: '500px'
+      });
+      return false;
+    }
+
+    return true;
+  }
+
+  // 事件绑定
+  $("#achieveInspection").click(function () {
+    if (checkNotEmpty()) {
+      achieveInspection();
+    }
+  });
+
+  function onFailure(error) {
+    Swal.close();
+    Swal.fire({
+      icon: "error",
+      title: "加载失败，请联系工程师/ Loading failed, please contact engineer",
+      text: error.toString()
+    });
+  }
+
+  // ==================== 图片上传和预览功能 ====================
+
+  // 上传图片功能
+  function uploadImage(rowId) {
+    let photoId = "";
+    let uploadStatus = "";
+
+    // 使用 SweetAlert 创建上传界面
+    Swal.fire({
+      title: '上传图片 / Upload Image',
+      html: '<div style="text-align: left;">' +
+        '<div style="margin-bottom: 15px;">' +
+        '<label style="display: block; margin-bottom: 5px; font-weight: bold;">图片ID / Image ID:</label>' +
+        '<input type="text" id="photoId" placeholder="请选择图片... / Please select image..." ' +
+        'style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" readonly>' +
+        '</div>' +
+        '<div style="margin-bottom: 15px;">' +
+        '<label style="display: block; margin-bottom: 5px; font-weight: bold;">选择图片 / Select Image:</label>' +
+        '<input type="file" id="photoFile" accept="image/jpeg,image/png,image/gif" ' +
+        'style="width: 100%; padding: 8px;">' +
+        '</div>' +
+        '<div id="uploadStatus" style="margin-top: 10px; color: #666; font-size: 14px;"></div>' +
+        '</div>',
+      showCancelButton: true,
+      confirmButtonText: '确定 / Confirm',
+      cancelButtonText: '取消 / Cancel',
+      width: '500px',
+      preConfirm: () => {
+        const fileInput = document.getElementById('photoFile');
+        const photoIdInput = document.getElementById('photoId');
+
+        if (!fileInput.files[0]) {
+          Swal.showValidationMessage('请选择图片文件 / Please select an image file');
+          return false;
+        }
+
+        if (!photoIdInput.value || photoIdInput.value.includes('Uploading') || photoIdInput.value.includes('Error')) {
+          Swal.showValidationMessage('请等待图片上传完成 / Please wait for image upload to complete');
+          return false;
+        }
+
+        return photoIdInput.value;
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // 保存图片ID到对应的任务行
+        savePhotoIdToTask(rowId, result.value);
+        Swal.fire({
+          icon: 'success',
+          title: '上传成功 / Upload Success',
+          text: '图片已成功上传 / Image uploaded successfully',
+          timer: 2000
+        });
+      }
+    });
+
+    // 文件选择事件处理
+    setTimeout(() => {
+      const fileInput = document.getElementById('photoFile');
+      if (fileInput) {
+        fileInput.addEventListener('change', handleFileUpload);
+      }
+    }, 100);
+  }
+
+  // 处理文件上传
+  function handleFileUpload(event) {
+    const file = event.target.files[0];
+    const photoIdInput = document.getElementById('photoId');
+    const statusDiv = document.getElementById('uploadStatus');
+
+    if (!file) {
+      statusDiv.innerHTML = '请选择文件... / Please select file...';
+      photoIdInput.value = '';
+      return;
+    }
+
+    // 显示上传状态
+    photoIdInput.value = '正在上传... / Uploading...';
+    statusDiv.innerHTML = '正在上传... / Uploading...';
+
+    // 使用与 PointCheck 相同的文件命名方式
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+    const fileName = year + '-' + month + '-' + day + '_' + hours + ':' + minutes + ':' + seconds + ':' + milliseconds;
+
+    // 图片压缩（使用与 PointCheck 相同的压缩器）
+    if (window.Compressor) {
+      new window.Compressor(file, {
+        quality: 0.5,
+        success(result) {
+          const reader = new FileReader();
+          reader.readAsDataURL(result);
+          reader.onloadend = function (e) {
+            // 使用 Inspection2.0 专用的上传方法
+            google.script.run
+              .withSuccessHandler(handleUploadSuccess)
+              .withFailureHandler(handleUploadError)
+              .uploadPhotoFileToGoogleDrive_Inspection2(e.target.result, fileName);
+          }
+        },
+        error(err) {
+          handleUploadError(err.message);
+        }
+      });
+    } else {
+      // 如果没有压缩器，直接上传
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = function (e) {
+        google.script.run
+          .withSuccessHandler(handleUploadSuccess)
+          .withFailureHandler(handleUploadError)
+          .uploadPhotoFileToGoogleDrive_Inspection2(e.target.result, fileName);
+      }
+    }
+  }
+
+  // 上传成功处理
+  function handleUploadSuccess(result) {
+    const photoIdInput = document.getElementById('photoId');
+    const statusDiv = document.getElementById('uploadStatus');
+
+    if (result && !result.toString().includes("Error")) {
+      photoIdInput.value = result;
+      statusDiv.innerHTML = '<a href="https://drive.google.com/file/d/' + result + '/view" target="_blank" style="color: #1976d2;">预览图片 / Preview Image</a>';
+    } else {
+      photoIdInput.value = result;
+      statusDiv.innerHTML = '<span style="color: red;">' + result + '</span>';
+    }
+  }
+
+  // 上传失败处理
+  function handleUploadError(error) {
+    const photoIdInput = document.getElementById('photoId');
+    const statusDiv = document.getElementById('uploadStatus');
+
+    photoIdInput.value = 'Error: ' + error;
+    statusDiv.innerHTML = '<span style="color: red;">上传失败 / Upload failed: ' + error + '</span>';
+  }
+
+  // 预览图片功能
+  function previewImage(rowId) {
+    const photoId = getPhotoIdFromTask(rowId);
+
+    if (!photoId) {
+      Swal.fire({
+        icon: 'info',
+        title: '提示 / Notice',
+        text: '该任务尚未上传图片 / No image uploaded for this task',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    // 使用 SweetAlert 预览图片
+    Swal.fire({
+      title: '图片预览 / Image Preview',
+      html: '<div style="text-align: center;">' +
+        '<img src="https://drive.google.com/thumbnail?id=' + photoId + '&sz=w800" ' +
+        'style="max-width: 100%; max-height: 400px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" ' +
+        'onerror="this.src=\'https://via.placeholder.com/400x300?text=Image Load Failed\'">' +
+        '<div style="margin-top: 15px;">' +
+        '<a href="https://drive.google.com/file/d/' + photoId + '/view" ' +
+        'target="_blank" ' +
+        'style="color: #1976d2; text-decoration: none; font-weight: bold;">' +
+        '在新窗口中打开 / Open in New Window' +
+        '</a>' +
+        '</div>' +
+        '</div>',
+      showConfirmButton: true,
+      confirmButtonText: '关闭 / Close',
+      width: '600px'
+    });
+  }
+
+  // 保存图片ID到任务行
+  function savePhotoIdToTask(rowId, photoId) {
+    // 根据表格结构，找到对应的隐藏输入框并保存图片ID
+    const photoInput = $('.photo-id-input[data-row-id="' + rowId + '"]');
+    if (photoInput.length > 0) {
+      photoInput.val(photoId);
+    } else {
+      // 如果没有找到对应的输入框，创建一个
+      const taskRow = $('.save-btn[data-row-id="' + rowId + '"]').closest('tr');
+      if (taskRow.length > 0) {
+        taskRow.append('<input type="hidden" class="photo-id-input" data-row-id="' + rowId + '" value="' + photoId + '">');
+      }
+    }
+  }
+
+  // 从任务行获取图片ID
+  function getPhotoIdFromTask(rowId) {
+    const photoInput = $('.photo-id-input[data-row-id="' + rowId + '"]');
+    return photoInput.length > 0 ? photoInput.val() : '';
+  }
+
+  // 初始化选择框背景色提示功能
+  function initSelectBackgroundHighlight() {
+    // 所有需要监控的选择框ID
+    const selectFields = [
+      '#employeeId',
+      '#employeeName',
+      '#shift',
+      '#workcenter',
+      '#workshopDisplay',
+      '#processDisplay',
+      '#frequency',
+      '#inspectorType',
+      '#machineType',
+      '#inspectionDate'
+    ];
+
+    // 为每个选择框添加change事件监听器
+    selectFields.forEach(function (selector) {
+      $(selector).on('change', function () {
+        updateSelectBackground(selector);
+      });
+
+      // 对于Select2，需要监听select2:select和select2:clear事件
+      if ($(selector).hasClass('select2-hidden-accessible') || $(selector).data('select2')) {
+        $(selector).on('select2:select select2:clear', function () {
+          updateSelectBackground(selector);
+        });
+      }
+    });
+  }
+
+  // 更新单个选择框的背景色
+  function updateSelectBackground(selector) {
+    const $element = $(selector);
+    const value = $element.val();
+    const hasValue = value && value !== '' && value !== null && value !== undefined;
+
+    // 对于Select2选择框
+    if ($element.hasClass('select2-hidden-accessible') || $element.data('select2')) {
+      const $select2Container = $element.next('.select2-container');
+      if (hasValue) {
+        $select2Container.find('.select2-selection--single').addClass('selected');
+      } else {
+        $select2Container.find('.select2-selection--single').removeClass('selected');
+      }
+    } else {
+      // 对于普通选择框和输入框
+      if (hasValue) {
+        $element.addClass('selected');
+      } else {
+        $element.removeClass('selected');
+      }
+    }
+  }
+
+  // 更新所有选择框的背景色状态
+  function updateAllSelectBackgrounds() {
+    const selectFields = [
+      '#employeeId',
+      '#employeeName',
+      '#shift',
+      '#workcenter',
+      '#workshopDisplay',
+      '#processDisplay',
+      '#frequency',
+      '#inspectorType',
+      '#machineType',
+      '#inspectionDate'
+    ];
+
+    selectFields.forEach(function (selector) {
+      updateSelectBackground(selector);
+    });
+  }
+
+</script>

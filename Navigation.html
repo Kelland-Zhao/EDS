@@ -1,0 +1,118 @@
+<html>
+
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <?!=include("Kez_datatables@1.11.5_css");?>
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("kez_Datatables_css");?>
+  <?!=include("CSS");?>
+</head>
+
+<body>
+
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <a class="navbar-brand"
+        style="color: white; font-family: Arial, Helvetica, sans-serif;font-size: xx-large; font-weight: bold;">导航页/
+        Navigation
+        Page</a>
+    </div>
+  </nav>
+
+
+
+  <div class="container-fluid mt-3">
+    <span id="name" class="highlight" style="color: #E60012; font-size:24px"></span>
+    <span class="highlight" style="color: #E60012; font-size:24px">,欢迎进入设备部数字化系统/ Welcome to Equipment Digital
+      System</span>
+    <div class="row col-6 mx-auto mt-3">
+      <div class="d-grid gap-3 col-6 mx-auto">
+        <button class="btn btn-primary" type="button" id="PM">保养/ PM</button>
+        <button class="btn btn-primary" type="button" id="Handover">交接班/ Handover</button>
+        <button class="btn btn-primary" type="button" id="PonitCheck">点检/ Inspection</button>
+        <button class="btn btn-primary" type="button" id="PPMS">工艺参数管理/ Process Parameters Management</button>
+        <button class="btn btn-primary" type="button" id="FailureReport">故障报告/ Failure
+          Report</button>
+      </div>
+      <div class="d-grid gap-3 col-6 mx-auto">
+        <button class="btn btn-primary" type="button" id="SHSP">二手备件/ Second Hand Spare Parts</button>
+        <button class="btn btn-primary disabled" type="button">文档索引/ Document Library</button>
+        <button class="btn btn-primary" type="button" id="MMS">模具管理/ Mold Management</button>
+        <button class="btn btn-primary" type="button" id="SEI">特种设备检查/ Special Equipment Inspection</button>
+        <button class="btn btn-primary" type="button" id="TLMoC">任务清单变更管理/ Tasklist MoC</button>
+        <button class="btn btn-primary" type="button" id="moldSurfaceCleanButton">模面清理/ Mold Surface Clean</button>
+        <button class="btn btn-primary" type="button" id="ProcessSamplingInspection">工艺抽检/ Process Sampling Inspection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 保养/PM 弹出窗口 -->
+  <div class="modal fade" id="pmModal" tabindex="-1" aria-labelledby="pmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="pmModalLabel">保养 / PM</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-grid gap-3">
+            <button class="btn btn-info" type="button" id="PM_Plan">保养计划 / Maintenance Plan</button>
+            <button class="btn btn-info" type="button" id="PM_Task">任务管理 / Task Management</button>
+            <button class="btn btn-info" type="button" id="PM_Query">记录查询 / Record Query</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 故障报告 弹出窗口 -->
+  <div class="modal fade" id="failureReportModal" tabindex="-1" aria-labelledby="failureReportModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="failureReportModalLabel">故障报告 / Failure Report</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-grid gap-3">
+            <button class="btn btn-info" type="button" id="FailureReport_Manage">故障报告管理 / Manage Failure Report</button>
+            <button class="btn btn-info" type="button" id="FailureReport_Upload">故障报告上传 / Upload Failure Report</button>
+            <button class="btn btn-info" type="button" id="FailureReport_View">故障报告查阅 / View Failure Report</button>
+            <button class="btn btn-info" type="button" id="FailureReport_Progress">故障报告进度 / Failure Report Progress</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 点检 弹出窗口 -->
+  <div class="modal fade" id="inspectionModal" tabindex="-1" aria-labelledby="inspectionModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="inspectionModalLabel">点检 / Inspection</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-grid gap-3">
+            <button class="btn btn-info" type="button" id="Inspection_Execute">点检执行 / Execute Inspection</button>
+            <button class="btn btn-info" type="button" id="Inspection_Report">点检报告 / Inspection Report</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Navigation_js") ?>
+
+
+</html>

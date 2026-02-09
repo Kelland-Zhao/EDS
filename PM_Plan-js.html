@@ -1,0 +1,278 @@
+<script>
+
+  // const pmTaskUrl="https://script.google.com/a/macros/colpal.com/s/AKfycbz92tqMHCvBErGfu_yHxtSeL25lDOkuuKcNTPvkMJQ/dev?v=PMtask";   /**测试部署**/
+  const pmTaskUrl = "https://script.google.com/a/colpal.com/macros/s/AKfycbyaQjG5yFGYxU825DrODhSLl2bdfbYKpqAH4qOIzKoTJ4b-5qU/exec?v=PMtask";    /**正式部署**/
+
+  let timerInterval;
+
+  window.onload = function () {
+    document.onkeydown = function () {
+      var e = window.event || arguments[0];
+      if (e.keyCode == 123) {
+        return false;
+      } else if ((e.ctrlKey) && (e.shiftKey) && (e.keyCode == 73)) {
+        return false;
+      }
+    }
+    document.oncontextmenu = function () {
+      return false;
+    }
+  }
+
+  $(document).ready(async function () {
+    initializeMaterialCSS();
+    document.getElementById('confirm').addEventListener('click', getInfo, true);
+    let name = $("#name").text();
+    let id = $("#id").text();
+    let userType = $("#userType").text();
+    if (!name && !id && !userType) {
+      name = sessionStorage.getItem('name');
+      id = sessionStorage.getItem('id');
+      userType = sessionStorage.getItem('userType');
+    }
+    else {
+      sessionStorage.setItem('name', name);
+      sessionStorage.setItem('id', id);
+      sessionStorage.setItem('userType', userType);
+    }
+    document.getElementById('name').textContent = name;
+    document.getElementById('id').textContent = '328' + id;
+    document.getElementById('userType').textContent = userType;
+    var workshop = "";
+    var process = "";
+    var { value: type } = await swal.fire({
+      allowOutsideClick: false,
+      title: '链接部门工序',
+      input: 'select',
+      inputOptions: {
+        TB1_INJ: 'TB1注塑',
+        TB1_TF: 'TB1植磨毛',
+        TB1_PK: 'TB1包装',
+        TB2_INJ: 'TB2注塑',
+        TB2_TF: 'TB2植磨毛',
+        TB2_PK: 'TB2包装'
+      },
+      inputPlaceholder: '请选择部门工序',
+      showCancelButton: true,
+      inputValidator: (value) => {
+        return new Promise((resolve) => {
+          if (value !== '') {
+            resolve()
+          } else {
+            resolve('请选择部门工序')
+          }
+        })
+      }
+    })
+    if (type) {
+      workshop = type.split("_")[0];
+      process = type.split("_")[1];
+      sessionStorage.setItem("pmWorkshop", workshop);
+      sessionStorage.setItem("pmProcess", process);
+      showRunning('正在加载机台数据……', '', '', 120000, '')
+      google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(passWorkcenter_auto).autocomplete_workcenter(workshop, process);
+      $("#workshop").val(workshop)
+      $("#process").val(process)
+      // $("#workshop").prop("disabled", true);
+      // $("#process").prop("disabled", true);
+    }
+    else {
+      console.log("取消")
+    }
+  });
+
+  function initializeMaterialCSS() {
+    $('.parallax').parallax();
+    $('.dropdown-trigger').dropdown();
+    $('select').formSelect();
+    $('.sidenav').sidenav();
+    $('.datepicker').datepicker({
+      format: 'yyyy-mm-dd',
+      autoClose: true
+    });
+    $('#plan').bootstrapTable({
+      height: 700,
+      search: true,
+      showSearchButton: true,
+    });
+  }
+
+  function passWorkcenter_auto(result) {
+    if (result[0] == "OK") {
+      var workcenter = JSON.parse(result[1]);
+      var autocomplete_workcenter = document.getElementById('workcenter');
+      var instances_workcenter = M.Autocomplete.init(autocomplete_workcenter, {
+        data: workcenter
+      });
+      workshop = result[2];
+      process = result[3];
+      showRunResult('success', '操作成功', '', '', 2000, false, '');
+      // showRunning('正在加载待完成的故障报告数量……','','',120000,'');
+      // google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(show_newBadge).getWaitFaultReport(workshop,process);
+    }
+    else {
+      showRunResult('error', '机台数据加载失败', result[1], '', '', true, '');
+    }
+  }
+
+  function getInfo() {
+    var date = $("#mainDate").val();
+    var workshop = $("#workshop").val();
+    var process = $("#process").val();
+    var workcenter = $("#workcenter").val();
+    var week = $("#week").val();
+    var info = [date, workshop, process, workcenter, week];
+    if (workshop && process) {
+      $("#confirm").prop("disabled", true);
+      showRunning('正在加载保养计划……', '', '', 120000, '')
+      google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((result) => {
+        if (result[0] == "OK") {
+          $("#plan").bootstrapTable('destroy');
+          var a = JSON.parse(result[1]);
+          if (a.toString() == 'false') {
+            swal.fire('请输入信息')
+          }
+          else if (a.toString() == '') {
+            swal.fire('无保养计划');
+          }
+          else {
+            var data = a.filter(function (r) {
+              return r[10] == "PM" || r[10] == "PM/AM"
+            })
+            var html = "";
+            for (i = 0; i < data.length; i++) {
+              if (data[i][11] == "NA") {
+                data[i][11] = "";
+              }
+              if (data[i][12] == "NA") {
+                data[i][12] = "";
+              }
+              if (data[i][13] == "NA") {
+                data[i][13] = "";
+              }
+              html += "<tr>"
+                +
+                "<td>" + data[i][1] + "</td>"
+                +
+                "<td>" + data[i][2] + "</td>"
+                +
+                "<td>" + data[i][3] + "</td>"
+                +
+                "<td>" + data[i][4] + "</td>"
+                +
+                "<td>" + data[i][6] + "</td>"
+                +
+                "<td>" + data[i][7] + "</td>"
+                +
+                "<td>" + data[i][8] + "</td>"
+                +
+                "<td>" + data[i][9] + "</td>"
+                +
+                "<td>" + data[i][11] + " " + data[i][12] + " " + data[i][13] + "</td>"
+                +
+                "<td>" +
+                "<button type = 'submit' class = 'btn waves-effect waves-light' onclick = 'passInfo(this)' >详情</button>" +
+                "</td>"
+                +
+                "<td>" + data[i][14] + "</td>"
+                +
+                "</tr>"
+            }
+            $("#tbody").html(html);
+            $('#plan').bootstrapTable({
+              height: 460,
+              search: true,
+              striped: true,
+              clickToSelect: true,
+              showExtendedPagination: true,
+              paginationLoop: true,
+              showSearchButton: true,
+            });
+          }
+          $("#confirm").prop("disabled", false);
+          showRunResult('success', '操作成功', '', '', 2000, false, '');
+        }
+        else {
+          showRunResult('error', '操作失败', result[1], '', '', true, '程序仍可运行，联系相关人员');
+        }
+      }).getPlan(info);
+      // $("#mainDate,#workshop,#process,#workcenter,#week").val("");
+      // $("#workshop,#process").formSelect();
+    }
+    else {
+      showRunResult('error', '查询设置有误', '车间|工序不能为空', '', '', true, '');
+    }
+  }
+
+  /*============培训文档索引===========*/
+  function todView() {
+    let viewId = $("#id").text().slice(-5);
+    let viewName = $("#name").text();
+    let viewProcess = "";
+    window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbzzv6PHu-AaqAL1fwLNZPNg30acgO4Xd4H5atps/exec?ALP=ViewTod&viewSapId=" + viewId + "&viewName=" + viewName + "&viewProcess=" + viewProcess + "&viewSource=EDSPAD");
+  }
+
+  /*============模具管理===========*/
+  function toMoldManager() {
+    let viewId = $("#id").text().slice(-5);
+    let viewName = $("#name").text();
+    let viewProcess = "";
+    window.open("https://script.google.com/a/macros/colpal.com/s/AKfycbw1MZrc24Kf40NsBHF3SggBD6sFKbFxalH_4dkXICgqnWJ5SQ2-5b5C2WNvPlLW_cQc6Q/exec?ALP=Login&paraTemp1=" + viewName + "&paraTemp2=" + viewId);
+  }
+
+  function passInfo(obj) {
+    var pmDate = tbody.rows[obj.parentElement.parentElement.rowIndex - 1].cells[3].innerHTML;
+    var workshop = tbody.rows[obj.parentElement.parentElement.rowIndex - 1].cells[1].innerHTML;
+    var process = tbody.rows[obj.parentElement.parentElement.rowIndex - 1].cells[2].innerHTML;
+    var workcenter = tbody.rows[obj.parentElement.parentElement.rowIndex - 1].cells[4].innerHTML;
+    var machine_type = tbody.rows[obj.parentElement.parentElement.rowIndex - 1].cells[8].innerHTML;
+    let PM_duration = tbody.rows[obj.parentElement.parentElement.rowIndex - 1].cells[5].innerHTML;
+    var r = [pmDate, workshop, process, workcenter, machine_type, PM_duration];
+    sessionStorage.setItem('data', JSON.stringify(r)); //传递当前行数据
+    window.open(pmTaskUrl);
+  }
+
+  /**============显示函数运行状态============**/
+  function showRunning(strTitle, strText, strHtml, times, strFooter) {
+    if (timerInterval) { clearInterval(timerInterval) }
+    swal.fire({
+      allowOutsideClick: false,
+      icon: 'info',
+      title: strTitle,
+      text: strText,
+      html: '窗口将在 <b></b> 秒内自动关闭.',
+      timer: times,
+      footer: strFooter,
+      timerProgressBar: true,
+      onBeforeOpen: () => {
+        if (timerInterval) { clearInterval(timerInterval) }
+        Swal.showLoading()
+        const b = Swal.getContent().querySelector('b')
+        timerInterval = setInterval(() => {
+          b.textContent = (Swal.getTimerLeft() / 1000).toFixed(0);
+        }, 1000)
+      },
+      onClose: () => {
+        if (timerInterval) { clearInterval(timerInterval) }
+      }
+    }).then((result) => {
+      if (result.dismiss === Swal.DismissReason.timer) {
+        if (timerInterval) { clearInterval(timerInterval) }
+        Swal.fire("程序在2分钟内未响应,尝试点击按钮再来一次");
+      }
+    });
+  }
+
+  /**============显示函数运行结果============**/
+  function showRunResult(strIcon, strTitle, strText, strHtml, times, booleanButton, strFooter) {
+    if (timerInterval) { clearInterval(timerInterval) }
+    swal.fire({ allowOutsideClick: false, icon: strIcon, title: strTitle, text: strText, html: strHtml, timer: times, showConfirmButton: booleanButton, footer: strFooter });
+  }
+
+  /**============返回服务器不响应结果============**/
+  function judgeFailure() {
+    if (timerInterval) { clearInterval(timerInterval) }
+    swal.fire({ allowOutsideClick: false, icon: 'error', title: '服务器长时间未响应', showConfirmButton: true, footer: '<p>尝试点击按钮再来一次</p>' });
+  }
+
+</script>

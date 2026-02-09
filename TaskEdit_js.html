@@ -1,0 +1,388 @@
+<script>
+  $(document).ready(() => {
+    let taskEditTable;
+    let taskToEditData = {};
+    let allTaskKeys = []; // --- 新增：用于存储任务对象的所有属性名 ---
+
+    // --- 1. 从sessionStorage获取任务数据 ---
+    const taskDataString = sessionStorage.getItem('taskToEdit');
+    sessionStorage.removeItem('taskToEdit'); // 读取后即焚
+    try {
+        taskToEditData = JSON.parse(taskDataString || '{}');
+        $('#taskIdentifier').text(taskToEditData['AEM#'] + ' on ' + taskToEditData['开始日期']);
+    } catch (e) {
+        console.error("解析任务数据失败:", e);
+    }
+
+    if (!taskToEditData['AEM#']) {
+        Swal.fire('错误', '无法加载任务数据，请返回任务管理页面重试。', 'error').then(() => {
+            window.close(); // 如果没有数据，直接关闭页面
+        });
+        return;
+    }
+
+    // --- 2. 加载任务清单 ---
+    Swal.fire({
+        title: '加载任务清单...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    const pmInfo = {
+        process: taskToEditData['工序'],
+        workshop: taskToEditData['车间'],
+        Plan_SD: taskToEditData['开始日期'],
+        workcenter: taskToEditData['AEM#']
+    };
+
+    const pmNo = (taskToEditData['开始日期'] || '').replace(/-/g, '') + (taskToEditData['AEM#'] || '');
+    // 优先尝试获取已存在的记录
+    google.script.run
+        .withSuccessHandler(function(response) {
+            const [status, data] = response;
+            if (status === "OK" && data) {
+
+                const records = JSON.parse(data);
+                // 检查records是否为空
+                if (!records || records.length === 0) {
+                    // 为空，加载标准清单
+                    console.log("records为空，加载标准任务清单。");
+                    loadStandardTaskList();
+                    return;
+                } else {
+                    // 不为空，加载records[0][10]作为清单
+                    try {
+                        const tasklist = JSON.parse(records[0][10]);
+                        console.log("已从records[0][10]加载任务清单。");
+                        initializeTable(tasklist);
+                        return;
+                    } catch (e) {
+                        console.error("解析records[0][10]为任务清单失败，尝试加载标准清单。", e);
+                        loadStandardTaskList();
+                        return;
+                    }
+                }
+
+                // console.log('records:', records);
+
+                // // 详细调试：打印前端pmNo和后台所有PM No.的字符编码
+                // console.log('前端pmNo:', JSON.stringify(pmNo));
+                // // console.log('后台PM No.:' JSON.stringify(backend));
+                // records.forEach((r, idx) => {
+                //   const backend = r[0] ? r[0].toString() : '';
+                //   console.log(`后台PM No.[${idx}]:`, JSON.stringify(backend));
+                //   if (JSON.stringify(pmNo) = JSON.stringify(backend)) {
+                //     console.log('>>> 匹配成功的索引:', idx);
+                //   }
+                // });
+                // // 参考PersonnelAssignment的健壮匹配
+                // let matched = null;
+                // for (let i = 0; i < recordsArr.length; i++) {
+                //   const r = recordsArr[i];
+                //   if (r && r[0] && r[0].toString().trim().toUpperCase() === pmNo.toString().trim().toUpperCase()) {
+                //     matched = r;
+                //     break;
+                //   }
+                // }
+                // if (!matched) {
+                //   console.log('for循环也没有匹配到任何记录！');
+                // }
+                // if (matched && (matched[1].includes('人员已分配') || matched[1].includes('进行中'))) {
+                //     console.log("找到PM No.完全匹配的任务记录，加载此记录的任务清单。", matched);
+                //     const tasklist = JSON.parse(matched[10]);
+                //     initializeTable(tasklist);
+                //     return;
+                // }
+            }
+            // 没找到，走标准清单
+            console.log("未找到PM No.完全匹配的记录，加载标准任务清单。");
+            loadStandardTaskList();
+        })
+        .withFailureHandler(function(error) {
+            console.error("获取PM记录失败:", error, "将尝试加载标准任务清单。");
+            loadStandardTaskList();
+        })
+        .getPMrecord(pmInfo);
+
+    function loadStandardTaskList() {
+        google.script.run
+            .withSuccessHandler(function(allStandardTasks) {
+                const equip1 = taskToEditData['设备类型1'];
+                const equip2 = taskToEditData['设备类型2'];
+                const auto = taskToEditData['自动化类型'];
+
+                const effectiveTasks = allStandardTasks.filter(task => task.Status && task.Status.includes('生效'));
+                const relevantMachineTasks = effectiveTasks.filter(task => {
+                    return task.MachineType === equip1 || task.MachineType === equip2 || task.MachineType === auto;
+                });
+
+                let finalTaskList = [];
+                relevantMachineTasks.forEach(task => {
+                    if (task.Tasklist) {
+                        try {
+                            const parsedTasks = JSON.parse(task.Tasklist);
+                            if (Array.isArray(parsedTasks)) {
+                                finalTaskList = finalTaskList.concat(parsedTasks);
+                            }
+                        } catch (e) {
+                            console.error("解析Tasklist失败:", e);
+                        }
+                    }
+                });
+                initializeTable(finalTaskList);
+            })
+            .withFailureHandler(handleError)
+            .get_Tasklist_new();
+    }
+
+    function initializeTable(taskListData) {
+        Swal.close();
+        if (!taskListData || taskListData.length === 0) {
+            Swal.fire('无数据', '未找到可编辑的任务清单。', 'warning');
+            taskListData = [];
+        }
+
+        // --- 新增：如果列表不为空，则存储其属性结构 ---
+        if (taskListData.length > 0) {
+            allTaskKeys = Object.keys(taskListData[0]);
+        }
+
+        // 基础列定义
+        let columns = [
+            { title: "Task No", data: "Task No" },
+            { title: "Task Description", data: "Task Description" },
+            { title: "Estimated Time", data: "Estimated Time" }
+        ];
+
+        const hasExecutives = taskListData.some(task => task.hasOwnProperty('执行人员'));
+
+        if (hasExecutives) {
+            columns.push({
+                title: "执行人员",
+                data: "执行人员",
+                render: function(data, type, row) {
+                    if (Array.isArray(data) && data.length > 0) {
+                        return data.join(' / ');
+                    }
+                    return '';
+                }
+            });
+        }
+
+        columns.push({
+            title: "操作",
+            data: null,
+            defaultContent: `<button class="btn btn-warning btn-sm edit-row-btn me-1">编辑</button><button class="btn btn-danger btn-sm delete-row-btn">删除</button>`,
+            orderable: false
+        });
+
+        // 按照第一列（Task No）升序排序
+        taskEditTable = $('#taskEditTable').DataTable({
+            data: taskListData, 
+            columns: columns,
+            responsive: true, 
+            pageLength: 25, 
+            scrollX: true,
+            language: { emptyTable: "任务清单为空，请点击“新增任务”按钮添加。" },
+            order: [[0, 'asc']] // 第一列升序排列
+        });
+    }
+
+    function handleError(error) {
+        Swal.fire('加载失败', error.message, 'error');
+    }
+
+    // --- 3. 导航、新增、编辑、删除逻辑 ---
+    const siWebPage = sessionStorage.getItem('siWebPage');
+    $('#navigateHome').on('click', () => { if (siWebPage) window.location.href = siWebPage; });
+    
+    // --- 新增任务按钮逻辑 (已修复) ---
+    $('#addNewTaskBtn').on('click', () => {
+        if (allTaskKeys.length === 0 && taskEditTable.rows().count() > 0) {
+             // 如果 allTaskKeys 为空但表中有数据，则从表中第一行获取
+            allTaskKeys = Object.keys(taskEditTable.row(0).data());
+        }
+        if (allTaskKeys.length === 0) {
+            Swal.fire('错误', '无法确定任务的数据结构，请先确保至少有一条标准任务。', 'error');
+            return;
+        }
+
+        const existingTempTasks = taskEditTable.rows().data().toArray().filter(d => d['Task No'] && d['Task No'].startsWith('TEM-'));
+        let nextTempNum = 1;
+        if (existingTempTasks.length > 0) {
+            const maxNum = Math.max(...existingTempTasks.map(d => parseInt(d['Task No'].split('-')[1], 10) || 0));
+            nextTempNum = maxNum + 1;
+        }
+        const newTaskNo = `TEM-${String(nextTempNum).padStart(2, '0')}`;
+
+        const hasExecutivesColumn = taskEditTable.columns().header().to$().map(function() { return $(this).text(); }).get().includes('执行人员');
+
+        let formHtml = `
+            <div class="mb-3 text-start">
+                <label for="swal-task-no" class="form-label">Task No</label>
+                <input type="text" id="swal-task-no" class="form-control" value="${newTaskNo}" readonly>
+            </div>
+            <div class="mb-3 text-start">
+                <label for="swal-task-desc" class="form-label">Task Description</label>
+                <textarea id="swal-task-desc" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="mb-3 text-start">
+                <label for="swal-est-time" class="form-label">Estimated Time</label>
+                <input type="number" id="swal-est-time" class="form-control" value="">
+            </div>
+        `;
+
+        if (hasExecutivesColumn) {
+            formHtml += `
+                <div class="mb-3 text-start">
+                    <label for="swal-executives" class="form-label">执行人员 (用逗号分隔)</label>
+                    <input type="text" id="swal-executives" class="form-control" value="">
+                </div>
+            `;
+        }
+
+        Swal.fire({
+            title: '新增临时任务',
+            html: formHtml,
+            showCancelButton: true,
+            confirmButtonText: '添加',
+            cancelButtonText: '取消',
+            preConfirm: () => {
+                const newDesc = $('#swal-task-desc').val();
+                if (!newDesc) {
+                    Swal.showValidationMessage('任务描述不能为空！');
+                    return false;
+                }
+                
+                // --- 核心修复：使用 allTaskKeys 创建一个结构完整的对象 ---
+                let newTask = {};
+                allTaskKeys.forEach(key => {
+                    newTask[key] = 'NA'; // 为所有属性设置一个默认值
+                });
+
+                // 用弹窗中的值覆盖默认值
+                newTask['Task No'] = $('#swal-task-no').val();
+                newTask['Task Description'] = newDesc;
+                newTask['Estimated Time'] = $('#swal-est-time').val() || 0;
+                newTask['Task Type'] = '临时';
+                newTask['Strategy'] = '临时任务';
+                
+                if (hasExecutivesColumn) {
+                    newTask['执行人员'] = $('#swal-executives').val().split(',').map(name => name.trim()).filter(name => name);
+                }
+
+                return newTask;
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const allData = taskEditTable.rows().data().toArray();
+                allData.unshift(result.value);
+
+                // --- 核心修复：在重绘时通过 order([]) 禁用排序，以确保新行显示在顶部 ---
+                taskEditTable.order([]).clear().rows.add(allData).draw();
+                
+                Swal.fire('已添加!', '新任务已添加到列表顶部。请记得保存全部更改。', 'success');
+            }
+        });
+    });
+    
+    // --- 编辑按钮逻辑 ---
+    $(document).on('click', '#taskEditTable .edit-row-btn', function () {
+        const row = taskEditTable.row($(this).closest('tr'));
+        const rowData = row.data();
+
+        let formHtml = `
+            <div class="mb-3 text-start">
+                <label for="swal-task-desc" class="form-label">Task Description</label>
+                <textarea id="swal-task-desc" class="form-control" rows="3">${rowData['Task Description'] || ''}</textarea>
+            </div>
+            <div class="mb-3 text-start">
+                <label for="swal-est-time" class="form-label">Estimated Time</label>
+                <input type="number" id="swal-est-time" class="form-control" value="${rowData['Estimated Time'] || ''}">
+            </div>
+        `;
+
+        if (rowData.hasOwnProperty('执行人员')) {
+            const executives = Array.isArray(rowData['执行人员']) ? rowData['执行人员'].join(', ') : (rowData['执行人员'] || '');
+            formHtml += `
+                <div class="mb-3 text-start">
+                    <label for="swal-executives" class="form-label">执行人员 (用逗号分隔)</label>
+                    <input type="text" id="swal-executives" class="form-control" value="${executives}">
+                </div>
+            `;
+        }
+
+        Swal.fire({
+            title: `编辑任务: ${rowData['Task No']}`,
+            html: formHtml,
+            showCancelButton: true,
+            confirmButtonText: '保存',
+            cancelButtonText: '取消',
+            preConfirm: () => {
+                const newDesc = $('#swal-task-desc').val();
+                const newTime = $('#swal-est-time').val();
+                let newExecutives = null;
+
+                if (rowData.hasOwnProperty('执行人员')) {
+                    newExecutives = $('#swal-executives').val().split(',').map(name => name.trim()).filter(name => name);
+                }
+
+                rowData['Task Description'] = newDesc;
+                rowData['Estimated Time'] = newTime;
+                if (newExecutives !== null) {
+                    rowData['执行人员'] = newExecutives;
+                }
+
+                row.data(rowData).draw();
+                return true;
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire('已更新', '任务信息已在列表中更新。请记得保存全部更改。', 'success');
+            }
+        });
+    });
+
+    // --- 删除按钮逻辑 ---
+    $(document).on('click', '#taskEditTable .delete-row-btn', function () {
+        Swal.fire({
+            title: '确认删除?', text: "您确定要删除这个任务吗？", icon: 'warning',
+            showCancelButton: true, confirmButtonText: '确认删除', cancelButtonText: '取消'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                taskEditTable.row($(this).closest('tr')).remove().draw();
+                Swal.fire('已删除!', '该任务已从列表中移除。请记得保存更改。', 'success');
+            }
+        });
+    });
+
+    // --- 4. 保存更改逻辑 (已修改) ---
+    $('#saveChangesBtn').on('click', () => {
+        const updatedData = taskEditTable.rows().data().toArray();
+        // 检查是否有临时任务
+        const hasTempTasks = updatedData.some(task => task['Task No'] && task['Task No'].startsWith('TEM-'));
+
+        Swal.fire({
+            title: '确认保存?', text: `将要更新该保养任务的清单，共 ${updatedData.length} 条记录。`, icon: 'question',
+            showCancelButton: true, confirmButtonText: '确认保存', cancelButtonText: '取消'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: '正在保存...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                
+                const dataToSave = {
+                    pmNo: (taskToEditData['开始日期'] || '').replace(/-/g, '') + (taskToEditData['AEM#'] || ''),
+                    sheetName: taskToEditData['工序'] + "-" + taskToEditData['车间'],
+                    updatedTasklist: JSON.stringify(updatedData),
+                    // 将标志位传递给后端
+                    shouldAppendStatus: hasTempTasks 
+                };
+
+                google.script.run
+                    .withSuccessHandler(response => { Swal.fire('成功!', response, 'success'); })
+                    .withFailureHandler(handleError)
+                    .updateTasklistForPM(dataToSave);
+            }
+        });
+    });
+});
+</script>

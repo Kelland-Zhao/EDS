@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"> -->
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-material-ui@3.1.4/material-ui.min.css"> -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css" integrity="sha512-aOG0c6nPNzGk+5zjwyJaoRUgCdOrfSDhmMID2u4+OIslr0GjpLKo7Xm0Ao3xmpM4T8AmIouRkqwj1nrdVsLKEQ==" crossorigin="anonymous"> -->
+    <!-- <link rel="stylesheet" href="https://unpkg.com/bootstrap-table@1.16.0/dist/themes/materialize/bootstrap-table-materialize.min.css"> -->
+    <!-- <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/css/select2.min.css" rel="stylesheet" /> -->
+    <?!=include("zj_material_Integrated_css");?>
+    <?!=include("CSS");?>
+  </head>
+
+  <body>
+    <div id="background" class="background" style="display: none;"> </div>
+    <div id="progressBar" class="preloader-wrapper big active"
+      style="display: none; z-index: 2001;position: absolute;left: 50%;top:50%">
+      <div class="spinner-layer spinner-red-only">
+        <div class="circle-clipper left">
+          <div class="circle"></div>
+        </div>
+        <div class="gap-patch">
+          <div class="circle"></div>
+        </div>
+        <div class="circle-clipper right">
+          <div class="circle"></div>
+        </div>
+      </div>
+    </div>
+
+    <nav>
+      <div class='nav-wrapper red darken-3'>
+        <a class="brand-logo right">交接班</a>
+        <ul id="nav-mobile">
+          <li><a class='dropdown-trigger' data-target="dropdown1">保养<i class="material-icons right">arrow_drop_down</i></a></li>
+          <li><a href="<?!=webPage?>?v=addItem_manage" style="display:none">转保养项目管理</a></li>
+          <li><a href="<?!=webPage?>?v=tmp_stop_machine" style="display:none">计划外停机</a></li>
+          <li><a href="<?!=webPage?>?v=Shift">交接班</a></li>
+          <li><a href="<?!=webPage?>?v=PointCheck">点检</a></li>
+          <li><a href="<?!=webPage?>?v=MaintenanceReport_Manage" style="display:none">故障报告管理<span class="new badge">待定</span></a></li>
+          <li><a href="https://script.google.com/a/colpal.com/macros/s/AKfycbyaKWHcTSogglvVN7sKaTOgDTXOg5IMYUIGKdy7/exec" target="_blank">工艺参数管理</a></li>
+          <li><a href="https://script.google.com/a/colpal.com/macros/s/AKfycbzX8unrThQsGqjz0gpwfTp3Y6HSl_2oyfuqBpw5/exec" target="_blank">二手备件</a></li>
+          <li><a onclick="todView()">文档索引</a></li>
+          <li><a onclick="toMoldManager()">模具管理</a></li>
+          <li><a href="https://script.google.com/a/macros/colpal.com/s/AKfycbx3i7PBxvqejgeGF2LA_XQ4HfOZxII2cku3BzQBtetYHPFEvlNd6egmt4SxAm8lxjkgnA/exec" target="_blank">特种设备检查</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <ul id="dropdown1" class="dropdown-content">
+      <li><a href="<?!=webPage?>?v=PM_Plan">保养计划</a></li>
+      <!-- <li><a href="<?!=webPage?>?v=PMtask">保养任务</a></li> -->
+      <li><a href="https://datastudio.google.com/reporting/9c716098-e8b2-4233-b5ca-731008bfd7b5/page/RpGdC">保养报告</a></li>
+    </ul>
+
+    <ul id="slide-out" class="sidenav"
+      style="background-image:url('https://app.chexology.com/assets/background_login-f94bf29cb8e076b24630a06a9e6a2a7fd3e1eb32b523c467daaec0399dab18b9.png')">
+      <li>
+        <div class="user-view">
+          <a><img class="circle" src="https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSllNXw9vLuipeBxo9_GeqYmzu88Djg-F0eRi8X_Hr_PT8lRCdE&usqp=CAU"></a>
+          <a><span class="white-text name" id='name' style="position: relative; left:20px; color:#eceff1;">姓名</span></a>
+          <a><span class="white-text name" id='id' style="position: relative; left:20px; color:#eceff1;">工号</span></a>
+          <li>
+            <div class="divider"></div>
+          </li>
+          <li>
+            <a href="<?!=webPage?>?v=page" style="color:#eceff1;"><i class="material-icons" style="color:#eceff1;">cloud</i>登出</a>
+          </li>
+        </div>
+      </li>
+    </ul>
+
+    <a data-target="slide-out" class="btn-floating pulse sidenav-trigger btn-floating teal lighten-2" style="left: 3em;top: 0.5em"><i class="material-icons">menu</i></a>
+
+    <br>
+    <br>
+
+    <div class='container'>
+      <div style="clear: both; border-radius:20px; height: 22rem; background-color: #ff8a80;">
+        <div style=" margin-top: 1rem;; margin-left: 3%; margin-bottom: 0; float: left; width: 94%;">
+          <div style="float: left; margin-bottom: 3rem; width: 100%;">
+            <div style="float: left; width: 30%; margin-right: 4.5%; ">
+              <select id="workcenter" class="browser-default" style="width: 100%; ">
+                <option value="">test</option>
+              </select>
+            </div>
+
+            <div style="float: left; width: 30%; margin-right: 4.5%; ">
+              <select id='shift' class="browser-default " style="width: 100%; ">
+                <option value="">test</option>
+                <option value="A班">A班</option>
+                <option value="B班">B班</option>
+                <option value="C班">C班</option>
+                <option value="D班">长白班</option>
+              </select>
+            </div>
+
+            <div style="float: right; width: 30%; ">
+              <select id="owner" class="browser-default" style="width: 100%; ">
+                <option value="">test</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="float: left; clear: left; width: 100%; margin-bottom: 0;">
+            <div style="width: 30%; float: left; margin-right: 4.5%;">
+              <select id="errorCode" class="browser-default">
+                <option value="">test</option>
+              </select>
+            </div>
+
+            <div class='input-field' style=" float: left; width: 20%; margin-top: 0;">
+              <input id="repairDuration" type="number" class="validate "
+                style="background-color: white; border-radius:2px; height: 38px;">
+              <label for="repairDuration" style="margin-left: 0.5rem;">维修时间/min</label>
+            </div>
+
+            <div class='input-field'
+              style=" float: left; margin-left: 2.75%; margin-right: 2.75%; width: 20%; margin-top: 0;">
+              <input id="No_repairPerson" type="number" class="validate "
+                style="background-color: white; border-radius:2px; height: 38px;">
+              <label for="No_repairPerson" style="margin-left: 0.5rem;">参与人数</label>
+            </div>
+
+            <div class='input-field' style=" float: left;  width: 20%; margin-top: 0;">
+              <input id="workorder" type="text" class="validate"
+                style="background-color: white; border-radius:2px; height: 38px;">
+              <label for="workorder" class="active" style="margin-left: 0.5rem;">工单号</label>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 1rem; margin-left: 3%; margin-top: 1rem; float: left; clear: left; width: 94%;">
+          <div style=" float: left; width: 80%; ">
+            <div style="  float: left; width: 100%;  ">
+              <div style="float: left;  width: 37.5%; margin-right: 5.5%;">
+                <select id='result' class="browser-default ">
+                  <option value="">test</option>
+                  <option value="未解决">未解决</option>
+                  <option value="已解决">已解决</option>
+                </select>
+              </div>
+
+              <div class="input-field" style=" float: left; width: 50%;  margin-right: 4.5%;  margin-top: 0;">
+                <textarea id="issue" class="materialize-textarea"
+                  style="background-color: white; border-radius:2px; "></textarea>
+                <label for=" issue" style="margin-left: 0.5rem;">问题描述</label>
+              </div>
+            </div>
+
+            <div style=" width: 100%; float: left; margin-top: 1rem; ">
+              <div style="width: 37.5%; float: left; margin-right: 5.5%;">
+                <select id="handover" class="browser-default">
+                  <option value="">test</option>
+                </select>
+              </div>
+
+              <div class="input-field" style=" float: left; width: 50%; margin-top: 0; margin-right: 4.5%;">
+                <textarea id="processMethod" class="materialize-textarea"
+                  style="background-color: white; border-radius:2px; height: 38px;"></textarea>
+                <label for="processMethod" style="margin-left: 0.5rem;">处理过程</label>
+              </div>
+            </div>
+          </div>
+
+          <div style=" float: left; width: 20%; margin-top:2rem">
+            <div style="  float: left; width: 100%;  ">
+              <div id="divFollowStatus" style="float: left; padding-right:10%;display:none">
+                <select id='followStatus' class="browser-default ">
+                  <option value="">test</option>
+                  <option value="是">是</option>
+                  <option value="否">否</option>
+                </select>
+              </div>
+
+              <div style="float: left; padding-left: 5%;">
+                <button class="btn waves-effect waves-light" type="submit" name="action" id="submit">提交</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <br>
+
+      <div style="border: 2px solid #bdbdbd; padding: 10px 10px; border-radius:5px; clear: both; " id="SC">
+        <span style="padding: 0 2em 0 0;">信息查询</span>
+        <select id='workshop' class="browser-default " style="width: 20%;">
+          <option value="">test</option>
+          <option value="TB1"> TB1</option>
+          <option value="TB2">TB2</option>
+        </select>
+        <select id='process' class="browser-default " style="width: 20%; ">
+          <option value="">test</option>
+          <option value="INJ">INJ</option>
+          <option value="TF">TF</option>
+          <option value="PK">PK</option>
+        </select>
+        <button id="confirm" type="submit" class="btn waves-effect waves-light"
+          style=" float:right; margin-right: 4rem;">确定</button>
+      </div>
+      <br>
+
+      <div style="border: 2px solid #bdbdbd; padding: 2px; border-radius:5px;">
+        <ul class="tabs tabs-fixed-width tab-demo z-depth-1">
+          <li class="tab"><a href="#solved_block">已解决</a></li>
+          <li class="tab"><a class="active" href="#unsolved_block">未解决</a></li>
+        </ul>
+
+        <br>
+
+        <div id="solved_block">
+          <table id="solved" data-height="600" data-toggle="solved">
+            <thead>
+              <tr>
+                <th data-field="issueNo">问题编号</th>
+                <th data-field="date">日期</th>
+                <th data-field="shift">班次</th>
+                <th data-field="workcenter">机台号</th>
+                <th data-field="issue">问题描述</th>
+                <th data-field="processMethod">处理过程</th>
+                <th data-field="owner">维修人</th>
+                <th data-field="repairDuration">维修时间</th>
+                <th data-field="errorCode">故障代码</th>
+                <th data-field="status">状态</th>
+              </tr>
+            </thead>
+          </table>
+        </div>
+
+        <div id="unsolved_block">
+          <table id="unsolved" data-toggle="unsolved">
+            <thead>
+              <tr>
+                <th data-field="issueNo">问题编号</th>
+                <th data-field="date">日期</th>
+                <th data-field="shift">班次</th>
+                <th data-field="workcenter">机台号</th>
+                <th data-field="issue">问题描述</th>
+                <th data-field="processMethod">处理过程</th>
+                <th data-field="owner">维修人</th>
+                <th data-field="repairDuration">维修时间</th>
+                <th data-field="errorCode">故障代码</th>
+                <th data-field="handover">交接人</th>
+                <th data-field="operation" data-formatter="operateFormatter" data-events="operateEvents">操作</th>
+              </tr>
+            </thead>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Structure -->
+    <div id="modal1" class="modal modal-fixed-footer">
+      <div class="modal-content">
+        <span style="font-size: 18px;">故障跟进</span>
+
+        <br>
+
+        <div class="row">
+          <div class="input-field" style="width: 7rem; float: left; ">
+            <input disabled id="code" type="text" class="validate">
+            <label for="code" class="active">日期</label>
+          </div>
+
+          <div class="input-field" style="width: 7rem; float: left; margin-left: 2rem;">
+            <input disabled id="workcenterUpdate" type="text" class="validate">
+            <label for="workcenterUpdate" class="active">机台号</label>
+          </div>
+
+          <div class="input-field" style="width: 10rem; float: left; margin-left: 2rem;">
+            <input disabled id="issueUpdate" type="text" class="validate">
+            <label for="issueUpdate" class="active">问题描述</label>
+          </div>
+
+          <div class="input-field" style="width: 10rem; float: left; margin-left: 2rem;">
+            <input disabled id="issueNo" type="text" class="validate">
+            <label for="issueNo" class="active">问题编号</label>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="input-field" style="width: 100%; float: left;">
+            <input id="processMethod_update" type="text" class="validate">
+            <label for="processMethod_update">处理过程</label>
+          </div>
+        </div>
+
+        <div style="float: left; margin-left: 0;margin-right: 2rem;">
+          <div style="margin: 1rem 2rem;">
+            <select id="ownerUpdate" class="browser-default" style="width: 12rem; ">
+              <option value="">test</option>
+            </select>
+          </div>
+
+          <div style="margin: 1rem 2rem;">
+            <select id='shiftUpdate' class="browser-default" style="width: 12rem;">
+              <option value="">test</option>
+              <option value="A班">A班</option>
+              <option value="B班">B班</option>
+              <option value="C班">C班</option>
+              <option value="D班">长白班</option>
+            </select>
+          </div>
+
+          <div style="margin: 1rem 2rem;">
+            <select id="errorCode_update" class="browser-default" style="width: 12rem;">
+              <option value="">test</option>
+            </select>
+          </div>
+
+          <div style="margin: 1rem 2rem;">
+            <select id='resultUpdate' class="browser-default" style="width: 12rem;">
+              <option value="">test</option>
+              <option value="未解决">未解决</option>
+              <option value="已解决">已解决</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="float: left; margin-left: 2rem;">
+          <div class='input-field' style="width: 12rem;">
+            <input id="durationUpdate" type="number" class="validate">
+            <label for="durationUpdate">维修时间</label>
+          </div>
+
+          <div class="input-field" style="width: 12rem;">
+            <input id="workorderUpdate" type="text" class="validate">
+            <label for="workorderUpdate" class="active">工单号</label>
+          </div>
+
+          <div class="input-field" style="width: 12rem;">
+            <input id="handoverUpdate" type="text" class="validate">
+            <label for="handoverUpdate" class="active">交接人</label>
+          </div>
+
+          <div class="input-field" style="width: 12rem;">
+            <input id="No_repairPersonUpdate" type="number" class="validate">
+            <label for="No_repairPersonUpdate" class="active">参与人数</label>
+          </div>
+
+          <label class="input-field " id="toPM">
+            <input type="checkbox" />
+            <span>转保养</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <a class="modal-close waves-effect waves-green btn-flat" id="modalSubmit">提交</a>
+      </div>
+    </div>
+    <!---close modal-content-->
+    
+  </body>
+
+  <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script> -->
+  <!-- <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script> -->
+  <!-- <script src="js/materialize.min.js"></script> -->
+  <!-- <script src="https://momentjs.com/downloads/moment.js"></script> -->
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script> -->
+  <!-- <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script> -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@9/dist/sweetalert2.min.js"></script> -->
+  <!-- <script src="https://unpkg.com/bootstrap-table@1.16.0/dist/bootstrap-table.min.js"></script> -->
+  <!-- <script src="https://unpkg.com/bootstrap-table@1.16.0/dist/themes/materialize/bootstrap-table-materialize.min.js"></script> -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/js/select2.min.js"></script> -->
+  <?!=include("zj_material_Integrated_js");?>
+  <?!=include("Shift-js") ?>
+
+</html>

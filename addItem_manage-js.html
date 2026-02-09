@@ -1,0 +1,287 @@
+<script>
+
+  // 禁用鼠标右键
+  window.onload = function () {
+    document.onkeydown = function () {
+      var e = window.event || arguments[0];
+      if (e.keyCode == 123) {
+        return false;
+      } else if ((e.ctrlKey) && (e.shiftKey) && (e.keyCode == 73)) {
+        return false;
+      }
+    }
+    document.oncontextmenu = function () {
+      return false;
+    }
+
+  }
+
+  // 窗体载入时加载
+  $(document).ready(async function () {
+    initializeMaterialCSS();
+    var name = sessionStorage.getItem('name');
+    var id = sessionStorage.getItem('id');
+    document.getElementById('name').textContent = name;
+    document.getElementById('id').textContent = '328' + id;
+    var workshop="";
+    var process="";
+    var { value: type } = await swal.fire({
+      allowOutsideClick:false,
+      title: '链接部门工序',
+      input: 'select',
+      inputOptions: {
+        TB1_INJ: 'TB1注塑',
+        TB1_TF: 'TB1植磨毛',
+        TB1_PK:'TB1包装',
+        TB2_INJ: 'TB2注塑',
+        TB2_TF: 'TB2植磨毛',
+        TB2_PK:'TB2包装'
+      },
+      inputPlaceholder: '请选择部门工序',
+      showCancelButton: true,
+      inputValidator: (value) => {
+        return new Promise((resolve) => {
+          if (value !== '') {
+            resolve()
+          } else {
+            resolve('请选择部门工序')
+          }
+        })
+      }
+    })
+    if(type){
+      workshop=type.split("_")[0];
+      process=type.split("_")[1];
+      swal.fire({
+        allowOutsideClick:false,
+        icon:'info',
+        title:'正在加载创建的任务记录……',
+        html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+            '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点按钮重新操作一次</p>',
+        confirmButtonText:'等待……不自动关闭再点',
+        showConfirmButton:true,
+        timer:120000,
+        timerProgressBar:true
+      });
+      google.script.run.withFailureHandler(judgeFailure).withSuccessHandler(main).getData_additem_manage(workshop,process);
+    }
+    else{
+      console.log("取消")
+    }
+  });
+
+  // 初始化
+  function initializeMaterialCSS() {
+    $('.modal').modal();
+    $('select').formSelect();
+    $('.sidenav').sidenav();
+    $('.datepicker').datepicker({format: 'yyyy/mm/dd',autoClose: true});
+    $('.dropdown-trigger').dropdown();
+    $('.tabs').tabs();
+  }
+
+  // 加载后台主数据
+  function main(result) {
+    if(result[0]=="OK")
+      let data=JSON.parse(result[1]);
+      let data_unsolved = data.data_shift.filter((r) => {
+        return r[12] == "TRUE" && r[18] == ""
+      })
+      let data_toPM = new Array();
+      data_unsolved.forEach((r) => {
+        let info = {
+          code: r[0],
+          workcenter: r[2],
+          taskDescription: r[3],
+          owner: r[6],
+          uploadtime: dayjs(r[11]).format("YYYY/MM/DD")
+        }
+        data_toPM.push(info)
+      })
+      let data_toBemanage = new Array();
+      data.data_APT.forEach((r) => {
+        let TMPitem = data.data_TMP.filter((q) => {
+          return r[2] == q[8] & dayjs(r[7]).format("YYYY/MM/DD") == dayjs(q[6]).format("YYYY/MM/DD")
+        })
+        let result_PLAN = new String()
+        if (r[9] == true) { result_PLAN = "待批准" } else { result_PLAN = "无需计划批准" }
+        if (TMPitem.length > 0) { result_PLAN = TMPitem[0][10]; }
+        data_toBemanage.push({
+          code: r[0],
+          machine_type: r[1],
+          workcenter: r[2],
+          module: r[3],
+          taskDescription: r[4],
+          duration: r[5],
+          No_resources: r[6],
+          PlanDate: dayjs(r[7]).format("YYYY/MM/DD"),
+          shift: r[8],
+          book_or_extend: r[9],
+          status: r[10],
+          plan_status: result_PLAN
+        })
+      })
+
+      /********************************************************************************************************************************************************/  
+      window.operateEvents = {
+        "click #creatTask": function (e, value, row, index) {
+          $("#workcenter").val(row.workcenter);
+          let workcenterList = data.machine_info.map((r) => { return r[0] })
+          let workshopList = data.machine_info.map((r) => { return r[4] })
+          let processList = data.machine_info.map((r) => { return r[5] })
+          let position = workcenterList.indexOf(row.workcenter);
+          if (position > -1) {
+            $("#workshop").val(workshopList[position]);
+            $("#process").val(processList[position])
+          } else {
+            console.log("workcenter not in the list");
+          }
+          let PMPlan = data.PMPlan.filter((r) => {
+            return r[9] == row.workcenter && r[16] == "正常" && new Date(r[7]) > new Date()
+          })
+          if (PMPlan.length == 0) {
+            $("#existTime").val("无保养计划");
+            $("#existDuration").val("无保养计划");
+          } else {
+            $("#existTime").val(dayjs(PMPlan[0][7]).format("YYYY/MM/DD"));
+            $("#existDuration").val(PMPlan[0][10]);
+          }
+          $("#applier").val($("#name").text())
+          $("#code").val(row.code)
+
+          $("#additionalTime").find("input").click(function () {
+            if ($("#additionalTime").find("input").is(":checked") == false) {
+              $("#bookDate").prop("disabled", true);
+              $("#Mold_Tooling").prop("disabled", true);
+              $("#type").prop("disabled", true);
+            } else if ($("#additionalTime").find("input").is(":checked") == true) {
+              $("#bookDate").prop("disabled", false);
+              $("#Mold_Tooling").prop("disabled", false);
+              $("#type").prop("disabled", false);
+            }
+          })
+          M.updateTextFields();
+        }
+      }
+      $("#table_unsolved").bootstrapTable({
+        data: data_toPM
+      })
+      $("#taskGeneration").bootstrapTable({
+        data: data_toBemanage
+      })
+      swal.fire({allowOutsideClick:false,icon:'success',title:'加载成功',showConfirmButton:false,timer:1500});
+    }
+    else{
+      swal.fire({allowOutsideClick:false,icon:'error',title:'加载失败',text:result[1],showConfirmButton:true,footer:'<p>联系相关人员</p>'});
+    }
+  }
+
+  // th data-formatter
+  function operateFormatter(value, row, index) {
+    return [
+      "<button class='btn-small waves-effect  modal-trigger' href='#modal1' id = 'creatTask'>编辑<i class='material-icons right'>edit</i></button>"
+    ].join('')
+  }
+
+  // 监控触发事件
+  $("#tasklistConfirm").click(function () {
+    let data = {
+      workshop: $("#workshop").val(),
+      process: $("#process").val(),
+      workcenter: $("#workcenter").val(),
+      PMdate: $("#existTime").val().toString(),
+      PMduration: $("#existDuration").val(),
+      result: $("#additionalTime").find("input").is(":checked"),
+      applier: $("#applier").val(),
+      Mold_Tooling: $("#Mold_Tooling").val(),
+      type: $("#type").val(),
+      shift: $("#shift").val(),
+      code: $("#code").val(),
+      module: $("#module").val(),
+      machine_type: $("#machine_type").val(),
+      bookDate: $("#bookDate").val().toString(),
+      No_resources: $("#No_resources").val(),
+      duration: $("#duration").val(),
+      taskDescription: $("#taskDescription").val(),
+      submitDate: dayjs(new Date()).format("YYYY/MM/DD").toString()
+    }
+
+    if ($("#workshop").val() == "" ||
+      $("#workcenter").val() == "" ||
+      $("#existTime").val() == "" ||
+      $("#existDuration").val() == "" ||
+      $("#code").val() == "" ||
+      $("#module").val() == "" ||
+      $("#machine_type").val() == "" ||
+      $("#bookDate").val() == "" ||
+      $("#No_resources").val() == "" ||
+      $("#duration").val() == "" ||
+      $("#taskDescription").val() == "") {
+      swal.fire({title: "信息填写不完整",icon: "warning"})
+      return false
+    }
+
+    if ($("#additionalTime").find("input").is(":checked") == true) {
+      if ($("#applier").val() == "" ||
+        $("#Mold_Tooling").val() == "" ||
+        $("#type") == "" ||
+        $("#shift").val() == "") {
+        swal.fire({title: "信息填写不完整",icon: "warning"})
+        return false
+      }
+    }
+    swal.fire({
+      allowOutsideClick:false,
+      icon:'info',
+      title:'正在保存创建任务……',
+      html:'<p style="color:red"><b style="color:blue;font-size:large">2</b>分钟内勿点击，完成后窗口会自动关闭</p>'+
+          '<p style="color:magenta"><b style="color:blue;font-size:large">2</b>分钟后窗口未关闭，点按钮重新操作一次</p>',
+      confirmButtonText:'等待……不自动关闭再点',
+      showConfirmButton:true,
+      timer:120000,
+      timerProgressBar:true
+    });
+    google.script.run.withFailureHandler(judgeFailure).withSuccessHandler((resultSave) => {
+      if (resultSave[0]=="OK") {
+        $("#table_unsolved").bootstrapTable("remove", {
+          field: "code",
+          values: $("#code").val()
+        })
+        $("#taskGeneration").bootstrapTable("insertRow", {
+          index: 0,
+          row: {
+            code: data.code,
+            machine_type: data.machine_type,
+            workcenter: data.workcenter,
+            module: data.module,
+            taskDescription: data.taskDescription,
+            duration: data.duration,
+            No_resources: data.No_resources,
+            PlanDate: data.bookDate,
+            shift: data.shift,
+            book_or_extend: data.result,
+            plan_status: "待批准",
+            status: "Ongoing"
+          }
+        })
+        swal.fire({allowOutsideClick:false,title: "任务创建成功！",icon: "success",timer: 1500,showConfirmButton: false});
+      }
+      else {
+        swal.fire({allowOutsideClick:false,title: "任务创建失败！",icon: "error",text:resultSave[1],showConfirmButton: true});
+      }
+    }).upload_additem_manage(data)
+  })
+
+  /*============培训文档索引===========*/
+  function todView(){
+    let viewId=$("#id").text().slice(-5);
+    let viewName=$("#name").text();
+    let viewProcess="";
+    window.open("https://script.google.com/a/colpal.com/macros/s/AKfycbzzv6PHu-AaqAL1fwLNZPNg30acgO4Xd4H5atps/exec?ALP=ViewTod&viewSapId="+viewId+"&viewName="+viewName+"&viewProcess="+viewProcess+"&viewSource=EDSPAD");
+  }
+
+  function judgeFailure(){
+    swal.fire({allowOutsideClick:false,icon:'info',title:'服务器长时间未响应',showConfirmButton:true,footer:'<p>建议重新操作一次</p>'});
+  }
+
+</script>

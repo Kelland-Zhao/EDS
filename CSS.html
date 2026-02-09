@@ -1,0 +1,144 @@
+<style>
+
+
+  /* SweetAlert中照片预览的样式 */
+  #swal-photo-preview {
+    max-width: 100%;
+    max-height: 200px;
+    /* 调整：进一步减小最大高度以适应弹窗 */
+    object-fit: contain;
+    /* 保持图片纵横比，防止图片拉伸变形 */
+    margin-top: 15px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+  }
+
+  .vertical-divider {
+    border-left: 3px dashed #E60012;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+
+  .nav-css {
+    color: white;
+    font-family: Helvetica;
+    font-weight: bold;
+  }
+
+  .navbar {
+    background-color: #E60012;
+  }
+
+  .highlight {
+    color: #000000;
+    font-family: Helvetica;
+    font-size: small;
+  }
+
+  .container {
+    max-width: 100%;
+    width: 95%;
+  }
+
+  .leftFunction {
+    display: relative;
+    left: 0;
+  }
+
+  .rightFunction {
+    display: inline-block;
+    position: relative;
+    top: 0px;
+    width: 51%;
+    left: 0.2%;
+  }
+
+  .background {
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0.4;
+    filter: alpha(opacity：=60);
+    background: black;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2000;
+  }
+
+  .center {
+    position: relative;
+    left: 8%
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 38px;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 38px
+  }
+
+  .select2-container .select2-selection--single {
+    height: 38px;
+  }
+
+  /*和Bootstrap有冲突*/
+  input:not([type]),
+  input[type=text]:not(.browser-default),
+  input[type=password]:not(.browser-default),
+  input[type=email]:not(.browser-default),
+  input[type=url]:not(.browser-default),
+  input[type=time]:not(.browser-default),
+  input[type=date]:not(.browser-default),
+  input[type=datetime]:not(.browser-default),
+  input[type=datetime-local]:not(.browser-default),
+  input[type=tel]:not(.browser-default),
+  input[type=number]:not(.browser-default),
+  input[type=search]:not(.browser-default),
+  textarea.materialize-textarea {
+    /* height: 2rem; */
+    height: auto
+  }
+
+  .select2-container .select2-selection--single .select2-selection__clear {
+    font-size: 2rem
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__clear {
+    cursor: pointer;
+    float: right;
+    font-weight: lighter;
+    height: 26px;
+    margin-right: 20px;
+    padding-right: 0px
+  }
+
+  .tablebackground {
+    background: greenyellow;
+  }
+
+  .subtitle {
+    font-size: 28px;
+    font-weight: bold;
+    background-color: #bdbdbd;
+    padding: 5px;
+  }
+
+  .input {
+    background-color: white;
+    float: left;
+    margin: 0 2rem;
+  }
+
+  /* 自定义表头样式 */
+  .dataTables_wrapper .dataTables_scroll .dataTables_scrollHead .dataTables_scrollHeadInner table thead th {
+    background-color: #E60012;
+    /* 表头背景颜色 */
+    color: white;
+    /* 表头字体颜色 */
+  }
+</style>

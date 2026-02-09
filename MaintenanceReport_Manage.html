@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"> -->
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-material-ui@3.1.4/material-ui.min.css"> -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css" integrity="sha512-aOG0c6nPNzGk+5zjwyJaoRUgCdOrfSDhmMID2u4+OIslr0GjpLKo7Xm0Ao3xmpM4T8AmIouRkqwj1nrdVsLKEQ==" crossorigin="anonymous"> -->
+    <!-- <link rel="stylesheet" href="https://unpkg.com/bootstrap-table@1.16.0/dist/themes/materialize/bootstrap-table-materialize.min.css"> -->
+    <!-- <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/css/select2.min.css" rel="stylesheet" /> -->
+    <?!=include("zj_material_Integrated_css");?>
+    <?!=include("CSS");?>
+  </head>
+
+  <body>
+
+    <nav>
+      <div class='nav-wrapper red darken-3'>
+        <a class="brand-logo right">故障报告管理</a>
+        <ul id="nav-mobile">
+          <li><a class='dropdown-trigger' data-target="dropdown1">保养<i class="material-icons right">arrow_drop_down</i></a></li>
+          <li><a href="<?!=webPage?>?v=addItem_manage" style="display:none">转保养项目管理</a></li>
+          <li><a href="<?!=webPage?>?v=tmp_stop_machine" style="display:none">计划外停机</a></li>
+          <li><a href="<?!=webPage?>?v=Shift">交接班</a></li>
+          <li><a href="<?!=webPage?>?v=PointCheck">点检</a></li>
+          <li><a href="<?!=webPage?>?v=MaintenanceReport_Manage" style="display:none">故障报告管理<span class="new badge">待定</span></a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <ul id="dropdown1" class="dropdown-content">
+      <li><a href="<?!=webPage?>?v=PM_Plan">保养计划</a></li>
+      <!-- <li><a href="<?!=webPage?>?v=PMtask">保养任务</a></li> -->
+      <li><a href="https://datastudio.google.com/reporting/9c716098-e8b2-4233-b5ca-731008bfd7b5/page/RpGdC">保养报告</a></li>
+    </ul>
+
+    <ul id="slide-out" class="sidenav" style="background-image:url('https://app.chexology.com/assets/background_login-f94bf29cb8e076b24630a06a9e6a2a7fd3e1eb32b523c467daaec0399dab18b9.png')">
+      <li>
+        <div class="user-view">
+          <a><img class="circle" src="https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSllNXw9vLuipeBxo9_GeqYmzu88Djg-F0eRi8X_Hr_PT8lRCdE&usqp=CAU"></a>
+          <a><span class="white-text name" id='name' style="position: relative; left:20px; color:#eceff1;">姓名</span></a>
+          <a><span class="white-text name" id='id' style="position: relative; left:20px; color:#eceff1;">工号</span></a>
+          <li><div class="divider"></div></li>
+          <li><a href="<?!=webPage?>?v=page" style="color:#eceff1;"><i class="material-icons" style="color:#eceff1;">cloud</i>登出</a></li>
+        </div>
+      </li>
+    </ul>
+
+    <a data-target="slide-out" class="btn-floating pulse sidenav-trigger btn-floating teal lighten-2" style="left: 3em;top: 0.5em"><i class="material-icons">menu</i></a>
+    
+    <div id="background" class="background" style="display: none;"> </div>
+
+    <div id="progressBar" class="preloader-wrapper big active" style="display: none; z-index: 2001;position: absolute;left: 50%;top:50%">
+      <div class="spinner-layer spinner-red-only">
+        <div class="circle-clipper left">
+          <div class="circle"></div>
+        </div>
+        <div class="gap-patch">
+          <div class="circle"></div>
+        </div>
+        <div class="circle-clipper right">
+          <div class="circle"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div style="border: 2px solid #e0e0e0; padding: 1%; border-radius:10px;" id="PART1">
+        <div class="subtitle"><span>故障报告分配</span></div>
+        <div style="float: right;">
+          <a id='add' class='waves-effect waves-light btn'><i class='material-icons'>check</i></a><a id='delete' class='waves-effect waves-light btn'><i class='material-icons'>clear</i></a>
+        </div>
+        <table id="MaintenanceReportDistribution" data-click-to-select="true">
+          <thead>
+            <tr>
+                    <th data-field="checkbox" data-checkbox="true"></th>
+                    <th data-field="code">故障编号</th>
+                    <th data-field="workshop">车间</th>
+                    <th data-field="process">工序</th>
+                    <th data-field="workcenter">机台号</th>
+                    <th data-field="issue">故障描述</th>
+                    <th data-field="duration">维修时长</th>
+                    <th data-field="ownner">维修人</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+      <br>
+      <div style="border: 2px solid #e0e0e0; padding: 1%; border-radius:10px;">
+        <div class="subtitle"><span>故障报告待完成</span></div>
+        <table id="MaintenanceReporttoBeFinished">
+          <thead>
+            <tr>
+              <th data-field="code">故障编号</th>
+              <th data-field="workshop">车间</th>
+              <th data-field="process">工序</th>
+              <th data-field="workcenter">机台号</th>
+              <th data-field="issue">故障描述</th>
+              <th data-field="duration">维修时长</th>
+              <th data-field="ownner">维修人</th>
+              <th data-field="status">状态</th>
+              <th data-field="operate" data-formatter="buttoninTable2" data-events="operateEvents">操作</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+    </div>
+
+  </body>
+
+    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script> -->
+    <!-- <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script> -->
+    <!-- <script src="js/materialize.min.js"></script> -->
+    <!-- <script src="https://momentjs.com/downloads/moment.js"></script> -->
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script> -->
+    <!-- <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@9/dist/sweetalert2.min.js"></script> -->
+    <!-- <script src="https://unpkg.com/bootstrap-table@1.16.0/dist/bootstrap-table.min.js"></script> -->
+    <!-- <script src="https://unpkg.com/bootstrap-table@1.16.0/dist/themes/materialize/bootstrap-table-materialize.min.js"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/js/select2.min.js"></script> -->
+    <?!=include("zj_material_Integrated_js");?>
+    <?!=include("MaintenanceReport_Manage-js");?>
+
+</html>

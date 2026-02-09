@@ -1,0 +1,57 @@
+<html>
+
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 引入必要的CSS文件 -->
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("kez_Datatables_css");?>
+  <?!=include("CSS");?>
+</head>
+
+<body>
+  <!-- 顶部导航栏 -->
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <!-- 左侧标题 -->
+      <a class="navbar-brand" style="color: white; font-family: Arial, Helvetica, sans-serif; font-size: xx-large; font-weight: bold;">
+        任务管理 / Task Management
+      </a>
+    </div>
+  </nav>
+
+  <!-- 主要内容区域 -->
+  <div class="container mt-3">
+    <div class="row mt-5">
+      <div class="col-12">
+        <!-- 添加工序筛选器 -->
+        <div class="row mb-3">
+          <div class="col-md-4">
+            <label for="processFilter" class="form-label">工序筛选 / Process Filter</label>
+            <select id="processFilter" class="form-select">
+              <option value="">所有工序 / All Processes</option>
+              <!-- 工序选项将由JavaScript动态生成 -->
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <!-- 用于显示任务管理的表格 -->
+          <table id="taskManagementTable" class="display table table-bordered table-striped table-hover" style="width:100%">
+            <!-- 表格内容将由JavaScript动态生成 -->
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+<!-- 引入必要的JS文件 -->
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<!-- 引入此页面专属的JS文件 -->
+<?!=include("TaskManagement_js") ?>
+
+</html>
