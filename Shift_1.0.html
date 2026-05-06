@@ -90,6 +90,15 @@
       </div>
     </div>
     <h3 class="mt-3">交接班记录/ Handover Record</h3>
+    
+    <!-- 交接班记录说明区域 -->
+    <div class="alert alert-info mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">交接班要求 / Handover Requirements</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>请在交接班时全员集合当面交接故障/ 安全/ 质量问题和注意事项，并拍照打卡上传 / All team members must gather during handover to discuss failures, safety, quality issues and precautions face-to-face, and upload photos for attendance</li>
+      </ul>
+    </div>
+    
     <div class="row mt-3">
       <div class="col-auto">
         <input type="file" accept="image/*" capture="camera" id="take-photo" class="form-control" />
@@ -100,6 +109,43 @@
     </div>
     <hr style="margin-top:32px;margin-bottom:32px; border-top:2px solid #E60012;">
     <h3 class="mt-3 mb-0">故障记录/ Failure Record</h3>
+    
+    <!-- 故障记录说明区域 -->
+    <div class="alert alert-info mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">填写说明 / Instructions</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>需要填写本班欠产大于半小时的机台情况 / Record machines with production shortage exceeding 30 minutes in current shift</li>
+        <li>需要填写重点质量问题的跟进情况 / Record follow-up on key quality issues:
+          <ul>
+            <li>注塑：工艺参数异常 / Injection Molding: Process parameter abnormalities</li>
+            <li>植磨毛：无金属丝 / Flocking: No metal wire issues</li>
+          </ul>
+        </li>
+        <li>故障处理过程填写方法 / How to fill in Failure Process:
+          <ol>
+            <li>找到维修该故障时对应的维修内容（如：主机/ 自动化/ 工艺等）/ Identify the related maintenance category (e.g., Main machine / Automation / Process, etc.)</li>
+            <li>将对应选项（是/否）选为“是”/ Select “Yes” for the corresponding option</li>
+            <li>在后续输入框中输入具体维修内容 / Enter detailed maintenance actions in the follow-up input box</li>
+          </ol>
+          <div class="mt-1"><strong>提示 / Tips:</strong></div>
+          <ul>
+            <li>默认所有部件都选“是”，请根据实际情况选择 / All items are defaulted to “Yes”, please adjust based on actual situation</li>
+            <li>一旦选择“是”，后续输入框不可为空，否则无法提交 / If “Yes” is selected, the follow-up input cannot be empty, otherwise submission will be blocked</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 数据源说明区域 -->
+    <div class="alert alert-warning mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">数据源说明 / Data Source Information</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>机台号已与三工序计划Matrix联动，所有有效机台实现自动同步，合并后文件名称：Workcenter_V202602 / Workcenter is synchronized with the 3-process planning Matrix, all valid workcenters are automatically synced, merged file name: Workcenter_V202602</li>
+        <li>故障代码已与OE故障代码联动，并增加了转规格代码，合并后文件名称：errorCode 2.0 / Failure codes are synchronized with OE failure codes, with additional changeover codes added, merged file name: errorCode 2.0</li>
+        <li>故障处理条目由各工序自行决定，数据来自于“故障处理选项设置”sheet / Failure process items are determined by each process, and the data source is the "故障处理选项设置" sheet</li>
+      </ul>
+    </div>
+
     <div class="mt-3">
       <div class="row">
         <div class="col-3" id="htmlSelect">
@@ -155,123 +201,16 @@
           <div class="col-auto mb-2">
             <textarea class="form-control" id="Description" rows="3" placeholder="故障描述/ Failure Description"></textarea>
           </div>
+          <div class="col-auto mb-2">
+            <input type="text" class="form-control" id="DirectCause" placeholder="直接原因/Direct Cause">
+          </div>
+          <div class="col-auto mb-2">
+            <input type="text" class="form-control" id="SuggestedAction" placeholder="建议措施/Suggested Action">
+          </div>
         </div>
         <div class="col-6" id="htmlFailureprocess">
           <h5 class="col-auto mb-2">故障处理/ Failure Process</h5>
-          <div class="row align-items-center mb-2">
-            <div class="col-4">
-              <label>设备维修/ Equipment Maintenance?</label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="EquM_Y" name="EquM" checked>
-              <label class="form-check-label" for="EquM_Y">
-                是/ Yes
-              </label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="EquM_N" name="EquM">
-              <label class="form-check-label" for="EquM_N">
-                否/ No
-              </label>
-            </div>
-            <div class="col-5">
-              <textarea class="form-control" id="EquMDescription" rows="1"
-                placeholder="设备维修描述/ Equipment Maintenance Description"></textarea>
-            </div>
-          </div>
-          <div class="row align-items-center mb-2">
-            <div class="col-4">
-              <label>模具维修/ Mold Maintenance?</label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="MoldM_Y" name="MoldM" checked>
-              <label class="form-check-label" for="MoldM_Y">
-                是/ Yes
-              </label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="MoldM_N" name="MoldM">
-              <label class="form-check-label" for="MoldM_N">
-                否/ No
-              </label>
-            </div>
-            <div class="col-5">
-              <textarea class="form-control" id="MoldMDescription" rows="1"
-                placeholder="模具维修描述/ Eold Maintenance Description"></textarea>
-            </div>
-          </div>
-          <div class="row align-items-center mb-2">
-            <!-- <div class="row align-items-center" style="border: 2px solid yellow;"> -->
-            <div class="col-4">
-              <label>自动化维修/ Automation Maintenance?</label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="AutoM_Y" name="AutoM" checked>
-              <label class="form-check-label" for="AutoM_Y">
-                是/ Yes
-              </label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="AutoM_N" name="AutoM">
-              <label class="form-check-label" for="AutoM_N">
-                否/ No
-              </label>
-            </div>
-            <div class="col-5">
-              <textarea class="form-control" id="AutoMDescription" rows="1"
-                placeholder="自动化维修描述/ Automation Maintenance Description"></textarea>
-            </div>
-          </div>
-          <div class="row align-items-center mb-2">
-            <div class="col-4">
-              <label>工艺调整/ Process Adjustment?</label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="ProcessAD_Y" name="ProcessAD" checked>
-              <label class="form-check-label" for="ProcessAD_Y">
-                是/ Yes
-              </label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="ProcessAD_N" name="ProcessAD">
-              <label class="form-check-label" for="ProcessAD_N">
-                否/ No
-              </label>
-            </div>
-            <div class="col-5">
-              <textarea class="form-control" id="ProcessADDes" rows="1"
-                placeholder="工艺调整描述/ Process Adjustment Description"></textarea>
-            </div>
-          </div>
-          <div class="row align-items-center mb-2">
-            <div class="col-4">
-              <label>是否有热流道跟从/ Follow the Hot Runner?</label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="Follow_Y" name="Follow">
-              <label class="form-check-label" for="Follow_Y">
-                是/ Yes
-              </label>
-            </div>
-            <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="Follow_N" name="Follow" checked>
-              <label class="form-check-label" for="Follow_N">
-                否/ No
-              </label>
-            </div>
-            <div class="col-5">
-              <div class="input-group-container">
-                <div class="input-group">
-                  <input type="number" step="1" class="form-control follow-cavity" placeholder="跟从穴号/ Follow Cavity"
-                    id="followone">
-                  <div class="arrow">&rarr;</div>
-                  <input type="number" step="1" class="form-control followed-cavity"
-                    placeholder="被跟从穴号/ Followed Cavity" id="followedone">
-                </div>
-                <button type="button" class="btn btn-primary add-input-group">+</button>
-              </div>
-            </div>
-          </div>
+          <div id="failureProcessContainer"></div>
         </div>
       </div>
     </div>
@@ -304,6 +243,18 @@
         </div>
       </div>
     </div>
+    
+    <!-- 故障历史说明区域 -->
+    <div class="alert alert-info mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">处理说明 / Follow-up Instructions</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>重大故障判定标准：注塑（IM）> 240分钟、植磨毛（TF）> 120分钟、包装（PK）> 60分钟 / Major failure criteria: IM > 240 mins, TF > 120 mins, PK > 60 mins</li>
+        <li>重大故障需要在每日SDM讨论，并决定后续措施（培训/ 改善/ 保养）/ Major failures must be discussed in daily SDM and determine follow-up actions (Training / Kaizen/CI / PM)</li>
+        <li>非重大故障由工序技术组长判定后续措施 / Non-major failures are determined by process technical team leader for follow-up actions</li>
+        <li>已解决和未解决故障都需要遵循上述规则 / Both solved and unsolved failures must follow the above rules</li>
+      </ul>
+    </div>
+
     <div class="mt-3">
       <table id="Failure_History_Table" class="display table table-bordered table-striped table-hover"
         style="width:100%">

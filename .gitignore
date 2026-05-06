@@ -15,3 +15,6 @@ desktop.ini
 *.tmp
 *.bak
 *~
+
+# Google API 凭据（含私钥，禁止提交）
+Google API/

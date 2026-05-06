@@ -5,6 +5,58 @@
         console.log('jQuery版本 / jQuery version:', $.fn.jquery);
         console.log('检查DataTables库 / Checking DataTables library:', typeof $.fn.DataTable !== 'undefined' ? '已加载 / Loaded' : '未加载 / Not loaded');
 
+        // 基于 sessionStorage.Process 决定默认显示哪个工序 Tab（TagName）
+        // - 注塑口径：INJ/IM -> IM tab
+        // - TF -> TF tab
+        // - PK -> PK tab
+        // 若 session 缺失或不匹配，则保持默认（IM tab）
+        (function setDefaultProcessTabBySession() {
+            try {
+                let sessionProcess = (sessionStorage.getItem('Process') || sessionStorage.getItem('pmProcess') || '').toString().trim();
+                if (sessionProcess === 'INJ') sessionProcess = 'IM';
+
+                let activeKey = 'IM';
+                if (sessionProcess === 'TF') activeKey = 'TF';
+                else if (sessionProcess === 'PK') activeKey = 'PK';
+
+                const tabs = [
+                    { key: 'IM', tabBtn: '#im-tab', tabContent: '#im-content' },
+                    { key: 'TF', tabBtn: '#tf-tab', tabContent: '#tf-content' },
+                    { key: 'PK', tabBtn: '#pk-tab', tabContent: '#pk-content' },
+                ];
+
+                // 保持三个工序 Tab 都可见，只将当前工序放在最前并设为激活
+                // 说明：只调整显示顺序，不隐藏其他工序
+                const $tabList = $('#processTabs');
+                const $contentList = $('#processTabContent');
+
+                // 确保不会遗留隐藏样式
+                tabs.forEach(t => {
+                    $(t.tabBtn).closest('li').removeClass('d-none');
+                    $(t.tabContent).removeClass('d-none');
+                });
+
+                // 将当前工序 tab 与内容移动到最前
+                const activeTab = tabs.find(t => t.key === activeKey);
+                if (activeTab && $tabList.length && $contentList.length) {
+                    const $activeLi = $(activeTab.tabBtn).closest('li');
+                    const $activePane = $(activeTab.tabContent);
+                    if ($activeLi.length) $tabList.prepend($activeLi);
+                    if ($activePane.length) $contentList.prepend($activePane);
+                }
+
+                // 激活对应 Tab
+                const activeTabBtn = document.querySelector(
+                    activeKey === 'TF' ? '#tf-tab' : activeKey === 'PK' ? '#pk-tab' : '#im-tab'
+                );
+                if (activeTabBtn && window.bootstrap && window.bootstrap.Tab) {
+                    new window.bootstrap.Tab(activeTabBtn).show();
+                }
+            } catch (e) {
+                // 保持默认显示（IM tab）
+            }
+        })();
+
         // 页面加载时显示一个提示框
         Swal.fire({
             title: '加载数据中... / Loading Data...',

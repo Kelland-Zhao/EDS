@@ -3179,28 +3179,62 @@ function getIDinfo() {
   return array;
 }
 
-function SelectItem() {
-  let id = "11zyH65MhC-LuqsEXT6KeO3-GQ3jwW7z7kJjHD0TwLZc";
+function getFailureProcessConfigData() {
+  let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let ss = SpreadsheetApp.openById(id);
-  let ws = ss.getSheetByName("2. Active Cell");
-  let data_1 = ws.getRange(3, 4, ws.getLastRow() - 2).getValues();
-  let data_2 = ws.getRange(3, 14, ws.getLastRow() - 2, 4).getValues();
-  let workcenter = [];
-  [data_1, data_2].forEach((r) => {
-    r.forEach((a) => {
-      a.forEach((cell) => {
-        if (cell !== "") {
-          workcenter.push(cell);
-        }
+  let ws = ss.getSheetByName("故障处理选项设置");
+
+  let lastRow = ws.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+
+  let headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getDisplayValues()[0];
+  let data = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getDisplayValues();
+
+  let descriptionIdx = headers.indexOf("Description");
+  let processIdx = headers.indexOf("Process");
+  let placeholderIdx = headers.indexOf("Placeholder");
+  let remarkIdx = headers.indexOf("Remark");
+
+  let result = [];
+  data.forEach((r) => {
+    let description = descriptionIdx > -1 ? r[descriptionIdx] : "";
+    let process = processIdx > -1 ? r[processIdx] : "";
+    let placeholder = placeholderIdx > -1 ? r[placeholderIdx] : "";
+    let remark = remarkIdx > -1 ? r[remarkIdx] : "";
+
+    if (description !== "" && process !== "") {
+      result.push({
+        Description: description,
+        Process: process,
+        Placeholder: placeholder,
+        Remark: remark,
       });
-    });
+    }
   });
+
+  return result;
+}
+
+function SelectItem() {
+  // 从 Workcenter_V202602 工作表获取机台号数据
+  let id = "1bYKTK5a63yJWRHzM_UPP6b4hwF67eZKEM5dCKLWR59U";
+  let ss = SpreadsheetApp.openById(id);
+  let ws = ss.getSheetByName("Workcenter_V202602");
+  
+  // 获取 A、B、C 列数据（机台号、车间、工序）
+  let workcenterData = ws.getRange(2, 1, ws.getLastRow() - 1, 3).getValues();
+  
   let WORKCENTER = [];
-  workcenter.forEach((r) => {
-    let obj = {};
-    obj.workcenter = r;
-    obj.workshop = checkSecondCharacter(r);
-    WORKCENTER.push(obj);
+  workcenterData.forEach((r) => {
+    if (r[0] !== "") {  // 确保机台号不为空
+      let obj = {};
+      obj.workcenter = r[0];  // A列：机台号
+      obj.workshop = r[1];     // B列：车间（TB1/TB2）
+      obj.process = r[2];      // C列：工序（INJ/IM/TF/PK）
+      WORKCENTER.push(obj);
+    }
   });
   // console.log(WORKCENTER);
   id = "1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM";
@@ -3276,6 +3310,26 @@ function submitFailure(obj) {
       }
     }
 
+    // 判断是否需要填写故障报告（按工序阈值）：
+    // IM 维修时间 < 240min → 填“否”
+    // TF 维修时间 < 120min → 填“否”
+    // PK 维修时间 < 60min  → 填“否”
+    // 其他情况 → 填空值
+    let maintenanceTime = parseFloat(obj["维修时间"]);
+    let processForJudge = (obj["工序"] || "").toString().trim();
+    if (processForJudge === "INJ") processForJudge = "IM"; // INJ/IM 视为同一工序口径
+
+    obj["是否需要填写故障报告"] = "";
+    if (!isNaN(maintenanceTime)) {
+      if (processForJudge === "IM" && maintenanceTime < 240) {
+        obj["是否需要填写故障报告"] = "否";
+      } else if (processForJudge === "TF" && maintenanceTime < 120) {
+        obj["是否需要填写故障报告"] = "否";
+      } else if (processForJudge === "PK" && maintenanceTime < 60) {
+        obj["是否需要填写故障报告"] = "否";
+      }
+    }
+
     ws.appendRow([
       obj["编号"],
       obj["班次"],
@@ -3299,6 +3353,8 @@ function submitFailure(obj) {
       obj["是否需要填写故障报告"],
       obj["是否跟随"],
       obj["判断是否最后"],
+      obj["直接原因"] || "",
+      obj["建议措施"] || "",
     ]);
 
     return ["OK", true];

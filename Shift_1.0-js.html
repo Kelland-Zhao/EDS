@@ -2,6 +2,9 @@
   let globalWorkcenter = [];
   let globalName = [];
   let globalErrorCode = [];
+  let globalFailureProcessConfig = [];
+  let globalFailureProcessItems = [];
+  let globalFailureProcessItemsModal = [];
   let global_Name = sessionStorage.getItem('Name');
   let global_Process = sessionStorage.getItem('Process');
   
@@ -9,6 +12,7 @@
   let pageLoadComplete = false;
   let selectItemLoaded = false;
   let tableDataLoaded = false;
+  let failureProcessLoaded = false;
 
   $(document).ready(function () {
     Swal.fire({
@@ -22,13 +26,27 @@
 
     google.script.run.withSuccessHandler(showSelectItem).SelectItem();
     google.script.run.withSuccessHandler(showTablehead).getAllshiftData();
-    inputInitialization();
+    google.script.run.withSuccessHandler(showFailureProcessConfig).getFailureProcessConfigData();
 
   });
 
+  function resetFailureProcessMain() {
+    globalFailureProcessItems.forEach((item) => {
+      if (item.isFollow) {
+        $('#Follow_N').prop('checked', true);
+        $('#followone,#followedone').val('');
+        $('.dynamic-follow-group').remove();
+      } else {
+        $(`#${item.yesId}`).prop('checked', true);
+        $(`#${item.descId}`).val('');
+      }
+    });
+    inputInitialization();
+  }
+
   // 检查页面是否完全加载完成
   function checkPageLoadComplete() {
-    if (selectItemLoaded && tableDataLoaded && !pageLoadComplete) {
+    if (selectItemLoaded && tableDataLoaded && failureProcessLoaded && !pageLoadComplete) {
       pageLoadComplete = true;
       Swal.close();
       Swal.fire({
@@ -41,24 +59,216 @@
     }
   }
 
-  function inputInitialization() {
-    // 页面加载时初始化输入框的状态
-    toggleInputBasedOnRadio('EquM_Y', 'EquM_N', 'EquMDescription');
-    toggleInputBasedOnRadio('MoldM_Y', 'MoldM_N', 'MoldMDescription');
-    toggleInputBasedOnRadio('AutoM_Y', 'AutoM_N', 'AutoMDescription');
-    toggleInputBasedOnRadio('ProcessAD_Y', 'ProcessAD_N', 'ProcessADDes');
-    if ($('#Follow_Y').is(':checked')) {
-      $('.follow-cavity, .followed-cavity').prop('disabled', false);
-      $('.add-input-group').prop('disabled', false);
-    } else {
-      $('.follow-cavity, .followed-cavity').prop('disabled', true);
-      $('.add-input-group').prop('disabled', true);
+  function normalizeProcess(process) {
+    if (process === 'INJ') {
+      return 'IM';
     }
+    return process;
+  }
+
+  function showFailureProcessConfig(data) {
+    globalFailureProcessConfig = data || [];
+    let process = normalizeProcess(sessionStorage.getItem('Process'));
+    let filtered = globalFailureProcessConfig.filter((r) => r.Process === process);
+
+    renderFailureProcess(filtered);
+    inputInitialization();
+
+    failureProcessLoaded = true;
+    checkPageLoadComplete();
+  }
+
+  function renderFailureProcess(configItems) {
+    let container = $('#failureProcessContainer');
+    container.empty();
+    globalFailureProcessItems = [];
+
+    let hasFollowRow = false;
+    configItems.forEach((item, index) => {
+      let isFollow = item.Remark === '跟从' && !hasFollowRow;
+      let html = '';
+
+      if (isFollow) {
+        hasFollowRow = true;
+        html = `
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>${item.Description}</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="Follow_Y" name="Follow">
+              <label class="form-check-label" for="Follow_Y">是/ Yes</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="Follow_N" name="Follow" checked>
+              <label class="form-check-label" for="Follow_N">否/ No</label>
+            </div>
+            <div class="col-5">
+              <div class="input-group-container">
+                <div class="input-group">
+                  <input type="number" step="1" class="form-control follow-cavity" placeholder="跟从穴号/ Follow Cavity" id="followone">
+                  <div class="arrow">&rarr;</div>
+                  <input type="number" step="1" class="form-control followed-cavity" placeholder="被跟从穴号/ Followed Cavity" id="followedone">
+                </div>
+                <button type="button" class="btn btn-primary add-input-group">+</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        globalFailureProcessItems.push({
+          Description: item.Description,
+          Remark: item.Remark,
+          isFollow: true,
+          yesId: 'Follow_Y',
+          noId: 'Follow_N',
+        });
+      } else {
+        let key = `FP_${index}`;
+        let yesId = `${key}_Y`;
+        let noId = `${key}_N`;
+        let descId = `${key}_Description`;
+
+        html = `
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>${item.Description}</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="${yesId}" name="${key}" checked>
+              <label class="form-check-label" for="${yesId}">是/ Yes</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="${noId}" name="${key}">
+              <label class="form-check-label" for="${noId}">否/ No</label>
+            </div>
+            <div class="col-5">
+              <textarea class="form-control" id="${descId}" rows="1" placeholder="${item.Placeholder || ''}"></textarea>
+            </div>
+          </div>
+        `;
+
+        globalFailureProcessItems.push({
+          Description: item.Description,
+          Remark: item.Remark,
+          isFollow: false,
+          yesId: yesId,
+          noId: noId,
+          descId: descId,
+        });
+      }
+
+      container.append(html);
+    });
+  }
+
+  /**
+   * 为跟进弹窗动态渲染故障处理区域（与主页面同数据源、同结构，id 带后缀避免冲突）
+   */
+  function renderFailureProcessForModal(containerSelector, configItems, idSuffix) {
+    let container = $(containerSelector);
+    container.empty();
+    globalFailureProcessItemsModal = [];
+    let hasFollowRow = false;
+    configItems.forEach((item, index) => {
+      let isFollow = item.Remark === '跟从' && !hasFollowRow;
+      let html = '';
+      if (isFollow) {
+        hasFollowRow = true;
+        html = `
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>${item.Description}</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="Follow_Y${idSuffix}" name="Follow${idSuffix}">
+              <label class="form-check-label" for="Follow_Y${idSuffix}">是/ Yes</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="Follow_N${idSuffix}" name="Follow${idSuffix}" checked>
+              <label class="form-check-label" for="Follow_N${idSuffix}">否/ No</label>
+            </div>
+            <div class="col-5">
+              <div class="input-group-container">
+                <div class="input-group">
+                  <input type="number" step="1" class="form-control follow-cavity${idSuffix}" placeholder="跟从穴号/ Follow Cavity">
+                  <div class="arrow">&rarr;</div>
+                  <input type="number" step="1" class="form-control followed-cavity${idSuffix}" placeholder="被跟从穴号/ Followed Cavity">
+                </div>
+                <button type="button" class="btn btn-primary add-input-group${idSuffix}">+</button>
+              </div>
+            </div>
+          </div>
+        `;
+        globalFailureProcessItemsModal.push({
+          Description: item.Description,
+          Remark: item.Remark,
+          isFollow: true,
+          yesId: `Follow_Y${idSuffix}`,
+          noId: `Follow_N${idSuffix}`,
+        });
+      } else {
+        let key = `FP_${index}`;
+        let yesId = `${key}_Y${idSuffix}`;
+        let noId = `${key}_N${idSuffix}`;
+        let descId = `${key}_Description${idSuffix}`;
+        html = `
+          <div class="row align-items-center mb-2">
+            <div class="col-4">
+              <label>${item.Description}</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="${yesId}" name="${key}${idSuffix}" checked>
+              <label class="form-check-label" for="${yesId}">是/ Yes</label>
+            </div>
+            <div class="col-1 form-check form-check-inline">
+              <input class="form-check-input" type="radio" id="${noId}" name="${key}${idSuffix}">
+              <label class="form-check-label" for="${noId}">否/ No</label>
+            </div>
+            <div class="col-5">
+              <textarea class="form-control" id="${descId}" rows="1" placeholder="${item.Placeholder || ''}"></textarea>
+            </div>
+          </div>
+        `;
+        globalFailureProcessItemsModal.push({
+          Description: item.Description,
+          Remark: item.Remark,
+          isFollow: false,
+          yesId: yesId,
+          noId: noId,
+          descId: descId,
+        });
+      }
+      container.append(html);
+    });
+  }
+
+  function inputInitialization() {
+    globalFailureProcessItems.forEach((item) => {
+      if (item.isFollow) {
+        if ($('#Follow_Y').is(':checked')) {
+          $('.follow-cavity, .followed-cavity').prop('disabled', false);
+          $('.add-input-group').prop('disabled', false);
+        } else {
+          $('.follow-cavity, .followed-cavity').prop('disabled', true);
+          $('.add-input-group').prop('disabled', true);
+        }
+      } else {
+        toggleInputBasedOnRadio(item.yesId, item.noId, item.descId);
+      }
+    });
+  }
+
+  /** 取故障处理项标题的中文部分（写入后端用），如 "设备维修/ Equipment Maintenance" -> "设备维修" */
+  function descriptionChineseOnly(desc) {
+    if (desc == null) return '';
+    let s = desc.toString().trim();
+    let i = s.indexOf('/');
+    return i >= 0 ? s.slice(0, i).trim() : s;
   }
 
   function submitFailure(id) {
     let obj = {};
-    // 初始化跟从穴号和被跟从穴号的字符串
     let followCavities = [];
     let followedCavities = [];
 
@@ -67,7 +277,17 @@
       obj['班次'] = $("#shift").val();
       obj['机台号'] = $("#workcenter").val();
       obj['问题描述'] = $("#Description").val();
-      obj['处理过程'] = "【设备】：" + $("#EquMDescription").val() + "\n" + "【模具】：" + $("#MoldMDescription").val() + "\n" + "【自动化】：" + $("#AutoMDescription").val() + "\n" + "【工艺】：" + $("#ProcessADDes").val();
+      obj['直接原因'] = ($("#DirectCause").val() || '').toString().trim();
+      obj['建议措施'] = ($("#SuggestedAction").val() || '').toString().trim();
+
+      let processLines = [];
+      globalFailureProcessItems.forEach((item) => {
+        if (item.isFollow) return;
+        let val = $(`#${item.yesId}`).is(':checked') ? ($(`#${item.descId}`).val() || '') : '';
+        processLines.push(`【${descriptionChineseOnly(item.Description)}】：${val}`);
+      });
+      obj['处理过程'] = processLines.join('\n');
+
       obj['状态'] = $("#Status").val();
       obj['维修人'] = $("#owner").val();
       obj['维修时间'] = $("#MaintenanceDuration").val();
@@ -101,7 +321,15 @@
       obj['班次'] = $("#shift2").val();
       obj['机台号'] = $("#workcenter2").val();
       obj['问题描述'] = $("#Description2").val();
-      obj['处理过程'] = "【设备】：" + $("#EquMDescription2").val() + "\n" + "【模具】：" + $("#MoldMDescription2").val() + "\n" + "【自动化】：" + $("#AutoMDescription2").val() + "\n" + "【工艺】：" + $("#ProcessADDes2").val();
+      obj['直接原因'] = ($("#DirectCause2").val() || '').toString().trim();
+      obj['建议措施'] = ($("#SuggestedAction2").val() || '').toString().trim();
+      let processLinesModal = [];
+      globalFailureProcessItemsModal.forEach((item) => {
+        if (item.isFollow) return;
+        let val = $(`#${item.yesId}`).is(':checked') ? ($(`#${item.descId}`).val() || '') : '';
+        processLinesModal.push(`【${descriptionChineseOnly(item.Description)}】：${val}`);
+      });
+      obj['处理过程'] = processLinesModal.join('\n');
       obj['状态'] = $("#Status2").val();
       obj['维修人'] = $("#owner2").val();
       obj['维修时间'] = $("#MaintenanceDuration2").val();
@@ -143,10 +371,29 @@
     obj['参与人数'] = '';
     obj['机型'] = '';
     obj['是否已安排PM跟进'] = '';
+    // 判断是否需要填写故障报告（按工序阈值）：
+    // IM 维修时间 < 240min → 填“否”
+    // TF 维修时间 < 120min → 填“否”
+    // PK 维修时间 < 60min  → 填“否”
+    // 其他情况 → 填空值
+    let maintenanceTime = parseFloat(obj['维修时间']);
+    let processForJudge = (obj['工序'] || '').toString().trim();
+    if (processForJudge === 'INJ') processForJudge = 'IM'; // INJ/IM 视为同一工序口径
+
     obj['是否需要填写故障报告'] = '';
+    if (!Number.isNaN(maintenanceTime)) {
+      if (processForJudge === 'IM' && maintenanceTime < 240) {
+        obj['是否需要填写故障报告'] = '否';
+      } else if (processForJudge === 'TF' && maintenanceTime < 120) {
+        obj['是否需要填写故障报告'] = '否';
+      } else if (processForJudge === 'PK' && maintenanceTime < 60) {
+        obj['是否需要填写故障报告'] = '否';
+      }
+    }
     obj['判断是否最后'] = '';
     console.log(obj)
 
+    let isModalSubmit = (id === 'ModalSubmit');
     Swal.fire({
       title: '数据上传中/ Data Uploading',
       icon: 'info',
@@ -156,22 +403,32 @@
     google.script.run.withSuccessHandler((r) => {
       console.log(r)
       if (r[1] == true) {
-        Swal.close();
-        Swal.fire({
-          title: '保存成功/ Saving Success',
-          icon: 'success'
-        });
-        addNewRow(obj);
-        console.log("清空数据")
-        $('#workcenter').val("机台号/ Workcenter").trigger('change');
-        $("#shift").val("班次/ Shift").trigger("change");
-        $("#owner").val("维修人/ Maintenance Owner").trigger("change");
-        $("#errorCode").val("故障代码/ Failure Code").trigger("change");
-        $("#Status").val("状态/ Status").trigger("change");
-        $("#MaintenanceDuration,#Workorder,#Description,#EquMDescription,#MoldMDescription,#AutoMDescription,#ProcessADDes,#followone,#followedone").val("");
-        $('#EquM_Y,#MoldM_Y,#AutoM_Y,#ProcessAD_Y,#Follow_N').prop('checked', true);
-
-
+        if (isModalSubmit) {
+          // 跟进模态框提交成功：先刷新表格，表格数据添加完成后再关闭弹窗并提示保存成功
+          google.script.run.withSuccessHandler((data) => {
+            showTablehead(data);
+            Swal.close();
+            Swal.fire({
+              title: '保存成功/ Saving Success',
+              icon: 'success'
+            });
+          }).getAllshiftData();
+        } else {
+          Swal.close();
+          Swal.fire({
+            title: '保存成功/ Saving Success',
+            icon: 'success'
+          });
+          addNewRow(obj);
+          console.log("清空数据")
+          $('#workcenter').val("机台号/ Workcenter").trigger('change');
+          $("#shift").val("班次/ Shift").trigger("change");
+          $("#owner").val("维修人/ Maintenance Owner").trigger("change");
+          $("#errorCode").val("故障代码/ Failure Code").trigger("change");
+          $("#Status").val("状态/ Status").trigger("change");
+          $("#MaintenanceDuration,#Workorder,#Description,#DirectCause,#SuggestedAction").val("");
+          resetFailureProcessMain();
+        }
       } else {
         Swal.close();
         Swal.fire({
@@ -206,14 +463,35 @@
     // 设置SelectItem加载完成状态
     selectItemLoaded = true;
 
+    // 根据工序过滤机台号
+    let filteredWorkcenter = result[0].filter((r) => {
+      // INJ 和 IM 都表示注塑工序
+      if (process === "INJ" && r.process === "IM") {
+        return true;
+      }
+      if (process === "IM" && r.process === "IM") {
+        return true;
+      }
+      if (process === "INJ" && r.process === "INJ") {
+        return true;
+      }
+      return r.process === process;
+    });
+    
+    // 如果找到匹配的工序，使用过滤后的数据；否则使用所有数据
+    let workcenterToUse = filteredWorkcenter.length > 0 ? filteredWorkcenter : result[0];
+    
     let workcenter = [];
-    result[0].forEach((r) => {
+    workcenterToUse.forEach((r) => {
       let item = {};
       item.id = r.workcenter;
       item.text = r.workcenter;
+      item.workshop = r.workshop;  // 保存车间信息
       workcenter.push(item);
     })
     globalWorkcenter = workcenter;
+    console.log('机台号数量:', workcenter.length);
+    console.log('是否找到匹配工序:', filteredWorkcenter.length > 0);
 
     let name = [];
     // console.log(result[1]);
@@ -292,6 +570,83 @@
     })
   }
 
+  /**
+   * 合并行内按组对齐：同一组的各列 group-row 使用相同最小高度，使该组首行对齐。
+   */
+  function alignMergedGroupRows() {
+    $('#Failure_History_Table tbody tr').each(function () {
+      let $cells = $(this).find('td');
+      let maxIndex = -1;
+      $cells.find('.group-row').each(function () {
+        let i = parseInt($(this).attr('data-group-index'), 10);
+        if (!isNaN(i) && i > maxIndex) maxIndex = i;
+      });
+      for (let gi = 0; gi <= maxIndex; gi++) {
+        let selector = '.group-row[data-group-index="' + gi + '"]';
+        let maxH = 0;
+        $cells.find(selector).each(function () {
+          let h = $(this).outerHeight();
+          if (h > maxH) maxH = h;
+        });
+        if (maxH > 0) {
+          $cells.find(selector).css('min-height', maxH + 'px');
+        }
+      }
+    });
+  }
+
+  /**
+   * 按“编号”中“-”前前缀分组，合并为一行显示；状态取“-”后数字最大条目的状态。
+   */
+  function mergeFailureHistoryRows(content, head) {
+    const groups = {};
+    content.forEach((r) => {
+      let code = (r['编号'] || '').toString().trim();
+      let idx = code.indexOf('-');
+      let prefix = idx >= 0 ? code.slice(0, idx) : code;
+      let suffix = idx >= 0 ? parseInt(code.slice(idx + 1), 10) : 0;
+      if (!groups[prefix]) groups[prefix] = [];
+      groups[prefix].push({ ...r, _suffix: suffix });
+    });
+    const merged = [];
+    Object.keys(groups).forEach((prefix) => {
+      let list = groups[prefix].sort((a, b) => a._suffix - b._suffix);
+      let maxRow = list[list.length - 1];
+      let base = { ...maxRow };
+      delete base._suffix;
+      if (list.length === 1) {
+        merged.push(base);
+        return;
+      }
+      let rev = list.slice().reverse();
+      let faultInfoParts = rev.map((e) => {
+        let desc = (e['问题描述'] || '').toString().trim();
+        let directCause = (e['直接原因'] || '').toString().trim();
+        let suggestedAction = (e['建议措施'] || '').toString().trim();
+        let lines = [];
+        lines.push(`【问题描述】：${desc}`);
+        lines.push(`【直接原因】：${directCause}`);
+        lines.push(`【建议措施】：${suggestedAction}`);
+        return lines.join('<br>');
+      });
+      let rowStyle = 'margin-bottom: 0.75em;';
+      base._merged故障信息 = faultInfoParts.map((html, i) => '<div class="group-row" data-group-index="' + i + '" style="' + rowStyle + '">' + html + '</div>').join('');
+      base._merged处理过程 = rev.map((e, i) => '<div class="group-row" data-group-index="' + i + '" style="' + rowStyle + '">' + (e['处理过程'] || '').toString().replace(/\n/g, '<br>') + '</div>').join('');
+      let timeParts = rev.map((e) => (e['维修时间'] || '').toString().trim());
+      let totalMins = list.reduce((acc, e) => acc + (parseFloat(e['维修时间']) || 0), 0);
+      base._merged维修时间 = '<div style="display: flex; flex-direction: column; min-height: 100%;">' +
+        timeParts.map((p, i) => '<div class="group-row" data-group-index="' + i + '" style="' + rowStyle + '">' + p + '</div>').join('') +
+        '<div style="margin-top: auto; text-align: left;">【合计维修时间】：' + totalMins + '</div>' +
+        '</div>';
+      base._merged维修人 = rev.map((e, i) => '<div class="group-row" data-group-index="' + i + '" style="' + rowStyle + '">' + (e['维修人'] || '').toString().trim() + '</div>').join('');
+      base._merged故障代码 = rev.map((e, i) => '<div class="group-row" data-group-index="' + i + '" style="' + rowStyle + '">' + (e['故障代码'] || '').toString().trim() + '</div>').join('');
+      base._merged提交日期 = rev.map((e, i) => '<div class="group-row" data-group-index="' + i + '" style="' + rowStyle + '">' + (e['提交日期'] || '').toString().trim() + '</div>').join('');
+      base._merged是否跟随 = rev.map((e, i) => '<div class="group-row" data-group-index="' + i + '" style="' + rowStyle + '">' + (e['是否跟随'] || '').toString().trim() + '</div>').join('');
+      merged.push(base);
+    });
+    return merged;
+  }
+
   function showTablehead(obj) {
     // 设置表格数据加载完成状态
     tableDataLoaded = true;
@@ -306,10 +661,16 @@
     let content = obj.Content;
     let TableHtml = '<thead><tr>';
     for (let i = 0; i < head.length; i++) {
-      TableHtml += "<th  style='background-color:#E60012; color:white'>" + head[i] + "</th>";
+      // 将“问题描述”列在UI上显示为“故障信息”
+      let displayHead = head[i] === '问题描述' ? '故障信息' : head[i];
+      TableHtml += "<th  style='background-color:#E60012; color:white'>" + displayHead + "</th>";
     };
     TableHtml += "<th  style='background-color:#E60012; color:white'>" + '跟进项' + "</th>";
     TableHtml += "</tr></thead>";
+    // 若表格已初始化过（如跟进提交后刷新），先销毁再重建，避免 DataTables 报错 Cannot reinitialise
+    if ($.fn.DataTable.isDataTable('#Failure_History_Table')) {
+      $('#Failure_History_Table').DataTable().destroy();
+    }
     $("#Failure_History_Table").html(TableHtml);
     // console.log(content)
     content.forEach((r) => {
@@ -329,7 +690,8 @@
       // console.log(formattedDate); // 输出 "2023-11-26"
       r['提交日期'] = formattedDate;
       r['处理过程'] = extractTextBetweenBraces(r['处理过程']);
-    })
+    });
+    let mergedContent = mergeFailureHistoryRows(content, head);
     let table_array = [];
     for (let i = 0; i < head.length; i++) {
       let obj = {};
@@ -341,10 +703,45 @@
       columns: table_array,
       columnDefs: [
         {
-          targets: [0, 1, 9, 10, 12, 13, 14, 15, 16, 17, 18, 21], // 隐藏指定列，新增12(是否转保养)和18(是否已安排PM跟进)
+          // 隐藏指定列：
+          // 0 编号, 1 班次, 9 工单号, 10 交接人, 12 是否转保养, 13 填写人, 14 车间, 15 工序,
+          // 16 参与人数, 17 机型, 18 是否已安排PM跟进, 21 判断是否最后
+          // 22 直接原因(W列), 23 建议措施(X列)（默认不在历史表中展示）
+          targets: [0, 1, 9, 10, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23],
           visible: false,
         },
         { "width": "300px", "targets": [3, 4] },
+        // “处理过程”列：有 _merged处理过程 时用合并内容（乐观更新后重绘时保留）
+        {
+          targets: head.indexOf('处理过程'),
+          render: function (data, type, row) {
+            if (type === 'display' || type === 'filter') {
+              if (row._merged处理过程) return row._merged处理过程;
+              let val = (row['处理过程'] || '').toString();
+              if (val.includes('\n')) val = val.replace(/\n/g, '<br>');
+              return val;
+            }
+            return data;
+          }
+        },
+        // “故障信息”列：合并行用 _merged故障信息（多段上大下小）；否则单行三段
+        {
+          targets: 3, // 原“问题描述”列索引为3
+          render: function (data, type, row) {
+            if (type === 'display' || type === 'filter') {
+              if (row._merged故障信息) return row._merged故障信息;
+              let desc = (row['问题描述'] || '').toString().trim();
+              let directCause = (row['直接原因'] || '').toString().trim();
+              let suggestedAction = (row['建议措施'] || '').toString().trim();
+              let lines = [];
+              lines.push(`【问题描述】：${desc}`);
+              lines.push(`【直接原因】：${directCause}`);
+              lines.push(`【建议措施】：${suggestedAction}`);
+              return lines.join('<br>');
+            }
+            return data;
+          }
+        },
         // 对"状态"列进行格式化显示（状态列是第6列，索引为5）
         {
           targets: 5,
@@ -372,30 +769,94 @@
           },
           className: 'text-center' // 添加居中样式
         },
+        // 对"是否需要填写故障报告"列进行格式化显示（索引为19）
         {
-          targets: 22, // 指向最后一列
-          data: null, // 这里不绑定具体的数据字段
-          defaultContent: '<button class="btn btn-info btn-sm">跟进</button>', // 设置默认内容为跟进按钮
-          orderable: false // 使这列不可排序
+          targets: 19,
+          render: function (data, type, row) {
+            if (type === 'display' || type === 'filter') {
+              if (data && data.includes('是')) {
+                return '<span class="badge bg-danger">是/ Yes</span>';
+              } else if (data && data.includes('否')) {
+                return '<span class="badge bg-success">否/ No</span>';
+              } else {
+                return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
+              }
+            }
+            return data;
+          },
+          className: 'text-center'
+        },
+        // 对"是否跟随"列进行格式化显示（索引为20）
+        {
+          targets: 20,
+          render: function (data, type, row) {
+            if (type === 'display' || type === 'filter') {
+              if (data && data.includes('是')) {
+                return '<span class="badge bg-danger">' + data + '</span>';
+              } else if (data && data.includes('否')) {
+                return '<span class="badge bg-success">否/ No</span>';
+              } else {
+                return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
+              }
+            }
+            return data;
+          },
+          className: 'text-center'
+        },
+        {
+          targets: head.length,
+          data: null,
+          defaultContent: '<button class="btn btn-info btn-sm">跟进</button>',
+          orderable: false
+        },
+        // 合并行时多段显示（维修时间/维修人/故障代码/提交日期/是否跟随）
+        {
+          targets: head.indexOf('维修时间') >= 0 ? head.indexOf('维修时间') : -1,
+          render: function (data, type, row) {
+            if ((type === 'display' || type === 'filter') && row._merged维修时间) return row._merged维修时间;
+            return data;
+          }
+        },
+        {
+          targets: head.indexOf('维修人') >= 0 ? head.indexOf('维修人') : -1,
+          render: function (data, type, row) {
+            if ((type === 'display' || type === 'filter') && row._merged维修人) return row._merged维修人;
+            return data;
+          }
+        },
+        {
+          targets: head.indexOf('故障代码') >= 0 ? head.indexOf('故障代码') : -1,
+          render: function (data, type, row) {
+            if ((type === 'display' || type === 'filter') && row._merged故障代码) return row._merged故障代码;
+            return data;
+          }
+        },
+        {
+          targets: head.indexOf('提交日期') >= 0 ? head.indexOf('提交日期') : -1,
+          render: function (data, type, row) {
+            if ((type === 'display' || type === 'filter') && row._merged提交日期) return row._merged提交日期;
+            return data;
+          }
+        },
+        {
+          targets: head.indexOf('是否跟随') >= 0 ? head.indexOf('是否跟随') : -1,
+          render: function (data, type, row) {
+            if ((type === 'display' || type === 'filter') && row._merged是否跟随) return row._merged是否跟随;
+            return data;
+          }
         }
-      ],
+      ].filter(c => Array.isArray(c.targets) || (typeof c.targets === 'number' && c.targets >= 0)),
       order: [
         [5, 'asc'], // 对第6列进行升序排序，优先显示未解决
         [11, 'desc'] // 对第12列进行降序排序
       ],
+      drawCallback: function () {
+        setTimeout(alignMergedGroupRows, 0);
+      },
       createdRow: function (row, data, dataIndex) {
-        // 缓存 jQuery 对象以避免重复查询
         let $row = $(row);
-        let $failureProcessCell = $row.find('td').eq(2);
         let $statusCell = $row.find('td').eq(3);
         let $followUpButton = $row.find('button');
-
-        // 处理过程列的换行
-        let failureProcess = data['处理过程'];
-        if (failureProcess.includes('\n')) {
-          failureProcess = failureProcess.replace(/\n/g, '<br>');
-        }
-        $failureProcessCell.html(failureProcess);
 
         // 状态列的样式
         let status = data['状态'];
@@ -407,8 +868,15 @@
         }
       }
     });
+
+    // 仅注塑工序（INJ/IM）显示“是否跟随”列；TF/PK 隐藏该列
+    // 注：列索引 20 对应“是否跟随”（见 columnDefs 注释）
+    let sessionProcess = (sessionStorage.getItem('Process') || global_Process || '').toString().trim();
+    let isInjectionProcess = (sessionProcess === 'INJ' || sessionProcess === 'IM');
+    table.column(20).visible(isInjectionProcess);
+
     table.clear().draw();
-    table.rows.add(content).draw();
+    table.rows.add(mergedContent).draw();
     // 获取#Workshop和#Process的值
     let workshopValue = $("#Workshop").val();
     let processValue = $("#Process").val();
@@ -501,122 +969,18 @@
               <textarea class="form-control" id="Description2" rows="4"
                 placeholder="故障描述/ Failure Description"></textarea>
             </div>
+            <div class="col-auto mb-2">
+              <input type="text" class="form-control" id="DirectCause2" placeholder="直接原因/Direct Cause">
+            </div>
+            <div class="col-auto mb-2">
+              <input type="text" class="form-control" id="SuggestedAction2" placeholder="建议措施/Suggested Action">
+            </div>
           </div>
         </div>
         <div class="row justify-content-center">
           <div class="col-6 ">
             <h5 class="col-auto mb-2">故障处理/ Failure Process</h5>
-            <div class="row align-items-center mb-2">
-              <div class="col-4">
-                <label>设备维修/ Equipment Maintenance?</label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="EquM_Y2" name="EquM2" checked>
-                <label class="form-check-label" for="EquM_Y2">
-                  是/ Yes
-                </label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="EquM_N2" name="EquM2">
-                <label class="form-check-label" for="EquM_N2">
-                  否/ No
-                </label>
-              </div>
-              <div class="col-5">
-                <textarea class="form-control" id="EquMDescription2" rows="1"
-                  placeholder="设备维修描述/ Equipment Maintenance Description"></textarea>
-              </div>
-            </div>
-            <div class="row align-items-center mb-2">
-              <div class="col-4">
-                <label>模具维修/ Mold Maintenance?</label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="MoldM_Y2" name="MoldM2" checked>
-                <label class="form-check-label" for="MoldM_Y2">
-                  是/ Yes
-                </label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="MoldM_N2" name="MoldM2">
-                <label class="form-check-label" for="MoldM_N2">
-                  否/ No
-                </label>
-              </div>
-              <div class="col-5">
-                <textarea class="form-control" id="MoldMDescription2" rows="1"
-                  placeholder="模具维修描述/ Eold Maintenance Description"></textarea>
-              </div>
-            </div>
-            <div class="row align-items-center mb-2">
-              <div class="col-4">
-                <label>自动化维修/ Automation Maintenance?</label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="AutoM_Y2" name="AutoM2" checked>
-                <label class="form-check-label" for="AutoM_Y2">
-                  是/ Yes
-                </label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="AutoM_N2" name="AutoM2">
-                <label class="form-check-label" for="AutoM_N2">
-                  否/ No
-                </label>
-              </div>
-              <div class="col-5">
-                <textarea class="form-control" id="AutoMDescription2" rows="1"
-                  placeholder="自动化维修描述/ Automation Maintenance Description"></textarea>
-              </div>
-            </div>
-            <div class="row align-items-center mb-2">
-              <div class="col-4">
-                <label>工艺调整/ Process Adjustment?</label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="ProcessAD_Y2" name="ProcessAD2" checked>
-                <label class="form-check-label" for="ProcessAD_Y2">
-                  是/ Yes
-                </label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="ProcessAD_N2" name="ProcessAD2">
-                <label class="form-check-label" for="ProcessAD_N2">
-                  否/ No
-                </label>
-              </div>
-              <div class="col-5">
-                <textarea class="form-control" id="ProcessADDes2" rows="1"
-                  placeholder="工艺调整描述/ Process Adjustment Description"></textarea>
-              </div>
-            </div>
-            <div class="row align-items-center mb-2">
-              <div class="col-4">
-                <label>是否有热流道跟从/ Follow the Hot Runner?</label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="Follow_Y2" name="Follow2">
-                <label class="form-check-label" for="Follow_Y2">
-                  是/ Yes
-                </label>
-              </div>
-              <div class="col-1 form-check form-check-inline">
-                <input class="form-check-input" type="radio" id="Follow_N2" name="Follow2" checked>
-                <label class="form-check-label" for="Follow_N2">
-                  否/ No
-                </label>
-              </div>
-              <div class="col-5">
-                  <div class="input-group-container">
-                    <div class="input-group">
-                    <input type="number" step="1" class="form-control follow-cavity2" placeholder="跟从穴号/ Follow Cavity">
-                    <div class="arrow">&rarr;</div>
-                    <input type="number" step="1" class="form-control followed-cavity2" placeholder="被跟从穴号/ Followed Cavity">
-                  </div>
-                  <button type="button" class="btn btn-primary add-input-group2">+</button>
-                </div>
-              </div>
-            </div>
+            <div id="failureProcessModalContainer"></div>
           </div>
         </div>
       </div>
@@ -655,16 +1019,44 @@
           $('#workcenter2').val(data['机台号'].replace(/\n/g, '')).trigger('change');
           $('#workshop2').val(data['车间']).trigger('change');
           $('#Description2').val(data['问题描述']).prop('readonly', true);
-          $('#Code2').val(data['编号']).prop('readonly', true)
+          $('#Code2').val(data['编号']).prop('readonly', true);
+
+          // 按当前工序动态渲染故障处理区域（与主页面同数据源）
+          let processModal = normalizeProcess(sessionStorage.getItem('Process'));
+          let filteredModal = globalFailureProcessConfig.filter((r) => r.Process === processModal);
+          renderFailureProcessForModal('#failureProcessModalContainer', filteredModal, '2');
+
+          // 故障处理动态项：是/否 与输入框联动
+          globalFailureProcessItemsModal.forEach((item) => {
+            if (item.isFollow) {
+              $('#' + item.yesId + ', #' + item.noId).on('change', function () {
+                if ($('#' + item.yesId).is(':checked')) {
+                  $('.follow-cavity2, .followed-cavity2').prop('disabled', false);
+                  $('.add-input-group2').prop('disabled', false);
+                } else {
+                  $('.follow-cavity2, .followed-cavity2').prop('disabled', true);
+                  $('.add-input-group2').prop('disabled', true);
+                }
+              });
+              if ($('#' + item.yesId).is(':checked')) {
+                $('.follow-cavity2, .followed-cavity2').prop('disabled', false);
+                $('.add-input-group2').prop('disabled', false);
+              } else {
+                $('.follow-cavity2, .followed-cavity2').prop('disabled', true);
+                $('.add-input-group2').prop('disabled', true);
+              }
+            } else {
+              toggleInputBasedOnRadio(item.yesId, item.noId, item.descId);
+            }
+          });
 
           // 为 "+" 按钮添加点击事件处理器
-          $('.add-input-group2').click(function () {
+          $('.add-input-group2').on('click', function () {
             var newInputGroup = $('<div class="input-group mb-2">' +
               '<input type="number" class="form-control follow-cavity2" placeholder="跟从穴号/ Follow Cavity" />' +
               '<div class="arrow">&rarr;</div>' +
               '<input type="number" class="form-control followed-cavity2" placeholder="被跟从穴号/ Followed Cavity" />' +
               '</div>');
-            // 将新的输入组添加到容器中
             $(this).closest('.input-group-container').append(newInputGroup);
           });
         },
@@ -678,20 +1070,7 @@
         }
       });
 
-      // 页面加载时初始化输入框的状态
-      toggleInputBasedOnRadio('EquM_Y2', 'EquM_N2', 'EquMDescription2');
-      toggleInputBasedOnRadio('MoldM_Y2', 'MoldM_N2', 'MoldMDescription2');
-      toggleInputBasedOnRadio('AutoM_Y2', 'AutoM_N2', 'AutoMDescription2');
-      toggleInputBasedOnRadio('ProcessAD_Y2', 'ProcessAD_N2', 'ProcessADDes2');
-      if ($('#Follow_Y2').is(':checked')) {
-        $('.follow-cavity2, .followed-cavity2').prop('disabled', false);
-        $('.add-input-group2').prop('disabled', false);
-      } else {
-        $('.follow-cavity2, .followed-cavity2').prop('disabled', true);
-        $('.add-input-group2').prop('disabled', true);
-      }
       console.log('跟进操作:', data);
-
     });
     
     // 检查页面是否完全加载完成
@@ -699,7 +1078,7 @@
   }
 
   function checkNotEmpty(id) {
-    // 定义需要检查的固定字段ID
+    // 定义需要检查的固定字段ID（主页面与模态框均校验，suffix 主页面为 ''、模态框为 '2'）
     const fixedFields = [
       'workcenter',
       'workshop',
@@ -708,25 +1087,34 @@
       'errorCode',
       'Status',
       'MaintenanceDuration',
-      'Description'
+      'Description',
+      'DirectCause',
+      'SuggestedAction'
     ];
-    // 根据id确定是否需要在ID后添加'2'
     const suffix = id === 'ModalSubmit' ? '2' : '';
-    // 检查固定字段是否非空
     let allFixedFieldsFilled = fixedFields.every(field => {
       let value = $(`#${field}${suffix}`).val() || '';
       return value.trim() !== '';
     });
-    // console.log('allFixedFieldsFilled', allFixedFieldsFilled)
 
-    // 创建一个对象，包含所有“是”选项的选择器及其对应的描述输入框选择器
-    const yesOptionsWithDescriptions = {
-      [`#EquM_Y${suffix}`]: `#EquMDescription${suffix}`,    // 设备维修/ Equipment Maintenance
-      [`#MoldM_Y${suffix}`]: `#MoldMDescription${suffix}`,   // 模具维修/ Mold Maintenance
-      [`#AutoM_Y${suffix}`]: `#AutoMDescription${suffix}`,   // 自动化维修/ Automation Maintenance
-      [`#ProcessAD_Y${suffix}`]: `#ProcessADDes${suffix}`, // 工艺调整/ Process Adjustment
-      [`#Follow_Y${suffix}`]: `.follow-cavity${suffix}, .followed-cavity${suffix}`   // 是否有热流道跟从/ Follow the Hot Runner
-    };
+    let yesOptionsWithDescriptions = {};
+    if (id === 'ModalSubmit') {
+      globalFailureProcessItemsModal.forEach((item) => {
+        if (item.isFollow) {
+          yesOptionsWithDescriptions[`#${item.yesId}`] = `.follow-cavity${suffix}, .followed-cavity${suffix}`;
+        } else {
+          yesOptionsWithDescriptions[`#${item.yesId}`] = `#${item.descId}`;
+        }
+      });
+    } else {
+      globalFailureProcessItems.forEach((item) => {
+        if (item.isFollow) {
+          yesOptionsWithDescriptions[`#${item.yesId}`] = `.follow-cavity, .followed-cavity`;
+        } else {
+          yesOptionsWithDescriptions[`#${item.yesId}`] = `#${item.descId}`;
+        }
+      });
+    }
     // 检查是否至少有一个“是”选项被选中
     const atLeastOneYes = Object.keys(yesOptionsWithDescriptions).some(selector => $(selector).is(':checked'));
 
@@ -736,7 +1124,7 @@
       // 如果“是”选项被选中，检查对应的描述输入框是否不为空
       if ($(yesSelector).is(':checked')) {
         // 对于热流道跟从的特殊处理，需要检查两个输入框
-        if (yesSelector === `#Follow_Y${suffix}`) {
+        if (yesSelector === `#Follow_Y${suffix}` || yesSelector === '#Follow_Y') {
           return $(descSelector).toArray().every(input => $(input).val().trim() !== '');
         }
         // 对于其他描述输入框，只需要检查对应的一个输入框
@@ -746,7 +1134,7 @@
     });
     // console.log('allDescriptionsFilled', allDescriptionsFilled)
 
-    // 如果所有字段都已填写
+    // 如果所有字段都已填写（含直接原因、建议措施必填）
     if (allFixedFieldsFilled && atLeastOneYes && allDescriptionsFilled) {
       console.log('数据填写完整', true);
       return true;
@@ -852,8 +1240,8 @@
     }
   })
 
-  $('.add-input-group').click(function () {
-    var newInputGroup = $('<div class="input-group">' +
+  $(document).on('click', '.add-input-group', function () {
+    var newInputGroup = $('<div class="input-group dynamic-follow-group">' +
       '<input type="number" step="1" class="form-control follow-cavity" placeholder="跟从穴号/ Follow Cavity">' +
       '<div class="arrow">&rarr;</div>' +
       '<input type="number" step="1" class="form-control followed-cavity" placeholder="被跟从穴号/ Followed Cavity">' +
@@ -870,16 +1258,7 @@
   }
 
   // 使用事件委托为所有单选按钮组添加事件监听器
-  $(document).on('change', `input[type=radio][name=EquM], 
-  input[type=radio][name=MoldM], 
-  input[type=radio][name=AutoM], 
-  input[type=radio][name=ProcessAD], 
-  input[type=radio][name=Follow],
-  input[type=radio][name=EquM2], 
-  input[type=radio][name=MoldM2], 
-  input[type=radio][name=AutoM2], 
-  input[type=radio][name=ProcessAD2], 
-  input[type=radio][name=Follow2]`, handleRadioButtonChange);
+  $(document).on('change', 'input[type=radio]', handleRadioButtonChange);
 
   // 定义一个函数来处理单选按钮的变化
   function handleRadioButtonChange() {
@@ -908,6 +1287,11 @@
         } else {
           $(`.follow-cavity${suffix}, .followed-cavity${suffix}`).prop('disabled', true); // 禁用输入框
           $(`.add-input-group${suffix}`).prop('disabled', true); // 禁用按钮
+        }
+        break;
+      default:
+        if (name.startsWith('FP_')) {
+          toggleInputBasedOnRadio(`${name}_Y`, `${name}_N`, `${name}_Description`);
         }
         break;
     }
