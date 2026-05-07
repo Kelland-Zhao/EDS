@@ -9193,12 +9193,13 @@ function checkFailureReportManagePermission(userEmail, userName) {
     if (!sheet) return false;
 
     const values = sheet.getDataRange().getValues();
-    if (values.length < 2) return false;
+    // userID sheet: row 1 = category, row 2 = headers, row 3+ = data
+    if (values.length < 3) return false;
 
     const emailLower = String(userEmail || '').trim().toLowerCase();
     const nameTrimmed = String(userName || '').trim();
-    // 按表头名称查找"故障报告管理权限"列
-    const headers = values[0];
+    // 按表头名称查找"故障报告管理权限"列（表头在第2行，即values[1]）
+    const headers = values[1];
     let permColIndex = -1;
     for (let c = 0; c < headers.length; c++) {
       if (String(headers[c] || '').trim() === '故障报告管理权限') {
@@ -9208,7 +9209,7 @@ function checkFailureReportManagePermission(userEmail, userName) {
     }
     if (permColIndex === -1) return false;
 
-    for (let i = 1; i < values.length; i++) {
+    for (let i = 2; i < values.length; i++) {
       const row = values[i];
       // B列为姓名（索引1），J列为邮箱（索引9）
       const rowName = String(row[1] || '').trim();
