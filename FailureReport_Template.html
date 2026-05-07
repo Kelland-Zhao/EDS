@@ -1,0 +1,140 @@
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("Kez_Select2@4.0.13_css");?>
+  <?!=include("Kez_Select2-bootstrap_css");?>
+  <?!=include("CSS");?>
+  <style>
+    body { background: #f8f9fa; }
+    .form-wrapper { max-width: 1020px; margin: 20px auto; background: white; padding: 24px; border: 1px solid #dee2e6; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .report-title { text-align: center; margin-bottom: 4px; }
+    .doc-no { text-align: right; font-size: 0.82rem; color: #666; margin-bottom: 10px; }
+    .section-header { background: #343a40; color: white; padding: 5px 10px; font-size: 0.88rem; font-weight: bold; margin: 14px 0 8px; }
+    .field-label { font-size: 0.82rem; font-weight: 600; color: #333; margin-bottom: 2px; display: block; }
+    .tbl-report th { background: #E60012; color: white; font-size: 0.82rem; text-align: center; vertical-align: middle; }
+    .tbl-report td { font-size: 0.82rem; vertical-align: middle; padding: 3px 4px; }
+    .tbl-report input, .tbl-report select, .tbl-report textarea { border: none; background: transparent; font-size: 0.82rem; width: 100%; resize: none; padding: 2px; }
+    .tbl-report input:focus, .tbl-report select:focus, .tbl-report textarea:focus { outline: 1px solid #0d6efd; background: #f0f7ff; border-radius: 2px; }
+    .checkbox-group label { font-size: 0.82rem; margin-right: 12px; cursor: pointer; }
+    .checkbox-group input[type="checkbox"] { margin-right: 4px; }
+    .is-invalid { border: 1px solid #dc3545 !important; background-color: #fff5f5 !important; border-radius: 4px; }
+    .tbl-report .select2-container { width: 100% !important; }
+    .tbl-report .select2-container .select2-selection--single { height: 22px; border: none; background: transparent; }
+    .tbl-report .select2-container .select2-selection--single .select2-selection__rendered { line-height: 22px; padding-right: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tbl-report .select2-container .select2-selection--single .select2-selection__arrow { height: 22px; top: 0; }
+    .select2-container--open .select2-dropdown { min-width: 280px; z-index: 2500; }
+    .select2-results__option { padding-top: 4px; padding-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <a class="navbar-brand" style="color:white;font-family:Arial;font-size:x-large;font-weight:bold;">
+        故障报告 / Breakdown Analysis
+      </a>
+    </div>
+  </nav>
+
+  <div class="container-fluid py-3">
+    <div class="form-wrapper" id="formWrapper" style="display:none">
+
+      <div id="formBody" style="display:none">
+        <div class="report-title">
+          <h5 class="fw-bold mb-0">Breakdown Analysis</h5>
+          <p class="mb-0">设备故障分析</p>
+        </div>
+        <div class="doc-no" id="doc_no_display"></div>
+
+        <!-- BasicInfo -->
+        <div class="section-header">基本信息 / Basic Information</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-4"><label class="field-label" id="lbl_aem_no"></label><input type="text" id="fld_aem_no" class="form-control form-control-sm"></div>
+          <div class="col-md-4"><label class="field-label" id="lbl_present_status"></label><select id="fld_present_status" class="form-select form-select-sm"></select></div>
+          <div class="col-md-4"><label class="field-label" id="lbl_case_code"></label><input type="text" id="fld_case_code" class="form-control form-control-sm"></div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><label class="field-label" id="lbl_analyst"></label><select id="fld_analyst" class="form-select form-select-sm sel2-analyst" multiple="multiple"></select></div>
+          <div class="col-md-6"><label class="field-label" id="lbl_time_used"></label><input type="text" id="fld_time_used" class="form-control form-control-sm"></div>
+        </div>
+
+        <!-- Problem Description -->
+        <div class="section-header">维修前故障现象描述 / Original Description of Problem Phenomena</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-4">
+            <label class="field-label" id="lbl_photo"></label>
+            <input type="file" id="fld_photo" class="form-control form-control-sm" accept="image/*">
+            <img id="photo_preview" class="img-fluid mt-2 border" style="display:none;max-height:180px;width:100%;object-fit:cover;">
+          </div>
+          <div class="col-md-8">
+            <div class="mb-1"><label class="field-label" id="lbl_what"></label><input type="text" id="fld_what" class="form-control form-control-sm"></div>
+            <div class="mb-1"><label class="field-label" id="lbl_when"></label><input type="text" id="fld_when" class="form-control form-control-sm"></div>
+            <div class="mb-1"><label class="field-label" id="lbl_where"></label><input type="text" id="fld_where" class="form-control form-control-sm"></div>
+            <div class="mb-1"><label class="field-label" id="lbl_pdesc_who"></label><input type="text" id="fld_pdesc_who" class="form-control form-control-sm"></div>
+            <div class="mb-1"><label class="field-label" id="lbl_trouble_desc"></label><textarea id="fld_trouble_desc" class="form-control form-control-sm" rows="3"></textarea></div>
+          </div>
+        </div>
+
+        <!-- Action Table -->
+        <div class="section-header">行动措施描述 / Description of Action & Remedy</div>
+        <table class="table table-bordered table-sm tbl-report mb-2">
+          <thead>
+            <tr>
+              <th style="width:36px">序号<br>NO.</th>
+              <th id="th_action_proc">维修过程描述 / Description of Maintenance Process</th>
+              <th style="width:80px" id="th_action_who">职责<br>Who</th>
+              <th style="width:90px" id="th_action_date">日期<br>Date</th>
+              <th style="width:68px" id="th_action_time">时间<br>(min)</th>
+              <th style="width:56px" id="th_action_result">结果<br>Y/N</th>
+            </tr>
+          </thead>
+          <tbody id="actionTableBody"></tbody>
+        </table>
+        <div class="mb-3">
+          <label class="field-label" id="lbl_fault_category"></label>
+          <div id="fault_category_group" class="checkbox-group mt-1"></div>
+        </div>
+
+        <!-- RCA -->
+        <div class="section-header">根本原因分析 / RCA Analysis</div>
+        <table class="table table-bordered table-sm tbl-report mb-2">
+          <thead>
+            <tr>
+              <th style="width:60px">层<br>Level</th>
+              <th id="th_rca_desc">描述 (Description)</th>
+              <th id="th_rca_cause">原因分析 (Cause)</th>
+              <th id="th_rca_action">行动 (Action)</th>
+            </tr>
+          </thead>
+          <tbody id="rcaTableBody"></tbody>
+        </table>
+
+        <!-- Preventive Action -->
+        <div class="section-header">预防对策 / Preventive Action</div>
+        <div class="d-flex justify-content-end mb-2">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="btnPaAddRow">+ 新增 / Add</button>
+        </div>
+        <table class="table table-bordered table-sm tbl-report mb-3">
+          <thead id="paTableHead"></thead>
+          <tbody id="paTableBody"></tbody>
+        </table>
+
+        <!-- 底部操作按钮 -->
+        <div class="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
+          <button class="btn btn-outline-secondary btn-sm" id="btnClearDraft">清除草稿 / Clear Draft</button>
+          <button class="btn btn-warning btn-sm" id="btnSaveDraft">保存草稿 / Save Draft</button>
+          <button class="btn btn-danger btn-sm" id="btnSubmit">提交 / Submit</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <?!=include("Kez_jquery@3.6.4_js")?>
+  <?!=include("Kez_bootstrap@5.3.1_js")?>
+  <?!=include("Kez_sweetalert2_js")?>
+  <?!=include("Kez_select2@4.0.13_js") ?>
+  <?!=include("FailureReport_Template-js")?>
+</body>
+</html>

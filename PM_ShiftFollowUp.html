@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三班转保养跟进 / PM Shift Follow-up</title>
+  <?!=include("kez_Datatables_css") ?>
+  <?!=include("Kez_Bootstrap@5.3.1_css") ?>
+  <?!=include("Kez_datatables@1.11.5_css") ?>
+  <?!=include("Kez_Select2@4.0.13_css") ?>
+  <?!=include("Kez_Select2-bootstrap_css") ?>
+  <?!=include("CSS") ?>
+  <style>
+    /* 确保表头背景色与FailureReport_Manage.html一致 */
+    .dataTables_wrapper .dataTables_scroll .dataTables_scrollHead .dataTables_scrollHeadInner table thead th,
+    table.dataTable thead th {
+        background-color: #E60012 !important;
+        color: white !important;
+    }
+    
+    /* 确保所有表头都使用相同的背景色 */
+    #pmFollowUpTable thead th {
+        background-color: #E60012 !important;
+        color: white !important;
+    }
+    
+    .editable-cell {
+      cursor: pointer;
+      background-color: #e8f5e8 !important; /* 浅绿色背景表示可编辑 */
+    }
+
+    .editable-cell:hover {
+      background-color: #d4edd4 !important; /* 悬停时更深的绿色 */
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container">
+      <a class="navbar-brand" style="
+        color: white;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: xx-large;
+        font-weight: bold;">三班转保养跟进 / PM Shift Follow-up</a>
+    </div>
+  </nav>
+
+  <div class="container mt-2">
+    <div class="card">
+        <div class="card-header">
+            三班转保养跟进 / PM Shift Follow-up
+        </div>
+        <div class="card-body">
+            <!-- 使用说明区域 -->
+            <div class="alert alert-info">
+                <h5>使用说明 / Instructions</h5>
+                <p><strong>工序切换 / Process Switching:</strong> 点击上方Tab切换不同工序的数据（IM/TF/PK）/ Click the tabs above to switch between different process data (IM/TF/PK)</p>
+                <p><strong>状态编辑 / Status Editing:</strong> 单击状态列可选择Done或Ongoing状态 / Click on the Status column to select Done or Ongoing status</p>
+                <p><strong>反馈编辑 / Feedback Editing:</strong> 双击"后续措施 - 保养（反馈）"列可输入跟进信息 / Double-click on the "Follow-up Action - PM (Feedback)" column to enter follow-up information</p>
+                <p><strong>批量提交 / Batch Submission:</strong> 编辑完成后点击右上角"提交修改"按钮保存所有更改 / After editing, click the "Submit Changes" button in the top-right corner to save all changes</p>
+            </div>
+            
+            <!-- 数据源说明区域 -->
+            <div class="alert alert-warning">
+                <h5>数据源说明 / Data Source Information</h5>
+                <p><strong>数据来源 / Data Source:</strong> 数据来源于MasterData表格，包含所有工序的保养跟进记录 / Data comes from the MasterData sheet, containing PM follow-up records for all processes</p>
+                <p><strong>更新机制 / Update Mechanism:</strong> 修改数据后需要点击提交按钮才能保存到MasterData / After modifying data, click the submit button to save to MasterData</p>
+                <p><strong>实时同步 / Real-time Sync:</strong> 提交成功后会自动刷新数据，确保显示最新信息 / After successful submission, data will be automatically refreshed to ensure the latest information is displayed</p>
+                <p><strong>状态说明 / Status Description:</strong> Done表示已完成，Ongoing表示进行中 / Done indicates completed, Ongoing indicates in progress</p>
+            </div>
+
+            <!-- 表格操作区域 -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex gap-2">
+                    <button id="refreshBtn" class="btn btn-outline-primary">
+                        <i class="fas fa-sync-alt"></i> 刷新数据 / Refresh
+                    </button>
+                    <button id="submitBtn" class="btn btn-success" disabled>
+                        <i class="fas fa-save"></i> 提交修改 / Submit Changes
+                    </button>
+                </div>
+            </div>
+
+            <!-- 工序标签页 -->
+            <ul class="nav nav-tabs" id="processTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="im-tab" data-bs-toggle="tab" data-bs-target="#im-content" type="button" role="tab" aria-controls="im-content" aria-selected="true">
+                        注塑工序(IM) / Injection Molding
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tf-tab" data-bs-toggle="tab" data-bs-target="#tf-content" type="button" role="tab" aria-controls="tf-content" aria-selected="false">
+                        植磨毛工序(TF) / Tufting
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pk-tab" data-bs-toggle="tab" data-bs-target="#pk-content" type="button" role="tab" aria-controls="pk-content" aria-selected="false">
+                        包装工序(PK) / Packaging
+                    </button>
+                </li>
+            </ul>
+            
+            <!-- 标签页内容 -->
+            <div class="tab-content" id="processTabContent">
+                <!-- IM工序内容 -->
+                <div class="tab-pane fade show active" id="im-content" role="tabpanel" aria-labelledby="im-tab">
+                    <div class="mt-3">
+                        <div class="table-responsive">
+                            <table id="pmFollowUpTable" class="display table table-bordered table-striped table-hover" style="width:100%">
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- TF工序内容 -->
+                <div class="tab-pane fade" id="tf-content" role="tabpanel" aria-labelledby="tf-tab">
+                    <div class="mt-3">
+                        <div class="table-responsive">
+                            <table id="tfTable" class="display table table-bordered table-striped table-hover" style="width:100%">
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PK工序内容 -->
+                <div class="tab-pane fade" id="pk-content" role="tabpanel" aria-labelledby="pk-tab">
+                    <div class="mt-3">
+                        <div class="table-responsive">
+                            <table id="pkTable" class="display table table-bordered table-striped table-hover" style="width:100%">
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+</body>
+
+<?!=include("Compressor_js") ?>
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("PM_ShiftFollowUp-js") ?>
+
+</html>

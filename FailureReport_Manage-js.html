@@ -1,9 +1,51 @@
 <script>
+    window.onerror = function(msg, src, line, col, err) {
+        console.error('[onerror] ' + msg + ' | src:' + src + ' | line:' + line + ':' + col);
+    };
+
+    let userHasManagePermission = false;
+    let currentUserEmail = sessionStorage.getItem('Email') || '';
+    let currentUserName = sessionStorage.getItem('Name') || '';
+
+    function checkUserManagePermission() {
+        if (typeof google === 'undefined' || typeof google.script === 'undefined' || typeof google.script.run === 'undefined') {
+            console.warn('无法检查权限：google.script.run 不可用');
+            updateUIByPermission();
+            return;
+        }
+        google.script.run
+            .withSuccessHandler(function (result) {
+                userHasManagePermission = result === true;
+                updateUIByPermission();
+                // 如果表格已有数据，重绘确认列以反映权限状态
+                [imTable, tfTable, pkTable].forEach(function (table) {
+                    if (table && table.rows().count() > 0) {
+                        table.rows().invalidate().draw(false);
+                    }
+                });
+            })
+            .withFailureHandler(function (error) {
+                console.error('权限检查失败:', error);
+                userHasManagePermission = false;
+                updateUIByPermission();
+            })
+            .checkFailureReportManagePermission(currentUserEmail, currentUserName);
+    }
+
+    function updateUIByPermission() {
+        if (userHasManagePermission) {
+            $('#manualAddBtn').show();
+            $('#permissionNotice').hide();
+        } else {
+            $('#manualAddBtn').hide();
+            $('#permissionNotice').show();
+        }
+    }
+
     $(document).ready(function () {
 
-        console.log('FailureReport_Manage-js.html 文件加载完成');
-        console.log('jQuery版本 / jQuery version:', $.fn.jquery);
-        console.log('检查DataTables库 / Checking DataTables library:', typeof $.fn.DataTable !== 'undefined' ? '已加载 / Loaded' : '未加载 / Not loaded');
+        // 启动权限检查
+        checkUserManagePermission();
 
         // 基于 sessionStorage.Process 决定默认显示哪个工序 Tab（TagName）
         // - 注塑口径：INJ/IM -> IM tab
@@ -57,6 +99,391 @@
             }
         })();
 
+        const buildBilingualTitle = (cn, en) => {
+            return `<span class="label-cn">${cn}</span><span class="label-en">${en}</span>`;
+        };
+
+        const escapeHtml = (value) => {
+            if (value == null) return '';
+            return String(value).replace(/[&<>"]+/g, function (match) {
+                const escape = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+                return escape[match] || match;
+            });
+        };
+
+        const getActiveProcessKey = () => {
+            const activeId = $('#processTabs .nav-link.active').attr('id');
+            if (activeId === 'tf-tab') return 'TF';
+            if (activeId === 'pk-tab') return 'PK';
+            return 'IM';
+        };
+
+        let imTable, tfTable, pkTable;
+
+        const getRowIdentifier = (row) => {
+            if (!row) return '';
+            if (row.manualEntry && row.tempId) return row.tempId;
+            return String(row.reportNo || '').trim();
+        };
+
+        const findRowIndexByIdentifier = (table, identifier) => {
+            if (!table || !identifier) return undefined;
+            const normalized = String(identifier).trim();
+            const indexes = table.rows().indexes().toArray();
+            for (let i = 0; i < indexes.length; i++) {
+                const idx = indexes[i];
+                const rowData = table.row(idx).data();
+                if (!rowData) continue;
+                const candidates = [rowData.reportNo, rowData.tempId];
+                for (let candidate of candidates) {
+                    if (!candidate) continue;
+                    if (String(candidate).trim() === normalized) {
+                        return idx;
+                    }
+                }
+            }
+            return undefined;
+        };
+
+        const locateRowByIdentifier = (identifier) => {
+            if (!identifier) return { table: null, rowIndex: undefined, rowData: null };
+            const tables = [imTable, tfTable, pkTable];
+            for (const table of tables) {
+                const rowIndex = findRowIndexByIdentifier(table, identifier);
+                if (rowIndex !== undefined) {
+                    return { table, rowIndex, rowData: table.row(rowIndex).data() };
+                }
+            }
+            return { table: null, rowIndex: undefined, rowData: null };
+        };
+        let responsibleOptions = [];
+        let responsibleOptionsLoaded = false;
+
+        const normalizeResponsibleDisplay = (user) => {
+            if (!user) return '';
+            if (typeof user === 'string') return user.trim();
+            return String(user.display || '').trim();
+        };
+
+        const loadResponsibleOptions = () => {
+            if (typeof google === 'undefined' || typeof google.script === 'undefined' || typeof google.script.run === 'undefined') {
+                console.warn('无法加载责任人列表：google.script.run 不可用 / Cannot load responsible options');
+                return;
+            }
+            google.script.run
+                .withSuccessHandler(function (result) {
+                    try {
+                        const parsed = typeof result === 'string' ? JSON.parse(result) : (result || []);
+                        responsibleOptions = (parsed || []).map(normalizeResponsibleDisplay).filter(Boolean);
+                        responsibleOptionsLoaded = true;
+                        refreshResponsibleColumnRenders();
+                    } catch (err) {
+                        console.error('解析责任人列表失败 / Failed to parse responsible options:', err);
+                    }
+                })
+                .withFailureHandler(function (error) {
+                    console.error('获取责任人列表失败 / Failed to fetch responsible options:', error);
+                })
+                .getEDSUserNames();
+        };
+
+        const parseResponsibleDisplay = (display) => {
+            if (!display) return { name: '', email: '' };
+            const match = display.match(/^(.+?)【(.+?)】$/);
+            if (match) {
+                return { name: match[1].trim(), email: match[2].trim() };
+            }
+            return { name: display.trim(), email: '' };
+        };
+
+        const findResponsibleOptionByName = (input) => {
+            if (!input) return null;
+            const target = String(input).toLowerCase();
+            for (let i = 0; i < responsibleOptions.length; i++) {
+                const option = responsibleOptions[i];
+                if (!option) continue;
+                const optionText = String(option).toLowerCase();
+                if (optionText === target) {
+                    return option;
+                }
+                const parsed = parseResponsibleDisplay(option);
+                if (parsed.name && parsed.name.toLowerCase() === target) {
+                    return option;
+                }
+            }
+            return null;
+        };
+
+        const enhanceResponsibleSelects = (scope) => {
+            if (!$.fn.select2) return;
+            const $targets = scope ? $(scope).find('.responsible-select') : $('.responsible-select');
+            const DROPDOWN_PARENT = $('body');
+            $targets.each(function () {
+                const $el = $(this);
+                const currentValue = $el.val();
+                if ($el.hasClass('select2-hidden-accessible')) {
+                    $el.select2('destroy');
+                    $el.val(currentValue);
+                }
+                $el.select2({
+                    width: '120px',
+                    theme: 'bootstrap',
+                    dropdownParent: DROPDOWN_PARENT,
+                    placeholder: '请输入或选择责任人 / Type or Select',
+                    tags: true,
+                    allowClear: false,
+                    templateSelection: function (data) {
+                        const parsed = parseResponsibleDisplay(data.text);
+                        return parsed.name || data.text;
+                    },
+                    templateResult: function (data) {
+                        if (data.loading) return data.text;
+                        const parsed = parseResponsibleDisplay(data.text);
+                        if (parsed.email) {
+                            return $('<span>' + parsed.name + '<br/><small style="color:#666">' + parsed.email + '</small></span>');
+                        }
+                        return data.text;
+                    },
+                    matcher: function (params, data) {
+                        if ($.trim(params.term) === '') {
+                            return data;
+                        }
+                        if (typeof data.text === 'undefined') {
+                            return null;
+                        }
+                        const term = params.term.toLowerCase();
+                        const text = data.text.toLowerCase();
+                        if (text.indexOf(term) > -1) {
+                            return data;
+                        }
+                        return null;
+                    },
+                    createTag: function (params) {
+                        const term = $.trim(params.term);
+                        if (!term) {
+                            return null;
+                        }
+                        const matched = findResponsibleOptionByName(term);
+                        if (matched) {
+                            return null;
+                        }
+                        if (!responsibleOptions.includes(term)) {
+                            responsibleOptions.push(term);
+                            responsibleOptions.sort();
+                        }
+                        return {
+                            id: term,
+                            text: term,
+                            newTag: true,
+                        };
+                    },
+                });
+            });
+        };
+
+        const enhanceManualSelects = (scope) => {
+            if (!$.fn.select2) return;
+            const $targets = scope ? $(scope).find('.manual-select') : $('.manual-select');
+            const DROPDOWN_PARENT = $('body');
+            $targets.each(function () {
+                const $el = $(this);
+                const placeholder = $el.data('placeholder') || '请选择 / Select';
+                const currentValue = $el.val();
+                if ($el.hasClass('select2-hidden-accessible')) {
+                    $el.select2('destroy');
+                    $el.val(currentValue);
+                }
+                $el.select2({
+                    width: '160px',
+                    theme: 'bootstrap',
+                    dropdownParent: DROPDOWN_PARENT,
+                    placeholder: placeholder,
+                    allowClear: false
+                });
+            });
+        };
+
+        const refreshResponsibleColumnRenders = () => {
+            [imTable, tfTable, pkTable].forEach(function (table) {
+                if (table) {
+                    table.rows().invalidate().draw(false);
+                }
+            });
+            enhanceResponsibleSelects();
+            enhanceManualSelects();
+        };
+
+        loadResponsibleOptions();
+
+        const renderNeedFailureBadge = (value) => {
+            if (value === '是' || value === true || value === 'true') {
+                return '<span class="badge bg-success">是 / Yes</span>';
+            }
+            if (value === '否' || value === false || value === 'false') {
+                return '<span class="badge bg-secondary">否 / No</span>';
+            }
+            return '<span class="badge bg-warning">待定 / Pending</span>';
+        };
+
+        const renderResponsibleSelect = (processKey) => {
+            return function (data, type, row) {
+                if (type !== 'display') {
+                    return data || '';
+                }
+                const current = data || '';
+                const options = ['<option value="">请选择 / Select</option>'];
+                const identifier = getRowIdentifier(row);
+                (responsibleOptions || []).forEach(function (option) {
+                    if (!option) return;
+                    const selected = option === current ? ' selected' : '';
+                    options.push(`<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`);
+                });
+                return `<select class="form-select form-select-sm responsible-select" data-id="${identifier}" data-process="${processKey}">${options.join('')}</select>`;
+            };
+        };
+
+        const createManualSelectRenderer = (field, placeholder, options) => {
+            return function (data, type, row) {
+                if (type !== 'display') return escapeHtml(data);
+                if (row && row.manualEntry) {
+                    const identifier = getRowIdentifier(row);
+                    const current = row[field] || '';
+                    const optionTags = [`<option value="">${escapeHtml(placeholder)}</option>`];
+                    options.forEach(opt => {
+                        const selected = current === opt.value ? ' selected' : '';
+                        optionTags.push(`<option value="${escapeHtml(opt.value)}"${selected}>${escapeHtml(opt.text)}</option>`);
+                    });
+                    return `<select class="form-select form-select-sm manual-select manual-select-${field}" data-field="${field}" data-report="${identifier}" data-placeholder="${escapeHtml(placeholder)}">${optionTags.join('')}</select>`;
+                }
+                return escapeHtml(data);
+            };
+        };
+
+        const manualSpecialRenderers = {
+            reportNo: function (data, type, row) {
+                if (type !== 'display') return escapeHtml(data);
+                if (row && row.manualEntry) {
+                    return escapeHtml(row.reportNo || '');
+                }
+                return escapeHtml(data);
+            },
+            process: function (data, type, row) {
+                if (type !== 'display') return escapeHtml(data);
+                if (row && row.manualEntry) {
+                    return escapeHtml(row.process || '');
+                }
+                return escapeHtml(data);
+            },
+            repairTime: function (data, type, row) {
+                if (type !== 'display') return escapeHtml(data);
+                if (row && row.manualEntry) {
+                    const identifier = getRowIdentifier(row);
+                    const value = escapeHtml((row.repairTime || '').toString());
+                    return `<input type="number" class="form-control form-control-sm manual-input manual-input-numeric" data-field="repairTime" data-report="${identifier}" placeholder="请输入维修时间 / Enter Repair Time" inputmode="numeric" pattern="\\d*" min="0" step="1" value="${value}">`;
+                }
+                return escapeHtml(data);
+            },
+            status: createManualSelectRenderer('status', '请选择状态 / Select Status', [
+                { value: '已解决', text: '已解决 / Resolved' },
+                { value: '未解决', text: '未解决 / Unresolved' }
+            ]),
+            submitDate: function (data, type, row) {
+                if (type !== 'display') return escapeHtml(data);
+                if (row && row.manualEntry) {
+                    const identifier = getRowIdentifier(row);
+                    const value = escapeHtml(row.submitDate || '');
+                    return `<input type="date" class="form-control form-control-sm manual-input manual-date" data-field="submitDate" data-report="${identifier}" value="${value}">`;
+                }
+                return escapeHtml(data);
+            },
+            workshop: createManualSelectRenderer('workshop', '请选择车间 / Select Workshop', [
+                { value: 'TB1', text: 'TB1 车间 / TB1 Workshop' },
+                { value: 'TB2', text: 'TB2 车间 / TB2 Workshop' }
+            ])
+        };
+
+        const manualFieldRenderer = (field, placeholder) => {
+            if (manualSpecialRenderers[field]) {
+                return manualSpecialRenderers[field];
+            }
+            return function (data, type, row) {
+                if (type !== 'display') return escapeHtml(data);
+                if (row && row.manualEntry) {
+                    const identifier = getRowIdentifier(row);
+                    const value = escapeHtml(row[field] || '');
+                    const ph = placeholder ? escapeHtml(placeholder) : '';
+                    return `<input type="text" class="form-control form-control-sm manual-input" data-field="${field}" data-report="${identifier}" placeholder="${ph}" value="${value}">`;
+                }
+                return escapeHtml(data);
+            };
+        };
+
+        const buildColumnsConfig = (processKey) => {
+            return [
+                { data: 'reportNo', title: buildBilingualTitle('编号', 'Report No.'), render: manualFieldRenderer('reportNo', '请输入编号 / Enter Report No.') },
+                { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.'), render: manualFieldRenderer('machineNo', '请输入机台号 / Enter Machine No.') },
+                { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description'), render: manualFieldRenderer('problemDescription', '请输入问题描述 / Describe the problem') },
+                { data: 'status', title: buildBilingualTitle('状态', 'Status'), render: manualFieldRenderer('status', '请输入状态 / Enter Status') },
+                { data: 'repairTime', title: buildBilingualTitle('维修时间', 'Repair Time'), render: manualFieldRenderer('repairTime', '请输入维修时间 / Enter Repair Time') },
+                { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date'), render: manualFieldRenderer('submitDate', '请输入提交日期 / Enter Submit Date') },
+                { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop'), render: manualFieldRenderer('workshop', '请输入车间 / Enter Workshop') },
+                { data: 'process', title: buildBilingualTitle('工序', 'Process'), render: manualFieldRenderer('process', '请输入工序 / Enter Process') },
+                {
+                    data: 'responsiblePerson',
+                    title: buildBilingualTitle('责任人', 'Responsible'),
+                    orderable: false,
+                    render: renderResponsibleSelect(processKey)
+                },
+                {
+                    data: 'confirmation',
+                    title: buildBilingualTitle('故障报告确认', 'Failure Report Confirmation'),
+                    className: 'text-center align-middle confirm-actions-cell',
+                    render: function (data, type, row) {
+                        if (type !== 'display') {
+                            return data || '';
+                        }
+                        if (!userHasManagePermission) {
+                            return '<span class="text-muted small">无权限 / No Permission</span>';
+                        }
+                        const identifier = getRowIdentifier(row);
+                        return '<div class="confirm-action-group">'
+                            + '<button class="btn btn-sm btn-success confirm-btn btn-confirm-action" data-id="' + identifier + '" data-process="' + processKey + '"><span class="label-cn">需要故障报告</span><span class="label-en">Need Failure Report</span></button>'
+                            + '<button class="btn btn-sm btn-secondary no-confirm-btn btn-confirm-action" data-id="' + identifier + '" data-process="' + processKey + '"><span class="label-cn">不需要故障报告</span><span class="label-en">No Failure Report</span></button>'
+                            + '</div>';
+                    }
+                },
+                {
+                    data: 'needFailureReport',
+                    title: buildBilingualTitle('是否需要故障报告', 'Need Failure Report'),
+                    render: function (data, type) {
+                        if (type !== 'display') {
+                            return data || '';
+                        }
+                        return renderNeedFailureBadge(data);
+                    }
+                }
+            ];
+        };
+
+        const getTableByProcess = (processKey) => {
+            if (processKey === 'IM') return imTable;
+            if (processKey === 'TF') return tfTable;
+            if (processKey === 'PK') return pkTable;
+            return null;
+        };
+
+        const getRowDataByReport = (processKey, reportId) => {
+            if (!reportId) {
+                return { table: null, rowIndex: undefined, rowData: null };
+            }
+            const table = getTableByProcess(processKey);
+            const rowIndex = findRowIndexByIdentifier(table, reportId);
+            if (table && rowIndex !== undefined) {
+                return { table, rowIndex, rowData: table.row(rowIndex).data() };
+            }
+            return locateRowByIdentifier(reportId);
+        };
+
         // 页面加载时显示一个提示框
         Swal.fire({
             title: '加载数据中... / Loading Data...',
@@ -74,52 +501,19 @@
         // const userProcess = urlParams.get('Process');
         // const userWorkshop = urlParams.get('Workshop');
 
-        console.log('初始化DataTable / Initializing DataTable');
         // 初始化三个工序的DataTable，添加错误处理
-        let imTable;
         try {
             if ($('#imTable').length) {
-                console.log('找到imTable元素 / Found imTable element');
                 imTable = $('#imTable').DataTable({
-                    language: {
-                        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
-                    },
                     pageLength: 10,
                     responsive: true,
-                    columns: [
-                        { data: 'reportNo', title: '编号 / Report No.' },
-                        { data: 'machineNo', title: '机台号 / Machine No.' },
-                        { data: 'problemDescription', title: '问题描述 / Problem Description' },
-                        { data: 'status', title: '状态 / Status' },
-                        { data: 'repairTime', title: '维修时间 / Repair Time' },
-                        { data: 'submitDate', title: '提交日期 / Submit Date' },
-                        { data: 'workshop', title: '车间 / Workshop' },
-                        { data: 'process', title: '工序 / Process' },
-                        {
-                            data: 'confirmation',
-                            title: '故障报告确认 / Failure Report Confirmation',
-                            render: function (data, type, row) {
-                                return '<button class="btn btn-sm btn-success confirm-btn" data-id="' + row.reportNo + '" data-process="IM">需要故障报告 / Need Failure Report</button>' +
-                                       '<button class="btn btn-sm btn-secondary no-confirm-btn" data-id="' + row.reportNo + '" data-process="IM">不要故障报告 / No Failure Report</button>';
-                            }
-                        },
-                        {
-                            data: 'needFailureReport',
-                            title: '是否需要故障报告 / Need Failure Report',
-                            render: function (data, type, row) {
-                                // 根据后台数据实际值显示，空值显示"待定"
-                                if (data === '是' || data === true || data === 'true') {
-                                    return '<span class="badge bg-success">是 / Yes</span>';
-                                } else if (data === '否' || data === false || data === 'false') {
-                                    return '<span class="badge bg-secondary">否 / No</span>';
-                                } else {
-                                    return '<span class="badge bg-warning">待定 / Pending</span>';
-                                }
-                            }
-                        }
-                    ]
+                    columns: buildColumnsConfig('IM')
                 });
-                console.log('imTable 初始化成功 / imTable initialized successfully');
+                imTable.on('draw', function () {
+                    const $table = $('#imTable');
+                    enhanceResponsibleSelects($table);
+                    enhanceManualSelects($table);
+                });
             } else {
                 console.error('imTable 元素未找到 / imTable element not found');
             }
@@ -127,50 +521,19 @@
             console.error('初始化 imTable 出错 / Error initializing imTable:', e);
         }
 
-        let tfTable;
+        tfTable = null;
         try {
             if ($('#tfTable').length) {
-                console.log('找到tfTable元素 / Found tfTable element');
                 tfTable = $('#tfTable').DataTable({
-                    language: {
-                        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
-                    },
                     pageLength: 10,
                     responsive: true,
-                    columns: [
-                        { data: 'reportNo', title: '编号 / Report No.' },
-                        { data: 'machineNo', title: '机台号 / Machine No.' },
-                        { data: 'problemDescription', title: '问题描述 / Problem Description' },
-                        { data: 'status', title: '状态 / Status' },
-                        { data: 'repairTime', title: '维修时间 / Repair Time' },
-                        { data: 'submitDate', title: '提交日期 / Submit Date' },
-                        { data: 'workshop', title: '车间 / Workshop' },
-                        { data: 'process', title: '工序 / Process' },
-                        {
-                            data: 'confirmation',
-                            title: '故障报告确认 / Failure Report Confirmation',
-                            render: function (data, type, row) {
-                                return '<button class="btn btn-sm btn-success confirm-btn" data-id="' + row.reportNo + '" data-process="TF">需要故障报告 / Need Failure Report</button>' +
-                                       '<button class="btn btn-sm btn-secondary no-confirm-btn" data-id="' + row.reportNo + '" data-process="TF">不要故障报告 / No Failure Report</button>';
-                            }
-                        },
-                        {
-                            data: 'needFailureReport',
-                            title: '是否需要故障报告 / Need Failure Report',
-                            render: function (data, type, row) {
-                                // 根据后台数据实际值显示，空值显示"待定"
-                                if (data === '是' || data === true || data === 'true') {
-                                    return '<span class="badge bg-success">是 / Yes</span>';
-                                } else if (data === '否' || data === false || data === 'false') {
-                                    return '<span class="badge bg-secondary">否 / No</span>';
-                                } else {
-                                    return '<span class="badge bg-warning">待定 / Pending</span>';
-                                }
-                            }
-                        }
-                    ]
+                    columns: buildColumnsConfig('TF')
                 });
-                console.log('tfTable 初始化成功 / tfTable initialized successfully');
+                tfTable.on('draw', function () {
+                    const $table = $('#tfTable');
+                    enhanceResponsibleSelects($table);
+                    enhanceManualSelects($table);
+                });
             } else {
                 console.error('tfTable 元素未找到 / tfTable element not found');
             }
@@ -178,50 +541,19 @@
             console.error('初始化 tfTable 出错 / Error initializing tfTable:', e);
         }
 
-        let pkTable;
+        pkTable = null;
         try {
             if ($('#pkTable').length) {
-                console.log('找到pkTable元素 / Found pkTable element');
                 pkTable = $('#pkTable').DataTable({
-                    language: {
-                        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json'
-                    },
                     pageLength: 10,
                     responsive: true,
-                    columns: [
-                        { data: 'reportNo', title: '编号 / Report No.' },
-                        { data: 'machineNo', title: '机台号 / Machine No.' },
-                        { data: 'problemDescription', title: '问题描述 / Problem Description' },
-                        { data: 'status', title: '状态 / Status' },
-                        { data: 'repairTime', title: '维修时间 / Repair Time' },
-                        { data: 'submitDate', title: '提交日期 / Submit Date' },
-                        { data: 'workshop', title: '车间 / Workshop' },
-                        { data: 'process', title: '工序 / Process' },
-                        {
-                            data: 'confirmation',
-                            title: '故障报告确认 / Failure Report Confirmation',
-                            render: function (data, type, row) {
-                                return '<button class="btn btn-sm btn-success confirm-btn" data-id="' + row.reportNo + '" data-process="PK">需要故障报告 / Need Failure Report</button>' +
-                                       '<button class="btn btn-sm btn-secondary no-confirm-btn" data-id="' + row.reportNo + '" data-process="PK">不要故障报告 / No Failure Report</button>';
-                            }
-                        },
-                        {
-                            data: 'needFailureReport',
-                            title: '是否需要故障报告 / Need Failure Report',
-                            render: function (data, type, row) {
-                                // 根据后台数据实际值显示，空值显示"待定"
-                                if (data === '是' || data === true || data === 'true') {
-                                    return '<span class="badge bg-success">是 / Yes</span>';
-                                } else if (data === '否' || data === false || data === 'false') {
-                                    return '<span class="badge bg-secondary">否 / No</span>';
-                                } else {
-                                    return '<span class="badge bg-warning">待定 / Pending</span>';
-                                }
-                            }
-                        }
-                    ]
+                    columns: buildColumnsConfig('PK')
                 });
-                console.log('pkTable 初始化成功 / pkTable initialized successfully');
+                pkTable.on('draw', function () {
+                    const $table = $('#pkTable');
+                    enhanceResponsibleSelects($table);
+                    enhanceManualSelects($table);
+                });
             } else {
                 console.error('pkTable 元素未找到 / pkTable element not found');
             }
@@ -229,25 +561,17 @@
             console.error('初始化 pkTable 出错 / Error initializing pkTable:', e);
         }
 
-        console.log('DataTable初始化完成 / DataTable initialization complete');
-
         // 加载各工序的故障报告数据
         function loadProcessData() {
-            console.log('尝试调用后端函数 / Attempting to call backend function');
-            console.log('检查google.script.run是否可用 / Checking if google.script.run is available:', typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined' ? '可用 / Available' : '不可用 / Not available');
             if (typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined') {
                 google.script.run
                     .withSuccessHandler(function (data) {
-                        console.log('从后端获取的数据（原始） / Data from backend (raw):', data);
-                        // 由于后端返回的是JSON字符串，需要解析为对象
                         let parsedData = typeof data === 'string' ? JSON.parse(data) : data;
-                        console.log('从后端获取的数据（解析后） / Data from backend (parsed):', parsedData);
-                        // 格式化提交日期为YYYY-MM-DD
                         function formatDate(dateStr) {
                             if (!dateStr) return '';
                             try {
                                 let date = new Date(dateStr);
-                                if (isNaN(date.getTime())) return dateStr; // 如果不是有效日期，返回原始字符串
+                                if (isNaN(date.getTime())) return dateStr;
                                 let year = date.getFullYear();
                                 let month = String(date.getMonth() + 1).padStart(2, '0');
                                 let day = String(date.getDate()).padStart(2, '0');
@@ -257,101 +581,114 @@
                                 return dateStr;
                             }
                         }
-                        // 对每个工序的数据进行日期格式化和处理 needFailureReport 字段
-                        parsedData.IM.forEach(item => {
-                            item.submitDate = formatDate(item.submitDate);
-                            // 处理后台"是否需要填写故障报告"字段（第20列）
-                            // 空值或undefined显示为"待定"，有值则按实际值显示
-                            if (item.needFailureReport === undefined || item.needFailureReport === null || item.needFailureReport === '') {
-                                item.needFailureReport = 'pending';
-                            }
+                        ['IM','TF','PK'].forEach(key => {
+                            const list = parsedData[key] || [];
+                            list.forEach(item => {
+                                item.submitDate = formatDate(item.submitDate);
+                                if (item.needFailureReport === undefined || item.needFailureReport === null || item.needFailureReport === '') {
+                                    item.needFailureReport = 'pending';
+                                }
+                                item.responsiblePerson = item.responsiblePerson || '';
+                            });
                         });
-                        parsedData.TF.forEach(item => {
-                            item.submitDate = formatDate(item.submitDate);
-                            // 处理后台"是否需要填写故障报告"字段（第20列）
-                            // 空值或undefined显示为"待定"，有值则按实际值显示
-                            if (item.needFailureReport === undefined || item.needFailureReport === null || item.needFailureReport === '') {
-                                item.needFailureReport = 'pending';
-                            }
-                        });
-                        parsedData.PK.forEach(item => {
-                            item.submitDate = formatDate(item.submitDate);
-                            // 处理后台"是否需要填写故障报告"字段（第20列）
-                            // 空值或undefined显示为"待定"，有值则按实际值显示
-                            if (item.needFailureReport === null || item.needFailureReport === '') {
-                                item.needFailureReport = 'pending';
-                            }
-                        });
-                        
-                        // 新增：筛选"是否需要故障报告"列值为空的记录
-                        const filteredIM = parsedData.IM.filter(item => 
-                            item.needFailureReport === undefined || 
-                            item.needFailureReport === null || 
-                            item.needFailureReport === '' || 
-                            item.needFailureReport === 'pending'
-                        );
-                        
-                        const filteredTF = parsedData.TF.filter(item => 
-                            item.needFailureReport === undefined || 
-                            item.needFailureReport === null || 
-                            item.needFailureReport === '' || 
-                            item.needFailureReport === 'pending'
-                        );
-                        
-                        const filteredPK = parsedData.PK.filter(item => 
-                            item.needFailureReport === undefined || 
-                            item.needFailureReport === null || 
-                            item.needFailureReport === '' || 
-                            item.needFailureReport === 'pending'
-                        );
-                        
-                        console.log('筛选后的数据统计:');
-                        console.log('IM工序 - 原始数据:', parsedData.IM.length, '条，筛选后:', filteredIM.length, '条');
-                        console.log('TF工序 - 原始数据:', parsedData.TF.length, '条，筛选后:', filteredTF.length, '条');
-                        console.log('PK工序 - 原始数据:', parsedData.PK.length, '条，筛选后:', filteredPK.length, '条');
-                        
-                        // 更新各表格数据（使用筛选后的数据）
+                        const filteredIM = (parsedData.IM || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport));
+                        const filteredTF = (parsedData.TF || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport));
+                        const filteredPK = (parsedData.PK || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport));
                         if (imTable) {
                             imTable.clear().rows.add(filteredIM).draw();
-                            console.log('IM 表格数据更新完成，行数:', imTable.rows().count());
+                            enhanceResponsibleSelects($('#imTable'));
                         }
                         if (tfTable) {
                             tfTable.clear().rows.add(filteredTF).draw();
-                            console.log('TF 表格数据更新完成，行数:', tfTable.rows().count());
+                            enhanceResponsibleSelects($('#tfTable'));
                         }
                         if (pkTable) {
                             pkTable.clear().rows.add(filteredPK).draw();
-                            console.log('PK 表格数据更新完成，行数:', pkTable.rows().count());
+                            enhanceResponsibleSelects($('#pkTable'));
                         }
-                        // 如果没有数据，显示提示
-                        if (filteredIM.length === 0 && filteredTF.length === 0 && filteredPK.length === 0) {
-                            Swal.fire({
-                                icon: 'info',
-                                title: '暂无待处理数据 / No Pending Data',
-                                text: '所有故障报告都已确认是否需要故障报告，暂无待处理项目。 / All failure reports have been confirmed, no pending items.',
-                                confirmButtonText: '确定 / OK'
-                            });
-                        }
-                        // 数据加载完成后关闭加载提示框
+                        refreshResponsibleColumnRenders();
                         Swal.close();
                     })
                     .withFailureHandler(function (error) {
-                        console.error('加载故障报告数据失败 / Failed to load failure report data:', error);
-                        alert('加载故障报告数据失败 / Failed to load failure report data: ' + error);
-                        // 加载失败时也关闭加载提示框
                         Swal.close();
+                        console.error('获取故障报告列表失败 / Failed to fetch failure report list:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: '加载失败 / Load Failed',
+                            text: '无法加载故障报告列表，请稍后重试。 / Unable to load failure report list, please try again later.',
+                            confirmButtonText: '确定 / OK'
+                        });
                     })
                     .getFilteredFailureReportData();
             } else {
                 console.error('google.script.run不可用，无法调用后端函数 / google.script.run is not available, cannot call backend function');
                 alert('无法连接到后端服务，请确保在Google Apps Script环境中运行 / Cannot connect to backend service, please ensure running in Google Apps Script environment');
-                // 如果环境不可用，也关闭加载提示框
                 Swal.close();
             }
         }
 
+        const generateManualReportNo = () => {
+            const now = new Date();
+            const pad = (value) => String(value).padStart(2, '0');
+            return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        };
+
+        const addManualRow = () => {
+            const processKey = getActiveProcessKey();
+            const table = getTableByProcess(processKey);
+            if (!table) {
+                Swal.fire({
+                    icon: 'error',
+                    title: '操作失败 / Action Failed',
+                    text: '当前工序表格尚未准备好，无法添加手动记录。 / Current process table is not ready for manual entry.',
+                    confirmButtonText: '确定 / OK'
+                });
+                return;
+            }
+
+            const tempId = `manual-${Date.now()}`;
+            const data = {
+                manualEntry: true,
+                tempId: tempId,
+                process: processKey,
+                reportNo: generateManualReportNo(),
+                machineNo: '',
+                problemDescription: '',
+                status: '',
+                repairTime: '',
+                submitDate: '',
+                workshop: '',
+                responsiblePerson: '',
+                needFailureReport: 'pending',
+                confirmation: ''
+            };
+            Swal.fire({
+                title: '创建手动录入行... / Creating Manual Entry...',
+                text: '正在为当前工序插入手动录入行，请稍候。 / Inserting manual entry row for the active process, please wait.',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            table.row.add(data).draw(false);
+
+            // 使用微延时等待 DataTable 完成渲染后再高亮行并关闭弹窗
+            window.setTimeout(() => {
+                const rowIndex = findRowIndexByIdentifier(table, tempId);
+                if (rowIndex !== undefined) {
+                    const node = table.row(rowIndex).node();
+                    if (node) {
+                        $(node).addClass('table-warning');
+                    }
+                }
+                if (Swal.isVisible()) {
+                    Swal.close();
+                }
+            }, 120);
+        };
+
         // 页面加载时获取数据
-        console.log('页面已加载，调用loadProcessData / Page loaded, calling loadProcessData');
         loadProcessData();
 
         // 表格行操作事件 - 统一处理所有工序的按钮点击
@@ -375,12 +712,33 @@
             }
         });
 
+        $(document).on('change', '.responsible-select', function () {
+            const reportId = $(this).data('id');
+            const process = $(this).data('process');
+            const value = $(this).val();
+            const { table, rowIndex, rowData } = getRowDataByReport(process, reportId);
+            if (table && rowIndex !== undefined && rowData) {
+                rowData.responsiblePerson = value || '';
+                table.row(rowIndex).data(rowData).draw(false);
+            }
+        });
+
         // 新增：故障报告确认按钮事件
         $(document).on('click', '.confirm-btn', function () {
             const reportId = $(this).data('id');
             const process = $(this).data('process');
-            console.log('点击确认按钮 / Clicked confirm button:', { reportId, process });
-            
+            const { rowData } = getRowDataByReport(process, reportId);
+            const responsible = rowData ? (rowData.responsiblePerson || '') : '';
+            if (!responsible) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '请先分配责任人 / Assign Responsible',
+                    text: '请在责任人列选择负责人后再标记需要故障报告。 / Please select a responsible person before marking as need failure report.',
+                    confirmButtonText: '确定 / OK'
+                });
+                return;
+            }
+
             // 弹窗确认操作
             Swal.fire({
                 title: '确认操作 / Confirm Action',
@@ -395,18 +753,51 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     // 用户确认后，更新对应行的"是否需要故障报告"列显示为"是"
-                    updateFailureReportStatus(reportId, process, true);
-                } else {
-                    console.log('用户取消了确认操作 / User cancelled the confirmation action');
+                    updateFailureReportStatus(reportId, process, true, responsible);
                 }
             });
+        });
+
+        $(document).on('click', '#manualAddBtn', function () {
+            addManualRow();
+        });
+
+        $(document).on('input', '.manual-input', function () {
+            const reportId = $(this).data('report');
+            const field = $(this).data('field');
+            if (!reportId || !field) return;
+            const { table, rowIndex, rowData } = locateRowByIdentifier(reportId);
+            if (!table || rowIndex === undefined || !rowData) return;
+            let value = $(this).val();
+            if (field === 'repairTime') {
+                value = value.replace(/\D+/g, '');
+                $(this).val(value);
+            }
+            rowData[field] = value;
+        });
+
+        $(document).on('change', '.manual-date', function () {
+            const reportId = $(this).data('report');
+            const field = $(this).data('field');
+            if (!reportId || !field) return;
+            const { table, rowIndex, rowData } = locateRowByIdentifier(reportId);
+            if (!table || rowIndex === undefined || !rowData) return;
+            rowData[field] = $(this).val();
+        });
+
+        $(document).on('change', '.manual-select', function () {
+            const reportId = $(this).data('report');
+            const field = $(this).data('field');
+            if (!reportId || !field) return;
+            const { table, rowIndex, rowData } = locateRowByIdentifier(reportId);
+            if (!table || rowIndex === undefined || !rowData) return;
+            rowData[field] = $(this).val() || '';
         });
 
         $(document).on('click', '.no-confirm-btn', function () {
             const reportId = $(this).data('id');
             const process = $(this).data('process');
-            console.log('点击不确认按钮 / Clicked no-confirm button:', { reportId, process });
-            
+
             // 弹窗确认操作
             Swal.fire({
                 title: '确认操作 / Confirm Action',
@@ -421,73 +812,43 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     // 用户确认后，更新对应行的"是否需要故障报告"列显示为"否"
-                    updateFailureReportStatus(reportId, process, false);
-                } else {
-                    console.log('用户取消了确认操作 / User cancelled the confirmation action');
+                    const { rowData } = getRowDataByReport(process, reportId);
+                    const responsible = rowData ? (rowData.responsiblePerson || '') : '';
+                    updateFailureReportStatus(reportId, process, false, responsible);
                 }
             });
         });
 
         // 新增：更新故障报告状态的函数
-        function updateFailureReportStatus(reportId, process, needReport) {
-            console.log('更新故障报告状态 / Updating failure report status:', { reportId, process, needReport });
-            
-            let targetTable;
-            if (process === 'IM') {
-                targetTable = imTable;
-                console.log('使用 IM 表格 / Using IM table:', targetTable);
-            } else if (process === 'TF') {
-                targetTable = tfTable;
-                console.log('使用 TF 表格 / Using TF table:', targetTable);
-            } else if (process === 'PK') {
-                targetTable = pkTable;
-                console.log('使用 PK 表格 / Using PK table:', targetTable);
-            }
-
-            if (targetTable) {
-                console.log('目标表格存在，开始查找行 / Target table exists, searching for row');
-                console.log('表格总行数 / Total rows in table:', targetTable.rows().count());
-                
-                // 使用 DataTable API 查找对应的行，处理类型不匹配问题
-                const rowIndex = targetTable.rows().indexes().filter(function (idx) {
-                    const rowData = targetTable.row(idx).data();
-                    console.log(`检查行 ${idx} 的数据 / Checking row ${idx} data:`, rowData);
-                    // 处理类型不匹配：将两个值都转换为字符串进行比较
-                    const tableReportNo = String(rowData ? rowData.reportNo : '');
-                    const searchReportId = String(reportId);
-                    console.log(`比较 reportNo: "${tableReportNo}" vs "${searchReportId}"`);
-                    return rowData && tableReportNo === searchReportId;
-                })[0];
-
-                console.log('找到的行索引 / Found row index:', rowIndex);
-
-                if (rowIndex !== undefined) {
-                    // 获取行数据
-                    const rowData = targetTable.row(rowIndex).data();
-                    console.log('原始行数据 / Original row data:', rowData);
-                    // 更新数据
-                    rowData.needFailureReport = needReport;
-                    console.log('更新后的行数据 / Updated row data:', rowData);
-                    
-                    // 使用 DataTable API 更新行数据
-                    targetTable.row(rowIndex).data(rowData).draw(false);
-                    console.log('行数据更新完成 / Row data update completed');
-                    
-                    // 新增：调用后端函数将数据写回到Google Sheets
-                    updateFailureReportInBackend(reportId, process, needReport);
-                } else {
-                    console.error('未找到对应的行 / Row not found for reportId:', reportId);
-                    console.log('表格中所有行的 reportNo:', targetTable.rows().data().pluck('reportNo').toArray());
-                }
-            } else {
+        function updateFailureReportStatus(reportId, process, needReport, responsiblePerson) {
+            const { table, rowIndex, rowData } = getRowDataByReport(process, reportId);
+            if (!table) {
                 console.error('目标表格不存在 / Target table not found for process:', process);
+                return;
             }
+            if (rowIndex === undefined || !rowData) {
+                console.error('未找到对应的行 / Row not found for reportId:', reportId);
+                return;
+            }
+            if (needReport && !responsiblePerson) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '请先分配责任人 / Assign Responsible',
+                    text: '请先选择责任人后再提交需要故障报告。 / Please assign a responsible person before updating.',
+                    confirmButtonText: '确定 / OK'
+                });
+                return;
+            }
+            rowData.needFailureReport = needReport;
+            if (typeof responsiblePerson !== 'undefined') {
+                rowData.responsiblePerson = responsiblePerson || '';
+            }
+            table.row(rowIndex).data(rowData).draw(false);
+            updateFailureReportInBackend(reportId, process, needReport, rowData.responsiblePerson || '', rowData);
         }
 
         // 新增：调用后端更新故障报告状态的函数
-        function updateFailureReportInBackend(reportId, process, needReport) {
-            console.log('调用后端更新故障报告状态 / Calling backend to update failure report status:', { reportId, process, needReport });
-            
+        function updateFailureReportInBackend(reportId, process, needReport, responsiblePerson, rowContext) {
             if (typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined') {
                 // 显示加载提示
                 Swal.fire({
@@ -501,7 +862,6 @@
 
                 google.script.run
                     .withSuccessHandler(function (result) {
-                        console.log('后端更新成功 / Backend update successful:', result);
                         Swal.close();
                         
                         // 显示成功提示
@@ -511,6 +871,11 @@
                             text: '故障报告状态已成功写回到后台。 / Failure report status has been successfully written back to backend.',
                             timer: 2000,
                             showConfirmButton: false
+                        }).then(function () {
+                            const { table: t, rowIndex: ri } = getRowDataByReport(process, reportId);
+                            if (t && ri !== undefined) {
+                                t.row(ri).remove().draw(false);
+                            }
                         });
                     })
                     .withFailureHandler(function (error) {
@@ -525,7 +890,7 @@
                             confirmButtonText: '确定 / OK'
                         });
                     })
-                    .updateFailureReportConfirmation(reportId, process, needReport);
+                    .updateFailureReportConfirmation(reportId, process, needReport, responsiblePerson || '', rowContext || null);
             } else {
                 console.error('google.script.run不可用，无法调用后端函数 / google.script.run is not available, cannot call backend function');
                 Swal.fire({
@@ -538,9 +903,8 @@
         }
 
         // 标签页切换事件
-        $('#processTabs button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
-            // 可以在这里添加标签页切换后的逻辑
-            console.log('切换到标签页:', e.target.textContent);
+        $('#processTabs button[data-bs-toggle="tab"]').on('shown.bs.tab', function () {
+            // 可在此扩展标签切换后的逻辑
         });
 
         // 显示用户信息 - 已注释

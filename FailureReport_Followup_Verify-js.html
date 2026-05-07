@@ -1,0 +1,525 @@
+<script>
+    console.log('故障报告验证页面JavaScript加载开始...');
+
+    let followupTable = null;
+    let followupData = [];
+    let currentUserName = '';
+
+    const STATUS_OPTIONS = ['进行中 / Ongoing', '已完成 / Completed'];
+    const VERIFY_OPTIONS = ['已验证 / Verified', '未验证 / Not Verified'];
+
+    const FIELD_LABELS = {
+        paPlan: '预防性措施 / PA Action',
+        status: '状态 / Status',
+        verification: '验证 / Verification'
+    };
+
+    const loadingSpinner = {
+        show: function() {
+            $('#loadingSpinner').show();
+        },
+        hide: function() {
+            $('#loadingSpinner').hide();
+        }
+    };
+
+    // 从hidden input获取当前用户信息
+    function getCurrentUser() {
+        const name = $('#currentUserName').val() || '';
+        return name;
+    }
+
+    $(document).ready(function() {
+        console.log('页面DOM加载完成，开始初始化...');
+
+        currentUserName = getCurrentUser();
+        console.log('当前用户:', currentUserName);
+
+        // 立即显示加载弹窗
+        Swal.fire({
+            title: '加载中 / Loading...',
+            text: '正在初始化页面 / Initializing page',
+            allowOutsideClick: false,
+            didOpen: function() { Swal.showLoading(); }
+        });
+
+        populateVerifyStatusOptions();
+        fetchFollowupRecords();
+    });
+
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function populateVerifyStatusOptions() {
+        const $select = $('#verifyStatus');
+        if (!$select.length) return;
+        const currentValue = $select.val();
+        $select.empty();
+        $select.append('<option value="">请选择 / Please Select</option>');
+        STATUS_OPTIONS.forEach(function(option) {
+            $select.append('<option value="' + option + '">' + option + '</option>');
+        });
+        if (STATUS_OPTIONS.indexOf(currentValue) !== -1) {
+            $select.val(currentValue);
+        }
+    }
+
+    function fetchFollowupRecords() {
+        if (Swal.isVisible()) {
+            Swal.update({
+                title: '加载中 / Loading...',
+                text: '正在获取验证记录 / Loading verification records'
+            });
+        } else {
+            Swal.fire({
+                title: '加载中 / Loading...',
+                text: '正在获取验证记录 / Loading verification records',
+                allowOutsideClick: false,
+                didOpen: function() { Swal.showLoading(); }
+            });
+        }
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                Swal.close();
+                console.log('验证记录获取成功:', response);
+
+                if (response && response.success) {
+                    followupData = mapRowsToObjects(response.data || []);
+                    initializeTable(followupData);
+                } else {
+                    Swal.fire({
+                        title: '错误 / Error',
+                        text: (response && response.message) || '获取验证记录失败 / Failed to get verification records',
+                        icon: 'error',
+                        confirmButtonText: '确定 / OK'
+                    });
+                }
+            })
+            .withFailureHandler(function(error) {
+                Swal.close();
+                console.error('获取验证记录失败:', error);
+                Swal.fire({
+                    title: '错误 / Error',
+                    text: '获取验证记录失败 / Failed to get verification records: ' + (error.message || ''),
+                    icon: 'error',
+                    confirmButtonText: '确定 / OK'
+                });
+            })
+            .getFollowupRecordsForVerifier(currentUserName);
+    }
+
+    function mapRowsToObjects(rows) {
+        return (rows || []).map(function(row) {
+            return {
+                followupId: String(row[0] || ''),
+                failureReportNo: String(row[1] || ''),
+                paType: String(row[2] || ''),
+                paPlan: String(row[3] || ''),
+                paWho: String(row[4] || ''),
+                paWhen: String(row[5] || ''),
+                paVerifier: String(row[6] || ''),
+                status: String(row[8] || ''),
+                verification: String(row[12] || ''), // 验证状态列
+                createdDate: String(row[9] || ''),
+                updatedDate: String(row[10] || ''),
+                pdfUrl: String(row[11] || '')
+            };
+        });
+    }
+
+    function initializeTable(data) {
+        console.log('初始化表格，数据行数:', data.length);
+
+        if (followupTable) {
+            followupTable.clear();
+            followupTable.rows.add(data);
+            followupTable.draw();
+            return;
+        }
+
+        followupTable = $('#followupTable').DataTable({
+            data: data,
+            columns: [
+                { data: 'followupId' },
+                { data: 'failureReportNo' },
+                { data: 'paType' },
+                {
+                    data: 'paPlan',
+                    className: 'pa-readonly-cell',
+                    render: function(value, type) {
+                        if (type !== 'display') {
+                            return value || '';
+                        }
+                        const safe = escapeHtml(value || '');
+                        const formatted = safe.replace(/\n/g, '<br>');
+                        return '<div class="pa-readonly-content">' + (formatted || '<span class="text-muted">（未填写 / Not Provided）</span>') + '</div>';
+                    }
+                },
+                { data: 'paWho', render: function(value, type) {
+                    if (type !== 'display') return value || '';
+                    // 从"名字【邮箱】"格式中提取名字
+                    const name = String(value || '').replace(/【.+】/, '').trim();
+                    return name || '<span class="text-muted">-</span>';
+                }}, // 责任人只显示名字
+                { data: 'paWhen', render: function(value, type) {
+                    if (type !== 'display') return value || '';
+                    return value || '<span class="text-muted">-</span>';
+                }}, // 计划完成日期
+                { data: 'paVerifier', render: function(value, type) {
+                    if (type !== 'display') return value || '';
+                    // 从"名字【邮箱】"格式中提取名字
+                    const name = String(value || '').replace(/【.+】/, '').trim();
+                    return name || '<span class="text-muted">-</span>';
+                }}, // 验证人只显示名字
+                { data: 'status', render: function(value, type) {
+                    if (type !== 'display') return value || '';
+                    const normalizedValue = String(value || '').trim();
+                    let statusClass = '';
+                    if (normalizedValue === '进行中 / Ongoing') {
+                        statusClass = 'status-ongoing';
+                    } else if (normalizedValue === '已完成 / Completed') {
+                        statusClass = 'status-completed';
+                    }
+                    return '<span class="' + statusClass + '">' + (value || '<span class="text-muted">-</span>') + '</span>';
+                }}, // 状态改为纯文本显示，带颜色标识
+                {
+                    data: 'verification',
+                    className: 'pa-verify-cell editable-cell',
+                    orderable: false,
+                    render: function(value, type, row) {
+                        if (type !== 'display') {
+                            return value || '';
+                        }
+                        return buildVerifySelectHtml(row.followupId, value, row.status);
+                    }
+                }, // 验证下拉选择列（可编辑高亮）
+                { data: 'createdDate' },
+                { data: 'updatedDate' },
+                {
+                    data: null,
+                    orderable: false,
+                    render: function(data, type, row) {
+                        let actions = '';
+                        if (row.pdfUrl) {
+                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '">';
+                            actions += '<i class="fas fa-file-pdf"></i> 查看PDF / View PDF';
+                            actions += '</button>';
+                        }
+                        return actions;
+                    }
+                }
+            ],
+            language: {
+                search: '搜索 / Search:',
+                lengthMenu: '显示 _MENU_ 条记录 / Show _MENU_ entries',
+                info: '显示第 _START_ 至 _END_ 条记录，共 _TOTAL_ 条 / Showing _START_ to _END_ of _TOTAL_ entries',
+                infoEmpty: '没有记录 / No entries',
+                infoFiltered: '(从 _TOTAL_ 条记录中过滤 / filtered from _TOTAL_ total entries)',
+                paginate: {
+                    first: '首页 / First',
+                    last: '末页 / Last',
+                    next: '下一页 / Next',
+                    previous: '上一页 / Previous'
+                },
+                emptyTable: '暂无数据 / No data available'
+            },
+            order: [[8, 'desc']],
+            pageLength: 25,
+            responsive: true
+        });
+
+        console.log('表格初始化完成');
+    }
+
+    function buildStatusSelectHtml(followupId, currentValue) {
+        const safeId = escapeHtml(followupId);
+        const normalizedValue = String(currentValue || '').trim();
+
+        // 根据状态值设置颜色类
+        let statusColorClass = '';
+        if (normalizedValue === '已完成 / Completed') {
+            statusColorClass = 'status-completed';
+        } else if (normalizedValue === '进行中 / Ongoing') {
+            statusColorClass = 'status-ongoing';
+        }
+
+        let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
+        let hasCurrent = normalizedValue === '';
+
+        STATUS_OPTIONS.forEach(function(option) {
+            const selected = option === normalizedValue ? ' selected' : '';
+            if (selected) {
+                hasCurrent = true;
+            }
+            optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
+        });
+
+        if (!hasCurrent && normalizedValue) {
+            optionsHtml += '<option value="' + escapeHtml(normalizedValue) + '" selected>' + escapeHtml(normalizedValue) + '</option>';
+        }
+
+        return '<select class="form-select form-select-sm followup-select followup-select-status ' + statusColorClass + '" data-field="status" data-id="' + safeId + '">' + optionsHtml + '</select>';
+    }
+
+    function buildVerifySelectHtml(followupId, currentValue, status) {
+        const safeId = escapeHtml(followupId);
+        const normalizedValue = String(currentValue || '').trim();
+        const isCompleted = status === '已完成 / Completed';
+
+        // 如果状态不是已完成，显示提示文本
+        if (!isCompleted) {
+            return '<span class="text-muted" title="状态需为已完成才能验证 / Status must be Completed to verify">-</span>';
+        }
+
+        let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
+        let hasCurrent = normalizedValue === '';
+
+        VERIFY_OPTIONS.forEach(function(option) {
+            const selected = option === normalizedValue ? ' selected' : '';
+            if (selected) {
+                hasCurrent = true;
+            }
+            optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
+        });
+
+        if (!hasCurrent && normalizedValue) {
+            optionsHtml += '<option value="' + escapeHtml(normalizedValue) + '" selected>' + escapeHtml(normalizedValue) + '</option>';
+        }
+
+        return '<select class="form-select form-select-sm followup-select followup-select-verify" data-field="verification" data-id="' + safeId + '">' + optionsHtml + '</select>';
+    }
+
+    function showToast(message, icon) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: icon || 'success',
+            title: message,
+            showConfirmButton: false,
+            timer: 1800,
+            timerProgressBar: true,
+            didOpen: function(toast) {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+    }
+
+    function buildDualMessage(fieldKey, suffixCn, suffixEn) {
+        const label = FIELD_LABELS[fieldKey] || '字段 / Field';
+        const parts = label.split(' / ');
+        const cn = parts[0] || label;
+        const en = parts[1] || 'Field';
+        return cn + suffixCn + ' / ' + en + suffixEn;
+    }
+
+    function updateFollowupField(fieldKey, followupId, value, onSuccess, onError) {
+        loadingSpinner.show();
+        google.script.run
+            .withSuccessHandler(function(response) {
+                loadingSpinner.hide();
+                if (response && response.success) {
+                    if (typeof onSuccess === 'function') onSuccess(response);
+                } else {
+                    if (typeof onError === 'function') onError(response ? response.message : '');
+                }
+            })
+            .withFailureHandler(function(error) {
+                loadingSpinner.hide();
+                console.error('更新跟进字段失败:', error);
+                if (typeof onError === 'function') onError(error && error.message ? error.message : '');
+            })
+            .updateFollowupFieldValue(followupId, fieldKey, value);
+    }
+
+    // 查看PDF按钮点击事件
+    $(document).on('click', '.view-pdf-btn', function() {
+        const pdfUrl = $(this).data('pdf');
+        const reportNo = $(this).data('report');
+        console.log('查看PDF:', { pdfUrl: pdfUrl, reportNo: reportNo });
+
+        if (pdfUrl) {
+            window.open(pdfUrl, '_blank');
+        } else {
+            Swal.fire({
+                title: '提示 / Info',
+                text: 'PDF链接无效 / Invalid PDF link',
+                icon: 'warning',
+                confirmButtonText: '确定 / OK'
+            });
+        }
+    });
+
+    // 预防性措施双击编辑 - 单元格内直接编辑（只读）
+    $('#followupTable tbody').on('dblclick', 'td.pa-action-cell', function(e) {
+        if (!followupTable) return;
+        const $cell = $(this);
+        if ($cell.find('textarea').length > 0) return;
+
+        const rowApi = followupTable.row($cell.closest('tr'));
+        const rowData = rowApi.data();
+        if (!rowData) return;
+
+        const originalValue = String(rowData.paPlan || '').trim();
+
+        const $textarea = $('<textarea class="form-control pa-action-editor" rows="3" readonly>' + escapeHtml(originalValue) + '</textarea>');
+        $cell.empty().append($textarea);
+        $textarea.focus();
+
+        const cancelEdit = function() {
+            $textarea.off('blur');
+            rowApi.draw(false);
+        };
+
+        $textarea.on('blur', cancelEdit);
+        $textarea.on('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+            }
+        });
+    });
+
+    // 下拉更新（支持状态列和验证列）
+    $('#followupTable tbody').on('change', 'select.followup-select', function() {
+        if (!followupTable) return;
+        const $select = $(this);
+        const fieldKey = $select.data('field');
+        const followupId = $select.data('id');
+        const rowApi = followupTable.row($select.closest('tr'));
+        const rowData = rowApi.data();
+        if (!fieldKey || !followupId || !rowData) return;
+
+        const newValue = String($select.val() || '').trim();
+        const previousValue = String(rowData[fieldKey] || '').trim();
+        if (newValue === previousValue) {
+            return;
+        }
+
+        const originalRow = Object.assign({}, rowData);
+        $select.prop('disabled', true);
+
+        updateFollowupField(fieldKey, followupId, newValue, function(response) {
+            $select.prop('disabled', false);
+            const updatedRow = Object.assign({}, rowData);
+            updatedRow[fieldKey] = newValue;
+            if (response && response.updatedDate) {
+                updatedRow.updatedDate = response.updatedDate;
+            }
+            rowApi.data(updatedRow).draw(false);
+            // 同步更新全局 followupData 数组
+            const index = followupData.findIndex(function(r) {
+                return r.followupId === followupId;
+            });
+            if (index !== -1) {
+                followupData[index] = updatedRow;
+            }
+            showToast(buildDualMessage(fieldKey, '已更新', ' updated'), 'success');
+        }, function(message) {
+            $select.prop('disabled', false);
+            rowApi.data(originalRow).draw(false);
+            showToast(message || buildDualMessage(fieldKey, '更新失败', ' update failed'), 'error');
+        });
+    });
+
+    function refreshFollowupData() {
+        console.log('刷新验证数据...');
+        loadingSpinner.show();
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                loadingSpinner.hide();
+                console.log('验证记录刷新成功:', response);
+
+                if (response && response.success) {
+                    followupData = mapRowsToObjects(response.data || []);
+                    initializeTable(followupData);
+                } else {
+                    showToast((response && response.message) || '刷新数据失败 / Failed to refresh data', 'error');
+                }
+            })
+            .withFailureHandler(function(error) {
+                loadingSpinner.hide();
+                console.error('验证记录刷新失败:', error);
+                showToast('刷新数据失败 / Failed to refresh data: ' + (error.message || ''), 'error');
+            })
+            .getFollowupRecordsForVerifier(currentUserName);
+    }
+
+    // 邮件提醒责任人按钮点击事件
+    $('#btnEmailResponsible').click(function() {
+        // 筛选出验证状态不等于"已验证"的记录
+        const unverifiedRecords = followupData.filter(function(record) {
+            return record.verification !== '已验证 / Verified';
+        });
+
+        if (unverifiedRecords.length === 0) {
+            showToast('没有未验证的记录需要提醒 / No unverified records to remind', 'warning');
+            return;
+        }
+
+        Swal.fire({
+            title: '确认发送 / Confirm Send',
+            text: '确定要发送邮件提醒责任人吗？共有 ' + unverifiedRecords.length + ' 条未验证记录。 / Are you sure you want to send email reminders to responsible persons? There are ' + unverifiedRecords.length + ' unverified records.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '发送 / Send',
+            cancelButtonText: '取消 / Cancel'
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                sendResponsibleReminderEmail(unverifiedRecords);
+            }
+        });
+    });
+
+    // 发送提醒邮件给责任人
+    function sendResponsibleReminderEmail(records) {
+        loadingSpinner.show();
+
+        // 构建要发送的数据
+        const emailData = records.map(function(record) {
+            return {
+                followupId: record.followupId,
+                failureReportNo: record.failureReportNo,
+                paType: record.paType,
+                paPlan: record.paPlan,
+                paWho: record.paWho,
+                paWhen: record.paWhen,
+                status: record.status,
+                verification: record.verification
+            };
+        });
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                loadingSpinner.hide();
+                if (response && response.success) {
+                    showToast('邮件发送成功：' + response.sentCount + ' 封 / Email sent successfully: ' + response.sentCount + ' emails', 'success');
+                } else {
+                    showToast((response && response.message) || '邮件发送失败 / Email sending failed', 'error');
+                }
+            })
+            .withFailureHandler(function(error) {
+                loadingSpinner.hide();
+                console.error('邮件发送失败:', error);
+                showToast('邮件发送失败 / Email sending failed: ' + (error.message || ''), 'error');
+            })
+            .sendReminderToResponsiblePersons(emailData);
+    }
+
+    $(window).on('beforeunload', function() {
+        console.log('页面即将卸载，清理资源...');
+        if (followupTable) {
+            followupTable.destroy();
+        }
+    });
+
+    console.log('故障报告验证页面JavaScript加载完成');
+</script>

@@ -32,23 +32,31 @@ function doGet(e) {
   Route.path("FailureReport_Manage", loadFailureReport_Manage);
   Route.path("FailureReport_Progress", loadFailureReport_Progress);
   Route.path("FailureReport_View", loadFailureReport_View);
+  Route.path("FailureReport_Followup", loadFailureReport_Followup);
+  Route.path("FailureReport_Followup_Manage", loadFailureReport_Followup_Manage);
+  Route.path("FailureReport_Followup_Verify", loadFailureReport_Followup_Verify);
   Route.path("MoldSurfaceClean", loadMoldSurfaceClean); // Changed to MoldSurfaceClean
   Route.path("TaskManagement", loadTaskManagement);
   Route.path("PersonnelAssignment", loadPersonnelAssignment);
   Route.path("TaskEdit", loadTaskEdit);
   Route.path("PM_RecordQuery", loadPM_RecordQuery); // 新增记录查询页面路由
   Route.path("Inspection2.0", loadInspection2_0); // 新增点检2.0路由
+  Route.path("ProcessSamplingInspection", loadProcessSamplingInspection); // 新增工艺抽检路由
+  Route.path("PM_ShiftFollowUp", loadPM_ShiftFollowUp); // 新增三班转保养跟进页面路由
+  Route.path("Handover_1.0", loadHandover_1_0); // 新增交接班页面路由
+  Route.path("Fault_Record_1.0", loadFault_Record_1_0); // 新增故障记录页面路由
+  Route.path("FailureReport_Template", loadFailureReport_Template);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
       e.parameters.webPage,
-      e.parameters.intoWebID,
-      e.parameters.intoWebName,
-      e.parameters.intoWebType
+      e.parameters.intoWebID || e.parameters.ID,
+      e.parameters.intoWebName || e.parameters.Name,
+      e.parameters.intoWebType || e.parameters.Process
     );
   } else {
     let webPage = getReleaseWebPage();
-    return render("home", { webPage: webPage })
+    return render("home_new_1.0", { webPage: webPage })
       .setTitle("登录")
       .setFaviconUrl(webIconUrl);
   }
@@ -83,6 +91,14 @@ function loadPM_RecordQuery() {
   let webPage = getReleaseWebPage();
   return render("PM_RecordQuery", { webPage: webPage })
     .setTitle("记录查询")
+    .setFaviconUrl(webIconUrl);
+}
+
+// 新增：三班转保养跟进页面加载函数
+function loadPM_ShiftFollowUp() {
+  let webPage = getReleaseWebPage();
+  return render("PM_ShiftFollowUp", { webPage: webPage })
+    .setTitle("三班转保养跟进 / PM Shift Follow-up")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -131,6 +147,354 @@ function loadShift_new() {
     .setFaviconUrl(webIconUrl);
 }
 
+// 新增：交接班页面加载函数
+function loadHandover_1_0() {
+  let webPage = getReleaseWebPage();
+  return render("Handover_1.0", { webPage: webPage })
+    .setTitle("交接班 / Handover")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadFailureReport_Template() {
+  let webPage = getReleaseWebPage();
+  return render("FailureReport_Template", { webPage: webPage })
+    .setTitle("故障报告模板 / Failure Report Template")
+    .setFaviconUrl(webIconUrl);
+}
+
+function getFailureReportTemplate() {
+  try {
+    const id = "1Zypt94pPHgD0eEa6QWROKJy_EkLA2eh0eAgISgkJgPY";
+    const ss = SpreadsheetApp.openById(id);
+    const ws = ss.getSheetByName("FailureReport_Template");
+    if (!ws) throw new Error("Sheet FailureReport_Template not found");
+    const data = ws.getDataRange().getValues();
+    const headers = data[0];
+    const rows = data.slice(1).map(row => {
+      let obj = {};
+      headers.forEach((h, i) => { obj[h] = row[i]; });
+      return obj;
+    });
+    return JSON.stringify(rows);
+  } catch (e) {
+    return JSON.stringify({ error: e.toString() });
+  }
+}
+
+function getEDSUserNames() {
+  try {
+    const ws = SpreadsheetApp.openById('1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM').getSheetByName('userID');
+    if (!ws) return JSON.stringify([]);
+    const vals = ws.getDataRange().getValues();
+    const users = [];
+    for (let i = 2; i < vals.length; i++) {
+      const name  = String(vals[i][1]  || '').trim();
+      const email = String(vals[i][9]  || '').trim();
+      const colO  = String(vals[i][14] || '').trim();
+      const defaultVerifierEmail = String(vals[i][55] || '').trim();
+      if (name && colO) {
+        users.push({
+          display: email ? name + '【' + email + '】' : name,
+          email: email,
+          defaultVerifierEmail: defaultVerifierEmail
+        });
+      }
+    }
+    return JSON.stringify(users);
+  } catch(e) { return JSON.stringify([]); }
+}
+
+function getFailureReportInit() {
+  const tpl = JSON.parse(getFailureReportTemplate());
+  if (tpl.error) return JSON.stringify({ error: tpl.error });
+  return JSON.stringify({ template: tpl, users: JSON.parse(getEDSUserNames()) });
+}
+
+/**
+ * 获取车间和工序选项
+ * Get workshop and process options
+ * @returns {Object}
+ */
+function getWorkshopProcessOptions() {
+  try {
+    const id = "1Zypt94pPHgD0eEa6QWROKJy_EkLA2eh0eAgISgkJgPY";
+    const ss = SpreadsheetApp.openById(id);
+    const ws = ss.getSheetByName("FailureReport_Template");
+    if (!ws) return JSON.stringify({ error: "Sheet not found" });
+    
+    const data = ws.getDataRange().getValues();
+    const headers = data[0];
+    const rows = data.slice(1);
+    
+    let workshops = [];
+    let processes = [];
+    
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const fieldId = String(row[0] || '').trim();
+      const options = String(row[3] || '').trim();
+      
+      if (fieldId === 'workshop' && options) {
+        workshops = options.includes('|') ? options.split('|') : options.split('/');
+        workshops = workshops.map(function(o) { return o.trim(); }).filter(function(o) { return o; });
+      }
+      if (fieldId === 'process' && options) {
+        processes = options.includes('|') ? options.split('|') : options.split('/');
+        processes = processes.map(function(o) { return o.trim(); }).filter(function(o) { return o; });
+      }
+    }
+    
+    return JSON.stringify({ workshops: workshops, processes: processes });
+  } catch (e) {
+    return JSON.stringify({ error: e.toString() });
+  }
+}
+
+function submitFailureReport(dataStr) {
+  try {
+    const data = JSON.parse(dataStr);
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const ws = ss.getSheetByName('Failure_Database');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+    if (!ws) throw new Error('Sheet Failure_Database not found');
+    if (!wsFollow) throw new Error('Sheet Failure_Report_followup not found');
+    const values = ws.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][6]).trim() === String(data.case_code).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('未找到故障报告编号 / Report ID not found: ' + data.case_code);
+    const dataForSheet = Object.assign({}, data);
+    delete dataForSheet.photo;
+    delete dataForSheet.fault_category_text;
+    ws.getRange(rowIndex, 11).setValue(JSON.stringify(dataForSheet));
+    // 生成PDF并写入J列
+    const pdfBlob = generateFailureReportPDF_(data);
+    const reportNo = String(data.case_code || '').trim();
+    const workshop = String(values[rowIndex - 1][4] || '').trim();
+    const processFromRow = String(values[rowIndex - 1][5] || '').trim();
+    const fileName = reportNo + '_' + workshop + '_' + processFromRow + '.pdf';
+    pdfBlob.setName(fileName);
+    const folder = DriveApp.getFolderById('1mMKiMFOzbpqB_V2iIQcIqF2o4ZyRRcNL');
+    const pdfFile = folder.createFile(pdfBlob);
+    const fileUrl = pdfFile.getUrl();
+    ws.getRange(rowIndex, 10).setFormula('=HYPERLINK("' + fileUrl + '","' + fileName + '")');
+
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const now = new Date();
+    const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    const followRows = [];
+    const requiredPa = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
+
+    (data.pa || []).forEach(function(row) {
+      const missing = requiredPa.filter(function(fid) {
+        return !String((row && row[fid]) || '').trim();
+      });
+      if (missing.length === requiredPa.length) return;
+      if (missing.length > 0) {
+        throw new Error('预防对策存在未填写完整行，请补全后提交 / Incomplete PA row exists');
+      }
+      const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
+      followRows.push([
+        followId,
+        String(data.case_code || '').trim(),
+        String((row && row.type) || '').trim(),
+        String((row && row.pa_plan) || '').trim(),
+        String((row && row.pa_who) || '').trim(),
+        String((row && row.pa_when) || '').trim(),
+        String((row && row.pa_verifier) || '').trim(),
+        String((row && row.pa_verifier_when) || '').trim(),
+        '进行中 / Ongoing',
+        nowYmd,
+        nowYmd,
+        fileUrl,
+        '未验证 / Not Verified'
+      ]);
+    });
+
+    if (followRows.length === 0) {
+      throw new Error('请至少完整填写1条预防对策后再提交 / Please complete at least one PA row');
+    }
+
+    wsFollow.getRange(wsFollow.getLastRow() + 1, 1, followRows.length, followRows[0].length).setValues(followRows);
+    return JSON.stringify({ success: true, fileUrl: fileUrl, fileName: fileName });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function generateFailureReportPDF_(data) {
+  const html = buildReportHtml_(data);
+  return htmlToPdf_(html, 'TMP_FR_' + data.case_code);
+}
+
+function htmlToPdf_(htmlContent, tmpName) {
+  const token = ScriptApp.getOAuthToken();
+  const boundary = 'fr_boundary_' + new Date().getTime();
+  const nl = '\r\n';
+  const metadata = JSON.stringify({ name: tmpName, mimeType: 'application/vnd.google-apps.document' });
+  const body = '--' + boundary + nl +
+    'Content-Type: application/json; charset=UTF-8' + nl + nl +
+    metadata + nl +
+    '--' + boundary + nl +
+    'Content-Type: text/html; charset=UTF-8' + nl + nl +
+    htmlContent + nl +
+    '--' + boundary + '--';
+  const resp = UrlFetchApp.fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'multipart/related; boundary="' + boundary + '"'
+      },
+      payload: Utilities.newBlob(body).getBytes(),
+      muteHttpExceptions: true
+    }
+  );
+  const fileId = JSON.parse(resp.getContentText()).id;
+  if (!fileId) throw new Error('HTML转PDF失败: ' + resp.getContentText());
+  Utilities.sleep(1500);
+  const pdf = DriveApp.getFileById(fileId).getAs(MimeType.PDF);
+  DriveApp.getFileById(fileId).setTrashed(true);
+  return pdf;
+}
+
+function buildReportHtml_(data) {
+  const e = function(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  const th = 'background-color:#E60012;color:#fff;border:1px solid #222;padding:4px 6px;text-align:center;font-size:9pt;font-weight:bold;';
+  const td = 'border:1px solid #222;padding:5px 7px;font-size:9pt;vertical-align:top;';
+  const sec = 'color:#000;font-weight:bold;font-size:12pt;margin:16px 0 6px 0;';
+  const fl = 'font-weight:bold;font-size:8pt;color:#222;margin-bottom:3px;';
+  const fv = 'font-size:10pt;color:#222;min-height:14px;';
+
+  const displayNameOnly = function(v) {
+    return String(v || '').replace(/\s*【[^】]*】\s*$/, '').trim();
+  };
+
+  const formatDateYMD = function(v) {
+    const s = String(v || '').trim();
+    if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (m) {
+      const mm = ('0' + m[2]).slice(-2);
+      const dd = ('0' + m[3]).slice(-2);
+      return m[1] + '-' + mm + '-' + dd;
+    }
+    return s;
+  };
+
+  function field(label, val, cs) {
+    const colspan = cs ? ' colspan="' + cs + '"' : '';
+    return '<td' + colspan + ' style="' + td + '"><div style="' + fl + '">' + label + '</div><div style="' + fv + '">' + e(val) + '&nbsp;</div></td>';
+  }
+
+  let actionRows = '';
+  (data.actions || []).forEach(function(a, i) {
+    actionRows += '<tr>' +
+      '<td style="' + td + 'text-align:center">' + (i+1) + '</td>' +
+      '<td style="' + td + '">' + e(a.proc) + '&nbsp;</td>' +
+      '<td style="' + td + 'text-align:center">' + e(displayNameOnly(a.who)) + '&nbsp;</td>' +
+      '<td style="' + td + 'text-align:center">' + e(formatDateYMD(a.date)) + '&nbsp;</td>' +
+      '<td style="' + td + 'text-align:center">' + e(a.time) + '&nbsp;</td>' +
+      '<td style="' + td + 'text-align:center">' + e(a.result) + '&nbsp;</td>' +
+      '</tr>';
+  });
+
+  let rcaRows = '';
+  (data.rca || []).forEach(function(r, i) {
+    rcaRows += '<tr>' +
+      '<td style="' + td + 'text-align:center;font-weight:bold">Why' + (i+1) + '</td>' +
+      '<td style="' + td + '">' + e(r.desc) + '&nbsp;</td>' +
+      '<td style="' + td + '">' + e(r.cause) + '&nbsp;</td>' +
+      '<td style="' + td + '">' + e(r.action) + '&nbsp;</td>' +
+      '</tr>';
+  });
+
+  let paHeader = '<tr><th style="' + th + 'width:90px">\u5e8f\u53f7<br>No.</th>';
+  (data.pa_fields || []).forEach(function(f) {
+    paHeader += '<th style="' + th + '">' + e(f.cn) + '<br>' + e(f.en) + '</th>';
+  });
+  paHeader += '</tr>';
+  let paRows = '';
+  (data.pa || []).forEach(function(p) {
+    let cells = '<td style="' + td + 'font-weight:bold">' + e(p.type) + '</td>';
+    (data.pa_fields || []).forEach(function(f) {
+      let v = p[f.id];
+      if (/who|verifier/i.test(String(f.id || ''))) v = displayNameOnly(v);
+      if (/date|when/i.test(String(f.id || ''))) v = formatDateYMD(v);
+      cells += '<td style="' + td + '">' + e(v) + '&nbsp;</td>';
+    });
+    paRows += '<tr>' + cells + '</tr>';
+  });
+
+  const cats = data.fault_category_text || (data.fault_category || '').split(',').filter(function(v){return v;}).join(' / ');
+
+  const photoContent = data.photo
+    ? '<img src="' + data.photo + '" width="160" height="120" style="display:block;width:160px;height:120px;object-fit:contain;">'
+    : '<div style="width:160px;height:120px;border:1px dashed #aaa;text-align:center;padding-top:48px;color:#bbb;font-size:9pt;box-sizing:border-box;">[ 图片 / Photo ]</div>';
+  const photoBox = '<div style="' + fl + '">故障设备图片 Equipment Photo</div>' + photoContent;
+
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;margin:24px;color:#222">' +
+    '<div style="text-align:center;font-size:16pt;font-weight:bold;margin-bottom:2px">Breakdown Analysis</div>' +
+    '<div style="text-align:center;font-size:11pt;margin-bottom:2px">设备故障分析</div>' +
+    '<div style="text-align:right;font-size:9pt;color:#666;margin-bottom:10px">EQU-R-MAC-042-00</div>' +
+
+    '<div style="' + sec + '">基本信息 / Basic Information</div>' +
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><tr>' +
+    field('设备AEM# Equip. AEM#', data.aem_no) +
+    field('目前状况 Present Status', data.present_status) +
+    field('存档编号 Case Code', data.case_code) +
+    '</tr><tr>' +
+    field('分析人员 Analysis Person', data.analyst, '2') +
+    field('故障时长 MDT', data.time_used) +
+    '</tr></table>' +
+
+    '<div style="' + sec + '">维修前故障现象描述 / Original Description of Problem Phenomena</div>' +
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:10px"><tr>' +
+    '<td style="' + td + 'width:28%;vertical-align:top" rowspan="4">' + photoBox + '</td>' +
+    field('What 产品/材料 What Product/Material', data.what) +
+    field('When 班次/时间 When Shift/Time', formatDateYMD(data.when)) +
+    '</tr><tr>' +
+    field('Where 部位/源头 Where Location/Source', data.where) +
+    field('Who 人员技能 Who Personnel/Skill', displayNameOnly(data.pdesc_who)) +
+    '</tr><tr>' +
+    '<td colspan="2" style="' + td + '"><div style="' + fl + '">故障描述 Trouble Description</div>' +
+    '<div style="' + fv + 'min-height:50px">' + e(data.trouble_desc) + '&nbsp;</div></td>' +
+    '</tr></table>' +
+
+    '<div style="' + sec + '">行动措施描述 / Description of Action &amp; Remedy</div>' +
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:6px">' +
+    '<tr><th style="' + th + 'width:30px">序号<br>NO.</th><th style="' + th + '">维修过程描述 / Description of Maintenance Process</th>' +
+    '<th style="' + th + 'width:70px">责任人<br>Who</th><th style="' + th + 'width:85px">日期<br>Date</th>' +
+    '<th style="' + th + 'width:55px">时间<br>(min)</th><th style="' + th + 'width:45px">结果<br>Y/N</th></tr>' +
+    actionRows + '</table>' +
+    '<div style="font-size:9pt;margin-bottom:10px"><b>故障分类 Fault Category: </b>' + (e(cats) || '&nbsp;') + '</div>' +
+
+    '<div style="' + sec + '">根本原因分析 / RCA Analysis</div>' +
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">' +
+    '<tr><th style="' + th + 'width:55px">层<br>Level</th><th style="' + th + '">描述 (Description)</th>' +
+    '<th style="' + th + '">原因分析 (Cause)</th><th style="' + th + '">行动 (Action)</th></tr>' +
+    rcaRows + '</table>' +
+
+    '<div style="' + sec + '">预防对策 / Preventive Action</div>' +
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">' +
+    paHeader + paRows + '</table>' +
+    '</body></html>';
+}
+
+// 新增：故障记录页面加载函数
+function loadFault_Record_1_0() {
+  let webPage = getReleaseWebPage();
+  return render("Fault_Record_1.0", { webPage: webPage })
+    .setTitle("故障记录 / Fault Record")
+    .setFaviconUrl(webIconUrl);
+}
+
 function loadhome_new() {
   let webPage = getReleaseWebPage();
   return render("home_new_1.0", { webPage: webPage })
@@ -150,6 +514,14 @@ function loadMoldSurfaceClean() {
   let webPage = getReleaseWebPage();
   return render("MoldSurfaceClean", { webPage: webPage })
     .setTitle("模面清理/ Mold Surface Clean") // Changed title
+    .setFaviconUrl(webIconUrl);
+}
+
+// 新增的工艺抽检页面的加载函数
+function loadProcessSamplingInspection() {
+  let webPage = getReleaseWebPage();
+  return render("Process_Inspection", { webPage: webPage })
+    .setTitle("工艺抽检 / Process Inspection")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -612,12 +984,9 @@ function getPlan_weekly() {
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     let ss = SpreadsheetApp.openByUrl(id);
     let ws = ss.getSheetByName("Total PM Plan List");
-    let head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
-
-    // 获取所有数据
-    let allValues = ws
-      .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-      .getValues();
+    let lastRow = ws.getLastRow();
+    let lastColumn = ws.getLastColumn();
+    let head = ws.getRange(1, 1, 1, lastColumn).getValues()[0];
 
     // 计算时间范围（自然周：周日到周六）
     let today = new Date();
@@ -635,11 +1004,23 @@ function getPlan_weekly() {
     let threeWeeksLaterSaturday = new Date(currentWeekSunday);
     threeWeeksLaterSaturday.setDate(currentWeekSunday.getDate() + 20); // 当前周+2周=20天
 
-    // 格式化日期为YYYY-MM-DD格式
-    let lastWeekSundayStr = lastWeekSunday.toISOString().split("T")[0];
-    let threeWeeksLaterSaturdayStr = threeWeeksLaterSaturday
-      .toISOString()
-      .split("T")[0];
+    const TIMEZONE = "Asia/Shanghai";
+    const DATE_FORMAT = "yyyy-MM-dd";
+    let lastWeekSundayStr = Utilities.formatDate(
+      lastWeekSunday,
+      TIMEZONE,
+      DATE_FORMAT
+    );
+    let threeWeeksLaterSaturdayStr = Utilities.formatDate(
+      threeWeeksLaterSaturday,
+      TIMEZONE,
+      DATE_FORMAT
+    );
+    let currentWeekSundayStr = Utilities.formatDate(
+      currentWeekSunday,
+      TIMEZONE,
+      DATE_FORMAT
+    );
 
     console.log(
       "筛选时间范围：",
@@ -648,40 +1029,63 @@ function getPlan_weekly() {
       threeWeeksLaterSaturdayStr
     );
 
-    // 筛选数据（基于第5列的日期）
     let filteredValues = [];
     let hasLastWeekData = false;
     let hasNextThreeWeeksData = false;
 
-    allValues.forEach((r) => {
-      if (r[4] instanceof Date) {
-        // 第5列（索引4）是日期
-        let dateStr = r[4].toISOString().split("T")[0];
+    if (lastRow > 1) {
+      let dateValues = ws.getRange(2, 5, lastRow - 1, 1).getValues();
+      let matchedRows = [];
+
+      dateValues.forEach((row, idx) => {
+        let cell = row[0];
+        if (!cell) {
+          return;
+        }
+
+        let dateStr = "";
+        if (cell instanceof Date) {
+          dateStr = Utilities.formatDate(cell, TIMEZONE, DATE_FORMAT);
+        } else if (typeof cell === "string") {
+          dateStr = cell.trim();
+        }
+
+        if (!dateStr) {
+          return;
+        }
 
         if (
           dateStr >= lastWeekSundayStr &&
           dateStr <= threeWeeksLaterSaturdayStr
         ) {
-          filteredValues.push(r);
+          let rowNumber = idx + 2; // 数据开始于第2行
+          matchedRows.push(rowNumber);
 
-          // 检查是否有前一周数据
-          if (
-            dateStr >= lastWeekSundayStr &&
-            dateStr < currentWeekSunday.toISOString().split("T")[0]
-          ) {
+          if (dateStr >= lastWeekSundayStr && dateStr < currentWeekSundayStr) {
             hasLastWeekData = true;
           }
 
-          // 检查是否有后三周数据
-          if (
-            dateStr >= currentWeekSunday.toISOString().split("T")[0] &&
-            dateStr <= threeWeeksLaterSaturdayStr
-          ) {
+          if (dateStr >= currentWeekSundayStr && dateStr <= threeWeeksLaterSaturdayStr) {
             hasNextThreeWeeksData = true;
           }
         }
+      });
+
+      if (matchedRows.length > 0) {
+        let minRow = Math.min.apply(null, matchedRows);
+        let maxRow = Math.max.apply(null, matchedRows);
+        let rowsToFetch = maxRow - minRow + 1;
+        let rowValues = ws.getRange(minRow, 1, rowsToFetch, lastColumn).getValues();
+        let rowNumberSet = new Set(matchedRows);
+
+        rowValues.forEach((r, idx) => {
+          let actualRow = minRow + idx;
+          if (rowNumberSet.has(actualRow)) {
+            filteredValues.push(r);
+          }
+        });
       }
-    });
+    }
 
     // 处理筛选后的数据
     let array = [];
@@ -716,25 +1120,62 @@ function getPlan_weekly() {
       .getRange(1, 1, 1, ws_head.getLastColumn())
       .getValues()[0];
 
-    let record = [];
+    const STATUS_SHEET_DATE_COL = 5; // Plan PM Date 列
+    let record_obj = [];
     sheetName.forEach((name) => {
       let wss = ss.getSheetByName(name);
-      let lastRow = wss.getLastRow();
-      if (lastRow > 1) {
-        let values = wss
-          .getRange(2, 1, lastRow - 1, wss.getLastColumn())
-          .getValues();
-        record = record.concat(values);
+      let lastRowStatus = wss.getLastRow();
+      if (lastRowStatus <= 1) {
+        return;
       }
-    });
 
-    let record_obj = [];
-    record.forEach((r) => {
-      let obj_2 = {};
-      for (let i = 0; i < head_record.length; i++) {
-        obj_2[head_record[i]] = r[i];
+      let statusDates = wss.getRange(2, STATUS_SHEET_DATE_COL, lastRowStatus - 1, 1).getValues();
+      let matchedStatusRows = [];
+
+      statusDates.forEach((row, idx) => {
+        let cell = row[0];
+        if (!cell) {
+          return;
+        }
+
+        let dateStr = "";
+        if (cell instanceof Date) {
+          dateStr = Utilities.formatDate(cell, TIMEZONE, DATE_FORMAT);
+        } else if (typeof cell === "string") {
+          dateStr = cell.trim();
+        }
+
+        if (!dateStr) {
+          return;
+        }
+
+        if (dateStr >= lastWeekSundayStr && dateStr <= threeWeeksLaterSaturdayStr) {
+          matchedStatusRows.push(idx + 2);
+        }
+      });
+
+      if (matchedStatusRows.length === 0) {
+        return;
       }
-      record_obj.push(obj_2);
+
+      let minStatusRow = Math.min.apply(null, matchedStatusRows);
+      let maxStatusRow = Math.max.apply(null, matchedStatusRows);
+      let statusRowsToFetch = maxStatusRow - minStatusRow + 1;
+      let rowValues = wss
+        .getRange(minStatusRow, 1, statusRowsToFetch, wss.getLastColumn())
+        .getValues();
+      let statusRowSet = new Set(matchedStatusRows);
+
+      rowValues.forEach((r, idx) => {
+        let actualRow = minStatusRow + idx;
+        if (statusRowSet.has(actualRow)) {
+          let obj_2 = {};
+          for (let i = 0; i < head_record.length; i++) {
+            obj_2[head_record[i]] = r[i];
+          }
+          record_obj.push(obj_2);
+        }
+      });
     });
 
     return {
@@ -1005,12 +1446,28 @@ function getPMrecord(PM_Info) {
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
     var ws = ss.getSheetByName(PM_Info.process + "-" + PM_Info.workshop);
-    var data = ws
+    var allData = ws
       .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-      .getDisplayValues()
-      .filter((v) => {
-        return v[9] == PM_Info.workcenter && v[4] == PM_Info.Plan_SD;
-      });
+      .getDisplayValues();
+    
+    Logger.log("=== getPMrecord 调试信息 ===");
+    Logger.log("查询条件 - Workcenter: " + PM_Info.workcenter + ", Plan_SD: " + PM_Info.Plan_SD);
+    Logger.log("总数据行数: " + allData.length);
+    
+    allData.forEach(function(v, index) {
+      Logger.log("第" + (index + 2) + "行 - v[9](Workcenter): '" + v[9] + "', v[4](Plan PM Date): '" + v[4] + "'");
+    });
+    
+    var data = allData.filter((v) => {
+      var workcenterMatch = v[9].toString().trim() == PM_Info.workcenter.toString().trim();
+      var dateMatch = v[4].toString().trim() == PM_Info.Plan_SD.toString().trim();
+      Logger.log("过滤判断 - Workcenter匹配: " + workcenterMatch + ", 日期匹配: " + dateMatch);
+      return workcenterMatch && dateMatch;
+    });
+    
+    Logger.log("过滤后数据行数: " + data.length);
+    Logger.log("===========================");
+    
     return ["OK", JSON.stringify(data)];
   } catch (e) {
     return ["NO", e.toString()];
@@ -2106,17 +2563,6 @@ function getData_PointCheck_Inspection2(process) {
     });
     
     
-    // 按任务类型分组统计
-    let taskTypeStats = {};
-    obj_PointCheckInfo.forEach(item => {
-      let taskType = item["任务类型"] ? item["任务类型"].toString().trim() : "空";
-      if (!taskTypeStats[taskType]) {
-        taskTypeStats[taskType] = 0;
-      }
-      taskTypeStats[taskType]++;
-    });
-    console.log('📈 按任务类型分组统计:', taskTypeStats);
-    
     // 在 if 块外部定义变量，确保作用域正确
     let workcenter_list = [];
     let nimWorkcenters_raw = []; // NIM机台号原始列表（不做排除，传给前端）
@@ -2358,17 +2804,6 @@ function getData_PointCheck_Inspection2(process) {
     });
     
     
-    // 按任务类型分组统计（筛选后）
-    let filteredTaskTypeStats = {};
-    filtered_pointCheckInfo.forEach(item => {
-      let taskType = item["任务类型"] ? item["任务类型"].toString().trim() : "空";
-      if (!filteredTaskTypeStats[taskType]) {
-        filteredTaskTypeStats[taskType] = 0;
-      }
-      filteredTaskTypeStats[taskType]++;
-    });
-    console.log('📈 按工序筛选后的任务类型统计:', filteredTaskTypeStats);
-
     // 筛选tasklist：索引14的元素等于process
     // 注：INJ和IM都对应注塑工序，需要同时匹配
     let filtered_tasklist = data_PointCheckTasklist.filter(row => {
@@ -2379,6 +2814,37 @@ function getData_PointCheck_Inspection2(process) {
       }
       // 其他工序直接匹配
       return rowProcess === process;
+    });
+
+    // ========== 获取该工序的所有历史点检记录的Code数据 ==========
+    let sheetNames = ss_PointCheck.getSheets().map(sheet => sheet.getName());
+    let allHistoricalRecords = [];
+    
+    sheetNames.forEach(sheetName => {
+      if (sheetName.includes("-") && sheetName.startsWith(process + "-")) {
+        let ws = ss_PointCheck.getSheetByName(sheetName);
+        if (ws && ws.getLastRow() > 1) {
+          let lastRow = ws.getLastRow();
+          let data = ws.getRange(2, 1, lastRow - 1, 17) // 获取A到Q列的所有数据
+            .getDisplayValues();
+          
+          data.forEach(row => {
+            if (row[0] && row[0].toString().trim()) { // 确保Code不为空
+              let record = {
+                Code: row[0] ? row[0].toString().trim() : "",
+                Workshop: row[1] ? row[1].toString().trim() : "",
+                // Process: row[2] ? row[2].toString().trim() : "",
+                MachineType: row[3] ? row[3].toString().trim() : "",
+                // PointChecker: row[5] ? row[5].toString().trim() : "",
+                // Ownner: row[6] ? row[6].toString().trim() : "",
+                SubmitDate: row[7] ? row[7].toString().trim() : "",
+                Workcenter: row[8] ? row[8].toString().trim() : ""
+              };
+              allHistoricalRecords.push(record);
+            }
+          });
+        }
+      }
     });
 
     var info = {
@@ -2393,15 +2859,10 @@ function getData_PointCheck_Inspection2(process) {
       nimWorkcenters_raw: nimWorkcenters_raw, // NIM机台号原始列表（前端动态过滤）
       excludedCombinations: excludedCombinations, // 当周已检查的"机台号+任务类型"组合
       currentYearWeek: now_YearWeek, // 当前周次
+      allHistoricalRecords: allHistoricalRecords, // 所有历史点检记录的完整对象数据
     };
     
-    console.log('📦 返回给前端的 pointCheckInfo 数据:', {
-      '工序': process,
-      'pointCheckInfo数量': filtered_pointCheckInfo.length,
-      'nimWorkcenters_raw数量': nimWorkcenters_raw.length,
-      'excludedCombinations数量': excludedCombinations.length
-    });
-        
+            
     let jsonString = JSON.stringify(info);
   
     return ["OK", jsonString];
@@ -2660,9 +3121,28 @@ function submitInspectionResults(obj, arrPmInfoJson) {
     checkTeam: obj.checkTeam,
     tableDataLength: obj.tableData ? obj.tableData.length : 0,
     arrPmInfoJsonLength: arrPmInfoJson.length,
+    useSelectionYearWeek: obj.useSelectionYearWeek,
+    yearWeekFromSelection: obj.yearWeekFromSelection,
   });
 
   try {
+    // ========== 基于红色标题判断：使用选择的年周或提交日期的年周 ==========
+    if (obj.useSelectionYearWeek && obj.yearWeekFromSelection) {
+      let now = new Date();
+      let dateStr = now.getFullYear() + 
+                    String(now.getMonth() + 1).padStart(2, '0') + 
+                    String(now.getDate()).padStart(2, '0');
+      let newCode = dateStr + obj.yearWeekFromSelection + obj.workcenter;
+      arrPmInfoJson[0] = newCode;
+      console.log("🔄 使用红色标题年周生成Code:", {
+        原Code: obj.code,
+        新Code: newCode,
+        年周来源: "红色标题 (secondInfo)"
+      });
+    } else {
+      console.log("✅ 使用提交日期年周生成Code (原有逻辑)");
+    }
+    
     console.log("📝 步骤1: 打开主数据表");
     let saasId = "1RQql-PrcBWiAQNeg7hQKcocpllSUMRhT5XPrDTVWoBY";
     let ss_PointCheck = SpreadsheetApp.openById(saasId);
@@ -3158,6 +3638,55 @@ function getAllshiftData() {
   return { Head: head, Content: contentArray };
 }
 
+function getShiftRowsByPrefix(prefix) {
+  let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
+  let ss = SpreadsheetApp.openById(id);
+  let sheetName = [
+    "Shift_INJ_TB1",
+    "Shift_INJ_TB2",
+    "Shift_TF_TB1",
+    "Shift_TF_TB2",
+    "Shift_PK_TB1",
+    "Shift_PK_TB2",
+  ];
+  let head = ss
+    .getSheetByName(sheetName[0])
+    .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
+    .getValues()[0];
+  let content = [];
+  sheetName.forEach((name) => {
+    let ws = ss.getSheetByName(name);
+    let lastRow = ws.getLastRow();
+    if (lastRow > 1) {
+      let values = ws
+        .getRange(2, 1, lastRow - 1, ws.getLastColumn())
+        .getValues();
+      content = content.concat(values);
+    }
+  });
+
+  // 按编号前缀筛选（prefix 如 "20260215"）
+  let filtered = content.filter((row) => {
+    let code = (row[head.indexOf("编号")] || "").toString().trim();
+    return code.startsWith(prefix);
+  });
+
+  let contentArray = filtered.map((row) => {
+    let contentObj = {};
+    head.forEach((columnName, index) => {
+      contentObj[columnName] = row[index];
+    });
+    return contentObj;
+  });
+
+  contentArray.forEach((r) => {
+    r["提交日期"] = r["提交日期"].toISOString();
+  });
+
+  console.log("getShiftRowsByPrefix prefix:", prefix, "rows:", contentArray.length);
+  return { Head: head, Content: contentArray };
+}
+
 function getIDinfo() {
   let saasId = "1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM";
   let ss = SpreadsheetApp.openById(saasId);
@@ -3452,19 +3981,32 @@ function saveData_tasklist(data, confirmUser) {
     }
 
     if (Status == "Start") {
-      ws.appendRow([
-        data["PM No."],
-        data["PmStatus"],
-        data["Notification"],
-        data["PM People"],
-        data["Plan PM Date"],
-        data["SatrtDate"],
-        data["StartTime"],
-        data["EndDate"],
-        data["EndTime"],
-        data["Workcenter"],
-        data["任务明细"],
-      ]);
+      if (rowNumber !== -1) {
+        ws.getRange(rowNumber, 2).setValue(data["PmStatus"]);
+        ws.getRange(rowNumber, 3).setValue(data["Notification"]);
+        ws.getRange(rowNumber, 4).setValue(data["PM People"]);
+        ws.getRange(rowNumber, 5).setValue(data["Plan PM Date"]);
+        ws.getRange(rowNumber, 6).setValue(data["SatrtDate"]);
+        ws.getRange(rowNumber, 7).setValue(data["StartTime"]);
+        ws.getRange(rowNumber, 8).setValue(data["EndDate"]);
+        ws.getRange(rowNumber, 9).setValue(data["EndTime"]);
+        ws.getRange(rowNumber, 10).setValue(data["Workcenter"]);
+        ws.getRange(rowNumber, 11).setValue(data["任务明细"]);
+      } else {
+        ws.appendRow([
+          data["PM No."],
+          data["PmStatus"],
+          data["Notification"],
+          data["PM People"],
+          data["Plan PM Date"],
+          data["SatrtDate"],
+          data["StartTime"],
+          data["EndDate"],
+          data["EndTime"],
+          data["Workcenter"],
+          data["任务明细"],
+        ]);
+      }
     } else if (Status == "End" && rowNumber !== -1) {
       let endDateColumn = 8; // 假设 EndDate 在第8列
       let endTimeColumn = 9; // 假设 EndTime 在第9列
@@ -5153,14 +5695,57 @@ function getMasterPMData() {
 }
 
 // 新增函数：从指定Google Sheet获取故障报告数据并按工序筛选
-function updateFailureReportConfirmation(reportId, process, needReport) {
+function updateFailureReportConfirmation(
+  reportId,
+  process,
+  needReport,
+  responsiblePerson,
+  clientRowData
+) {
   try {
     console.log(
       "开始更新故障报告确认状态 / Starting to update failure report confirmation status:",
-      { reportId, process, needReport }
+      { reportId, process, needReport, responsiblePerson }
     );
 
-    // 根据工序确定对应的Sheet名称
+    const responsibleName = String(responsiblePerson || "").trim();
+    const rowDataFromClient = clientRowData || null;
+    const isManualEntry = !!(rowDataFromClient && rowDataFromClient.manualEntry);
+
+    // 手动录入行：不存在对应 Shift Sheet 行，直接处理后返回
+    if (isManualEntry) {
+      if (needReport) {
+        if (!responsibleName) {
+          throw new Error(
+            "需要故障报告前必须分配责任人 / Please assign a responsible person before requesting a failure report"
+          );
+        }
+        writeToFailureDatabase(rowDataFromClient, process, responsibleName);
+        try {
+          sendFailureReportNotification(rowDataFromClient, process, responsibleName);
+        } catch (notifyError) {
+          console.error(
+            "发送故障报告通知邮件失败 / Failed to send failure report notification:",
+            notifyError
+          );
+        }
+      }
+      return {
+        success: true,
+        message: needReport
+          ? "故障报告需求已登记 / Failure report request recorded"
+          : "已记录为无需故障报告 / Marked as no failure report required",
+        details: {
+          reportId,
+          process,
+          needReport,
+          manualEntry: true,
+          timestamp: new Date().toISOString(),
+        },
+      };
+    }
+
+    // 非手动录入行：在对应 Shift Sheet 中更新"是否需要故障报告"列
     let sheetNames = [];
     if (process === "IM") {
       sheetNames = ["Shift_INJ_TB1", "Shift_INJ_TB2"];
@@ -5172,104 +5757,53 @@ function updateFailureReportConfirmation(reportId, process, needReport) {
       throw new Error("无效的工序参数 / Invalid process parameter: " + process);
     }
 
-    // 打开Google Sheets
     const spreadsheetId = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-
     let updateSuccess = false;
     let updatedSheetName = "";
 
-    // 遍历对应的Sheet，查找并更新数据
     for (let sheetName of sheetNames) {
       try {
         const sheet = spreadsheet.getSheetByName(sheetName);
-        if (!sheet) {
-          console.log("Sheet不存在 / Sheet not found:", sheetName);
-          continue;
-        }
+        if (!sheet) continue;
 
-        console.log("正在搜索Sheet / Searching in sheet:", sheetName);
-
-        // 获取所有数据
         const data = sheet.getDataRange().getValues();
-        if (data.length <= 1) {
-          console.log("Sheet数据为空 / Sheet data is empty:", sheetName);
-          continue;
-        }
+        if (data.length <= 1) continue;
 
-        // 查找匹配的行（编号列，通常是第1列，索引为0）
         let rowIndex = -1;
         for (let i = 1; i < data.length; i++) {
-          // 从第2行开始（跳过表头）
           if (String(data[i][0]) === String(reportId)) {
-            // 编号列
             rowIndex = i;
             break;
           }
         }
 
         if (rowIndex !== -1) {
-          console.log(
-            "在Sheet中找到匹配行 / Found matching row in sheet:",
-            sheetName,
-            "行号 / Row:",
-            rowIndex + 1
-          );
-
-          // 更新"是否需要填写故障报告"列（第20列，索引为19）
-          // 根据需求文档，这是第20列，从0开始计数
-          const needReportColumnIndex = 19;
-
-          // 将布尔值转换为中文描述
-          const needReportValue = needReport ? "是" : "否";
-
-          // 更新单元格
           sheet
-            .getRange(rowIndex + 1, needReportColumnIndex + 1)
-            .setValue(needReportValue);
+            .getRange(rowIndex + 1, 20)
+            .setValue(needReport ? "是" : "否");
 
-          console.log(
-            "成功更新Sheet / Successfully updated sheet:",
-            sheetName,
-            "行号 / Row:",
-            rowIndex + 1,
-            "列号 / Column:",
-            needReportColumnIndex + 1,
-            "新值 / New value:",
-            needReportValue
-          );
-
-          // 如果需要故障报告，先向Failure_Database sheet写入数据，然后发送邮件通知
           if (needReport) {
+            if (!responsibleName) {
+              throw new Error(
+                "需要故障报告前必须分配责任人 / Please assign a responsible person before requesting a failure report"
+              );
+            }
+            const rowForProcessing = rowDataFromClient || data[rowIndex];
             try {
-              // 新增：向Failure_Database sheet写入数据
-              writeToFailureDatabase(data[rowIndex], process);
-              console.log(
-                "成功写入Failure_Database sheet / Successfully wrote to Failure_Database sheet"
-              );
-
-              // 发送邮件通知
-              sendFailureReportNotification(data[rowIndex], process);
-              console.log(
-                "故障报告邮件通知发送成功 / Failure report email notification sent successfully"
-              );
-            } catch (error) {
+              writeToFailureDatabase(rowForProcessing, process, responsibleName);
+              sendFailureReportNotification(rowForProcessing, process, responsibleName);
+            } catch (e) {
               console.error(
-                "处理故障报告需求时出错 / Error processing failure report request:",
-                error
+                "写入 Failure_Database 或发送通知失败 / Failed to write or notify:",
+                e
               );
-              // 如果写入数据库或发送邮件失败，不影响数据更新，只记录错误
             }
           }
 
           updateSuccess = true;
           updatedSheetName = sheetName;
-          break; // 找到并更新后退出循环
-        } else {
-          console.log(
-            "在Sheet中未找到匹配行 / No matching row found in sheet:",
-            sheetName
-          );
+          break;
         }
       } catch (sheetError) {
         console.error(
@@ -5281,27 +5815,24 @@ function updateFailureReportConfirmation(reportId, process, needReport) {
       }
     }
 
-    if (updateSuccess) {
-      console.log(
-        "故障报告确认状态更新成功 / Failure report confirmation status updated successfully"
-      );
-      return {
-        success: true,
-        message:
-          "故障报告确认状态已成功更新 / Failure report confirmation status updated successfully",
-        details: {
-          reportId: reportId,
-          process: process,
-          needReport: needReport,
-          updatedSheet: updatedSheetName,
-          timestamp: new Date().toISOString(),
-        },
-      };
-    } else {
+    if (!updateSuccess) {
       throw new Error(
         "在所有相关Sheet中均未找到匹配的记录 / No matching record found in any related sheets"
       );
     }
+
+    return {
+      success: true,
+      message:
+        "故障报告确认状态已成功更新 / Failure report confirmation status updated successfully",
+      details: {
+        reportId,
+        process,
+        needReport,
+        updatedSheet: updatedSheetName,
+        timestamp: new Date().toISOString(),
+      },
+    };
   } catch (error) {
     console.error(
       "更新故障报告确认状态失败 / Failed to update failure report confirmation status:",
@@ -5311,19 +5842,34 @@ function updateFailureReportConfirmation(reportId, process, needReport) {
   }
 }
 
-function sendFailureReportNotification(rowData, process) {
+function sendFailureReportNotification(rowData, process, responsiblePerson) {
   try {
     console.log(
       "开始发送故障报告邮件通知 / Starting to send failure report email notification"
     );
 
-    // 从行数据中提取必要信息
-    const reportNo = rowData[0] || ""; // 编号
-    const machineNo = rowData[2] || ""; // 机台号
-    const problemDescription = rowData[3] || ""; // 问题描述
-    const submitDate = rowData[11] ? rowData[11].toString() : ""; // 提交日期
-    const workshop = rowData[14] || ""; // 车间
-    const processName = rowData[15] || process; // 工序
+    let reportNo = "";
+    let machineNo = "";
+    let problemDescription = "";
+    let submitDate = "";
+    let workshop = "";
+    let processName = process;
+
+    if (Array.isArray(rowData)) {
+      reportNo = rowData[0] || "";
+      machineNo = rowData[2] || "";
+      problemDescription = rowData[3] || "";
+      submitDate = rowData[11] ? rowData[11].toString() : "";
+      workshop = rowData[14] || "";
+      processName = rowData[15] || process;
+    } else if (rowData && typeof rowData === "object") {
+      reportNo = rowData.reportNo || rowData.failureReportNumber || "";
+      machineNo = rowData.machineNo || "";
+      problemDescription = rowData.problemDescription || "";
+      submitDate = rowData.submitDate || "";
+      workshop = rowData.workshop || "";
+      processName = rowData.process || process;
+    }
 
     console.log("提取的故障报告信息 / Extracted failure report info:", {
       reportNo,
@@ -5470,6 +6016,18 @@ function sendFailureReportNotification(rowData, process) {
 
     const recipientEmails = getNotificationEmails(processForMatching, workshop);
     console.log("收件人邮箱 / Recipient emails:", recipientEmails);
+
+    // 提取责任人邮箱并加入收件人列表
+    if (responsiblePerson) {
+      const respMatch = String(responsiblePerson).match(/【(.+?)】$/);
+      if (respMatch && respMatch[1]) {
+        const respEmail = respMatch[1].trim();
+        if (respEmail && !recipientEmails.includes(respEmail)) {
+          recipientEmails.push(respEmail);
+          console.log("已添加责任人邮箱 / Added responsible person email:", respEmail);
+        }
+      }
+    }
 
     if (recipientEmails.length === 0) {
       console.warn(
@@ -5879,6 +6437,7 @@ function getFilteredFailureReportData() {
               process: row[15] || process,
               confirmation: row[18] || "待确认 / Pending Confirmation",
               needFailureReport: row[19] || "", // 第20列：是否需要填写故障报告
+              responsiblePerson: "",
             });
           }
         }
@@ -6095,13 +6654,14 @@ function getFailureReportProgressData() {
  * 向Failure_Database sheet写入故障报告数据
  * 当用户确认需要故障报告时调用
  */
-function writeToFailureDatabase(rowData, process) {
+function writeToFailureDatabase(rowData, process, responsiblePerson) {
   try {
     console.log(
       "开始向Failure_Database sheet写入数据 / Starting to write data to Failure_Database sheet"
     );
     console.log("行数据 / Row data:", rowData);
     console.log("工序 / Process:", process);
+    const responsibleName = String(responsiblePerson || "").trim();
 
     // 打开Failure_Database sheet
     const failureDatabaseSpreadsheetId =
@@ -6115,32 +6675,47 @@ function writeToFailureDatabase(rowData, process) {
       );
     }
 
-    // 从行数据中提取必要信息
-    const reportNo = rowData[0] || ""; // 编号
-    const machineNo = rowData[2] || ""; // 机台号
-    const problemDescription = rowData[3] || ""; // 问题描述
+    let reportNo = "";
+    let machineNo = "";
+    let problemDescription = "";
+    let submitDateValue = "";
+    let workshop = "";
+    let processName = process;
 
-    // 格式化提交日期为 YYYY-MM-DD 格式
+    if (Array.isArray(rowData)) {
+      reportNo = rowData[0] || "";
+      machineNo = rowData[2] || "";
+      problemDescription = rowData[3] || "";
+      submitDateValue = rowData[11] || "";
+      workshop = rowData[14] || "";
+      processName = rowData[15] || process;
+    } else if (rowData && typeof rowData === "object") {
+      reportNo = rowData.reportNo || rowData.failureReportNumber || "";
+      machineNo = rowData.machineNo || "";
+      problemDescription = rowData.problemDescription || "";
+      submitDateValue = rowData.submitDate || "";
+      workshop = rowData.workshop || "";
+      processName = rowData.process || process;
+    } else {
+      throw new Error("无效的故障报告数据 / Invalid failure report data");
+    }
+
     let formattedSubmitDate = "";
-    const submitDate = rowData[11];
-    if (submitDate) {
+    if (submitDateValue) {
       try {
-        const date = new Date(submitDate);
+        const date = new Date(submitDateValue);
         if (!isNaN(date.getTime())) {
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, "0");
           const day = String(date.getDate()).padStart(2, "0");
           formattedSubmitDate = `${year}-${month}-${day}`;
         } else {
-          formattedSubmitDate = submitDate.toString();
+          formattedSubmitDate = submitDateValue.toString();
         }
       } catch (e) {
-        formattedSubmitDate = submitDate.toString();
+        formattedSubmitDate = submitDateValue.toString();
       }
     }
-
-    const workshop = rowData[14] || ""; // 车间
-    let processName = rowData[15] || process; // 工序
 
     // 工序转换：如果工序是INJ，则改写为IM
     if (processName === "INJ") {
@@ -6186,6 +6761,13 @@ function writeToFailureDatabase(rowData, process) {
     failureDatabaseSheet
       .getRange(nextRow, 1, 1, newRowData.length)
       .setValues([newRowData]);
+
+    const RESPONSIBLE_COL = 12; // 责任人列
+    const headerCell = failureDatabaseSheet.getRange(1, RESPONSIBLE_COL);
+    if (!headerCell.getValue()) {
+      headerCell.setValue("责任人");
+    }
+    failureDatabaseSheet.getRange(nextRow, RESPONSIBLE_COL).setValue(responsibleName);
 
     console.log(
       "成功写入Failure_Database sheet / Successfully wrote to Failure_Database sheet"
@@ -6289,186 +6871,10 @@ function generateFailureReportNumber() {
       error
     );
     // 如果出错，返回一个基于当前时间的备用编号
-    const currentYear = new Date().getFullYear();
-    const currentTime = new Date().getTime();
-    const fallbackNumber =
-      "FR" + currentYear + String(currentTime % 10000).padStart(4, "0");
-    console.log("使用备用编号 / Using fallback number:", fallbackNumber);
-    return fallbackNumber;
+    const timestamp = new Date().getTime();
+    return "FR" + currentYear + String(timestamp).slice(-4);
   }
 }
-
-/**
- * 上传故障报告附件
- * 将文件上传到Google Drive并更新Failure_Database表中的附件信息
- */
-function uploadFailureReportAttachment(
-  failureReportNumber,
-  process,
-  fileData,
-  fileName,
-  fileDescription
-) {
-  try {
-    console.log(
-      "开始上传故障报告附件 / Starting to upload failure report attachment"
-    );
-    console.log("故障报告编号 / Failure Report Number:", failureReportNumber);
-    console.log("工序 / Process:", process);
-    console.log("文件名 / File Name:", fileName);
-    console.log("文件描述 / File Description:", fileDescription);
-
-    // 打开Failure_Database sheet
-    const failureDatabaseSpreadsheetId =
-      "1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU";
-    const spreadsheet = SpreadsheetApp.openById(failureDatabaseSpreadsheetId);
-    const failureDatabaseSheet = spreadsheet.getSheetByName("Failure_Database");
-
-    if (!failureDatabaseSheet) {
-      throw new Error(
-        "Failure_Database sheet未找到 / Failure_Database sheet not found"
-      );
-    }
-
-    // 查找对应的故障报告记录
-    const data = failureDatabaseSheet.getDataRange().getValues();
-    let targetRow = -1;
-    const failureReportNumberColumnIndex = 6; // 故障报告编号列（第7列，索引为6）
-
-    for (let i = 1; i < data.length; i++) {
-      // 从第2行开始（跳过表头）
-      const row = data[i];
-      if (row[failureReportNumberColumnIndex] === failureReportNumber) {
-        targetRow = i + 1; // 转换为1-based行号
-        break;
-      }
-    }
-
-    if (targetRow === -1) {
-      throw new Error(
-        `未找到故障报告编号 ${failureReportNumber} / Failure report number ${failureReportNumber} not found`
-      );
-    }
-
-    console.log("找到目标行 / Found target row:", targetRow);
-
-    // 使用指定的固定文件夹
-    const folderId = "1mMKiMFOzbpqB_V2iIQcIqF2o4ZyRRcNL";
-    console.log("使用指定的文件夹 / Using specified folder, ID:", folderId);
-
-    // 获取车间和工序信息用于文件命名
-    const workshop = data[targetRow - 1][4] || ""; // 车间列（第5列，索引为4）
-    const processFromRow = data[targetRow - 1][5] || ""; // 工序列（第6列，索引为5）
-
-    // 生成标准化的文件名：故障报告编号_车间_工序
-    const fileExtension = fileName.includes(".")
-      ? fileName.substring(fileName.lastIndexOf("."))
-      : "";
-    const standardizedFileName = `${failureReportNumber}_${workshop}_${processFromRow}${fileExtension}`;
-
-    console.log(
-      "生成标准化文件名 / Generated standardized filename:",
-      standardizedFileName
-    );
-    console.log(
-      "车间 / Workshop:",
-      workshop,
-      "工序 / Process:",
-      processFromRow
-    );
-
-    // 上传文件到Google Drive
-    let fileId;
-    if (fileData.startsWith("data:")) {
-      // 处理base64数据
-      const base64Data = fileData.split(",")[1];
-      const mimeType = fileData.split(",")[0].split(":")[1].split(";")[0];
-
-      // 使用现有的uploadBase64ImageToDrive函数，但使用标准化文件名
-      fileId = uploadBase64ImageToDrive(
-        base64Data,
-        folderId,
-        standardizedFileName,
-        mimeType
-      );
-    } else {
-      // 处理其他格式的文件数据，使用标准化文件名
-      const blob = Utilities.newBlob(
-        Utilities.base64Decode(fileData),
-        "application/octet-stream",
-        standardizedFileName
-      );
-      const file = DriveApp.getFolderById(folderId).createFile(blob);
-      fileId = file.getId();
-    }
-
-    console.log("文件上传成功 / File uploaded successfully, File ID:", fileId);
-
-    // 获取文件链接
-    const fileUrl = `https://drive.google.com/file/d/${fileId}/view`;
-
-    // 构建附件信息字符串，使用标准化文件名
-    const attachmentInfo = `${standardizedFileName}|${fileUrl}|${fileDescription}|${
-      new Date().toISOString().split("T")[0]
-    }`;
-
-    // 构建超链接格式的附件信息，用于在Google Sheets中显示为可点击的链接
-    const hyperlinkAttachmentInfo = `=HYPERLINK("${fileUrl}","${standardizedFileName}")`;
-
-    // 更新Failure_Database表中的附件列和上传日期列
-    const attachmentColumnIndex = 9; // 附件列（第10列，索引为9）
-    const uploadDateColumnIndex = 8; // 上传日期列（第9列，索引为8）
-
-    // 更新附件信息 - 使用超链接格式，显示为可点击的文件名
-    failureDatabaseSheet
-      .getRange(targetRow, attachmentColumnIndex + 1)
-      .setValue(hyperlinkAttachmentInfo);
-
-    // 更新上传日期
-    failureDatabaseSheet
-      .getRange(targetRow, uploadDateColumnIndex + 1)
-      .setValue(new Date().toISOString().split("T")[0]);
-
-    console.log(
-      "成功更新Failure_Database表 / Successfully updated Failure_Database table"
-    );
-    console.log("附件信息 / Attachment info:", attachmentInfo);
-    console.log(
-      "超链接格式附件信息 / Hyperlink attachment info:",
-      hyperlinkAttachmentInfo
-    );
-
-    return {
-      success: true,
-      message:
-        "故障报告附件上传成功 / Failure report attachment uploaded successfully",
-      details: {
-        failureReportNumber: failureReportNumber,
-        originalFileName: fileName,
-        standardizedFileName: standardizedFileName,
-        fileId: fileId,
-        fileUrl: fileUrl,
-        folderId: folderId,
-        uploadDate: new Date().toISOString().split("T")[0],
-        workshop: workshop,
-        process: processFromRow,
-      },
-    };
-  } catch (error) {
-    console.error(
-      "上传故障报告附件时出错 / Error uploading failure report attachment:",
-      error
-    );
-    throw new Error(
-      "上传附件失败 / Failed to upload attachment: " + error.message
-    );
-  }
-}
-
-/**
- * 从Google Drive上传故障报告附件
- * 直接使用Google Drive文件ID，无需重新上传文件
- */
 
 /**
  * 获取故障报告附件信息
@@ -6494,7 +6900,9 @@ function getFailureReportAttachmentInfo(failureReportNumber) {
     }
 
     // 查找对应的故障报告记录
-    const data = failureDatabaseSheet.getDataRange().getValues();
+    const range = failureDatabaseSheet.getDataRange();
+    const data = range.getValues();
+    const formulas = range.getFormulas();
     const failureReportNumberColumnIndex = 6; // 故障报告编号列（第7列，索引为6）
     const attachmentColumnIndex = 9; // 附件列（第10列，索引为9）
     const uploadDateColumnIndex = 8; // 上传日期列（第9列，索引为8）
@@ -6504,42 +6912,57 @@ function getFailureReportAttachmentInfo(failureReportNumber) {
       const row = data[i];
       if (row[failureReportNumberColumnIndex] === failureReportNumber) {
         const attachmentInfo = row[attachmentColumnIndex] || "";
+        const attachmentText = String(attachmentInfo || "").trim();
+        const attachmentFormula = String(
+          (formulas[i] && formulas[i][attachmentColumnIndex]) || ""
+        ).trim();
         const uploadDate = row[uploadDateColumnIndex] || "";
 
-        if (attachmentInfo && attachmentInfo !== "") {
+        if (attachmentText) {
           // 解析附件信息：现在附件列存储的是超链接公式 =HYPERLINK("链接","显示文本")
           let fileName = "";
           let fileUrl = "";
 
-          if (attachmentInfo.startsWith("=HYPERLINK(")) {
+          // 优先从单元格公式中提取真实链接
+          if (attachmentFormula.startsWith("=HYPERLINK(")) {
+            const fm = attachmentFormula.match(
+              /=HYPERLINK\("([^"]+)","([^"]+)"\)/
+            );
+            if (fm) {
+              fileUrl = fm[1];
+              fileName = fm[2] || attachmentText;
+            }
+          }
+
+          if (!fileUrl && attachmentText.startsWith("=HYPERLINK(")) {
             // 解析超链接公式
-            const match = attachmentInfo.match(
+            const match = attachmentText.match(
               /=HYPERLINK\("([^"]+)","([^"]+)"\)/
             );
             if (match) {
               fileUrl = match[1];
               fileName = match[2];
             }
-          } else if (attachmentInfo.includes("|")) {
+          } else if (!fileUrl && attachmentText.includes("|")) {
             // 兼容旧格式：文件名|文件链接|文件描述|上传日期
-            const parts = attachmentInfo.split("|");
+            const parts = attachmentText.split("|");
             fileName = parts[0] || "";
             fileUrl = parts[1] || "";
-          } else {
+          } else if (!fileName) {
             // 如果都不是，直接使用原始值
-            fileName = attachmentInfo;
+            fileName = attachmentText;
           }
 
           const fileDescription = ""; // 当前不再存储文件描述
-          const fileUploadDate = uploadDate;
+          const fileUploadDate = String(uploadDate || "").trim();
 
           return {
             success: true,
             hasAttachment: true,
             attachment: {
-              fileName: fileName,
-              fileUrl: fileUrl,
-              fileDescription: fileDescription,
+              fileName: String(fileName || "").trim(),
+              fileUrl: String(fileUrl || "").trim(),
+              fileDescription: String(fileDescription || "").trim(),
               uploadDate: fileUploadDate,
             },
           };
@@ -6547,26 +6970,828 @@ function getFailureReportAttachmentInfo(failureReportNumber) {
           return {
             success: true,
             hasAttachment: false,
-            message:
-              "该故障报告暂无附件 / No attachment for this failure report",
+            message: "未找到附件信息 / No attachment information found"
           };
         }
       }
     }
 
     return {
-      success: false,
-      message: `未找到故障报告编号 ${failureReportNumber} / Failure report number ${failureReportNumber} not found`,
+      success: true,
+      hasAttachment: false,
+      message: "未找到故障报告编号 / Failure report number not found"
     };
   } catch (error) {
-    console.error(
-      "获取故障报告附件信息时出错 / Error getting failure report attachment info:",
-      error
-    );
+    console.error("获取故障报告附件信息失败:", error);
     return {
       success: false,
-      message:
-        "获取附件信息失败 / Failed to get attachment info: " + error.message,
+      message: "获取附件信息失败 / Failed to get attachment info: " + error.toString()
+    };
+  }
+}
+
+/**
+ * 获取跟进记录列表
+ * 从Failure_Report_followup表中获取所有跟进记录
+ */
+function getFollowupRecords() {
+  try {
+    console.log('获取跟进记录列表 / Getting follow-up records');
+
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+
+    if (!wsFollow) {
+      throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
+    }
+
+    const dataRange = wsFollow.getDataRange();
+    const values = dataRange.getValues();
+    const headers = values.length > 0 ? values[0] : [];
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+
+    const followupData = [];
+
+    const formatDate = (cell) => {
+      if (!cell) return '';
+      if (cell instanceof Date) {
+        return Utilities.formatDate(cell, tz, 'yyyy-MM-dd');
+      }
+      return String(cell);
+    };
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+
+      const isRowEmpty = row.every(cell => cell === '' || cell === null || typeof cell === 'undefined');
+      if (isRowEmpty) continue;
+
+      const formattedRow = [
+        String(row[0] || ''),
+        String(row[1] || ''),
+        String(row[2] || ''),
+        String(row[3] || ''),
+        String(row[4] || ''),
+        formatDate(row[5]),
+        String(row[6] || ''),
+        formatDate(row[7]),
+        String(row[8] || ''),
+        formatDate(row[9]),
+        formatDate(row[10]),
+        String(row[11] || '')
+      ];
+
+      if (!formattedRow[0]) {
+        console.log('跳过无跟进ID的行 / Skip row without follow-up ID', row);
+        continue;
+      }
+
+      followupData.push(formattedRow);
+    }
+
+    console.log('跟进记录获取成功，记录数:', followupData.length);
+
+    return {
+      success: true,
+      headers: headers,
+      data: followupData
+    };
+
+  } catch (error) {
+    console.error('获取跟进记录失败:', error);
+    return {
+      success: false,
+      message: '获取跟进记录失败 / Failed to get follow-up records: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * 更新跟进状态
+ * 更新指定跟进记录的状态和验证结果
+ * @param {string} followupId - 跟进ID
+ * @param {string} status - 新状态
+ * @param {string} remarks - 验证结果/备注
+ */
+function updateFollowupStatus(followupId, status, remarks) {
+  try {
+    console.log('更新跟进状态 / Updating follow-up status:', { followupId, status, remarks });
+
+    const allowedStatus = ['进行中 / Ongoing', '已完成 / Completed'];
+    if (!allowedStatus.includes(String(status || '').trim())) {
+      throw new Error('状态值无效 / Invalid status value: ' + status);
+    }
+
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+
+    if (!wsFollow) {
+      throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
+    }
+
+    // 获取所有数据
+    const data = wsFollow.getDataRange().getValues();
+    let rowIndex = -1;
+
+    // 查找对应的跟进记录（第1列是followupId）
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(followupId).trim()) {
+        rowIndex = i + 1; // 转换为实际行号（从1开始）
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      throw new Error('未找到跟进ID / Follow-up ID not found: ' + followupId);
+    }
+
+    // 更新状态（第9列，索引为8）
+    wsFollow.getRange(rowIndex, 9).setValue(status);
+
+    // 更新备注（如果提供了备注，需要先确认是否有备注列）
+    // 根据现有字段结构，我们可以在updated_date后面添加备注列，或者将备注添加到某个现有字段
+    // 暂时将备注添加到updated_date字段（第11列，索引为10），格式为：日期 | 备注
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const now = new Date();
+    const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    
+    let updatedValue = nowYmd;
+    if (remarks && String(remarks).trim()) {
+      updatedValue += ' | ' + String(remarks).trim();
+    }
+    
+    wsFollow.getRange(rowIndex, 11).setValue(updatedValue);
+
+    console.log('跟进状态更新成功');
+
+    return {
+      success: true,
+      message: '跟进状态更新成功 / Follow-up status updated successfully',
+      updatedDate: updatedValue
+    };
+
+  } catch (error) {
+    console.error('更新跟进状态失败:', error);
+    return {
+      success: false,
+      message: '更新跟进状态失败 / Failed to update follow-up status: ' + error.toString()
+    };
+  }
+}
+
+function updateFollowupFieldValue(followupId, fieldKey, value) {
+  try {
+    console.log('更新跟进字段 / Updating follow-up field:', { followupId, fieldKey, value });
+
+    const fieldMap = {
+      paPlan: 4,
+      paWho: 5,
+      paVerifier: 7,
+      status: 9,
+      verification: 13
+    };
+
+    if (!fieldMap.hasOwnProperty(fieldKey)) {
+      throw new Error('不支持的字段键 / Unsupported field key: ' + fieldKey);
+    }
+
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+
+    if (!wsFollow) {
+      throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
+    }
+
+    const data = wsFollow.getDataRange().getValues();
+    let rowIndex = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(followupId).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      throw new Error('未找到跟进ID / Follow-up ID not found: ' + followupId);
+    }
+
+    let normalizedValue = value;
+    if (normalizedValue === null || typeof normalizedValue === 'undefined') {
+      normalizedValue = '';
+    }
+
+    if (fieldKey === 'status') {
+      const allowedStatus = ['进行中 / Ongoing', '已完成 / Completed'];
+      normalizedValue = String(normalizedValue).trim();
+      if (!allowedStatus.includes(normalizedValue)) {
+        throw new Error('状态值无效 / Invalid status value: ' + normalizedValue);
+      }
+    }
+
+    if (fieldKey === 'verification') {
+      const allowedVerification = ['已验证 / Verified', '未验证 / Not Verified'];
+      normalizedValue = String(normalizedValue).trim();
+      if (normalizedValue && !allowedVerification.includes(normalizedValue)) {
+        throw new Error('验证值无效 / Invalid verification value: ' + normalizedValue);
+      }
+    }
+
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const now = new Date();
+    const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+
+    wsFollow.getRange(rowIndex, fieldMap[fieldKey]).setValue(normalizedValue);
+
+    const rangeUpdatedDate = wsFollow.getRange(rowIndex, 11);
+    const currentUpdatedValue = String(rangeUpdatedDate.getValue() || '').trim();
+    let nextUpdatedValue = nowYmd;
+    if (currentUpdatedValue && currentUpdatedValue.includes('|')) {
+      const remarkPart = currentUpdatedValue.split('|')[1];
+      if (remarkPart && remarkPart.trim()) {
+        nextUpdatedValue += ' | ' + remarkPart.trim();
+      }
+    }
+    rangeUpdatedDate.setValue(nextUpdatedValue);
+
+    console.log('字段更新成功 / Field updated successfully');
+
+    return {
+      success: true,
+      updatedDate: nextUpdatedValue
+    };
+
+  } catch (error) {
+    console.error('更新跟进字段失败:', error);
+    return {
+      success: false,
+      message: '更新跟进字段失败 / Failed to update follow-up field: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * 发送跟进邮件提醒
+ * 根据类型发送邮件给责任人或验证人
+ * @param {string} type - 提醒类型：'responsible' 或 'verifier'
+ */
+function sendFollowupEmailReminder(type) {
+  try {
+    console.log('发送跟进邮件提醒 / Sending follow-up email reminder:', type);
+
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+
+    if (!wsFollow) {
+      throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
+    }
+
+    const data = wsFollow.getDataRange().getValues();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+
+    // 收集收件人邮箱
+    const recipients = new Set();
+    const details = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row[0]) continue; // 跳过无跟进ID的行
+
+      const status = String(row[8] || '').trim();
+      // 只提醒状态为"进行中"的记录
+      if (status !== '进行中 / Ongoing') continue;
+
+      const failureReportNo = String(row[1] || '');
+      const paType = String(row[2] || '');
+      const paPlan = String(row[3] || '');
+      const paWho = String(row[4] || '');
+      const paWhen = String(row[5] || '');
+      const paVerifier = String(row[6] || '');
+
+      let targetEmail = '';
+      let targetName = '';
+
+      if (type === 'responsible' && paWho) {
+        // 从paWho中提取名字和邮箱
+        const match = paWho.match(/【(.+)】/);
+        if (match) {
+          targetEmail = match[1].trim();
+          targetName = paWho.replace(/【.+】/, '').trim();
+        }
+      } else if (type === 'verifier' && paVerifier) {
+        // 从paVerifier中提取名字和邮箱
+        const match = paVerifier.match(/【(.+)】/);
+        if (match) {
+          targetEmail = match[1].trim();
+          targetName = paVerifier.replace(/【.+】/, '').trim();
+        }
+      }
+
+      if (targetEmail) {
+        recipients.add(targetEmail);
+        details.push({
+          failureReportNo: failureReportNo,
+          paType: paType,
+          paPlan: paPlan,
+          paWhen: paWhen,
+          targetName: targetName
+        });
+      }
+    }
+
+    if (recipients.size === 0) {
+      return {
+        success: true,
+        message: '没有需要提醒的' + (type === 'responsible' ? '责任人' : '验证人') + ' / No ' + (type === 'responsible' ? 'responsible persons' : 'verifiers') + ' to remind'
+      };
+    }
+
+    // 构建邮件内容
+    const now = new Date();
+    const nowStr = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm');
+
+    const typeText = type === 'responsible' ? '责任人 / Responsible Person' : '验证人 / Verifier';
+    const subject = '故障报告跟进提醒 / Failure Report Follow-up Reminder - ' + nowStr;
+
+    let htmlBody = '<h2>故障报告跟进提醒 / Failure Report Follow-up Reminder</h2>';
+    htmlBody += '<p>您好 / Hello,</p>';
+    htmlBody += '<p>您有进行中的故障报告跟进任务需要处理 / You have ongoing failure report follow-up tasks to handle:</p>';
+    htmlBody += '<table border="1" cellpadding="5" style="border-collapse: collapse;">';
+    htmlBody += '<tr style="background-color: #E60012; color: white;">';
+    htmlBody += '<th>故障报告编号<br>Failure Report No.</th>';
+    htmlBody += '<th>PA类型<br>PA Type</th>';
+    htmlBody += '<th>预防性措施<br>PA Action</th>';
+    htmlBody += '<th>计划日期<br>Plan Date</th>';
+    htmlBody += '</tr>';
+
+    details.forEach(function(item) {
+      htmlBody += '<tr>';
+      htmlBody += '<td>' + escapeHtml(item.failureReportNo) + '</td>';
+      htmlBody += '<td>' + escapeHtml(item.paType) + '</td>';
+      htmlBody += '<td>' + escapeHtml(item.paPlan).replace(/\n/g, '<br>') + '</td>';
+      htmlBody += '<td>' + escapeHtml(item.paWhen) + '</td>';
+      htmlBody += '</tr>';
+    });
+
+    htmlBody += '</table>';
+    htmlBody += '<p style="margin-top: 20px;">请尽快登录系统处理 / Please log in to the system to handle these tasks as soon as possible.</p>';
+    htmlBody += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
+
+    const recipientList = Array.from(recipients);
+    console.log('收件人列表 / Recipients:', recipientList);
+
+    // 发送邮件
+    let sentCount = 0;
+    recipientList.forEach(function(email) {
+      try {
+        GmailApp.sendEmail(email, subject, '', { htmlBody: htmlBody });
+        sentCount++;
+        console.log('邮件已发送到 / Email sent to:', email);
+      } catch (e) {
+        console.error('发送邮件失败 / Failed to send email to ' + email + ':', e);
+      }
+    });
+
+    return {
+      success: true,
+      message: '已成功发送 ' + sentCount + ' 封邮件 / Successfully sent ' + sentCount + ' emails',
+      recipientCount: recipientList.length,
+      sentCount: sentCount
+    };
+
+  } catch (error) {
+    console.error('发送跟进邮件提醒失败:', error);
+    return {
+      success: false,
+      message: '发送邮件提醒失败 / Failed to send email reminder: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * 发送验证提醒邮件给验证人
+ * 针对状态为"已完成"的记录，提醒验证人进行验证
+ * @param {Array} records - 要发送邮件的记录数组
+ */
+function sendVerificationReminderToVerifiers(records) {
+  try {
+    console.log('发送验证提醒邮件 / Sending verification reminder emails, records count:', records.length);
+
+    if (!records || records.length === 0) {
+      return {
+        success: true,
+        message: '没有需要发送的记录 / No records to send',
+        sentCount: 0
+      };
+    }
+
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const now = new Date();
+    const nowStr = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm');
+
+    // 按验证人分组记录
+    const verifierGroups = {};
+
+    records.forEach(function(record) {
+      const paVerifier = String(record.paVerifier || '');
+      // 从"名字【邮箱】"格式中提取邮箱
+      const match = paVerifier.match(/【(.+)】/);
+      const email = match ? match[1].trim() : '';
+      const name = paVerifier.replace(/【.+】/, '').trim();
+
+      if (!email) {
+        console.log('跳过无邮箱的验证人 / Skip verifier without email:', paVerifier);
+        return;
+      }
+
+      if (!verifierGroups[email]) {
+        verifierGroups[email] = {
+          name: name,
+          email: email,
+          records: []
+        };
+      }
+      verifierGroups[email].records.push(record);
+    });
+
+    const verifierList = Object.values(verifierGroups);
+    if (verifierList.length === 0) {
+      return {
+        success: true,
+        message: '没有有效的验证人邮箱 / No valid verifier emails found',
+        sentCount: 0
+      };
+    }
+
+    console.log('需要发送的验证人数 / Verifiers to notify:', verifierList.length);
+
+    const subject = '故障报告验证提醒 / Failure Report Verification Reminder - ' + nowStr;
+
+    let sentCount = 0;
+
+    verifierList.forEach(function(verifier) {
+      try {
+        // 构建邮件内容
+        let htmlBody = '<h2>故障报告验证提醒 / Failure Report Verification Reminder</h2>';
+        htmlBody += '<p>您好 ' + escapeHtml(verifier.name) + ' / Hello ' + escapeHtml(verifier.name) + ',</p>';
+        htmlBody += '<p>您有故障报告跟进任务需要验证 / You have failure report follow-up tasks that require verification:</p>';
+        htmlBody += '<table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%;">';
+        htmlBody += '<tr style="background-color: #E60012; color: white;">';
+        htmlBody += '<th>跟进ID<br>Follow-up ID</th>';
+        htmlBody += '<th>故障报告编号<br>Failure Report No.</th>';
+        htmlBody += '<th>PA类型<br>PA Type</th>';
+        htmlBody += '<th>预防性措施<br>PA Action</th>';
+        htmlBody += '<th>计划完成日期<br>Planned Completion Date</th>';
+        htmlBody += '<th>状态<br>Status</th>';
+        htmlBody += '</tr>';
+
+        verifier.records.forEach(function(record) {
+          htmlBody += '<tr>';
+          htmlBody += '<td>' + escapeHtml(record.followupId) + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.failureReportNo) + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.paType) + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.paPlan).replace(/\n/g, '<br>') + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.paWhen) + '</td>';
+          htmlBody += '<td style="color: #28a745; font-weight: bold;">' + escapeHtml(record.status) + '</td>';
+          htmlBody += '</tr>';
+        });
+
+        htmlBody += '</table>';
+        htmlBody += '<p style="margin-top: 20px;">请尽快登录系统验证这些任务 / Please log in to the system to verify these tasks as soon as possible.</p>';
+        htmlBody += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
+
+        // 发送邮件
+        GmailApp.sendEmail(verifier.email, subject, '', { htmlBody: htmlBody });
+        sentCount++;
+        console.log('验证提醒邮件已发送到 / Verification reminder email sent to:', verifier.email);
+
+      } catch (e) {
+        console.error('发送邮件失败 / Failed to send email to ' + verifier.email + ':', e);
+      }
+    });
+
+    return {
+      success: true,
+      message: '已成功发送 ' + sentCount + ' 封邮件 / Successfully sent ' + sentCount + ' emails',
+      sentCount: sentCount,
+      verifierCount: verifierList.length
+    };
+
+  } catch (error) {
+    console.error('发送验证提醒邮件失败:', error);
+    return {
+      success: false,
+      message: '发送邮件失败 / Failed to send emails: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * 发送提醒邮件给责任人
+ * 针对验证状态不等于"已验证"的记录，提醒责任人跟进
+ * @param {Array} records - 要发送邮件的记录数组
+ */
+function sendReminderToResponsiblePersons(records) {
+  try {
+    console.log('发送责任人提醒邮件 / Sending reminder emails to responsible persons, records count:', records.length);
+
+    if (!records || records.length === 0) {
+      return {
+        success: true,
+        message: '没有需要发送的记录 / No records to send',
+        sentCount: 0
+      };
+    }
+
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const now = new Date();
+    const nowStr = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm');
+
+    // 按责任人分组记录
+    const responsibleGroups = {};
+
+    records.forEach(function(record) {
+      const paWho = String(record.paWho || '');
+      // 从"名字【邮箱】"格式中提取邮箱
+      const match = paWho.match(/【(.+)】/);
+      const email = match ? match[1].trim() : '';
+      const name = paWho.replace(/【.+】/, '').trim();
+
+      if (!email) {
+        console.log('跳过无邮箱的责任人 / Skip responsible person without email:', paWho);
+        return;
+      }
+
+      if (!responsibleGroups[email]) {
+        responsibleGroups[email] = {
+          name: name,
+          email: email,
+          records: []
+        };
+      }
+      responsibleGroups[email].records.push(record);
+    });
+
+    const responsibleList = Object.values(responsibleGroups);
+    if (responsibleList.length === 0) {
+      return {
+        success: true,
+        message: '没有有效的责任人邮箱 / No valid responsible person emails found',
+        sentCount: 0
+      };
+    }
+
+    console.log('需要发送的责任人数 / Responsible persons to notify:', responsibleList.length);
+
+    const subject = '故障报告跟进提醒 / Failure Report Follow-up Reminder - ' + nowStr;
+
+    let sentCount = 0;
+
+    responsibleList.forEach(function(person) {
+      try {
+        // 构建邮件内容
+        let htmlBody = '<h2>故障报告跟进提醒 / Failure Report Follow-up Reminder</h2>';
+        htmlBody += '<p>您好 ' + escapeHtml(person.name) + ' / Hello ' + escapeHtml(person.name) + ',</p>';
+        htmlBody += '<p>您有以下故障报告跟进任务尚未被验证，请尽快完成 / You have the following failure report follow-up tasks that have not been verified yet, please complete them as soon as possible:</p>';
+        htmlBody += '<table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%;">';
+        htmlBody += '<tr style="background-color: #E60012; color: white;">';
+        htmlBody += '<th>跟进ID<br>Follow-up ID</th>';
+        htmlBody += '<th>故障报告编号<br>Failure Report No.</th>';
+        htmlBody += '<th>PA类型<br>PA Type</th>';
+        htmlBody += '<th>预防性措施<br>PA Action</th>';
+        htmlBody += '<th>计划完成日期<br>Planned Completion Date</th>';
+        htmlBody += '<th>状态<br>Status</th>';
+        htmlBody += '<th>验证状态<br>Verification Status</th>';
+        htmlBody += '</tr>';
+
+        person.records.forEach(function(record) {
+          const verificationColor = record.verification === '未验证 / Not Verified' ? '#dc3545' : '#6c757d';
+          htmlBody += '<tr>';
+          htmlBody += '<td>' + escapeHtml(record.followupId) + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.failureReportNo) + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.paType) + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.paPlan).replace(/\n/g, '<br>') + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.paWhen) + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.status) + '</td>';
+          htmlBody += '<td style="color: ' + verificationColor + '; font-weight: bold;">' + escapeHtml(record.verification || '未验证 / Not Verified') + '</td>';
+          htmlBody += '</tr>';
+        });
+
+        htmlBody += '</table>';
+        htmlBody += '<p style="margin-top: 20px;">请登录系统查看详情并尽快完成验证 / Please log in to the system to view details and complete verification as soon as possible.</p>';
+        htmlBody += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
+
+        // 发送邮件
+        GmailApp.sendEmail(person.email, subject, '', { htmlBody: htmlBody });
+        sentCount++;
+        console.log('跟进提醒邮件已发送到 / Follow-up reminder email sent to:', person.email);
+
+      } catch (e) {
+        console.error('发送邮件失败 / Failed to send email to ' + person.email + ':', e);
+      }
+    });
+
+    return {
+      success: true,
+      message: '已成功发送 ' + sentCount + ' 封邮件 / Successfully sent ' + sentCount + ' emails',
+      sentCount: sentCount,
+      responsibleCount: responsibleList.length
+    };
+
+  } catch (error) {
+    console.error('发送责任人提醒邮件失败:', error);
+    return {
+      success: false,
+      message: '发送邮件失败 / Failed to send emails: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * HTML转义辅助函数
+ */
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * 获取责任人的跟进记录
+ * 只返回指定责任人负责的跟进记录
+ * @param {string} userName - 责任人姓名（URL参数中的Name）
+ */
+function getFollowupRecordsForResponsiblePerson(userName) {
+  try {
+    console.log('获取责任人跟进记录 / Getting responsible person follow-up records:', userName);
+
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+
+    if (!wsFollow) {
+      throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
+    }
+
+    const dataRange = wsFollow.getDataRange();
+    const values = dataRange.getValues();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+
+    const followupData = [];
+
+    const formatDate = (cell) => {
+      if (!cell) return '';
+      if (cell instanceof Date) {
+        return Utilities.formatDate(cell, tz, 'yyyy-MM-dd');
+      }
+      return String(cell);
+    };
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+
+      const isRowEmpty = row.every(cell => cell === '' || cell === null || typeof cell === 'undefined');
+      if (isRowEmpty) continue;
+
+      // 检查责任人是否匹配（第5列，索引4）
+      const paWho = String(row[4] || '');
+      // 从"名字【邮箱】"格式中提取名字
+      const paWhoName = paWho.replace(/【.+】/, '').trim();
+
+      // 如果不匹配当前用户，跳过
+      if (paWhoName !== userName) continue;
+
+      // 检查验证状态，已验证的记录不显示（第13列，索引12）
+      const verification = String(row[12] || '');
+      if (verification === '已验证 / Verified') continue;
+
+      const formattedRow = [
+        String(row[0] || ''),
+        String(row[1] || ''),
+        String(row[2] || ''),
+        String(row[3] || ''),
+        String(row[4] || ''),
+        formatDate(row[5]),
+        String(row[6] || ''),
+        formatDate(row[7]),
+        String(row[8] || ''),
+        formatDate(row[9]),
+        formatDate(row[10]),
+        String(row[11] || ''),
+        String(row[12] || '')
+      ];
+
+      if (!formattedRow[0]) {
+        console.log('跳过无跟进ID的行 / Skip row without follow-up ID', row);
+        continue;
+      }
+
+      followupData.push(formattedRow);
+    }
+
+    console.log('责任人跟进记录获取成功，记录数:', followupData.length);
+
+    return {
+      success: true,
+      data: followupData
+    };
+
+  } catch (error) {
+    console.error('获取责任人跟进记录失败:', error);
+    return {
+      success: false,
+      message: '获取跟进记录失败 / Failed to get follow-up records: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * 获取验证人的跟进记录
+ * 只返回指定验证人负责的跟进记录
+ * @param {string} userName - 验证人姓名（URL参数中的Name）
+ */
+function getFollowupRecordsForVerifier(userName) {
+  try {
+    console.log('获取验证人跟进记录 / Getting verifier follow-up records:', userName);
+
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+
+    if (!wsFollow) {
+      throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
+    }
+
+    const dataRange = wsFollow.getDataRange();
+    const values = dataRange.getValues();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+
+    const followupData = [];
+
+    const formatDate = (cell) => {
+      if (!cell) return '';
+      if (cell instanceof Date) {
+        return Utilities.formatDate(cell, tz, 'yyyy-MM-dd');
+      }
+      return String(cell);
+    };
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+
+      const isRowEmpty = row.every(cell => cell === '' || cell === null || typeof cell === 'undefined');
+      if (isRowEmpty) continue;
+
+      // 检查验证人是否匹配（第7列，索引6）
+      const paVerifier = String(row[6] || '');
+      // 从"名字【邮箱】"格式中提取名字
+      const paVerifierName = paVerifier.replace(/【.+】/, '').trim();
+
+      // 如果不匹配当前用户，跳过
+      if (paVerifierName !== userName) continue;
+
+      // 检查验证状态，已验证的记录不显示（第13列，索引12）
+      const verification = String(row[12] || '');
+      if (verification === '已验证 / Verified') continue;
+
+      const formattedRow = [
+        String(row[0] || ''),
+        String(row[1] || ''),
+        String(row[2] || ''),
+        String(row[3] || ''),
+        String(row[4] || ''),
+        formatDate(row[5]),
+        String(row[6] || ''),
+        formatDate(row[7]),
+        String(row[8] || ''),
+        formatDate(row[9]),
+        formatDate(row[10]),
+        String(row[11] || ''),
+        String(row[12] || '')
+      ];
+
+      if (!formattedRow[0]) {
+        console.log('跳过无跟进ID的行 / Skip row without follow-up ID', row);
+        continue;
+      }
+
+      followupData.push(formattedRow);
+    }
+
+    console.log('验证人跟进记录获取成功，记录数:', followupData.length);
+
+    return {
+      success: true,
+      data: followupData
+    };
+
+  } catch (error) {
+    console.error('获取验证人跟进记录失败:', error);
+    return {
+      success: false,
+      message: '获取跟进记录失败 / Failed to get follow-up records: ' + error.toString()
     };
   }
 }
@@ -6762,6 +7987,44 @@ function loadFailureReport_View() {
     .setFaviconUrl(webIconUrl);
 }
 
+/**
+ * 加载故障报告跟进验证页面
+ */
+function loadFailureReport_Followup() {
+  let webPage = getReleaseWebPage();
+  return render("FailureReport_Followup", { webPage: webPage })
+    .setTitle("故障报告跟进验证 / Failure Report Follow-up Verification")
+    .setFaviconUrl(webIconUrl);
+}
+
+/**
+ * 加载故障报告跟进页面（责任人使用）
+ */
+function loadFailureReport_Followup_Manage(webPage, id, name, type) {
+  let pageUrl = webPage || getReleaseWebPage();
+  let userName = name || '';
+  return render("FailureReport_Followup_Manage", { 
+    webPage: pageUrl,
+    userName: userName 
+  })
+    .setTitle("故障报告跟进 / Failure Report Follow-up")
+    .setFaviconUrl(webIconUrl);
+}
+
+/**
+ * 加载故障报告验证页面（验证人使用）
+ */
+function loadFailureReport_Followup_Verify(webPage, id, name, type) {
+  let pageUrl = webPage || getReleaseWebPage();
+  let userName = name || '';
+  return render("FailureReport_Followup_Verify", { 
+    webPage: pageUrl,
+    userName: userName 
+  })
+    .setTitle("故障报告验证 / Failure Report Verification")
+    .setFaviconUrl(webIconUrl);
+}
+
 function PdMData_submit_Database_PdM_Data_visualization(PdM_Data_Written_In) {
   try {
     let url = "1ft6cYnIsBt1FjYx7vXp_4tH7963VFm6Z4qETMFhL6zY";
@@ -6787,6 +8050,14 @@ function PdMData_submit_Database_PdM_Data_visualization(PdM_Data_Written_In) {
       Record: "Record",
       "Record Time": "Record_Time", // 表头有空格，数据字段是下划线
       Equipment: "Equipment",
+      Process: "Process", // 新增：工序字段
+      Month: "Month",     // 新增：月份字段
+      Week: "Week",       // 新增：周数字段
+      Notification: "Notification", // 通知字段
+      Alarm_information: "Alarm_information", // 报警信息字段
+      "Notification No.": null, // 手动输入字段，写入空值
+      "Work Order": null, // 手动输入字段，写入空值
+      "Tracking Result": null // 手动输入字段，写入空值
     };
 
     // 遍历 PdM_Data_Written_In 数组中的每个对象
@@ -6800,7 +8071,7 @@ function PdMData_submit_Database_PdM_Data_visualization(PdM_Data_Written_In) {
         let dataFieldName = fieldMapping[colName];
 
         if (dataFieldName === null) {
-          // Notification 字段，填充空值
+          // 手动输入字段，写入空值
           newRow.push("");
         } else if (dataFieldName && dataRow.hasOwnProperty(dataFieldName)) {
           // 如果字段存在，使用字段值
@@ -6938,5 +8209,1205 @@ function get_PM_Workorder() {
         "获取PM工单数据失败 / Failed to get PM workorder data: " +
         error.toString(),
     });
+  }
+}
+
+// ==================== 工艺抽检模块函数 ====================
+
+/**
+ * 获取工艺抽检数据
+ * @param {string} process - 工序类型 (IM/TF/PK)
+ * @param {string} workshop - 车间
+ * @param {string} targetDate - 目标日期 (YYYY-MM-DD)
+ * @returns {object} 包含状态、数据和表头的对象
+ */
+function getProcessSamplingData(process, workshop, targetDate) {
+  try {
+    // 数据源配置
+    let dataSources = {
+      "IM": {
+        "spreadsheetId": "1afvNifotG_Ik36NQ7aptPjKT4ebAyeSBCc4hJ9WL7v4",
+        "sheetName": "Master Data",
+        "available": true
+      },
+      "TF": {
+        "spreadsheetId": "",
+        "sheetName": "",
+        "available": false
+      },
+      "PK": {
+        "spreadsheetId": "",
+        "sheetName": "",
+        "available": false
+      }
+    };
+    
+    let dataSource = dataSources[process];
+    
+    if (!dataSource || !dataSource.available) {
+      return {
+        status: "under_development",
+        message: "该工序数据源正在开发中",
+        data: []
+      };
+    }
+    
+    // 获取数据
+    let ss = SpreadsheetApp.openById(dataSource.spreadsheetId);
+    let ws = ss.getSheetByName(dataSource.sheetName);
+    
+    if (!ws) {
+      return {
+        status: "error",
+        message: "未找到工作表: " + dataSource.sheetName,
+        data: []
+      };
+    }
+    
+    let allData = ws.getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn()).getDisplayValues();
+    let headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getDisplayValues()[0];
+    
+    // 筛选当天夜班数据
+    let nightShiftData = filterNightShiftData(allData, targetDate);
+    
+    return {
+      status: "success",
+      data: nightShiftData,
+      headers: headers,
+      totalCount: allData.length,
+      filteredCount: nightShiftData.length
+    };
+    
+  } catch (e) {
+    console.error("获取工艺抽检数据失败:", e);
+    return {
+      status: "error",
+      message: "数据获取失败：" + e.toString(),
+      data: []
+    };
+  }
+}
+
+/**
+ * 筛选夜班数据
+ * @param {Array} allData - 所有数据
+ * @param {string} targetDate - 目标日期
+ * @returns {Array} 筛选后的夜班数据
+ */
+function filterNightShiftData(allData, targetDate) {
+  let targetDateStr = Utilities.formatDate(new Date(targetDate), "GMT+8", "yyyy-MM-dd");
+  let targetNightShift = targetDateStr + "_1"; // 夜班标识
+  
+  return allData.filter(function(row) {
+    let dateShiftStr = row[13]; // 日期&班次列（索引13）
+    return dateShiftStr === targetNightShift;
+  });
+}
+
+/**
+ * 获取工艺参数标准
+ * @param {string} material - 物料编码
+ * @returns {object} 包含状态和标准数据的对象
+ */
+function getProcessParameterStandards(material) {
+  try {
+    let standardsSpreadsheetId = "164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ";
+    let standardsSheetName = "INJ_New";
+    
+    let ss = SpreadsheetApp.openById(standardsSpreadsheetId);
+    let ws = ss.getSheetByName(standardsSheetName);
+    
+    if (!ws) {
+      return {
+        status: "error",
+        message: "未找到工艺参数标准工作表",
+        standards: []
+      };
+    }
+    
+    let allStandards = ws.getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn()).getDisplayValues();
+    
+    // 通过物料匹配SKU（索引4）
+    let matchingStandards = allStandards.filter(function(standard) {
+      let sku = standard[4]; // SKU（索引4）
+      let status = standard[19]; // 状态（索引19）
+      
+      let isValidStatus = status === "生效" || status === "Effective" || status === "有效";
+      
+      return sku === material && isValidStatus;
+    });
+    
+    if (matchingStandards.length === 0) {
+      return {
+        status: "not_found",
+        message: "未找到物料 " + material + " 对应的工艺参数标准",
+        standards: []
+      };
+    }
+    
+    return {
+      status: "success",
+      standards: matchingStandards,
+      message: "找到 " + matchingStandards.length + " 条匹配的标准"
+    };
+    
+  } catch (e) {
+    console.error("获取工艺参数标准失败:", e);
+    return {
+      status: "error",
+      message: "工艺参数标准获取失败：" + e.toString(),
+      standards: []
+    };
+  }
+}
+
+/**
+ * 评估工艺参数
+ * @param {string} samplingParams - 抽检时的工艺参数
+ * @param {string} material - 物料编码
+ * @returns {object} 评估结果
+ */
+function evaluateParameters(samplingParams, material) {
+  // 1. 通过物料获取标准
+  let standardResponse = getProcessParameterStandards(material);
+  
+  if (standardResponse.status !== "success") {
+    return {
+      allPassed: false,
+      error: standardResponse.message,
+      results: []
+    };
+  }
+  
+  // 2. 解析标准工艺参数
+  let standard = standardResponse.standards[0];
+  let standardParams = standard[8]; // 工艺参数列（索引8）
+  
+  let standardParamMap = parseParameterString(standardParams);
+  let samplingParamMap = parseParameterString(samplingParams);
+  
+  // 3. 逐个比较参数
+  let checkResults = [];
+  let allPassed = true;
+  
+  for (let paramName in standardParamMap) {
+    let standardRange = standardParamMap[paramName];
+    let currentValue = samplingParamMap[paramName];
+    
+    if (currentValue !== undefined) {
+      let isInRange = checkValueInRange(currentValue, standardRange);
+      checkResults.push({
+        parameter: paramName,
+        currentValue: currentValue,
+        standardRange: standardRange,
+        passed: isInRange
+      });
+      
+      if (!isInRange) {
+        allPassed = false;
+      }
+    } else {
+      checkResults.push({
+        parameter: paramName,
+        currentValue: '缺失',
+        standardRange: standardRange,
+        passed: false,
+        missing: true
+      });
+      allPassed = false;
+    }
+  }
+  
+  return {
+    allPassed: allPassed,
+    results: checkResults,
+    issueRecord: generateIssueRecord(checkResults.filter(function(r) { return !r.passed; })),
+    material: material,
+    standardInfo: {
+      sku: standard[4],
+      machineModel: standard[0],
+      automationGroup: standard[1],
+      moldCode: standard[2],
+      processCardNumber: standard[5],
+      cavityCount: standard[6]
+    }
+  };
+}
+
+/**
+ * 解析参数字符串
+ * @param {string} paramString - 参数字符串
+ * @returns {object} 参数映射对象
+ */
+function parseParameterString(paramString) {
+  let paramMap = {};
+  
+  if (!paramString || typeof paramString !== 'string') {
+    return paramMap;
+  }
+  
+  let pairs = [];
+  
+  if (paramString.includes(';')) {
+    pairs = paramString.split(';');
+  } else if (paramString.includes(',')) {
+    pairs = paramString.split(',');
+  } else if (paramString.includes('\n')) {
+    pairs = paramString.split('\n');
+  } else {
+    pairs = [paramString];
+  }
+  
+  pairs.forEach(function(pair) {
+    pair = pair.trim();
+    if (!pair) return;
+    
+    let key, value;
+    
+    if (pair.includes('=')) {
+      let parts = pair.split('=');
+      key = parts[0];
+      value = parts.slice(1).join('=');
+    } else if (pair.includes(':')) {
+      let parts = pair.split(':');
+      key = parts[0];
+      value = parts.slice(1).join(':');
+    } else if (pair.includes('：')) {
+      let parts = pair.split('：');
+      key = parts[0];
+      value = parts.slice(1).join('：');
+    }
+    
+    if (key && value) {
+      key = key.trim().replace(/[：:=]/g, '');
+      value = value.trim();
+      if (key) {
+        paramMap[key] = value;
+      }
+    }
+  });
+  
+  return paramMap;
+}
+
+/**
+ * 检查值是否在范围内
+ * @param {string} currentValue - 当前值
+ * @param {string} standardRange - 标准范围
+ * @returns {boolean} 是否在范围内
+ */
+function checkValueInRange(currentValue, standardRange) {
+  let cleanCurrentValue = currentValue.toString().trim();
+  let cleanRange = standardRange.toString().trim();
+  
+  try {
+    let currentNum = parseFloat(cleanCurrentValue);
+    
+    if (isNaN(currentNum)) {
+      return cleanCurrentValue === cleanRange;
+    }
+    
+    if (cleanRange.includes('-') && !cleanRange.startsWith('-')) {
+      let rangeParts = cleanRange.split('-');
+      if (rangeParts.length === 2) {
+        let min = parseFloat(rangeParts[0].trim());
+        let max = parseFloat(rangeParts[1].trim());
+        return currentNum >= min && currentNum <= max;
+      }
+    } else if (cleanRange.startsWith('>=')) {
+      let min = parseFloat(cleanRange.substring(2).trim());
+      return currentNum >= min;
+    } else if (cleanRange.startsWith('>')) {
+      let min = parseFloat(cleanRange.substring(1).trim());
+      return currentNum > min;
+    } else if (cleanRange.startsWith('<=')) {
+      let max = parseFloat(cleanRange.substring(2).trim());
+      return currentNum <= max;
+    } else if (cleanRange.startsWith('<')) {
+      let max = parseFloat(cleanRange.substring(1).trim());
+      return currentNum < max;
+    } else if (cleanRange.includes('~')) {
+      let parts = cleanRange.split('~');
+      let min = parseFloat(parts[0].trim());
+      let max = parseFloat(parts[1].trim());
+      return currentNum >= min && currentNum <= max;
+    } else {
+      let target = parseFloat(cleanRange);
+      return currentNum === target;
+    }
+  } catch (e) {
+    console.error('参数范围解析错误:', e);
+    return false;
+  }
+  
+  return false;
+}
+
+/**
+ * 生成问题记录
+ * @param {Array} failedResults - 失败的检查结果
+ * @returns {string} 问题记录文本
+ */
+function generateIssueRecord(failedResults) {
+  if (failedResults.length === 0) {
+    return '';
+  }
+  
+  let issues = failedResults.map(function(result) {
+    if (result.missing) {
+      return result.parameter + ": 参数缺失（标准范围: " + result.standardRange + "）";
+    } else {
+      return result.parameter + ": 当前值" + result.currentValue + "，标准范围" + result.standardRange;
+    }
+  });
+  
+  return '以下工艺参数不符合标准：\n' + issues.join('\n');
+}
+
+/**
+ * 保存工艺抽检结果
+ * @param {Array} rowData - 行数据
+ * @param {string} inspectionResult - 抽检结果
+ * @param {string} issueRecord - 问题记录
+ * @param {string} samplingParams - 抽检时的工艺参数
+ * @returns {object} 保存结果
+ */
+function saveProcessInspection(rowData, inspectionResult, issueRecord, samplingParams) {
+  try {
+    let workcenter = rowData[1];
+    let dateShift = rowData[13];
+    let currentUser = Session.getActiveUser().getEmail();
+    
+    let spreadsheetId = "1afvNifotG_Ik36NQ7aptPjKT4ebAyeSBCc4hJ9WL7v4";
+    let sheetName = "Master Data";
+    
+    let ss = SpreadsheetApp.openById(spreadsheetId);
+    let ws = ss.getSheetByName(sheetName);
+    
+    if (!ws) {
+      return {
+        status: "error",
+        message: "未找到工作表"
+      };
+    }
+    
+    // 查找对应的行
+    let allData = ws.getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn()).getDisplayValues();
+    let targetRowIndex = -1;
+    
+    for (let i = 0; i < allData.length; i++) {
+      if (allData[i][1] === workcenter && allData[i][13] === dateShift) {
+        targetRowIndex = i + 2;
+        break;
+      }
+    }
+    
+    if (targetRowIndex === -1) {
+      return {
+        status: "error",
+        message: "未找到对应的记录行"
+      };
+    }
+    
+    // 更新字段
+    ws.getRange(targetRowIndex, 15, 1, 1).setValue(currentUser);       // 抽检人（O列，索引14）
+    ws.getRange(targetRowIndex, 16, 1, 1).setValue(inspectionResult);  // 抽检结果（P列，索引15）
+    ws.getRange(targetRowIndex, 17, 1, 1).setValue(issueRecord);       // 问题记录（Q列，索引16）
+    ws.getRange(targetRowIndex, 18, 1, 1).setValue(samplingParams);    // 工艺参数-抽检（R列，索引17）
+    
+    let timestamp = Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm:ss");
+    console.log("工艺抽检保存: " + workcenter + " " + dateShift + " " + inspectionResult + " by " + currentUser + " at " + timestamp);
+    
+    return {
+      status: "success",
+      message: "保存成功"
+    };
+    
+  } catch (e) {
+    console.error("保存工艺抽检失败:", e);
+    return {
+      status: "error",
+      message: "保存失败：" + e.toString()
+    };
+  }
+}
+
+/**
+ * 保存保养后续措施数据
+ * @param {string} recordId - 记录编号（例如：20260213233819-1）
+ * @param {object} pmData - 保养数据对象
+ * @returns {object} 保存结果
+ */
+function savePMFollowUpAction(recordId, pmData) {
+  try {
+    let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
+    let ss = SpreadsheetApp.openById(id);
+    let sheetNames = [
+      "Shift_INJ_TB1",
+      "Shift_INJ_TB2",
+      "Shift_TF_TB1",
+      "Shift_TF_TB2",
+      "Shift_PK_TB1",
+      "Shift_PK_TB2",
+    ];
+    
+    // 从recordId中提取基础编号（去掉-后的数字）
+    let baseId = recordId.split('-')[0];
+    
+    // 遍历所有sheet查找匹配的记录
+    for (let sheetName of sheetNames) {
+      let ws = ss.getSheetByName(sheetName);
+      if (!ws) continue;
+      
+      let lastRow = ws.getLastRow();
+      if (lastRow < 2) continue;
+      
+      // 获取表头
+      let headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+      let idColIndex = headers.indexOf('编号');
+      let pmColIndex = headers.indexOf('后续措施 - 保养');
+      
+      if (idColIndex === -1 || pmColIndex === -1) {
+        continue;
+      }
+      
+      // 获取所有数据
+      let allData = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getValues();
+      
+      // 查找所有匹配基础编号的记录
+      let matchingRows = [];
+      for (let i = 0; i < allData.length; i++) {
+        let currentId = allData[i][idColIndex].toString();
+        if (currentId.startsWith(baseId)) {
+          matchingRows.push({
+            rowIndex: i + 2,
+            id: currentId,
+            suffix: currentId.includes('-') ? parseInt(currentId.split('-')[1]) : 0
+          });
+        }
+      }
+      
+      // 如果找到匹配的记录，找到后缀数字最大的那条
+      if (matchingRows.length > 0) {
+        matchingRows.sort((a, b) => b.suffix - a.suffix);
+        let targetRow = matchingRows[0].rowIndex;
+        
+        // 构建JSON数据
+        let pmJsonData = [{
+          "优化现有保养清单 / Optimize existing PM checklist": pmData.option1 || "NA",
+          "下次保养时专项执行 / Special execution in next PM": pmData.option2 || "NA",
+          "其他 / Others": pmData.option3 || "NA",
+          "提交人/ Submitor": pmData.submitor,
+          "提交日期/ Submit Date": pmData.submitDate
+        }];
+        
+        // 写入数据
+        ws.getRange(targetRow, pmColIndex + 1).setValue(JSON.stringify(pmJsonData));
+        
+        console.log("保养数据保存成功: " + matchingRows[0].id + " at row " + targetRow);
+        
+        return {
+          status: "success",
+          message: "保存成功 / Save successfully",
+          targetId: matchingRows[0].id
+        };
+      }
+    }
+    
+    return {
+      status: "error",
+      message: "未找到对应的记录 / Record not found"
+    };
+    
+  } catch (e) {
+    console.error("保存保养数据失败:", e);
+    return {
+      status: "error",
+      message: "保存失败 / Save failed: " + e.toString()
+    };
+  }
+}
+
+/**
+ * 读取保养后续措施数据
+ * @param {string} recordId - 记录编号（例如：20260213233819-1）
+ * @returns {object} 读取结果
+ */
+function getPMFollowUpAction(recordId) {
+  try {
+    let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
+    let ss = SpreadsheetApp.openById(id);
+    let sheetNames = [
+      "Shift_INJ_TB1",
+      "Shift_INJ_TB2",
+      "Shift_TF_TB1",
+      "Shift_TF_TB2",
+      "Shift_PK_TB1",
+      "Shift_PK_TB2",
+    ];
+    
+    // 从recordId中提取基础编号（去掉-后的数字）
+    let baseId = recordId.split('-')[0];
+    
+    // 遍历所有sheet查找匹配的记录
+    for (let sheetName of sheetNames) {
+      let ws = ss.getSheetByName(sheetName);
+      if (!ws) continue;
+      
+      let lastRow = ws.getLastRow();
+      if (lastRow < 2) continue;
+      
+      // 获取表头
+      let headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+      let idColIndex = headers.indexOf('编号');
+      let pmColIndex = headers.indexOf('后续措施 - 保养');
+      
+      if (idColIndex === -1 || pmColIndex === -1) {
+        continue;
+      }
+      
+      // 获取所有数据
+      let allData = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getValues();
+      
+      // 查找所有匹配基础编号的记录
+      let matchingRows = [];
+      for (let i = 0; i < allData.length; i++) {
+        let currentId = allData[i][idColIndex].toString();
+        if (currentId.startsWith(baseId)) {
+          matchingRows.push({
+            rowIndex: i + 2,
+            id: currentId,
+            suffix: currentId.includes('-') ? parseInt(currentId.split('-')[1]) : 0,
+            pmData: allData[i][pmColIndex]
+          });
+        }
+      }
+      
+      // 如果找到匹配的记录，找到后缀数字最大的那条
+      if (matchingRows.length > 0) {
+        matchingRows.sort((a, b) => b.suffix - a.suffix);
+        let targetRecord = matchingRows[0];
+        
+        // 检查是否有保养数据
+        if (!targetRecord.pmData || targetRecord.pmData.toString().trim() === '') {
+          return {
+            status: "success",
+            hasData: false,
+            data: null
+          };
+        }
+        
+        // 解析JSON数据
+        try {
+          let pmJsonData = JSON.parse(targetRecord.pmData);
+          if (Array.isArray(pmJsonData) && pmJsonData.length > 0) {
+            let pmInfo = pmJsonData[0];
+            return {
+              status: "success",
+              hasData: true,
+              data: {
+                option1: pmInfo["优化现有保养清单 / Optimize existing PM checklist"] === "NA" ? "" : pmInfo["优化现有保养清单 / Optimize existing PM checklist"],
+                option2: pmInfo["下次保养时专项执行 / Special execution in next PM"] === "NA" ? "" : pmInfo["下次保养时专项执行 / Special execution in next PM"],
+                option3: pmInfo["其他 / Others"] === "NA" ? "" : pmInfo["其他 / Others"]
+              }
+            };
+          }
+        } catch (parseError) {
+          console.error("解析保养数据JSON失败:", parseError);
+          return {
+            status: "error",
+            message: "数据格式错误 / Data format error"
+          };
+        }
+      }
+    }
+    
+    return {
+      status: "success",
+      hasData: false,
+      data: null
+    };
+    
+  } catch (e) {
+    console.error("读取保养数据失败:", e);
+    return {
+      status: "error",
+      message: "读取失败 / Read failed: " + e.toString()
+    };
+  }
+}
+
+// ==================== 三班转保养跟进功能 / PM Shift Follow-up Functions ====================
+
+/**
+ * 根据工序获取MasterData数据
+ * @param {string} process - 工序名称 (INJ/TF/PK)
+ * @returns {Array} 返回对应工序的数据数组
+ */
+function getMasterDataByProcess(process) {
+  try {
+    const spreadsheetId = '1HZHz5wN8sXeP5S7ub041bqklk0Rm2Jsmh3Ovd7ZKeJE';
+    const sheetName = 'MasterData';
+    
+    let ss = SpreadsheetApp.openById(spreadsheetId);
+    let ws = ss.getSheetByName(sheetName);
+    
+    if (!ws) {
+      console.error('MasterData sheet not found');
+      return [];
+    }
+    
+    let lastRow = ws.getLastRow();
+    if (lastRow < 2) {
+      return [];
+    }
+    
+    // 获取表头
+    let headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+    
+    // 获取所有数据
+    let allData = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getValues();
+    
+    // 转换为对象数组
+    let dataArray = allData.map((row, index) => {
+      let obj = {};
+      headers.forEach((header, colIndex) => {
+        obj[header] = row[colIndex];
+      });
+      obj['行号'] = index + 2; // 保存行号用于后续更新
+      return obj;
+    });
+    
+    // 根据工序筛选数据
+    let filteredData = dataArray.filter(item => {
+      let itemProcess = item['工序'] || '';
+      // INJ和IM等同处理
+      if (process === 'INJ' || process === 'IM') {
+        return itemProcess === 'INJ' || itemProcess === 'IM';
+      }
+      return itemProcess === process;
+    });
+    
+    return filteredData;
+    
+  } catch (e) {
+    console.error('获取MasterData数据失败:', e);
+    return [];
+  }
+}
+
+/**
+ * 批量更新MasterData数据
+ * @param {Array} submitData - 提交的数据数组
+ * @returns {Object} 返回操作结果
+ */
+function batchUpdateMasterData(submitData) {
+  try {
+    const spreadsheetId = '1HZHz5wN8sXeP5S7ub041bqklk0Rm2Jsmh3Ovd7ZKeJE';
+    const sheetName = 'MasterData';
+    
+    let ss = SpreadsheetApp.openById(spreadsheetId);
+    let ws = ss.getSheetByName(sheetName);
+    
+    if (!ws) {
+      return {
+        success: false,
+        message: 'MasterData sheet not found'
+      };
+    }
+    
+    // 获取表头
+    let headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+    let statusColIndex = headers.indexOf('状态') + 1;
+    let feedbackColIndex = headers.indexOf('后续措施 - 保养（反馈）') + 1;
+    let numberColIndex = headers.indexOf('编号') + 1;
+    
+    if (statusColIndex === 0 || feedbackColIndex === 0 || numberColIndex === 0) {
+      return {
+        success: false,
+        message: '表头列未找到'
+      };
+    }
+    
+    // 获取所有编号列数据用于查找行号
+    let lastRow = ws.getLastRow();
+    let allNumbers = ws.getRange(2, numberColIndex, lastRow - 1, 1).getValues();
+    
+    let updateCount = 0;
+    
+    // 遍历提交数据进行更新
+    submitData.forEach(item => {
+      let recordNumber = item.recordNumber;
+      let changes = item.changes;
+      
+      // 查找对应的行号
+      let rowIndex = -1;
+      for (let i = 0; i < allNumbers.length; i++) {
+        if (allNumbers[i][0].toString() === recordNumber.toString()) {
+          rowIndex = i + 2; // +2 因为数据从第2行开始
+          break;
+        }
+      }
+      
+      if (rowIndex === -1) {
+        console.error('未找到编号为 ' + recordNumber + ' 的记录');
+        return;
+      }
+      
+      // 更新状态
+      if (changes.hasOwnProperty('状态')) {
+        ws.getRange(rowIndex, statusColIndex).setValue(changes['状态']);
+        updateCount++;
+      }
+      
+      // 更新反馈
+      if (changes.hasOwnProperty('后续措施 - 保养（反馈）')) {
+        ws.getRange(rowIndex, feedbackColIndex).setValue(changes['后续措施 - 保养（反馈）']);
+        updateCount++;
+      }
+    });
+    
+    return {
+      success: true,
+      message: '成功更新 ' + updateCount + ' 个字段',
+      updateCount: updateCount
+    };
+    
+  } catch (e) {
+    console.error('批量更新MasterData失败:', e);
+    return {
+      success: false,
+      message: '更新失败: ' + e.toString()
+    };
+  }
+}
+
+// ==================== 4D隐患汇报功能 / 4D Hazard Report Functions ====================
+
+/**
+ * 提交4D隐患汇报
+ * @param {object} hazardData - 隐患汇报数据对象
+ * @returns {object} 返回操作结果
+ */
+function submit4DHazardReport(hazardData) {
+  try {
+    const spreadsheetId = '1VlYsGx1WenM2xw2W-5i0zKOsjlj-QW2ZJnANrQksUQA';
+    const sheetName = 'MasterData';
+    
+    let ss = SpreadsheetApp.openById(spreadsheetId);
+    let ws = ss.getSheetByName(sheetName);
+    
+    if (!ws) {
+      return {
+        success: false,
+        message: 'MasterData工作表未找到 / MasterData sheet not found'
+      };
+    }
+    
+    // 按照表头顺序准备数据
+    // A:工序 / Process | B:车间 / Workshop | C:隐患详情 / Hazard Details | 
+    // D:建议措施 / Suggested Measures | E:提交人 / Submitter | F:提交时间 / Data
+    let submitRow = [
+      hazardData['工序'] || '',                    // A: 工序 / Process
+      hazardData['车间'] || '',                    // B: 车间 / Workshop  
+      hazardData['隐患描述'] || '',                 // C: 隐患详情 / Hazard Details
+      hazardData['建议措施'] || '',                 // D: 建议措施 / Suggested Measures
+      hazardData['提交人'] || '',                   // E: 提交人 / Submitter
+      hazardData['提交时间'] || ''                  // F: 提交时间 / Data (YYYY-MM-DD)
+    ];
+    
+    // 追加新行
+    ws.appendRow(submitRow);
+    
+    // 生成汇报编号 (格式: HZ + YYYYMMDD + 4位序号)
+    let now = new Date();
+    let dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyyMMdd');
+    let reportId = 'HZ' + dateStr + String(ws.getLastRow()).padStart(4, '0');
+    
+    console.log('4D隐患汇报提交成功，编号: ' + reportId);
+    console.log('提交数据:', hazardData);
+    
+    return {
+      success: true,
+      message: '提交成功 / Submit Successfully',
+      reportId: reportId
+    };
+    
+  } catch (error) {
+    console.error('4D隐患汇报提交失败:', error);
+    return {
+      success: false,
+      message: '提交失败 / Submit Failed: ' + error.toString()
+    };
+  }
+}
+
+// ==================== Check 4 Safety功能 / Check 4 Safety Functions ====================
+
+/**
+ * 提交Check 4 Safety检查数据
+ * @param {object} checkData - 检查数据对象
+ * @returns {object} 返回操作结果
+ */
+function submitSafety4Check(checkData) {
+  try {
+    const spreadsheetId = '1S5l2sWbozcOVXVFdP2P8rXmyCAVsYbwjNKosXdhdz3U';
+    const sheetName = 'MasterData';
+    
+    let ss = SpreadsheetApp.openById(spreadsheetId);
+    let ws = ss.getSheetByName(sheetName);
+    
+    if (!ws) {
+      return {
+        success: false,
+        message: 'MasterData工作表未找到 / MasterData sheet not found'
+      };
+    }
+    
+    // 格式化检查项数据
+    let check1Data = formatCheckItemData(checkData.checks[0]);
+    let check2Data = formatCheckItemData(checkData.checks[1]);
+    let check3Data = formatCheckItemData(checkData.checks[2]);
+    let check4Data = formatCheckItemData(checkData.checks[3]);
+    
+    // 准备提交数据
+    let now = new Date();
+    let submitDate = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    let submitTime = Utilities.formatDate(now, Session.getScriptTimeZone(), 'HH:mm:ss');
+    
+    let submitRow = [
+      checkData.process || '',                    // A: 工序 / Process
+      checkData.workshop || '',                   // B: 车间 / Workshop  
+      check1Data,                                 // C: 检查项1
+      check2Data,                                 // D: 检查项2
+      check3Data,                                 // E: 检查项3
+      check4Data,                                 // F: 检查项4
+      checkData.submitter || '',                   // G: 提交人 / Submitter
+      submitDate,                                 // H: 提交日期 / Date
+      submitTime                                  // I: 提交时间 / Time
+    ];
+    
+    // 追加新行
+    ws.appendRow(submitRow);
+    
+    // 生成检查编号 (格式: S4C + YYYYMMDD + 4位序号)
+    let dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyyMMdd');
+    let checkId = 'S4C' + dateStr + String(ws.getLastRow()).padStart(4, '0');
+    
+    console.log('Check 4 Safety提交成功，编号: ' + checkId);
+    console.log('提交数据:', checkData);
+    
+    return {
+      success: true,
+      message: '提交成功 / Submit Successfully',
+      checkId: checkId
+    };
+    
+  } catch (error) {
+    console.error('Check 4 Safety提交失败:', error);
+    return {
+      success: false,
+      message: '提交失败 / Submit Failed: ' + error.toString()
+    };
+  }
+}
+
+/**
+ * 格式化检查项数据
+ * @param {object} checkItem - 检查项对象
+ * @returns {string} 格式化后的字符串
+ */
+function formatCheckItemData(checkItem) {
+  let status = checkItem.status || '';
+  let details = checkItem.details || '';
+  
+  let result = '【状态 / Status】：' + status;
+  
+  if (status === '异常' && details) {
+    result += '\n【具体细节 / Specific Details】：' + details;
+  } else if (status === '正常') {
+    result += '\n【具体细节 / Specific Details】：无 / None';
+  }
+  
+  return result;
+}
+
+// ==========================================
+// 交接班留言板功能 / Handover Message Board
+// ==========================================
+const HANDBOARD_SS_ID = '1PlLYcuCA3H3MsQyOaA0AIPpuEPNR0fXWCsBvQtT-bEQ';
+const HANDBOARD_SHEET_NAME = 'Handover_MessageBoard';
+const USER_PERMISSION_SS_ID = '1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM';
+const USER_PERMISSION_SHEET_NAME = 'userID';
+
+/**
+ * 检查用户是否有留言板编辑权限
+ * Check if user has message board edit permission
+ * @param {string} userEmail - 用户邮箱
+ * @param {string} userName - 用户姓名
+ * @returns {boolean}
+ */
+function checkMessageBoardEditPermission(userEmail, userName) {
+  try {
+    const ss = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const sheet = ss.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!sheet) return false;
+    
+    const values = sheet.getDataRange().getValues();
+    const emailLower = String(userEmail || '').trim().toLowerCase();
+    const nameTrimmed = String(userName || '').trim();
+    // 从第2行开始遍历（跳过表头）
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      // B列为姓名（索引1），J列为邮箱（索引9），BE列为权限（索引56）
+      const rowName = String(row[1] || '').trim();
+      const rowEmail = String(row[9] || row[0] || '').trim().toLowerCase();
+      const permission = String(row[56] || '').trim();
+      
+      const matchByEmail = emailLower && rowEmail && rowEmail === emailLower;
+      const matchByName = nameTrimmed && rowName && rowName === nameTrimmed;
+      
+      if ((matchByEmail || matchByName) && permission.includes('编辑')) {
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('检查权限失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 检查用户是否有故障报告管理权限
+ * Check if user has failure report management permission
+ * 读取权限表最后一列，检查是否包含"故障报告管理"
+ * @param {string} userEmail - 用户邮箱
+ * @param {string} userName - 用户姓名
+ * @returns {boolean}
+ */
+function checkFailureReportManagePermission(userEmail, userName) {
+  try {
+    const ss = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const sheet = ss.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!sheet) return false;
+
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return false;
+
+    const emailLower = String(userEmail || '').trim().toLowerCase();
+    const nameTrimmed = String(userName || '').trim();
+    // 按表头名称查找"故障报告管理权限"列
+    const headers = values[0];
+    let permColIndex = -1;
+    for (let c = 0; c < headers.length; c++) {
+      if (String(headers[c] || '').trim() === '故障报告管理权限') {
+        permColIndex = c;
+        break;
+      }
+    }
+    if (permColIndex === -1) return false;
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      // B列为姓名（索引1），J列为邮箱（索引9）
+      const rowName = String(row[1] || '').trim();
+      const rowEmail = String(row[9] || row[0] || '').trim().toLowerCase();
+      const permission = String(row[permColIndex] || '').trim();
+
+      const matchByEmail = emailLower && rowEmail && rowEmail === emailLower;
+      const matchByName = nameTrimmed && rowName && rowName === nameTrimmed;
+
+      if ((matchByEmail || matchByName) && permission.includes('故障报告管理')) {
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('检查故障报告管理权限失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 初始化故障报告管理权限列（一次性操作）
+ * 在权限表最后新增一列，表头为"故障报告管理权限"
+ * Setup failure report management permission column (one-time operation)
+ */
+function setupFailureReportManagePermissionColumn() {
+  try {
+    const ss = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const sheet = ss.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!sheet) return 'Sheet userID not found';
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const lastHeader = String(headers[lastCol - 1] || '').trim();
+
+    if (lastHeader === '故障报告管理权限') {
+      return 'Column already exists, no action needed / 列已存在，无需操作';
+    }
+
+    sheet.insertColumnAfter(lastCol);
+    sheet.getRange(1, lastCol + 1).setValue('故障报告管理权限');
+    return 'Column added successfully / 列添加成功';
+  } catch (error) {
+    console.error('初始化权限列失败:', error);
+    return 'Error: ' + error.message;
+  }
+}
+
+/**
+ * 获取留言板列表（按车间工序过滤，时间倒序）
+ * Get message board list (filtered by workshop/process, time desc)
+ * @param {string} workshop - 车间
+ * @param {string} process - 工序
+ * @param {number} limit - 限制条数（默认50）
+ * @returns {Object}
+ */
+function getMessageBoardList(workshop, process, limit) {
+  try {
+    limit = limit || 50;
+    const ss = SpreadsheetApp.openById(HANDBOARD_SS_ID);
+    const sheet = ss.getSheetByName(HANDBOARD_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, message: '留言板工作表不存在 / Message board sheet not found' };
+    }
+    
+    const values = sheet.getDataRange().getValues();
+    let messages = [];
+    
+    // 从第2行开始遍历（跳过表头）
+    // 列顺序：序号(0),留言ID(1),车间(2),工序(3),留言人(4),留言时间(5),留言内容(6),最后编辑时间(7)
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      const rowWorkshop = String(row[2] || '').trim();
+      const rowProcess = String(row[3] || '').trim();
+      
+      // 过滤车间和工序
+      if (workshop && rowWorkshop !== workshop) continue;
+      if (process && rowProcess !== process) continue;
+      
+      messages.push({
+        seqNo: String(row[0] || ''),
+        messageId: String(row[1] || ''),
+        timestamp: String(row[5] || ''),
+        author: String(row[4] || ''),
+        workshop: rowWorkshop,
+        process: rowProcess,
+        content: String(row[6] || ''),
+        editTime: String(row[7] || '')
+      });
+    }
+    
+    // 按时间倒序排列
+    messages.sort(function(a, b) {
+      return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+    
+    // 限制返回条数
+    messages = messages.slice(0, limit);
+    
+    return { success: true, data: messages };
+  } catch (error) {
+    return { success: false, message: '获取留言失败 / Failed to get messages: ' + error.toString() };
+  }
+}
+
+/**
+ * 添加新留言
+ * Add new message
+ * @param {string} author - 留言人
+ * @param {string} workshop - 车间
+ * @param {string} process - 工序
+ * @param {string} content - 内容
+ * @returns {Object}
+ */
+function addMessageBoardMessage(author, workshop, process, content) {
+  try {
+    const ss = SpreadsheetApp.openById(HANDBOARD_SS_ID);
+    const sheet = ss.getSheetByName(HANDBOARD_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, message: '留言板工作表不存在 / Message board sheet not found' };
+    }
+    
+    const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    const messageId = Utilities.getUuid();
+    
+    // 计算序号：当前行数（含表头）即下一行的序号
+    const lastRow = sheet.getLastRow();
+    const seqNo = lastRow > 0 ? lastRow : 1;
+    
+    // 列顺序：序号(0),留言ID(1),车间(2),工序(3),留言人(4),留言时间(5),留言内容(6),最后编辑时间(7)
+    sheet.appendRow([seqNo, messageId, workshop, process, author, timestamp, content, timestamp]);
+    
+    return { success: true, message: '留言添加成功 / Message added successfully' };
+  } catch (error) {
+    return { success: false, message: '添加留言失败 / Failed to add message: ' + error.toString() };
+  }
+}
+
+/**
+ * 编辑留言
+ * Edit message
+ * @param {string} messageId - 留言ID
+ * @param {string} content - 新内容
+ * @param {string} editor - 编辑人
+ * @returns {Object}
+ */
+function editMessageBoardMessage(messageId, content, editor) {
+  try {
+    const ss = SpreadsheetApp.openById(HANDBOARD_SS_ID);
+    const sheet = ss.getSheetByName(HANDBOARD_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, message: '留言板工作表不存在 / Message board sheet not found' };
+    }
+    
+    const values = sheet.getDataRange().getValues();
+    
+    // 查找留言
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][1]) === messageId) {
+        const editTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+        // 更新内容（G列，索引7）和编辑时间（H列，索引8）
+        sheet.getRange(i + 1, 7).setValue(content);
+        sheet.getRange(i + 1, 8).setValue(editTime);
+        return { success: true, message: '留言编辑成功 / Message edited successfully' };
+      }
+    }
+    
+    return { success: false, message: '留言不存在 / Message not found' };
+  } catch (error) {
+    return { success: false, message: '编辑留言失败 / Failed to edit message: ' + error.toString() };
+  }
+}
+
+/**
+ * 删除留言
+ * Delete message
+ * @param {string} messageId - 留言ID
+ * @returns {Object}
+ */
+function deleteMessageBoardMessage(messageId) {
+  try {
+    const ss = SpreadsheetApp.openById(HANDBOARD_SS_ID);
+    const sheet = ss.getSheetByName(HANDBOARD_SHEET_NAME);
+    if (!sheet) {
+      return { success: false, message: '留言板工作表不存在 / Message board sheet not found' };
+    }
+    
+    const values = sheet.getDataRange().getValues();
+    
+    // 查找并删除留言
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][1]) === messageId) {
+        sheet.deleteRow(i + 1);
+        return { success: true, message: '留言删除成功 / Message deleted successfully' };
+      }
+    }
+    
+    return { success: false, message: '留言不存在 / Message not found' };
+  } catch (error) {
+    return { success: false, message: '删除留言失败 / Failed to delete message: ' + error.toString() };
   }
 }

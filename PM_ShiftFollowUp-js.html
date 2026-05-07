@@ -1,0 +1,592 @@
+<script>
+  // 全局变量
+  let masterData = [];
+  let tableData = [];
+  let currentProcess = '';
+  let userProcess = '';
+  let tables = {}; // 存储多个表格实例
+  let modifiedData = new Map(); // key: 行号, value: {状态, 后续措施 - 保养（反馈）}
+
+  $(document).ready(function() {
+    // 获取用户工序信息
+    userProcess = sessionStorage.getItem('Process') || '';
+    
+    // 工序映射处理（INJ和IM等同）
+    let normalizedProcess = normalizeProcess(userProcess);
+    currentProcess = normalizedProcess === 'INJ' ? 'IM' : normalizedProcess;
+    
+    // 初始化页面
+    initializePage();
+  });
+
+  // 初始化页面
+  function initializePage() {
+    // 绑定事件
+    bindEvents();
+    
+    // 设置默认激活的Tab
+    setActiveTab(currentProcess);
+    
+    // 加载默认工序数据
+    loadProcessData(currentProcess);
+  }
+
+  // 工序映射处理
+  function normalizeProcess(process) {
+    return process === 'IM' ? 'INJ' : process;
+  }
+
+  // 设置激活的Tab
+  function setActiveTab(process) {
+    let processLower = process.toLowerCase(); // 转换为小写以匹配HTML中的ID
+    
+    $('.nav-link').removeClass('active');
+    $(`#${processLower}-tab`).addClass('active');
+    
+    $('.tab-pane').removeClass('show active');
+    $(`#${processLower}-content`).addClass('show active');
+    
+    // 确保表格在正确的Tab中正确显示
+    let tableId = process === 'IM' ? 'pmFollowUpTable' : process.toLowerCase() + 'Table';
+    if (tables[tableId]) {
+      setTimeout(function() {
+        tables[tableId].columns.adjust().draw();
+      }, 50);
+    }
+  }
+
+  // 绑定事件
+  function bindEvents() {
+    // Tab点击事件
+    $('.nav-link').click(function() {
+      let selectedProcess = $(this).attr('id').replace('-tab', '');
+      
+      if (selectedProcess === currentProcess) {
+        return; // 已经是当前工序，不需要重新加载
+      }
+      
+      // 检查是否有未提交的修改
+      if (modifiedData.size > 0) {
+        Swal.fire({
+          title: '警告',
+          text: '您有未提交的修改，切换工序将丢失这些修改。是否继续？',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: '继续',
+          cancelButtonText: '取消'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            modifiedData.clear();
+            updateSubmitButton();
+            currentProcess = selectedProcess;
+            setActiveTab(selectedProcess);
+            loadProcessData(selectedProcess);
+          }
+        });
+      } else {
+        currentProcess = selectedProcess;
+        setActiveTab(selectedProcess);
+        loadProcessData(selectedProcess);
+      }
+    });
+
+    // 刷新按钮
+    $('#refreshBtn').click(function() {
+      if (modifiedData.size > 0) {
+        Swal.fire({
+          title: '警告',
+          text: '您有未提交的修改，刷新将丢失这些修改。是否继续？',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: '继续',
+          cancelButtonText: '取消'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            modifiedData.clear();
+            updateSubmitButton();
+            loadProcessData(currentProcess);
+          }
+        });
+      } else {
+        loadProcessData(currentProcess);
+      }
+    });
+
+    // 提交按钮
+    $('#submitBtn').click(function() {
+      if (modifiedData.size === 0) {
+        Swal.fire('提示', '没有需要提交的修改', 'info');
+        return;
+      }
+      
+      showSubmitModal();
+    });
+
+    // 确认提交
+    $('#confirmSubmit').click(function() {
+      submitChanges();
+    });
+  }
+
+  // 加载工序数据
+  function loadProcessData(process) {
+    let normalizedProcess = normalizeProcess(process);
+    
+    Swal.fire({
+      title: '正在加载数据...',
+      text: '请稍候',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        Swal.close();
+        if (data && data.length > 0) {
+          masterData = data;
+          tableData = data;
+          initializeTable();
+        } else {
+          masterData = [];
+          tableData = [];
+          initializeTable();
+          Swal.fire('提示', '当前工序暂无数据', 'info');
+        }
+      })
+      .withFailureHandler(function(error) {
+        Swal.close();
+        Swal.fire('错误', '数据加载失败: ' + error, 'error');
+      })
+      .getMasterDataByProcess(normalizedProcess);
+  }
+
+  // 初始化表格
+  function initializeTable() {
+    // 应用自定义排序
+    tableData.sort(customSort);
+    
+    let tableId = currentProcess === 'IM' ? 'pmFollowUpTable' : currentProcess.toLowerCase() + 'Table';
+    
+    if (tables[tableId]) {
+      tables[tableId].clear();
+      tables[tableId].rows.add(tableData);
+      tables[tableId].draw();
+    } else {
+      tables[tableId] = $('#' + tableId).DataTable({
+        data: tableData,
+        columns: [
+          { data: '工序', title: '工序 / Process', visible: false },
+          { data: '编号', title: '编号 / Number' },
+          { data: '机台号', title: '机台号 / Workcenter' },
+          { data: '问题描述', title: '问题描述 / Problem Description' },
+          { 
+            data: '处理过程', 
+            title: '处理过程 / Process',
+            render: function(data, type, row) {
+              if (type === 'display' && data) {
+                // 将换行符转换为HTML的<br>标签
+                return data.replace(/\n/g, '<br>');
+              }
+              return data;
+            }
+          },
+          { data: '直接原因', title: '直接原因 / Direct Cause' },
+          { data: '建议措施', title: '建议措施 / Suggested Action' },
+          { 
+            data: '后续措施 - 保养', 
+            title: '后续措施 - 保养 / Follow-up Action - PM',
+            render: function(data, type, row) {
+              if (type === 'display' && data) {
+                return renderFollowUpAction(data);
+              }
+              return data;
+            }
+          },
+          { 
+            data: '后续措施 - 保养（反馈）', 
+            title: '后续措施 - 保养（反馈） / Follow-up Action - PM (Feedback)',
+            className: 'editable-cell'
+          },
+          { 
+            data: '状态', 
+            title: '状态 / Status',
+            className: 'editable-cell',
+            render: function(data, type, row) {
+              if (type === 'display') {
+                return renderStatusBadge(data);
+              }
+              return data;
+            }
+          }
+        ],
+        pageLength: 25,
+        responsive: true,
+        language: {
+          search: "搜索 / Search:",
+          lengthMenu: "显示 _MENU_ 条记录 / Show _MENU_ entries",
+          info: "显示第 _START_ 至 _END_ 条记录，共 _TOTAL_ 条 / Showing _START_ to _END_ of _TOTAL_ entries",
+          paginate: {
+            first: "首页 / First",
+            last: "末页 / Last",
+            next: "下一页 / Next",
+            previous: "上一页 / Previous"
+          },
+          emptyTable: "暂无数据 / No data available"
+        }
+      });
+
+      // 绑定单元格编辑事件
+      bindCellEditEvents();
+    }
+    
+    // 强制显示当前Tab并重绘表格
+    setTimeout(function() {
+      let tableId = currentProcess === 'IM' ? 'pmFollowUpTable' : currentProcess.toLowerCase() + 'Table';
+      let processLower = currentProcess.toLowerCase();
+      
+      if (tables[tableId]) {
+        // 确保Tab是激活状态
+        $('.tab-pane').removeClass('show active');
+        $(`#${processLower}-content`).addClass('show active');
+        
+        // 重绘表格
+        tables[tableId].columns.adjust().draw();
+      }
+    }, 100);
+  }
+
+  // 数据排序函数
+  function customSort(a, b) {
+    // 首先按状态排序：Ongoing在前，Done在后
+    let statusA = a['状态'] || 'Ongoing';
+    let statusB = b['状态'] || 'Ongoing';
+    
+    if (statusA !== statusB) {
+      return (statusA === 'Done' ? 1 : 0) - (statusB === 'Done' ? 1 : 0);
+    }
+    
+    // 状态相同时，按编号数字降序排列
+    let numberA = extractNumber(a['编号'] || '');
+    let numberB = extractNumber(b['编号'] || '');
+    
+    return numberB - numberA;
+  }
+
+  // 提取编号中的数字部分
+  function extractNumber(code) {
+    if (!code) return 0;
+    
+    let match = code.match(/^(\d+)/);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+    
+    let numberMatch = code.match(/\d+/);
+    return numberMatch ? parseInt(numberMatch[0], 10) : 0;
+  }
+
+  // 渲染状态badge
+  function renderStatusBadge(status) {
+    if (!status) status = 'Ongoing';
+    let badgeClass = status === 'Done' ? 'bg-success' : 'bg-warning';
+    return `<span class="badge ${badgeClass}">${status}</span>`;
+  }
+
+  // 渲染后续措施 - 保养
+  function renderFollowUpAction(data) {
+    if (!data) return '';
+    
+    try {
+      let jsonData = JSON.parse(data);
+      if (!Array.isArray(jsonData) || jsonData.length === 0) return data;
+      
+      let result = '';
+      let item = jsonData[0]; // 取第一个对象
+      
+      // 处理措施项
+      if (item['优化现有保养清单 / Optimize existing PM checklist']) {
+        result += `【优化现有保养清单】：${item['优化现有保养清单 / Optimize existing PM checklist']}<br>`;
+      }
+      if (item['下次保养时专项执行 / Special execution in next PM']) {
+        result += `【下次保养时专项执行】：${item['下次保养时专项执行 / Special execution in next PM']}<br>`;
+      }
+      if (item['其他 / Others']) {
+        result += `【其他】：${item['其他 / Others']}<br>`;
+      }
+      
+      // 处理提交信息
+      if (item['提交人/ Submitor']) {
+        result += `提交人：${item['提交人/ Submitor']}<br>`;
+      }
+      if (item['提交日期/ Submit Date']) {
+        result += `提交日期：${item['提交日期/ Submit Date']}`;
+      }
+      
+      return result;
+    } catch (e) {
+      // 如果不是有效的JSON，返回原始数据
+      return data;
+    }
+  }
+
+  // 绑定单元格编辑事件
+  function bindCellEditEvents() {
+    let tableId = currentProcess === 'IM' ? 'pmFollowUpTable' : currentProcess.toLowerCase() + 'Table';
+    
+    // 先移除旧的事件绑定，避免重复绑定
+    $('#' + tableId).off('dblclick', 'td:nth-child(8)');
+    $('#' + tableId).off('click', 'td:nth-child(9)');
+    
+    // 后续措施 - 保养（反馈）列：双击编辑
+    $('#' + tableId).on('dblclick', 'td:nth-child(8)', function(e) {
+      e.stopPropagation();
+      let cell = $(this);
+      let currentValue = cell.text().trim();
+      let row = tables[tableId].row(cell.closest('tr'));
+      let rowData = row.data();
+      
+      // 创建输入框
+      let input = $('<textarea>')
+        .addClass('form-control')
+        .val(currentValue)
+        .css({
+          'width': '100%',
+          'height': '60px',
+          'resize': 'vertical'
+        });
+      
+      cell.empty().append(input);
+      input.focus();
+      
+      // 保存逻辑
+      function saveEdit() {
+        let newValue = input.val().trim();
+        let originalValue = rowData['后续措施 - 保养（反馈）'] || '';
+        
+        if (newValue !== originalValue) {
+          rowData['后续措施 - 保养（反馈）'] = newValue;
+          recordModification(rowData['编号'], '后续措施 - 保养（反馈）', newValue);
+        }
+        
+        cell.text(newValue);
+      }
+      
+      input.blur(saveEdit);
+      input.keydown(function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          saveEdit();
+        }
+      });
+    });
+
+    // 状态列：单击编辑
+    $('#' + tableId).on('click', 'td:nth-child(9)', function(e) {
+      e.stopPropagation();
+      let cell = $(this);
+      
+      // 如果已经是编辑状态，不重复创建
+      if (cell.find('select').length > 0) {
+        return;
+      }
+      
+      let currentValue = cell.find('.badge').text().trim() || 'Ongoing';
+      let row = tables[tableId].row(cell.closest('tr'));
+      let rowData = row.data();
+      
+      // 创建下拉选择
+      let select = $('<select>')
+        .addClass('form-select')
+        .css('width', '100%');
+      
+      ['Ongoing', 'Done'].forEach(status => {
+        let option = $('<option>')
+          .val(status)
+          .text(status)
+          .prop('selected', status === currentValue);
+        select.append(option);
+      });
+      
+      cell.empty().append(select);
+      select.focus();
+      
+      // 保存逻辑
+      function saveStatus() {
+        let newStatus = select.val();
+        let originalStatus = rowData['状态'] || 'Ongoing';
+        
+        if (newStatus !== originalStatus) {
+          rowData['状态'] = newStatus;
+          recordModification(rowData['编号'], '状态', newStatus);
+        }
+        
+        let badgeClass = newStatus === 'Done' ? 'bg-success' : 'bg-warning';
+        let badge = $('<span>')
+          .addClass('badge ' + badgeClass)
+          .text(newStatus);
+        cell.empty().append(badge);
+      }
+      
+      select.on('change', function(e) {
+        e.stopPropagation();
+        saveStatus();
+      });
+      
+      select.on('blur', function(e) {
+        e.stopPropagation();
+        saveStatus();
+      });
+      
+      // 阻止select的点击事件冒泡
+      select.on('click', function(e) {
+        e.stopPropagation();
+      });
+    });
+  }
+
+  // 记录修改
+  function recordModification(recordNumber, field, newValue) {
+    if (!modifiedData.has(recordNumber)) {
+      modifiedData.set(recordNumber, {});
+    }
+    modifiedData.get(recordNumber)[field] = newValue;
+    
+    updateSubmitButton();
+  }
+
+  // 更新提交按钮状态
+  function updateSubmitButton() {
+    let hasChanges = modifiedData.size > 0;
+    $('#submitBtn').prop('disabled', !hasChanges);
+    
+    if (hasChanges) {
+      $('#submitBtn').html('<i class="fas fa-save"></i> 提交修改 (' + modifiedData.size + ') / Submit Changes');
+    } else {
+      $('#submitBtn').html('<i class="fas fa-save"></i> 提交修改 / Submit Changes');
+    }
+  }
+
+  // 显示提交弹窗
+  function showSubmitModal() {
+    // 生成提交表格HTML
+    let tableHtml = '<table class="table table-bordered table-striped" style="width:100%"><thead><tr>';
+    tableHtml += '<th>编号 / Number</th>';
+    tableHtml += '<th>机台号 / Workcenter</th>';
+    tableHtml += '<th>后续措施 - 保养（反馈） / Follow-up Action - PM (Feedback)</th>';
+    tableHtml += '<th>状态 / Status</th>';
+    tableHtml += '</tr></thead><tbody>';
+    
+    modifiedData.forEach((changes, recordNumber) => {
+      let rowData = tableData.find(row => row['编号'] === recordNumber);
+      if (rowData) {
+        tableHtml += '<tr>';
+        tableHtml += `<td>${rowData['编号'] || ''}</td>`;
+        tableHtml += `<td>${rowData['机台号'] || ''}</td>`;
+        tableHtml += `<td>${changes['后续措施 - 保养（反馈）'] || rowData['后续措施 - 保养（反馈）'] || ''}</td>`;
+        tableHtml += `<td>${renderStatusBadge(changes['状态'] || rowData['状态'])}</td>`;
+        tableHtml += '</tr>';
+      }
+    });
+    
+    tableHtml += '</tbody></table>';
+    
+    // 生成完整的HTML内容
+    let htmlContent = `
+      <div style="text-align: left;">
+        <div class="alert alert-info">
+          <strong>修改统计 / Changes Summary:</strong><br>
+          - 总计修改 / Total Changes: ${modifiedData.size} 条记录<br>
+          - 状态更新 / Status Updates: ${getStatusUpdateCount()} 条<br>
+          - 反馈更新 / Feedback Updates: ${getFeedbackUpdateCount()} 条
+        </div>
+        <h6>以下修改将被提交到MasterData：</h6>
+        ${tableHtml}
+      </div>
+    `;
+    
+    Swal.fire({
+      title: '提交确认 / Submit Confirmation',
+      html: htmlContent,
+      width: '800px',
+      showCancelButton: true,
+      confirmButtonText: '确认提交 / Confirm Submit',
+      cancelButtonText: '取消 / Cancel',
+      confirmButtonColor: '#198754',
+      cancelButtonColor: '#6c757d',
+      customClass: {
+        popup: 'swal-wide'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        submitChanges();
+      }
+    });
+  }
+
+  // 提交修改
+  function submitChanges() {
+    let submitData = [];
+    
+    modifiedData.forEach((changes, recordNumber) => {
+      let rowData = tableData.find(row => row['编号'] === recordNumber);
+      if (rowData) {
+        submitData.push({
+          recordNumber: recordNumber,
+          process: currentProcess === 'IM' ? 'INJ' : currentProcess,
+          changes: changes,
+          workcenter: rowData['机台号'] || ''
+        });
+      }
+    });
+    
+    Swal.fire({
+      title: '正在提交...',
+      text: '请稍候',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        Swal.close();
+        
+        if (result.success) {
+          Swal.fire('成功', '数据提交成功！', 'success');
+          modifiedData.clear();
+          updateSubmitButton();
+          loadProcessData(currentProcess);
+        } else {
+          Swal.fire('错误', '提交失败: ' + result.message, 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        Swal.close();
+        Swal.fire('错误', '提交失败: ' + error, 'error');
+      })
+      .batchUpdateMasterData(submitData);
+  }
+
+  // 获取状态更新数量
+  function getStatusUpdateCount() {
+    let count = 0;
+    modifiedData.forEach(changes => {
+      if (changes.hasOwnProperty('状态')) count++;
+    });
+    return count;
+  }
+
+  // 获取反馈更新数量
+  function getFeedbackUpdateCount() {
+    let count = 0;
+    modifiedData.forEach(changes => {
+      if (changes.hasOwnProperty('后续措施 - 保养（反馈）')) count++;
+    });
+    return count;
+  }
+</script>

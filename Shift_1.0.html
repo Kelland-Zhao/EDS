@@ -95,7 +95,7 @@
     <div class="alert alert-info mt-3 mb-3" role="alert">
       <h5 class="alert-heading mb-2">交接班要求 / Handover Requirements</h5>
       <ul class="mb-0" style="text-align: left;">
-        <li>请在交接班时全员集合当面交接故障/ 安全/ 质量问题和注意事项，并拍照打卡上传 / All team members must gather during handover to discuss failures, safety, quality issues and precautions face-to-face, and upload photos for attendance</li>
+        <li>请在交接班时<strong>当班和下一班全员集合当面交接</strong>故障/ 安全/ 质量问题和注意事项，并拍照打卡上传 / <strong>Current shift and next shift all team members must gather</strong> during handover to discuss failures, safety, quality issues and precautions face-to-face, and upload photos for attendance</li>
       </ul>
     </div>
     
@@ -107,6 +107,135 @@
         <button type="button" class="btn btn-success mb-1" id="upload">上传</button>
       </div>
     </div>
+
+    <!-- 安全4检查模块 - 已隐藏 -->
+    <div style="display: none;">
+    <hr style="margin-top:32px;margin-bottom:32px; border-top:2px solid #E60012;">
+    <h3 class="mt-3">安全4检查 / Safety 4 Check</h3>
+    
+    <!-- 安全4检查说明区域 -->
+    <div class="alert alert-warning mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">检查说明 / Check Instructions</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li><strong>接班技术员</strong>需要对以下四条进行<strong>自我检查和记录</strong> / <strong>Incoming shift technician</strong> must perform <strong>self-check and record</strong> for the following four items</li>
+        <li>如果正常，对应条目选择"正常" / If normal, select "Normal" for the corresponding item</li>
+        <li>如果异常，需要输入具体细节 / If abnormal, need to input specific details</li>
+        <li>检查完成后需要提交记录 / After completion, the record needs to be submitted</li>
+      </ul>
+    </div>
+
+    <div class="mt-3">
+      <div class="row">
+        <div class="col-12">
+          <h5 class="mb-3">安全4检查内容 / Safety 4 Check Content</h5>
+          
+          <!-- 检查项1 -->
+          <div class="card mb-3">
+            <div class="card-header bg-light">
+              <h6 class="mb-0">1. 接班同事完成自身情况确认 / 1. Incoming shift colleague self-confirmation</h6>
+              <small class="text-muted">是否有异常（包含身体情况，情绪等） / Any abnormalities (including physical condition, emotions, etc.)</small>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-3">
+                  <label class="form-label">状态 / Status</label>
+                  <select class="form-select" id="safety4d_1_status">
+                    <option value="">请选择 / Please select</option>
+                    <option value="正常">正常 / Normal</option>
+                    <option value="异常">异常 / Abnormal</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label">具体细节 / Specific Details</label>
+                  <textarea class="form-control" id="safety4d_1_details" rows="2" placeholder="如选择异常，请详细说明 / If abnormal, please provide details"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 检查项2 -->
+          <div class="card mb-3">
+            <div class="card-header bg-light">
+              <h6 class="mb-0">2. 接班同事相互确认 / 2. Incoming shift colleagues mutual confirmation</h6>
+              <small class="text-muted">是否有异常（包含身体情况，情绪等） / Any abnormalities (including physical condition, emotions, etc.)</small>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-3">
+                  <label class="form-label">状态 / Status</label>
+                  <select class="form-select" id="safety4d_2_status">
+                    <option value="">请选择 / Please select</option>
+                    <option value="正常">正常 / Normal</option>
+                    <option value="异常">异常 / Abnormal</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label">具体细节 / Specific Details</label>
+                  <textarea class="form-control" id="safety4d_2_details" rows="2" placeholder="如选择异常，请详细说明 / If abnormal, please provide details"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 检查项3 -->
+          <div class="card mb-3">
+            <div class="card-header bg-light">
+              <h6 class="mb-0">3. 接班同事对工作环境进行确认 / 3. Incoming shift colleague work environment confirmation</h6>
+              <small class="text-muted">是否存在变化，异常，风险 / Any changes, abnormalities, or risks</small>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-3">
+                  <label class="form-label">状态 / Status</label>
+                  <select class="form-select" id="safety4d_3_status">
+                    <option value="">请选择 / Please select</option>
+                    <option value="正常">正常 / Normal</option>
+                    <option value="异常">异常 / Abnormal</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label">具体细节 / Specific Details</label>
+                  <textarea class="form-control" id="safety4d_3_details" rows="2" placeholder="如选择异常，请详细说明 / If abnormal, please provide details"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 检查项4 -->
+          <div class="card mb-3">
+            <div class="card-header bg-light">
+              <h6 class="mb-0">4. 接班同事对需要使用的工具进行确认 / 4. Incoming shift colleague tools confirmation</h6>
+              <small class="text-muted">是否有缺失，损坏等 / Any missing, damaged, etc.</small>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-3">
+                  <label class="form-label">状态 / Status</label>
+                  <select class="form-select" id="safety4d_4_status">
+                    <option value="">请选择 / Please select</option>
+                    <option value="正常">正常 / Normal</option>
+                    <option value="异常">异常 / Abnormal</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label">具体细节 / Specific Details</label>
+                  <textarea class="form-control" id="safety4d_4_details" rows="2" placeholder="如选择异常，请详细说明 / If abnormal, please provide details"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 提交按钮 -->
+          <div class="row mt-4">
+            <div class="col-12">
+              <button type="button" class="btn btn-primary" id="submitSafety4">提交安全4检查 / Submit Safety 4 Check</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
     <hr style="margin-top:32px;margin-bottom:32px; border-top:2px solid #E60012;">
     <h3 class="mt-3 mb-0">故障记录/ Failure Record</h3>
     
@@ -131,6 +260,7 @@
           <ul>
             <li>默认所有部件都选“是”，请根据实际情况选择 / All items are defaulted to “Yes”, please adjust based on actual situation</li>
             <li>一旦选择“是”，后续输入框不可为空，否则无法提交 / If “Yes” is selected, the follow-up input cannot be empty, otherwise submission will be blocked</li>
+            <li><strong>直接原因 / Direct Cause</strong> 与 <strong>建议措施 / Suggested Action</strong> 为必填项，否则无法提交 / Direct Cause and Suggested Action are required fields, submission will be blocked if empty</li>
           </ul>
         </li>
       </ul>
@@ -149,6 +279,7 @@
     <div class="mt-3">
       <div class="row">
         <div class="col-3" id="htmlSelect">
+          <h5 class="col-auto mb-2">故障基础信息 / Basic Failure Information</h5>
           <div class="col-auto mb-2">
             <select id="workcenter" class="form-select">
               <option selected disabled>机台号/ Workcenter</option>
@@ -189,6 +320,7 @@
           </div>
         </div>
         <div class="col-3" id="htmlInput">
+          <h5 class="col-auto mb-2">&nbsp;</h5>
           <div class="col-auto mb-2">
             <div class="input-group">
               <input type="number" class="form-control" placeholder="维修时间/Maintenance Time" id="MaintenanceDuration" />
@@ -252,6 +384,18 @@
         <li>重大故障需要在每日SDM讨论，并决定后续措施（培训/ 改善/ 保养）/ Major failures must be discussed in daily SDM and determine follow-up actions (Training / Kaizen/CI / PM)</li>
         <li>非重大故障由工序技术组长判定后续措施 / Non-major failures are determined by process technical team leader for follow-up actions</li>
         <li>已解决和未解决故障都需要遵循上述规则 / Both solved and unsolved failures must follow the above rules</li>
+        <li><strong>直接原因 / Direct Cause</strong> 与 <strong>建议措施 / Suggested Action</strong> 为必填项，否则无法提交 / Direct Cause and Suggested Action are required fields, submission will be blocked if empty</li>
+      </ul>
+    </div>
+
+    <!-- 故障历史显示范围说明区域 -->
+    <div class="alert alert-warning mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">显示范围说明 / Display Range Information</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li><strong>未解决故障 / Unsolved Failures</strong>：显示所有未解决的故障记录，无时间限制 / Display all unsolved failure records without time limitation</li>
+        <li><strong>已解决故障 / Solved Failures</strong>：仅显示最近30天内解决的故障记录 / Only display failure records resolved within the last 30 days</li>
+        <li><strong>历史数据 / Historical Data</strong>：30天前已解决的故障记录不会显示，以优化页面性能 / Failure records resolved more than 30 days ago are not displayed to optimize page performance</li>
+        <li><strong>数据来源 / Data Source</strong>：包含所有工序（注塑/植磨毛/包装）的故障记录 / Includes failure records from all processes (Injection/Flocking/Packaging)</li>
       </ul>
     </div>
 

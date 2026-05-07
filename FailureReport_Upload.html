@@ -31,6 +31,32 @@
             background-color: #E60012 !important;
             color: white !important;
         }
+        /* 斑马纹 */
+        #imTable tbody tr:nth-child(odd), #tfTable tbody tr:nth-child(odd), #pkTable tbody tr:nth-child(odd) {
+            background-color: #ffffff !important;
+        }
+        #imTable tbody tr:nth-child(even), #tfTable tbody tr:nth-child(even), #pkTable tbody tr:nth-child(even) {
+            background-color: #eeeeee !important;
+        }
+        /* 单元格垂直居中 */
+        #imTable tbody td, #tfTable tbody td, #pkTable tbody td {
+            vertical-align: middle;
+        }
+        /* 附件列：badge 水平+垂直居中，等宽 */
+        #imTable td:nth-child(9), #tfTable td:nth-child(9), #pkTable td:nth-child(9) {
+            text-align: center;
+        }
+        #imTable td:nth-child(9) .badge, #tfTable td:nth-child(9) .badge, #pkTable td:nth-child(9) .badge {
+            min-width: 80px;
+            display: inline-block;
+            line-height: 1.4;
+        }
+        /* 操作列：按钮等宽 */
+        #imTable td:last-child .btn, #tfTable td:last-child .btn, #pkTable td:last-child .btn {
+            display: block;
+            width: 120px;
+            margin: 2px auto;
+        }
     </style>
 
 <body>
@@ -41,7 +67,7 @@
                 font-family: Arial, Helvetica, sans-serif;
                 font-size: xx-large;
                 font-weight: bold;
-              ">故障报告上传 / Failure Report Upload</a>
+              ">故障报告填写 / Fill Failure Report</a>
         </div>
     </nav>
 
@@ -50,18 +76,18 @@
     <div class="container mt-2">
         <div class="card">
             <div class="card-header">
-                Failure Report Upload / 故障报告上传
+                Failure Report Fill / 故障报告填写
             </div>
             <div class="card-body">
                 <!-- 故障报告上传功能区域 -->
                 <div class="row">
                     <div class="col-md-12">
                         <div class="alert alert-info">
-                            <h5>故障报告上传管理 / Failure Report Upload Management</h5>
-                            <p>此页面用于上传和管理故障报告文件。</p>
-                            <p>This page is used for uploading and managing failure report files.</p>
-                            <p>可以查看各工序故障报告的上传状态、管理附件等。</p>
-                            <p>You can view the upload status and manage attachments for failure reports of each process.</p>
+                            <h5>故障报告填写与查看 / Failure Report Fill & View</h5>
+                            <p>此页面用于填写故障报告并查看已存在附件。</p>
+                            <p>This page is used for filling failure reports and viewing existing attachments.</p>
+                            <p>可按工序查看报告状态，并进入“填写故障报告 / Fill Report”。</p>
+                            <p>You can check report status by process and open “Fill Report”.</p>
                         </div>
                     </div>
                 </div>
@@ -71,7 +97,7 @@
                     <div class="col-md-12">
                         <div class="card">
                             <div class="card-header">
-                                <h6>故障报告上传列表 / Failure Report Upload List</h6>
+                                <h6>故障报告列表 / Failure Report List</h6>
                             </div>
                             <div class="card-body">
                                 <!-- 工序标签页 -->

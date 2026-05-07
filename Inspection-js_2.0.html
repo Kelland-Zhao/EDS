@@ -9,6 +9,7 @@
   let globalExcludedCombinations = []; // 当周已检查的"机台号+任务类型"组合（所有工序）
   let globalPointCheckInfo = []; // PointCheckInfo 完整数据（INJ工序专用）
   let globalCurrentYearWeek = ""; // 当前周次（从后端获取）
+  let globalAllHistoricalRecords = []; // 存储所有历史点检记录的完整对象数据
   let global_Name = sessionStorage.getItem('Name');
   let global_Process = sessionStorage.getItem('Process');
   let global_ID = sessionStorage.getItem('ID');
@@ -24,7 +25,7 @@
     initializePage();
 
     // 先显示工序选择弹窗
-    showProcessSelectionDialog().then(function(process) {
+    showProcessSelectionDialog().then(function (process) {
       loadData(process);
     });
   });
@@ -47,7 +48,7 @@
     google.script.run
       .withSuccessHandler(function (result) {
 
-        
+
         const pageLoadEndTime = performance.now();
         const loadTime = ((pageLoadEndTime - pageLoadStartTime) / 1000).toFixed(2);
 
@@ -102,7 +103,7 @@
 
   // 显示工序选择弹窗
   function showProcessSelectionDialog() {
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve) {
       Swal.fire({
         title: '请选择工序<br>Please Select Process',
         html: '<div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">' +
@@ -158,7 +159,7 @@
       });
     }
 
-
+    console.log("data", data)
     // 设置机台选项
     let workcenter = [];
     let workcenterSet = new Set(); // 用于去重
@@ -174,49 +175,49 @@
         globalMachineInfo = data.origin_machine_info;
       }
     } else {
-    if (data.machine_info) {
-      globalMachineInfo = data.origin_machine_info;
+      if (data.machine_info) {
+        globalMachineInfo = data.origin_machine_info;
 
-      data.machine_info.forEach((r, index) => {
-        let machineCode = r[3]; // 机台号
-        if (machineCode && !workcenterSet.has(machineCode)) {
-          let item = {};
-          item.id = machineCode;
-          item.text = machineCode;
-          workcenter.push(item);
-          workcenterSet.add(machineCode);
-        }
-      });
-    }
+        data.machine_info.forEach((r, index) => {
+          let machineCode = r[3]; // 机台号
+          if (machineCode && !workcenterSet.has(machineCode)) {
+            let item = {};
+            item.id = machineCode;
+            item.text = machineCode;
+            workcenter.push(item);
+            workcenterSet.add(machineCode);
+          }
+        });
+      }
 
-    // 从current_PointCheckInfo中添加机台号
-    if (data.current_PointCheckInfo && Array.isArray(data.current_PointCheckInfo)) {
-      data.current_PointCheckInfo.forEach((item) => {
-        let machineCode = item["机台号"];
-        if (machineCode && machineCode.toString().trim() !== '' && !workcenterSet.has(machineCode.toString().trim())) {
-          let workcenterItem = {};
-          workcenterItem.id = machineCode.toString().trim();
-          workcenterItem.text = machineCode.toString().trim();
-          workcenterItem.secondInfo = item["选项描述"] || '';
-          workcenter.push(workcenterItem);
-          workcenterSet.add(machineCode.toString().trim());
-        }
-      });
-    }
+      // 从current_PointCheckInfo中添加机台号
+      if (data.current_PointCheckInfo && Array.isArray(data.current_PointCheckInfo)) {
+        data.current_PointCheckInfo.forEach((item) => {
+          let machineCode = item["机台号"];
+          if (machineCode && machineCode.toString().trim() !== '' && !workcenterSet.has(machineCode.toString().trim())) {
+            let workcenterItem = {};
+            workcenterItem.id = machineCode.toString().trim();
+            workcenterItem.text = machineCode.toString().trim();
+            workcenterItem.secondInfo = item["选项描述"] || '';
+            workcenter.push(workcenterItem);
+            workcenterSet.add(machineCode.toString().trim());
+          }
+        });
+      }
 
-    // 从history_PointCheckInfo中添加机台号
-    if (data.history_PointCheckInfo && Array.isArray(data.history_PointCheckInfo)) {
-      data.history_PointCheckInfo.forEach((item) => {
-        let machineCode = item["机台号"];
-        if (machineCode && machineCode.toString().trim() !== '' && !workcenterSet.has(machineCode.toString().trim())) {
-          let workcenterItem = {};
-          workcenterItem.id = machineCode.toString().trim();
-          workcenterItem.text = machineCode.toString().trim();
-          workcenterItem.secondInfo = item["选项描述"] || '';
-          workcenter.push(workcenterItem);
-          workcenterSet.add(machineCode.toString().trim());
-        }
-      });
+      // 从history_PointCheckInfo中添加机台号
+      if (data.history_PointCheckInfo && Array.isArray(data.history_PointCheckInfo)) {
+        data.history_PointCheckInfo.forEach((item) => {
+          let machineCode = item["机台号"];
+          if (machineCode && machineCode.toString().trim() !== '' && !workcenterSet.has(machineCode.toString().trim())) {
+            let workcenterItem = {};
+            workcenterItem.id = machineCode.toString().trim();
+            workcenterItem.text = machineCode.toString().trim();
+            workcenterItem.secondInfo = item["选项描述"] || '';
+            workcenter.push(workcenterItem);
+            workcenterSet.add(machineCode.toString().trim());
+          }
+        });
       }
     }
 
@@ -244,7 +245,7 @@
       // 保存user数据到全局变量
       globalUserData = data.user;
     }
-    
+
     // 保存 INJ 工序的新数据
     if (data.nimWorkcenters_raw) {
       globalNIMWorkcenters = data.nimWorkcenters_raw;
@@ -258,11 +259,15 @@
     if (data.currentYearWeek) {
       globalCurrentYearWeek = data.currentYearWeek;
     }
-    
+    if (data.allHistoricalRecords) {
+      globalAllHistoricalRecords = data.allHistoricalRecords;
+      console.log("globalAllHistoricalRecords", globalAllHistoricalRecords[1])
+    }
+
     // 从globalMachineInfo的第三列（索引2）提取任务类型，去重
     if (globalMachineInfo && globalMachineInfo.length > 0) {
       let uniqueTypes = [...new Set(globalMachineInfo.map(r => r[2]).filter(type => type && type.trim() !== ''))];
-      
+
       uniqueTypes.forEach((type) => {
         let item = {};
         item.id = type;
@@ -358,7 +363,7 @@
     });
 
     // ========== 互相锁定逻辑：点检人类型 → 任务类型 → 机台号 → 车间 → 工序 ==========
-    
+
     // 辅助函数：恢复频次字段到默认状态
     function resetFrequencyToDefault() {
       let $frequency = $("#frequency");
@@ -378,11 +383,11 @@
         dropdownParent: $('body'),
         autocomplete: 'off'
       });
-      
+
       // 重置背景色为默认状态
       $frequency.next('.select2-container').find('.select2-selection--single').removeClass('selected');
     }
-    
+
     // 将前端选择值映射为所有等价值（用于匹配后台数据）
     function getInspectorTypeEquivalents(selectedValue) {
       if (!selectedValue) return [];
@@ -392,17 +397,17 @@
       };
       return mapping[selectedValue] || [selectedValue];
     }
-    
+
     // 通用过滤函数：根据已选择的字段从 globalMachineInfo 中筛选匹配的记录
     function filterFieldsBySelection() {
       let selectedInspectorType = $("#inspectorType").val();
       let selectedMachineType = $("#machineType").val();
       let selectedWorkcenter = $("#workcenter").val();
       let selectedWorkshop = $("#workshopDisplay").val();
-      
+
       // 获取点检人类型的所有等价值
       let inspectorTypeEquivalents = getInspectorTypeEquivalents(selectedInspectorType);
-      
+
       // 从 globalMachineInfo 中筛选匹配的记录
       let matchedMachines = globalMachineInfo.filter((r) => {
         if (selectedInspectorType && !inspectorTypeEquivalents.includes(r[4])) return false;
@@ -411,26 +416,26 @@
         if (selectedWorkshop && r[1] != selectedWorkshop) return false;
         return true;
       });
-      
+
       return matchedMachines;
     }
-    
+
     // 更新机台号选项的函数：基于 workcenter_list 进行过滤（不自动填充）
     function updateWorkcenterOptions(matchedMachineCodes) {
       if (matchedMachineCodes && matchedMachineCodes.length > 0) {
         // 从 globalWorkcenter（workcenter_list）中筛选匹配的机台号
         let filteredWorkcenters = globalWorkcenter.filter(wc => matchedMachineCodes.includes(wc.id));
         let currentValue = $("#workcenter").val(); // 保存当前值
-        
+
         // 如果当前值为空或null，确保不会自动选择
         if (!currentValue || currentValue === null || currentValue === '') {
           currentValue = null;
         }
-        
+
         $('#workcenter').empty();
         // 在数据前面添加一个空的placeholder选项
         let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }, ...filteredWorkcenters];
-        
+
         $('#workcenter').select2({
           data: dataWithPlaceholder,
           theme: 'bootstrap',
@@ -441,7 +446,7 @@
           autocomplete: 'off',
           minimumResultsForSearch: Infinity
         });
-        
+
         // 如果当前值在新选项中，保持选择；否则清空（不自动填充）
         if (currentValue && filteredWorkcenters.some(wc => wc.id === currentValue)) {
           $("#workcenter").val(currentValue).trigger('change');
@@ -452,7 +457,7 @@
       } else {
         // 即使没有数据也添加placeholder选项
         let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }];
-        
+
         $('#workcenter').empty();
         $('#workcenter').select2({
           data: dataWithPlaceholder,
@@ -467,23 +472,23 @@
         $("#workcenter").val('').trigger('change');
       }
     }
-    
+
     // 1. 点检人类型变化 → 基于 MachineList 自动调整任务类型/机台号/车间/工序
     $("#inspectorType").on("change", function () {
       let selectedInspectorType = $(this).val();
-      
+
       // 清空后续字段
       $("#machineType").val(null).trigger('change');
       $("#workcenter").val(null).trigger('change');
       $("#workshopDisplay").val(null).trigger('change');
       $("#processDisplay").val(null).trigger('change');
-      
+
       // 恢复频次字段到默认状态
       resetFrequencyToDefault();
-      
+
       if (selectedInspectorType) {
         let matchedMachines = filterFieldsBySelection();
-        
+
         // 过滤任务类型
         let uniqueMachineTypes = [...new Set(matchedMachines.map(r => r[2]).filter(v => v && v.trim() !== ''))];
         if (uniqueMachineTypes.length > 0) {
@@ -491,11 +496,11 @@
         } else {
           updateSelect2Options('#machineType', [], '任务类型/ Task Type');
         }
-        
+
         // 过滤机台号（基于 workcenter_list）
         let uniqueWorkcenters = [...new Set(matchedMachines.map(r => r[3]).filter(v => v && v.trim() !== ''))];
         updateWorkcenterOptions(uniqueWorkcenters);
-        
+
         // 过滤车间
         let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
         if (uniqueWorkshops.length > 0) {
@@ -503,7 +508,7 @@
         } else {
           updateSelectOptions('#workshopDisplay', [], '车间/ Workshop');
         }
-        
+
         // 过滤工序
         let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
         if (uniqueProcesses.length > 0) {
@@ -531,25 +536,25 @@
         updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
       }
     });
-    
+
     // 2. 任务类型变化 → 在已选点检人类型基础上，进一步缩小机台号/车间/工序
     $("#machineType").on("change", function () {
       let selectedMachineType = $(this).val();
-      
+
       // 清空后续字段
       $("#workcenter").val(null).trigger('change');
       $("#workshopDisplay").val(null).trigger('change');
       $("#processDisplay").val(null).trigger('change');
       $("#frequency").val(null).trigger('change');
-      
+
       if (selectedMachineType) {
         // 在已选点检人类型基础上过滤
         let matchedMachines = filterFieldsBySelection();
-        
+
         // ========== 新逻辑：INJ 工序的机台号动态过滤 ==========
         if (window.currentProcess === "INJ") {
           // INJ 工序：根据任务类型动态过滤 NIM 和 IM 机台号
-          
+
           // 1. NIM 机台号过滤
           let nimWorkcenters = [];
           if (globalNIMWorkcenters && globalNIMWorkcenters.length > 0) {
@@ -557,21 +562,21 @@
             let machineTypeWorkcenters = matchedMachines
               .filter(r => r[2] === selectedMachineType)
               .map(r => r[3]);
-            
+
             // 与 NIM 机台号取交集
-            let nimIntersection = globalNIMWorkcenters.filter(wc => 
+            let nimIntersection = globalNIMWorkcenters.filter(wc =>
               machineTypeWorkcenters.includes(wc)
             );
-            
+
             // 排除当周该任务类型已检查的机台号
             let excludedForThisType = globalExcludedCombinations
               .filter(combo => combo.machineType === selectedMachineType)
               .map(combo => combo.workcenter);
-            
-            let nimFiltered = nimIntersection.filter(wc => 
+
+            let nimFiltered = nimIntersection.filter(wc =>
               !excludedForThisType.includes(wc)
             );
-            
+
             nimWorkcenters = nimFiltered.map(wc => ({
               id: wc,
               text: wc,
@@ -579,49 +584,64 @@
               uniqueKey: wc // NIM 机台号使用机台号本身作为唯一键
             }));
           }
-          
+
           // 2. IM 机台号过滤
           let imWorkcenters = [];
+
           if (globalPointCheckInfo && globalPointCheckInfo.length > 0) {
-            
+
             // 从 PointCheckInfo 筛选该任务类型的条目
             let filteredByTaskType = globalPointCheckInfo.filter(item => {
+
               let taskType = item["机型"] ? item["机型"].toString().trim() : "";
+
               return taskType === selectedMachineType;
             });
-            
-            
-            let filteredByStatus = filteredByTaskType.filter(item => {
-              // 筛选"是否已做"≠"已做"
-              let status = item["是否已做"] ? item["是否已做"].toString().trim() : "";
-              return status !== "已做";
-            });
-            
-            // 交叉验证排除：检查 PointCheckInfo 中"未做"或"为空"的记录是否已在 INJ-TB1/TB2 中提交
-            // 如果已提交（存在于 globalExcludedCombinations 中），则排除该记录
-            let filteredByExcluded = filteredByStatus.filter(item => {
+
+            console.log("该机型未完成点检的条目", filteredByTaskType);
+
+            // 通过年周+机台号匹配历史记录的Code后缀
+            let filteredByExcluded = filteredByTaskType.filter(item => {
+
               let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
-              let status = item["是否已做"] ? item["是否已做"].toString().trim() : "";
+
+              let yearWeekFromPointCheck = item["年周"] ? item["年周"].toString().trim() : "";
+
+              let machineType = item["机型"] ? item["机型"].toString().trim() : "";
               
-              // 只对"未做"或"状态为空"的记录进行交叉验证
-              if (status === "未做" || status === "") {
-                // 检查该机台号+任务类型组合是否已在 TB1/TB2 中存在
-                if (globalExcludedCombinations && globalExcludedCombinations.length > 0) {
-                  let isExcluded = globalExcludedCombinations.some(combo => 
-                    combo.workcenter === machineCode && combo.machineType === selectedMachineType
-                  );
-                  // 如果在 TB1/TB2 中已存在，则排除（返回 false）
-                  if (isExcluded) {
-                    return false;
-                  }
+              // 构建PointCheckInfo中的标识符：年周+机台号
+              let pointCheckIdentifier = yearWeekFromPointCheck + machineCode;
+
+              // 检查是否在历史记录的Code后缀中存在
+              if (globalAllHistoricalRecords && globalAllHistoricalRecords.length > 0) {
+
+                let isAlreadyChecked = globalAllHistoricalRecords.some(record => {
+
+                  // 提取历史记录Code的后缀（从第9位开始）
+                  let codeSuffix = record.Code.length >= 9 ? record.Code.substring(8) : "";
+
+                  let machineTypeFromHistory = record.MachineType ? record.MachineType.toString().trim() : "";
+
+                  // 匹配条件：年周+机台号相同
+                  return codeSuffix === pointCheckIdentifier && machineType === machineTypeFromHistory;
+                });
+
+                console.log("isAlreadyChecked", isAlreadyChecked);
+                
+                // 如果已存在，则排除
+                if (isAlreadyChecked) {
+                  return false;
                 }
+
               }
-              
+
               // 其他情况保留
               return true;
             });
-            
-            
+
+            console.log("filteredByExcluded", filteredByExcluded);
+
+
             imWorkcenters = filteredByExcluded
               .map(item => {
                 let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
@@ -629,14 +649,14 @@
                 let yearWeek = item["年周"] ? item["年周"].toString().trim() : "";
                 let startDate = item["开始日期"] ? item["开始日期"].toString().trim() : "";
                 let startShift = item["开始班次"] ? item["开始班次"].toString().trim() : "";
-                
+
                 let result = {
                   id: machineCode, // 实际的机台号
                   text: machineCode,
                   secondInfo: "",
                   uniqueKey: machineCode // 用于去重的唯一键
                 };
-                
+
                 // 如果是"未做"，添加红色备注
                 if (status === "未做" && machineCode) {
                   if (yearWeek && startDate && startShift) {
@@ -645,16 +665,18 @@
                     result.uniqueKey = machineCode + "_" + yearWeek;
                   }
                 }
-                
+
                 return result;
               })
               .filter(item => item.id);
-            
+
           }
-          
+
+          console.log("imWorkcenters", imWorkcenters);
+
           // 3. 合并 NIM 和 IM 机台号
           let allWorkcenters = [...nimWorkcenters, ...imWorkcenters];
-          
+
           // 4. 去重（基于 uniqueKey，确保不同周次的未做记录都显示）
           let workcenterMap = new Map();
           allWorkcenters.forEach(wc => {
@@ -662,18 +684,18 @@
             // 对于 IM 未做记录：uniqueKey = 机台号_年周（不同周次视为不同选项）
             // 对于 NIM 和 IM 已做记录：uniqueKey = 机台号
             let key = wc.uniqueKey || wc.id;
-            
+
             if (!workcenterMap.has(key)) {
               workcenterMap.set(key, wc);
             }
           });
           let uniqueWorkcenters = Array.from(workcenterMap.values());
-          
+
           // 5. 更新机台号下拉框
           if (uniqueWorkcenters.length > 0) {
             // 在数据前面添加一个空的placeholder选项
             let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }, ...uniqueWorkcenters];
-            
+
             $('#workcenter').empty();
             $('#workcenter').select2({
               data: dataWithPlaceholder,
@@ -690,7 +712,7 @@
           } else {
             // 即使没有数据也添加placeholder选项
             let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }];
-            
+
             $('#workcenter').empty();
             $('#workcenter').select2({
               data: dataWithPlaceholder,
@@ -708,22 +730,22 @@
         } else {
           // 非 INJ 工序（TF、PK）：应用当周已检查排除逻辑
           let uniqueWorkcenters = [...new Set(matchedMachines.map(r => r[3]).filter(v => v && v.trim() !== ''))];
-          
+
           // 如果有当周已检查组合数据，进行排除
           if (globalExcludedCombinations && globalExcludedCombinations.length > 0) {
             // 排除当周该任务类型已检查的机台号
             let excludedForThisType = globalExcludedCombinations
               .filter(combo => combo.machineType === selectedMachineType)
               .map(combo => combo.workcenter);
-            
-            uniqueWorkcenters = uniqueWorkcenters.filter(wc => 
+
+            uniqueWorkcenters = uniqueWorkcenters.filter(wc =>
               !excludedForThisType.includes(wc)
             );
           }
-          
+
           updateWorkcenterOptions(uniqueWorkcenters);
         }
-        
+
         // 过滤车间
         let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
         if (uniqueWorkshops.length > 0) {
@@ -731,7 +753,7 @@
         } else {
           updateSelectOptions('#workshopDisplay', [], '车间/ Workshop');
         }
-        
+
         // 过滤工序
         let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
         if (uniqueProcesses.length > 0) {
@@ -739,105 +761,105 @@
         } else {
           updateSelectOptions('#processDisplay', [], '工序/ Process');
         }
-        
+
         // 更新检查频次选项
-      let effectiveTasks = globalTasklist.filter(r => {
+        let effectiveTasks = globalTasklist.filter(r => {
           let status = r[12];
-        return status && status.toString().trim() === "生效/ Effective";
-      });
+          return status && status.toString().trim() === "生效/ Effective";
+        });
 
-      let matchedTasks = effectiveTasks.filter(task => {
+        let matchedTasks = effectiveTasks.filter(task => {
           return task[0] === selectedMachineType;
-      });
+        });
 
-      // 辅助函数：显示错误信息到检查频次下拉框
-      function showFrequencyError(errorMessage) {
-        let $frequency = $("#frequency");
-        $frequency.empty();
-        $frequency.append($('<option>', {
-          value: '',
-          text: errorMessage,
-          selected: true,
-          disabled: true
-        }));
-        if ($frequency.hasClass('select2-hidden-accessible') || $frequency.data('select2')) {
-          $frequency.select2('destroy');
-          $frequency.select2({
-            theme: 'bootstrap',
-            minimumResultsForSearch: Infinity,
-            dropdownParent: $('body'),
-            autocomplete: 'off'
-          });
-        }
-        
-        // 错误状态下重置背景色
-        $frequency.next('.select2-container').find('.select2-selection--single').removeClass('selected');
-      }
-
-      if (matchedTasks.length > 0) {
-        // 获取第一个匹配任务的任务清单
-        let firstTask = matchedTasks[0];
-        try {
-          // 解析任务清单 JSON（格式为数组）
-          let tasklistArray = JSON.parse(firstTask[1]);
-          
-          // 检查是否为数组
-          if (!Array.isArray(tasklistArray)) {
-            showFrequencyError('任务清单格式错误：不是数组 / Tasklist is not an array');
-            return;
-          }
-          
-          // 检查数组是否为空
-          if (tasklistArray.length === 0) {
-            showFrequencyError('任务清单为空 / Tasklist is empty');
-            return;
-          }
-          
-          // 取第一个元素
-          let firstItem = tasklistArray[0];
-          
-          // 检查第一个元素是否有 Frequency 属性
-          if (!firstItem.hasOwnProperty('Frequency') || !firstItem.Frequency) {
-            showFrequencyError('任务清单缺少频次字段 / Frequency field is missing');
-            return;
-          }
-          
-          // 直接使用 Frequency 属性值作为检查频次
-          let frequencyValue = firstItem.Frequency;
-          
-          // 动态创建频次选项
+        // 辅助函数：显示错误信息到检查频次下拉框
+        function showFrequencyError(errorMessage) {
           let $frequency = $("#frequency");
+          $frequency.empty();
+          $frequency.append($('<option>', {
+            value: '',
+            text: errorMessage,
+            selected: true,
+            disabled: true
+          }));
           if ($frequency.hasClass('select2-hidden-accessible') || $frequency.data('select2')) {
             $frequency.select2('destroy');
+            $frequency.select2({
+              theme: 'bootstrap',
+              minimumResultsForSearch: Infinity,
+              dropdownParent: $('body'),
+              autocomplete: 'off'
+            });
           }
-          $frequency.empty();
-          
-          // 添加从任务清单获取的频次值作为唯一选项
-          $frequency.append($('<option>', {
-            value: frequencyValue,
-            text: frequencyValue,
-            selected: true
-          }));
-          
-          // 重新初始化 Select2
-          $frequency.select2({
-            theme: 'bootstrap',
-            minimumResultsForSearch: Infinity,
-            dropdownParent: $('body'),
-            autocomplete: 'off'
-          });
-          
-          // 更新背景色为绿色，表示已获取到值
-          updateSelectBackground('#frequency');
-          
-        } catch (e) {
-          // JSON 解析失败
-          showFrequencyError('任务清单解析失败 / JSON parsing failed: ' + e.message);
+
+          // 错误状态下重置背景色
+          $frequency.next('.select2-container').find('.select2-selection--single').removeClass('selected');
         }
-      } else {
-        // 如果在 Tasklist_history 中没有找到对应的任务清单
-        showFrequencyError('无对应任务清单 / No Corresponding Tasklist');
-      }
+
+        if (matchedTasks.length > 0) {
+          // 获取第一个匹配任务的任务清单
+          let firstTask = matchedTasks[0];
+          try {
+            // 解析任务清单 JSON（格式为数组）
+            let tasklistArray = JSON.parse(firstTask[1]);
+
+            // 检查是否为数组
+            if (!Array.isArray(tasklistArray)) {
+              showFrequencyError('任务清单格式错误：不是数组 / Tasklist is not an array');
+              return;
+            }
+
+            // 检查数组是否为空
+            if (tasklistArray.length === 0) {
+              showFrequencyError('任务清单为空 / Tasklist is empty');
+              return;
+            }
+
+            // 取第一个元素
+            let firstItem = tasklistArray[0];
+
+            // 检查第一个元素是否有 Frequency 属性
+            if (!firstItem.hasOwnProperty('Frequency') || !firstItem.Frequency) {
+              showFrequencyError('任务清单缺少频次字段 / Frequency field is missing');
+              return;
+            }
+
+            // 直接使用 Frequency 属性值作为检查频次
+            let frequencyValue = firstItem.Frequency;
+
+            // 动态创建频次选项
+            let $frequency = $("#frequency");
+            if ($frequency.hasClass('select2-hidden-accessible') || $frequency.data('select2')) {
+              $frequency.select2('destroy');
+            }
+            $frequency.empty();
+
+            // 添加从任务清单获取的频次值作为唯一选项
+            $frequency.append($('<option>', {
+              value: frequencyValue,
+              text: frequencyValue,
+              selected: true
+            }));
+
+            // 重新初始化 Select2
+            $frequency.select2({
+              theme: 'bootstrap',
+              minimumResultsForSearch: Infinity,
+              dropdownParent: $('body'),
+              autocomplete: 'off'
+            });
+
+            // 更新背景色为绿色，表示已获取到值
+            updateSelectBackground('#frequency');
+
+          } catch (e) {
+            // JSON 解析失败
+            showFrequencyError('任务清单解析失败 / JSON parsing failed: ' + e.message);
+          }
+        } else {
+          // 如果在 Tasklist_history 中没有找到对应的任务清单
+          showFrequencyError('无对应任务清单 / No Corresponding Tasklist');
+        }
       } else {
         // 如果任务类型为空，恢复所有选项（基于已选点检人类型）
         let selectedInspectorType = $("#inspectorType").val();
@@ -869,7 +891,7 @@
           let allProcesses = [...new Set(globalMachineInfo.map(r => r[0]).filter(v => v && v.trim() !== ''))];
           updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
         }
-        
+
         // 恢复频次字段到默认状态
         resetFrequencyToDefault();
       }
@@ -878,7 +900,7 @@
     // 3. 机台号变化 → 在已选点检人类型+任务类型基础上，进一步缩小车间/工序
     $("#workcenter").on("change", function () {
       let selectedWorkcenter = $(this).val();
-      
+
       // 保存完整的选项信息（包括 uniqueKey 和 secondInfo），用于后续精确移除
       // 只在机台号有值且已初始化为 Select2 时才尝试获取 select2 数据
       if (selectedWorkcenter && $(this).hasClass('select2-hidden-accessible')) {
@@ -907,15 +929,15 @@
       // 清空后续字段（检查频次不受机台号影响，不清空）
       $("#workshopDisplay").val(null).trigger('change');
       $("#processDisplay").val(null).trigger('change');
-      
+
       if (selectedWorkcenter) {
         // 在已选点检人类型+任务类型基础上过滤
         let matchedMachines = filterFieldsBySelection();
 
         // 过滤车间
         let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
-        
-        
+
+
         if (uniqueWorkshops.length > 0) {
           updateSelectOptions('#workshopDisplay', uniqueWorkshops, '车间/ Workshop');
           // 机台号确定后，车间唯一，直接自动选中
@@ -924,11 +946,11 @@
         } else {
           updateSelectOptions('#workshopDisplay', [], '车间/ Workshop');
         }
-        
+
         // 过滤工序
         let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
-        
-        
+
+
         if (uniqueProcesses.length > 0) {
           updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
           // 机台号确定后，工序唯一，直接自动选中
@@ -937,13 +959,13 @@
         } else {
           updateSelectOptions('#processDisplay', [], '工序/ Process');
         }
-        
+
       } else {
         // 如果机台号为空，恢复所有选项（基于已选点检人类型+任务类型）
         let selectedInspectorType = $("#inspectorType").val();
         let selectedMachineType = $("#machineType").val();
-        
-        
+
+
         if (selectedInspectorType || selectedMachineType) {
           let inspectorTypeEquivalents = getInspectorTypeEquivalents(selectedInspectorType);
           let matchedMachines = globalMachineInfo.filter((r) => {
@@ -951,17 +973,17 @@
             if (selectedMachineType && r[2] != selectedMachineType) return false;
             return true;
           });
-        let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
-        let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
-        
-        
+          let uniqueWorkshops = [...new Set(matchedMachines.map(r => r[1]).filter(v => v && v.trim() !== ''))];
+          let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
+
+
           updateSelectOptions('#workshopDisplay', uniqueWorkshops, '车间/ Workshop');
           // 如果车间选项唯一，自动选中
           if (uniqueWorkshops.length === 1) {
             $('#workshopDisplay').val(uniqueWorkshops[0]).trigger('change');
             updateSelectBackground('#workshopDisplay');
           }
-          
+
           updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
           // 如果工序选项唯一，自动选中
           if (uniqueProcesses.length === 1) {
@@ -972,15 +994,15 @@
           // 如果都没有选择，恢复所有选项
           let allWorkshops = [...new Set(globalMachineInfo.map(r => r[1]).filter(v => v && v.trim() !== ''))];
           let allProcesses = [...new Set(globalMachineInfo.map(r => r[0]).filter(v => v && v.trim() !== ''))];
-          
-          
+
+
           updateSelectOptions('#workshopDisplay', allWorkshops, '车间/ Workshop');
           // 如果车间选项唯一，自动选中
           if (allWorkshops.length === 1) {
             $('#workshopDisplay').val(allWorkshops[0]).trigger('change');
             updateSelectBackground('#workshopDisplay');
           }
-          
+
           updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
           // 如果工序选项唯一，自动选中
           if (allProcesses.length === 1) {
@@ -990,18 +1012,18 @@
         }
       }
     });
-    
+
     // 4. 车间变化 → 在已选点检人类型+任务类型+机台号基础上，进一步缩小工序
     $("#workshopDisplay").on("change", function () {
       let selectedWorkshop = $(this).val();
-      
+
       // 清空后续字段（检查频次不受车间影响，不清空）
       $("#processDisplay").val(null).trigger('change');
-      
+
       if (selectedWorkshop) {
         // 在已选点检人类型+任务类型+机台号基础上过滤
         let matchedMachines = filterFieldsBySelection();
-        
+
         // 过滤工序
         let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
         if (uniqueProcesses.length > 0) {
@@ -1009,7 +1031,7 @@
         } else {
           updateSelectOptions('#processDisplay', [], '工序/ Process');
         }
-        } else {
+      } else {
         // 如果车间为空，恢复所有选项（基于已选点检人类型+任务类型+机台号）
         let selectedInspectorType = $("#inspectorType").val();
         let selectedMachineType = $("#machineType").val();
@@ -1024,7 +1046,7 @@
           });
           let uniqueProcesses = [...new Set(matchedMachines.map(r => r[0]).filter(v => v && v.trim() !== ''))];
           updateSelectOptions('#processDisplay', uniqueProcesses, '工序/ Process');
-      } else {
+        } else {
           // 如果都没有选择，恢复所有选项
           let allProcesses = [...new Set(globalMachineInfo.map(r => r[0]).filter(v => v && v.trim() !== ''))];
           updateSelectOptions('#processDisplay', allProcesses, '工序/ Process');
@@ -1085,13 +1107,18 @@
       let $select = $(selector);
       let currentValue = $select.val();
 
+      // 如果已经是 Select2 实例，先销毁
+      if ($select.hasClass('select2-hidden-accessible')) {
+        $select.select2('destroy');
+      }
+
       // 构建 Select2 数据格式
       let select2Data = values.map(value => ({
         id: value,
         text: value
       }));
 
-      // 更新 Select2 数据
+      // 清空并重新初始化 Select2
       $select.empty();
       $select.select2({
         data: select2Data,
@@ -1099,7 +1126,8 @@
         width: '100%',
         placeholder: placeholder,
         dropdownParent: $('body'),
-        autocomplete: 'off'
+        autocomplete: 'off',
+        minimumResultsForSearch: Infinity
       });
 
       // 如果当前值在新选项中，保持选择
@@ -1772,6 +1800,29 @@
           checkTeam: $('#shift').val()             // 班次
         };
 
+        // ========== 基于红色标题判断年周来源 ==========
+        // 获取选中的workcenter选项数据
+        let selectedData = $('#workcenter').select2('data')[0];
+        let hasSecondInfo = selectedData && selectedData.secondInfo;
+        
+        if (hasSecondInfo) {
+          // 有红色标题 → 提取年周用于Code生成
+          let yearWeekMatch = selectedData.secondInfo.match(/^(\d{4}W\d{2})/);
+          let yearWeekFromSelection = yearWeekMatch ? yearWeekMatch[1] : null;
+          
+          console.log("检测到红色标题，提取年周:", yearWeekFromSelection);
+          
+          // 传递给后端使用
+          obj.useSelectionYearWeek = true;
+          obj.yearWeekFromSelection = yearWeekFromSelection;
+        } else {
+          // 无红色标题 → 使用提交日期的年周
+          console.log("无红色标题，使用提交日期年周");
+          obj.useSelectionYearWeek = false;
+        }
+
+        console.log("提交对象obj:", obj);
+
         // 构建表格数据 - 按照PointCheck的格式
         let tableData = new Array();
         let arrJson = [];
@@ -1895,7 +1946,7 @@
     if (result && result[0] === "OK") {
       // 获取刚刚提交的机台号
       let submittedWorkcenter = $("#workcenter").val();
-      
+
       // 显示成功提示
       Swal.fire({
         icon: 'success',
@@ -1954,27 +2005,27 @@
     // 获取保存的完整选项信息
     let selectedUniqueKey = $("#workcenter").data('selectedUniqueKey');
     let selectedSecondInfo = $("#workcenter").data('selectedSecondInfo');
-    
+
     // 从 globalWorkcenter 中移除
     globalWorkcenter = globalWorkcenter.filter(wc => wc.id !== workcenterToRemove);
-    
+
     // 从 globalNIMWorkcenters 中移除（如果存在）
     if (globalNIMWorkcenters && globalNIMWorkcenters.length > 0) {
       globalNIMWorkcenters = globalNIMWorkcenters.filter(wc => wc !== workcenterToRemove);
     }
-    
+
     // 从 globalPointCheckInfo 中精确标记为已完成（基于机台号+年周）
     if (globalPointCheckInfo && globalPointCheckInfo.length > 0) {
       globalPointCheckInfo.forEach(item => {
         let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
-        
+
         // 如果有 secondInfo（年周_日期_班次），说明是未做记录，需要精确匹配
         if (selectedSecondInfo && machineCode === workcenterToRemove) {
           let yearWeek = item["年周"] ? item["年周"].toString().trim() : "";
           let startDate = item["开始日期"] ? item["开始日期"].toString().trim() : "";
           let startShift = item["开始班次"] ? item["开始班次"].toString().trim() : "";
           let itemSecondInfo = yearWeek + "_" + startDate + "_" + startShift;
-          
+
           // 只标记匹配的特定周次记录为已做
           if (itemSecondInfo === selectedSecondInfo) {
             item["是否已做"] = "已做";

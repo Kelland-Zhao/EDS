@@ -1,0 +1,657 @@
+<script>
+  $(document).ready(function () {
+    showPageLoadingSwal();
+  });
+
+  // 图片上传功能
+  $("#upload").click(function () {
+    Swal.fire({
+      title: '数据上传中/ Data Uploading',
+      icon: 'info',
+      allowOutsideClick: false,
+      showConfirmButton: false
+    });
+    var fileInput = document.getElementById('take-photo');
+    var file = fileInput.files[0];
+    if (file) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var dataURL = reader.result;
+        var base64 = dataURL.split(',')[1];
+        var filename = new Date().toISOString().replace(/:/g, '-') + '_' + file.name;
+
+        google.script.run.withSuccessHandler(function (response) {
+          Swal.close();
+          fileInput.value = '';
+          Swal.fire({
+            title: '上传成功/ Upload Success',
+            text: '文件已成功上传到Drive',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+          });
+        }).withFailureHandler(function (error) {
+          Swal.close();
+          Swal.fire({
+            title: '上传失败/ Upload Failed',
+            text: '请重试或联系管理员',
+            icon: 'error'
+          });
+          console.error('文件上传失败:', error);
+        }).uploadFileToDrive(base64, filename, file.type);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      Swal.close();
+      Swal.fire({
+        title: '请选择文件/ Please Select File',
+        icon: 'warning'
+      });
+    }
+  });
+
+  // 安全4检查提交功能
+  $("#submitSafety4").click(function () {
+    // 验证所有检查项都已选择状态
+    let allSelected = true;
+    let missingDetails = false;
+    let emptyStatusItems = [];
+
+    for (let i = 1; i <= 4; i++) {
+      let status = $(`#safety4_${i}_status`).val();
+      let details = $(`#safety4_${i}_details`).val().trim();
+
+      // 检查状态是否已选择
+      if (!status) {
+        allSelected = false;
+        emptyStatusItems.push(i);
+        continue;
+      }
+
+      // 检查异常时是否填写细节
+      if (status === '异常' && !details) {
+        missingDetails = true;
+        break;
+      }
+    }
+
+    // 验证结果处理
+    if (!allSelected) {
+      let errorMessage = '';
+      if (emptyStatusItems.length === 4) {
+        errorMessage = '请为所有检查项选择状态 / Please select status for all check items';
+      } else {
+        errorMessage = `请为检查项${emptyStatusItems.join('、')}选择状态 / Please select status for check item(s) ${emptyStatusItems.join(', ')}`;
+      }
+      
+      Swal.fire({
+        title: '验证失败 / Validation Failed',
+        text: errorMessage,
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    if (missingDetails) {
+      Swal.fire({
+        title: '请填写异常细节 / Please Fill in Abnormal Details',
+        text: '选择异常状态时必须填写具体细节 / When selecting abnormal status, specific details must be provided',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    // 收集数据
+    let checkData = {
+      timestamp: new Date().toISOString(),
+      submitter: sessionStorage.getItem('Name') || '',
+      process: sessionStorage.getItem('Process') || '',
+      workshop: sessionStorage.getItem('Workshop') || '',
+      checks: []
+    };
+
+    for (let i = 1; i <= 4; i++) {
+      checkData.checks.push({
+        item: i,
+        status: $(`#safety4_${i}_status`).val(),
+        details: $(`#safety4_${i}_details`).val().trim()
+      });
+    }
+
+    // 提交数据
+    Swal.fire({
+      title: '提交中 / Submitting',
+      text: '请稍候 / Please wait',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    // 调用后端接口提交数据
+    google.script.run
+      .withSuccessHandler(function(response) {
+        if (response.success) {
+          // 清空表单
+          for (let i = 1; i <= 4; i++) {
+            $(`#safety4_${i}_status`).val('');
+            $(`#safety4_${i}_details`).val('');
+          }
+          
+          // 显示成功提示
+          Swal.fire({
+            title: '提交成功 / Submit Success',
+            html: '<div style="text-align: left;">' +
+                  '<strong>安全4检查已成功记录 / Safety 4 Check recorded successfully</strong><br><br>' +
+                  '检查编号 / Check ID: ' + response.checkId + '<br>' +
+                  '提交人 / Submitter: ' + checkData.submitter + '<br>' +
+                  '提交时间 / Submit Time: ' + new Date().toLocaleString() + '<br><br>' +
+                  '所有检查项已完成 / All check items completed' +
+                  '</div>',
+            icon: 'success',
+            confirmButtonText: '确定 / OK'
+          });
+        } else {
+          Swal.fire({
+            title: '提交失败 / Submit Failed',
+            text: response.message,
+            icon: 'error',
+            confirmButtonText: '确定 / OK'
+          });
+        }
+      })
+      .withFailureHandler(function(error) {
+        Swal.fire({
+          title: '提交失败 / Submit Failed',
+          text: error.toString(),
+          icon: 'error',
+          confirmButtonText: '确定 / OK'
+        });
+      })
+      .submitSafety4Check(checkData);
+  });
+
+  // ==========================================
+  // 留言板功能 / Message Board
+  // ==========================================
+  let userHasEditPermission = false;
+  let currentUserEmail = sessionStorage.getItem('Email') || '';
+  let currentUserName = sessionStorage.getItem('Name') || '';
+  let pageLoadingSwalShown = false;
+
+  function showPageLoadingSwal() {
+    if (!pageLoadingSwalShown) {
+      Swal.fire({
+        title: '页面加载中 / Loading Page',
+        text: '正在载入留言板数据 / Loading message board data',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: function() {
+          Swal.showLoading();
+        }
+      });
+      pageLoadingSwalShown = true;
+    }
+  }
+
+  function closePageLoadingSwal() {
+    if (pageLoadingSwalShown) {
+      Swal.close();
+      pageLoadingSwalShown = false;
+    }
+  }
+
+  function finalizeMessageRender(afterRenderCallback, retryCount) {
+    retryCount = retryCount || 0;
+    const MAX_RETRY = 10;
+    if (userHasEditPermission) {
+      const hasButtons = $('#message_list .message-actions').length > 0;
+      if (hasButtons || retryCount >= MAX_RETRY) {
+        closePageLoadingSwal();
+        if (typeof afterRenderCallback === 'function') afterRenderCallback();
+      } else {
+        setTimeout(function() {
+          finalizeMessageRender(afterRenderCallback, retryCount + 1);
+        }, 100);
+      }
+    } else {
+      closePageLoadingSwal();
+      if (typeof afterRenderCallback === 'function') afterRenderCallback();
+    }
+  }
+
+  // 初始化留言板
+  function initMessageBoard() {
+    // 填充车间和工序下拉选项
+    populateWorkshopProcessOptions();
+    
+    // 检查用户权限
+    checkUserEditPermission();
+    
+    // 加载留言列表
+    loadMessages();
+    
+    // 绑定事件
+    $('#msg_workshop, #msg_process').on('change', loadMessages);
+    $('#btn_post_message').on('click', postMessage);
+  }
+
+  // Process 映射到工序名称
+  function mapProcessToName(process) {
+    if (!process) return '';
+    const p = String(process).toUpperCase();
+    if (p === 'IM' || p === 'INJ') return '注塑';
+    if (p === 'TF') return '植磨毛';
+    if (p === 'PK') return '包装';
+    return '';
+  }
+
+  // 填充车间和工序选项（硬编码）
+  function populateWorkshopProcessOptions() {
+    // 硬编码车间选项
+    const workshopData = ['TB1', 'TB2'];
+    // 硬编码工序选项
+    const processData = ['注塑', '植磨毛', '包装'];
+    
+    const workshopHtml = workshopData.map(function(w) {
+      return '<option value="' + w + '">' + w + '</option>';
+    }).join('');
+    const processHtml = processData.map(function(p) {
+      return '<option value="' + p + '">' + p + '</option>';
+    }).join('');
+    
+    $('#msg_workshop').append(workshopHtml);
+    $('#msg_process').append(processHtml);
+    
+    // 设置默认车间
+    const currentWorkshop = sessionStorage.getItem('Workshop') || '';
+    if (currentWorkshop) $('#msg_workshop').val(currentWorkshop);
+    
+    // 根据用户 Process 设置工序默认值
+    const userProcess = sessionStorage.getItem('Process') || '';
+    const mappedProcess = mapProcessToName(userProcess);
+    if (mappedProcess) {
+      $('#msg_process').val(mappedProcess);
+    }
+  }
+
+  // 检查用户是否有编辑权限
+  function checkUserEditPermission() {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        userHasEditPermission = result;
+        console.log('MessageBoard Edit Permission:', {
+          email: currentUserEmail,
+          name: currentUserName,
+          hasPermission: userHasEditPermission
+        });
+        loadMessages();
+      })
+      .withFailureHandler(function(error) {
+        userHasEditPermission = false;
+        console.error('MessageBoard permission check failed:', error);
+        loadMessages();
+      })
+      .checkMessageBoardEditPermission(currentUserEmail, currentUserName);
+  }
+
+  // 加载留言列表（根据登录人工序自动筛选）
+  function loadMessages(afterRenderCallback) {
+    // 获取登录人的工序，用于自动筛选
+    const userProcessRaw = sessionStorage.getItem('Process') || '';
+    const mappedUserProcess = mapProcessToName(userProcessRaw);
+    
+    // 不传 workshop 和 process，获取所有留言
+    google.script.run
+      .withSuccessHandler(function(response) {
+        if (response.success) {
+          let filteredData = response.data;
+          // 根据登录人工序自动筛选（IM/INJ/TF/PK 映射后筛选）
+          if (mappedUserProcess) {
+            filteredData = response.data.filter(function(msg) {
+              return msg.process === mappedUserProcess;
+            });
+          }
+          renderMessageList(filteredData, afterRenderCallback);
+        } else {
+          $('#message_list').html('<div class="text-center text-muted small">' + response.message + '</div>');
+          closePageLoadingSwal();
+          if (typeof afterRenderCallback === 'function') afterRenderCallback();
+        }
+      })
+      .withFailureHandler(function(error) {
+        $('#message_list').html('<div class="text-center text-muted small">加载失败 / Failed to load</div>');
+        closePageLoadingSwal();
+        if (typeof afterRenderCallback === 'function') afterRenderCallback();
+      })
+      .getMessageBoardList('', '', 50);
+  }
+
+  // 格式化日期为YYYY-MM-DD
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return year + '-' + month + '-' + day;
+    } catch (e) {
+      return dateStr.split(' ')[0] || dateStr;
+    }
+  }
+
+  // 格式化日期时间为YYYY-MM-DD hh:mm:ss
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  // 渲染留言列表
+  function renderMessageList(messages, afterRenderCallback) {
+    if (!messages || messages.length === 0) {
+      $('#message_list').html('<div class="text-center text-muted small py-3">暂无留言 / No messages</div>');
+      finalizeMessageRender(afterRenderCallback);
+      return;
+    }
+
+    let html = '';
+    messages.forEach(function(msg) {
+      const canEdit = userHasEditPermission;
+      const rawContentAttr = encodeURIComponent(msg.content || '');
+      const actionButtons = canEdit ? 
+        '<div class="message-actions d-flex flex-column align-items-end ms-3" style="min-width:70px;">' +
+          '<button type="button" class="btn btn-outline-primary btn-sm small mb-1 message-action w-100" data-action="edit" data-message-id="' + msg.messageId + '">编辑 / Edit</button>' +
+          '<button type="button" class="btn btn-outline-danger btn-sm small message-action w-100" data-action="delete" data-message-id="' + msg.messageId + '">删除 / Delete</button>' +
+        '</div>' : '';
+      
+      html += '<div class="card mb-2" data-message-id="' + msg.messageId + '">' +
+        '<div class="card-body p-2">' +
+          '<div class="d-flex justify-content-between align-items-start">' +
+            '<div class="flex-grow-1 pe-2">' +
+              '<small class="text-muted">' + formatDate(msg.timestamp) + '</small>' +
+              '<div class="small message-content mt-1" data-raw="' + rawContentAttr + '">' + escapeHtml(msg.content).replace(/\n/g, '<br>') + '</div>' +
+              (msg.editTime && msg.editTime !== msg.timestamp ? '<div class="mt-1 small text-muted"><i>(已编辑 / Edited: ' + formatDateTime(msg.editTime) + ')</i></div>' : '') +
+              '<div class="mt-2">' +
+                '<strong class="small">' + escapeHtml(msg.author) + '</strong>' +
+              '</div>' +
+            '</div>' +
+            (canEdit ? actionButtons : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    
+    $('#message_list').html(html);
+
+    if (userHasEditPermission) {
+      // 按钮事件
+      $('#message_list [data-action="edit"]').off('click').on('click', function() {
+        const messageId = $(this).data('message-id');
+        editMessage(messageId);
+      });
+      $('#message_list [data-action="delete"]').off('click').on('click', function() {
+        const messageId = $(this).data('message-id');
+        deleteMessage(messageId);
+      });
+      // 双击内容编辑
+      $('#message_list .message-content').off('dblclick').on('dblclick', function() {
+        const messageId = $(this).closest('.card').data('message-id');
+        editMessage(messageId);
+      });
+    }
+    finalizeMessageRender(afterRenderCallback);
+  }
+
+  // 发表新留言
+  function postMessage() {
+    const content = $('#msg_content').val().trim();
+    const workshop = $('#msg_workshop').val() || '';
+    const process = $('#msg_process').val() || '';
+
+    if (!workshop) {
+      Swal.fire({
+        title: '提示 / Notice',
+        text: '请选择车间 / Please select workshop',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    if (!process) {
+      Swal.fire({
+        title: '提示 / Notice',
+        text: '请选择工序 / Please select process',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    if (!content) {
+      Swal.fire({
+        title: '提示 / Notice',
+        text: '请输入留言内容 / Please enter message content',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    const author = sessionStorage.getItem('Name') || '';
+
+    $('#btn_post_message').prop('disabled', true).text('提交中... / Submitting...');
+
+    Swal.fire({
+      title: '处理中 / Processing',
+      text: '请稍候 / Please wait',
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: function() {
+        Swal.showLoading();
+      }
+    });
+
+    google.script.run
+      .withSuccessHandler(function(response) {
+        if (response.success) {
+          $('#msg_content').val('');
+          loadMessages(function() {
+            $('#btn_post_message').prop('disabled', false).text('发表 / Post');
+            Swal.close();
+            Swal.fire({
+              title: '成功 / Success',
+              text: '留言发表成功 / Message posted successfully',
+              icon: 'success',
+              timer: 1500,
+              showConfirmButton: false
+            });
+          });
+        } else {
+          $('#btn_post_message').prop('disabled', false).text('发表 / Post');
+          Swal.close();
+          Swal.fire({
+            title: '失败 / Failed',
+            text: response.message,
+            icon: 'error',
+            confirmButtonText: '确定 / OK'
+          });
+        }
+      })
+      .withFailureHandler(function(error) {
+        $('#btn_post_message').prop('disabled', false).text('发表 / Post');
+        Swal.close();
+        Swal.fire({
+          title: '失败 / Failed',
+          text: error.toString(),
+          icon: 'error',
+          confirmButtonText: '确定 / OK'
+        });
+      })
+      .addMessageBoardMessage(author, workshop, process, content);
+  }
+
+  // 编辑留言（全局函数供onclick调用）
+  window.editMessage = function(messageId, currentContent) {
+    if (typeof currentContent === 'undefined') {
+      const contentEl = $('.card[data-message-id="' + messageId + '"] .message-content');
+      if (contentEl.length) {
+        try {
+          currentContent = decodeURIComponent(contentEl.attr('data-raw') || '');
+        } catch (e) {
+          currentContent = contentEl.text() || '';
+        }
+      } else {
+        currentContent = '';
+      }
+    }
+    Swal.fire({
+      title: '编辑留言 / Edit Message',
+      input: 'textarea',
+      inputValue: currentContent,
+      inputAttributes: {
+        rows: 4
+      },
+      showCancelButton: true,
+      confirmButtonText: '保存 / Save',
+      cancelButtonText: '取消 / Cancel',
+      inputValidator: function(value) {
+        if (!value || !value.trim()) {
+          return '请输入内容 / Please enter content';
+        }
+      }
+    }).then(function(result) {
+      if (result.isConfirmed) {
+        const editor = sessionStorage.getItem('Name') || '';
+        Swal.fire({
+          title: '处理中 / Processing',
+          text: '请稍候 / Please wait',
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          didOpen: function() {
+            Swal.showLoading();
+          }
+        });
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if (response.success) {
+              loadMessages(function() {
+                Swal.close();
+                Swal.fire({
+                  title: '成功 / Success',
+                  text: '留言编辑成功 / Message edited successfully',
+                  icon: 'success',
+                  timer: 1500,
+                  showConfirmButton: false
+                });
+              });
+            } else {
+              Swal.close();
+              Swal.fire({
+                title: '失败 / Failed',
+                text: response.message,
+                icon: 'error',
+                confirmButtonText: '确定 / OK'
+              });
+            }
+          })
+          .withFailureHandler(function(error) {
+            Swal.close();
+            Swal.fire({
+              title: '失败 / Failed',
+              text: error.toString(),
+              icon: 'error',
+              confirmButtonText: '确定 / OK'
+            });
+          })
+          .editMessageBoardMessage(messageId, result.value.trim(), editor);
+      }
+    });
+  };
+
+  // 删除留言（全局函数供onclick调用）
+  window.deleteMessage = function(messageId) {
+    Swal.fire({
+      title: '确认删除 / Confirm Delete',
+      text: '确定要删除这条留言吗？ / Are you sure you want to delete this message?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '删除 / Delete',
+      cancelButtonText: '取消 / Cancel',
+      confirmButtonColor: '#dc3545'
+    }).then(function(result) {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: '处理中 / Processing',
+          text: '请稍候 / Please wait',
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          didOpen: function() {
+            Swal.showLoading();
+          }
+        });
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if (response.success) {
+              loadMessages(function() {
+                Swal.close();
+                Swal.fire({
+                  title: '成功 / Success',
+                  text: '留言删除成功 / Message deleted successfully',
+                  icon: 'success',
+                  timer: 1500,
+                  showConfirmButton: false
+                });
+              });
+            } else {
+              Swal.close();
+              Swal.fire({
+                title: '失败 / Failed',
+                text: response.message,
+                icon: 'error',
+                confirmButtonText: '确定 / OK'
+              });
+            }
+          })
+          .withFailureHandler(function(error) {
+            Swal.close();
+            Swal.fire({
+              title: '失败 / Failed',
+              text: error.toString(),
+              icon: 'error',
+              confirmButtonText: '确定 / OK'
+            });
+          })
+          .deleteMessageBoardMessage(messageId);
+      }
+    });
+  };
+
+  // HTML转义函数
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // 初始化留言板
+  initMessageBoard();
+</script>

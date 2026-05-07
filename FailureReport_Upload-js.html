@@ -74,8 +74,6 @@ function initializeTables() {
         lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
         order: [[0, 'desc']], // 按故障报告编号降序排列
         responsive: true,
-        scrollX: true,
-        scrollCollapse: true,
         columns: [
             { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
             { data: 'workshop', title: '车间 / Workshop' },
@@ -90,9 +88,9 @@ function initializeTables() {
                 title: '附件 / Attachments',
                 render: function(data, type, row) {
                     if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
                     } else {
-                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                        return `<span class="badge bg-warning text-dark">未上传<br>Not Uploaded</span>`;
                     }
                 }
             },
@@ -100,24 +98,18 @@ function initializeTables() {
                 data: null,
                 title: '操作 / Actions',
                 render: function(data, type, row) {
+                    let btns = '';
                     if (row.attachments && row.attachments !== '') {
-                        // 如果已有附件，显示查看和重新上传按钮
-                        return `
+                        btns = `
                             <button class="btn btn-sm btn-info view-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'IM'}">
                                 <i class="fas fa-eye"></i> 查看 / View
-                            </button>
-                            <button class="btn btn-sm btn-warning reupload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'IM'}">
-                                <i class="fas fa-upload"></i> 重新上传 / Re-upload
-                            </button>
-                        `;
-                    } else {
-                        // 如果没有附件，显示上传按钮
-                        return `
-                            <button class="btn btn-sm btn-success upload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'IM'}">
-                                <i class="fas fa-upload"></i> 上传 / Upload
-                            </button>
-                        `;
+                            </button>`;
                     }
+                    btns += `
+                        <button class="btn btn-sm btn-primary fill-template-btn mt-1" data-id="${row.failureReportNumber}">
+                            填写故障报告 / Fill Report
+                        </button>`;
+                    return btns;
                 }
             }
         ],
@@ -136,8 +128,6 @@ function initializeTables() {
         lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
         order: [[0, 'desc']], // 按故障报告编号降序排列
         responsive: true,
-        scrollX: true,
-        scrollCollapse: true,
         columns: [
             { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
             { data: 'workshop', title: '车间 / Workshop' },
@@ -152,9 +142,9 @@ function initializeTables() {
                 title: '附件 / Attachments',
                 render: function(data, type, row) {
                     if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
                     } else {
-                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                        return `<span class="badge bg-warning text-dark">未上传<br>Not Uploaded</span>`;
                     }
                 }
             },
@@ -162,24 +152,18 @@ function initializeTables() {
                 data: null,
                 title: '操作 / Actions',
                 render: function(data, type, row) {
+                    let btns = '';
                     if (row.attachments && row.attachments !== '') {
-                        // 如果已有附件，显示查看和重新上传按钮
-                        return `
+                        btns = `
                             <button class="btn btn-sm btn-info view-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'TF'}">
                                 <i class="fas fa-eye"></i> 查看 / View
-                            </button>
-                            <button class="btn btn-sm btn-warning reupload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'TF'}">
-                                <i class="fas fa-upload"></i> 重新上传 / Re-upload
-                            </button>
-                        `;
-                    } else {
-                        // 如果没有附件，显示上传按钮
-                        return `
-                            <button class="btn btn-sm btn-success upload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'TF'}">
-                                <i class="fas fa-upload"></i> 上传 / Upload
-                            </button>
-                        `;
+                            </button>`;
                     }
+                    btns += `
+                        <button class="btn btn-sm btn-primary fill-template-btn mt-1" data-id="${row.failureReportNumber}">
+                            填写故障报告 / Fill Report
+                        </button>`;
+                    return btns;
                 }
             }
         ],
@@ -198,8 +182,6 @@ function initializeTables() {
         lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
         order: [[0, 'desc']], // 按故障报告编号降序排列
         responsive: true,
-        scrollX: true,
-        scrollCollapse: true,
         columns: [
             { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
             { data: 'workshop', title: '车间 / Workshop' },
@@ -214,9 +196,9 @@ function initializeTables() {
                 title: '附件 / Attachments',
                 render: function(data, type, row) {
                     if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
                     } else {
-                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                        return `<span class="badge bg-warning text-dark">未上传<br>Not Uploaded</span>`;
                     }
                 }
             },
@@ -224,24 +206,18 @@ function initializeTables() {
                 data: null,
                 title: '操作 / Actions',
                 render: function(data, type, row) {
+                    let btns = '';
                     if (row.attachments && row.attachments !== '') {
-                        // 如果已有附件，显示查看和重新上传按钮
-                        return `
+                        btns = `
                             <button class="btn btn-sm btn-info view-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'PK'}">
                                 <i class="fas fa-eye"></i> 查看 / View
-                            </button>
-                            <button class="btn btn-sm btn-warning reupload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'PK'}">
-                                <i class="fas fa-upload"></i> 重新上传 / Re-upload
-                            </button>
-                        `;
-                    } else {
-                        // 如果没有附件，显示上传按钮
-                        return `
-                            <button class="btn btn-sm btn-success upload-btn" data-id="${row.failureReportNumber}" data-process="${row.process || 'PK'}">
-                                <i class="fas fa-upload"></i> 上传 / Upload
-                            </button>
-                        `;
+                            </button>`;
                     }
+                    btns += `
+                        <button class="btn btn-sm btn-primary fill-template-btn mt-1" data-id="${row.failureReportNumber}">
+                            填写故障报告 / Fill Report
+                        </button>`;
+                    return btns;
                 }
             }
         ],
@@ -409,64 +385,20 @@ function showError(message) {
     });
 }
 
-// 显示成功信息
-function showSuccess(message) {
-    Swal.fire({
-        icon: 'success',
-        title: '成功 / Success',
-        text: message,
-        confirmButtonText: '确定 / OK'
-    });
-}
-
-// 显示确认信息
-function showConfirm(title, text, callback) {
-    Swal.fire({
-        title: title,
-        text: text,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#28a745',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '确定 / Confirm',
-        cancelButtonText: '取消 / Cancel'
-    }).then((result) => {
-        if (result.isConfirmed && callback) {
-            callback();
-        }
-    });
-}
-
 // 事件处理函数
-$(document).on('click', '.upload-btn', function() {
+$(document).on('click', '.fill-template-btn', function() {
     const reportId = $(this).data('id');
-    const process = $(this).data('process');
-    console.log('点击上传按钮:', { reportId, process });
-    
-    // 获取按钮所在行的数据
     const row = $(this).closest('tr');
     const table = $(this).closest('table').DataTable();
     const rowData = table.row(row).data();
-    
-    // 显示文件上传对话框
-    showFileUploadDialog(reportId, process, rowData);
-});
-
-$(document).on('click', '.reupload-btn', function() {
-    const reportId = $(this).data('id');
-    const process = $(this).data('process');
-    console.log('点击重新上传按钮:', { reportId, process });
-    
-    // 获取按钮所在行的数据
-    const row = $(this).closest('tr');
-    const table = $(this).closest('table').DataTable();
-    const rowData = table.row(row).data();
-    
-    showConfirm(
-        '确认重新上传 / Confirm Re-upload',
-        `确定要重新上传故障报告 ${reportId} 的附件吗？/ Are you sure you want to re-upload the attachment for failure report ${reportId}?`,
-        () => showFileUploadDialog(reportId, process, rowData)
-    );
+    const machineNo = rowData ? (rowData.machineNo || '') : '';
+    const desc = rowData ? (rowData.problemDescription || '') : '';
+    const base = sessionStorage.getItem('siWebPage') || '';
+    const url = base + '?v=FailureReport_Template'
+        + '&reportId=' + encodeURIComponent(reportId)
+        + '&machineNo=' + encodeURIComponent(machineNo)
+        + '&desc=' + encodeURIComponent(desc);
+    window.open(url);
 });
 
 $(document).on('click', '.view-btn', function() {
@@ -478,154 +410,33 @@ $(document).on('click', '.view-btn', function() {
     showAttachmentViewDialog(reportId, process);
 });
 
-// 显示文件上传对话框
-function showFileUploadDialog(reportId, process, rowData) {
-    // 从行数据直接获取车间和工序信息
-    const workshop = rowData.workshop || '车间';
-    const processName = rowData.process || process;
-    
-    console.log('显示文件上传对话框:', { reportId, process, workshop, processName, rowData });
-    
+// 显示附件查看对话框
+function showAttachmentViewDialog(reportId, process) {
+    // 显示加载弹窗
     Swal.fire({
-        title: '上传故障报告附件 / Upload Failure Report Attachment',
-        html: `
-            <!-- 文件选择 -->
-            <div class="mb-3">
-                <label for="fileInput" class="form-label">选择本地文件 / Select Local File:</label>
-                <input type="file" class="form-control" id="fileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png">
-            </div>
-            
-            <!-- 文件名称预览 -->
-            <div class="mb-3">
-                <label class="form-label">文件名称预览 / File Name Preview:</label>
-                <div class="alert alert-secondary">
-                    <strong id="fileNamePreview">${reportId}_${workshop}_${processName}</strong>
-                    <small class="d-block text-muted mt-1">
-                        文件将自动重命名为：故障报告编号_车间_工序 / File will be automatically renamed to: Failure Report No._Workshop_Process
-                    </small>
-                </div>
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: '上传 / Upload',
-        cancelButtonText: '取消 / Cancel',
-        width: '600px',
-        didOpen: () => {
-            // 绑定本地文件选择事件，实时更新文件名称预览
-            const fileInput = document.getElementById('fileInput');
-            const fileNamePreview = document.getElementById('fileNamePreview');
-            
-            fileInput.addEventListener('change', function() {
-                if (this.files[0]) {
-                    const file = this.files[0];
-                    const fileExtension = file.name.includes('.') ? file.name.substring(file.name.lastIndexOf('.')) : '';
-                    fileNamePreview.textContent = `${reportId}_${workshop}_${processName}${fileExtension}`;
-                } else {
-                    fileNamePreview.textContent = `${reportId}_${workshop}_${processName}`;
-                }
-            });
-        },
-        preConfirm: () => {
-            const fileInput = document.getElementById('fileInput');
-            if (!fileInput.files[0]) {
-                Swal.showValidationMessage('请选择本地文件 / Please select a local file');
-                return false;
-            }
-            return fileInput.files[0];
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // 处理本地上传，确保传递正确的process参数
-            console.log('确认上传，调用handleFileUpload:', { reportId, process, fileName: result.value.name });
-            handleFileUpload(reportId, process, result.value);
-        }
-    });
-}
-
-// 处理文件上传
-function handleFileUpload(reportId, process, file) {
-    console.log('开始上传文件:', { reportId, process, fileName: file.name, processType: typeof process });
-    
-    // 验证参数
-    if (!reportId || !process || !file) {
-        console.error('参数验证失败:', { reportId, process, file });
-        showError('上传参数错误 / Upload parameters error');
-        return;
-    }
-    
-    // 显示上传进度
-    Swal.fire({
-        title: '上传中... / Uploading...',
-        text: '正在上传文件，请稍候... / Uploading file, please wait...',
+        title: '加载中 / Loading...',
+        text: '正在获取附件信息 / Getting attachment info',
         allowOutsideClick: false,
         didOpen: () => {
             Swal.showLoading();
         }
     });
-    
-    // 将文件转换为base64格式
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const fileData = e.target.result;
-        
-        console.log('文件读取完成，调用后端上传函数:', { reportId, process, fileName: file.name });
-        
-        // 调用后端的上传函数
-        google.script.run
-            .withSuccessHandler(function(response) {
-                Swal.close();
-                if (response.success) {
-                    showSuccess(`文件上传成功 / File uploaded successfully<br><br><strong>文件名 / Filename:</strong> ${response.details.standardizedFileName}<br><strong>保存位置 / Save Location:</strong> Google Drive 指定文件夹`);
-                    
-                    // 刷新数据
-                    loadFailureReportData();
-                } else {
-                    showError('文件上传失败 / File upload failed: ' + response.message);
-                }
-            })
-            .withFailureHandler(function(error) {
-                Swal.close();
-                console.error('后端上传失败:', error);
-                showError('文件上传失败 / File upload failed: ' + error.message);
-            })
-            .uploadFailureReportAttachment(reportId, process, fileData, file.name, '');
-    };
-    
-    reader.onerror = function() {
-        Swal.close();
-        showError('文件读取失败 / File read failed');
-    };
-    
-    reader.readAsDataURL(file);
-}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// 显示附件查看对话框
-function showAttachmentViewDialog(reportId, process) {
     // 获取附件信息
     google.script.run
         .withSuccessHandler(function(response) {
+            if (!response || typeof response !== 'object') {
+                Swal.fire({
+                    title: '查看附件 / View Attachment',
+                    text: '附件返回数据异常 / Invalid attachment response',
+                    icon: 'error',
+                    confirmButtonText: '确定 / OK'
+                });
+                return;
+            }
             if (response.success && response.hasAttachment) {
                 const attachment = response.attachment;
+                const hasValidUrl = attachment.fileUrl && attachment.fileUrl !== '' && attachment.fileUrl !== '链接无效 / Invalid link';
                 Swal.fire({
                     title: '查看附件 / View Attachment',
                     html: `
@@ -636,9 +447,15 @@ function showAttachmentViewDialog(reportId, process) {
                             <p><strong>上传日期 / Upload Date:</strong> ${attachment.uploadDate}</p>
                             <p><strong>保存位置 / Save Location:</strong> Google Drive 指定文件夹</p>
                             <hr>
-                            <a href="${attachment.fileUrl}" target="_blank" class="btn btn-primary">
-                                <i class="fas fa-external-link-alt"></i> 查看文件 / View File
-                            </a>
+                            ${hasValidUrl ? `
+                                <a href="${attachment.fileUrl}" target="_blank" class="btn btn-primary">
+                                    <i class="fas fa-external-link-alt"></i> 查看文件 / View File
+                                </a>
+                            ` : `
+                                <button class="btn btn-secondary" disabled>
+                                    <i class="fas fa-exclamation-circle"></i> 链接无效 / Invalid link
+                                </button>
+                            `}
                         </div>
                     `,
                     icon: 'info',

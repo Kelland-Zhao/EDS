@@ -7,6 +7,7 @@
   <?!=include("Kez_Bootstrap@5.3.1_css");?>
   <?!=include("kez_Datatables_css");?>
   <?!=include("CSS");?>
+  <?!=include("Kez_sweetalert2_js");?>
 </head>
 
 <body>
@@ -22,27 +23,41 @@
 
 
 
-  <div class="container-fluid mt-3">
-    <span id="name" class="highlight" style="color: #E60012; font-size:24px"></span>
-    <span class="highlight" style="color: #E60012; font-size:24px">,欢迎进入设备部数字化系统/ Welcome to Equipment Digital
-      System</span>
-    <div class="row col-6 mx-auto mt-3">
-      <div class="d-grid gap-3 col-6 mx-auto">
-        <button class="btn btn-primary" type="button" id="PM">保养/ PM</button>
-        <button class="btn btn-primary" type="button" id="Handover">交接班/ Handover</button>
-        <button class="btn btn-primary" type="button" id="PonitCheck">点检/ Inspection</button>
-        <button class="btn btn-primary" type="button" id="PPMS">工艺参数管理/ Process Parameters Management</button>
-        <button class="btn btn-primary" type="button" id="FailureReport">故障报告/ Failure
-          Report</button>
-      </div>
-      <div class="d-grid gap-3 col-6 mx-auto">
-        <button class="btn btn-primary" type="button" id="SHSP">二手备件/ Second Hand Spare Parts</button>
-        <button class="btn btn-primary disabled" type="button">文档索引/ Document Library</button>
-        <button class="btn btn-primary" type="button" id="MMS">模具管理/ Mold Management</button>
-        <button class="btn btn-primary" type="button" id="SEI">特种设备检查/ Special Equipment Inspection</button>
-        <button class="btn btn-primary" type="button" id="TLMoC">任务清单变更管理/ Tasklist MoC</button>
-        <button class="btn btn-primary" type="button" id="moldSurfaceCleanButton">模面清理/ Mold Surface Clean</button>
-        <button class="btn btn-primary" type="button" id="ProcessSamplingInspection">工艺抽检/ Process Sampling Inspection</button>
+  <style>
+    .marquee-container { overflow: hidden; white-space: nowrap; width: 100%; }
+    .marquee-content { display: inline-block; animation: marquee 20s linear infinite; }
+    @keyframes marquee {
+      0%   { transform: translateX(100vw); }
+      100% { transform: translateX(-100%); }
+    }
+    .btn-area { min-height: calc(100vh - 80px); display: flex; align-items: center; justify-content: center; }
+  </style>
+
+  <div class="container-fluid px-3">
+    <div class="marquee-container mt-2">
+      <span class="marquee-content">
+        <span id="name" style="color:#E60012; font-size:24px"></span>
+        <span style="color:#E60012; font-size:24px">,欢迎进入设备部数字化系统/ Welcome to Equipment Digital System</span>
+      </span>
+    </div>
+    <div class="btn-area">
+      <div class="row g-3" style="max-width:1000px; width:100%;">
+        <div class="col-6 d-grid gap-3">
+          <button class="btn btn-primary btn-lg" type="button" id="PM" style="font-size: 1rem;">保养/ PM</button>
+          <button class="btn btn-primary btn-lg" type="button" id="Handover" style="font-size: 1rem;">交接班 & 故障记录/ Handover & Fault Record</button>
+          <button class="btn btn-primary btn-lg" type="button" id="PonitCheck" style="font-size: 1rem;">点检/ Inspection</button>
+          <button class="btn btn-primary btn-lg" type="button" id="PPMS" style="font-size: 1rem;">工艺参数管理/ Process Parameters Management</button>
+          <button class="btn btn-primary btn-lg" type="button" id="FailureReport" style="font-size: 1rem;">故障报告/ Failure Report</button>
+          <button class="btn btn-primary btn-lg" type="button" id="ProcessSamplingInspection" style="font-size: 1rem;">工艺抽检/ Process Sampling Inspection</button>
+        </div>
+        <div class="col-6 d-grid gap-3">
+          <button class="btn btn-primary btn-lg" type="button" id="SHSP" style="font-size: 1rem;">二手备件/ Second Hand Spare Parts</button>
+          <button class="btn btn-primary btn-lg disabled" type="button" style="font-size: 1rem;">文档索引/ Document Library</button>
+          <button class="btn btn-primary btn-lg" type="button" id="MMS" style="font-size: 1rem;">模具管理/ Mold Management</button>
+          <button class="btn btn-primary btn-lg" type="button" id="SEI" style="font-size: 1rem;">特种设备检查/ Special Equipment Inspection</button>
+          <button class="btn btn-primary btn-lg" type="button" id="TLMoC" style="font-size: 1rem;">任务清单变更管理/ Tasklist MoC</button>
+          <button class="btn btn-primary btn-lg" type="button" id="moldSurfaceCleanButton" style="font-size: 1rem;">模面清理/ Mold Surface Clean</button>
+        </div>
       </div>
     </div>
   </div>
@@ -58,8 +73,28 @@
         <div class="modal-body">
           <div class="d-grid gap-3">
             <button class="btn btn-info" type="button" id="PM_Plan">保养计划 / Maintenance Plan</button>
+            <button class="btn btn-info" type="button" id="PM_ShiftFollowUp">三班转保养跟进 / PM Shift Follow-up</button>
             <button class="btn btn-info" type="button" id="PM_Task">任务管理 / Task Management</button>
             <button class="btn btn-info" type="button" id="PM_Query">记录查询 / Record Query</button>
+            <button class="btn btn-info" type="button" id="PM_Report">保养报告 / Maintenance Report</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 交接班 & 故障记录 弹出窗口 -->
+  <div class="modal fade" id="handoverModal" tabindex="-1" aria-labelledby="handoverModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="handoverModalLabel">交接班 & 故障记录 / Handover & Fault Record</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-grid gap-3">
+            <button class="btn btn-info" type="button" id="Handover_Shift">交接班 & 留言板 / Handover & MessageBoard</button>
+            <button class="btn btn-info" type="button" id="Fault_Record">故障 & 安全隐患记录 / Fault & Safety Hazard Record</button>
           </div>
         </div>
       </div>
@@ -78,9 +113,10 @@
         <div class="modal-body">
           <div class="d-grid gap-3">
             <button class="btn btn-info" type="button" id="FailureReport_Manage">故障报告管理 / Manage Failure Report</button>
-            <button class="btn btn-info" type="button" id="FailureReport_Upload">故障报告上传 / Upload Failure Report</button>
+            <button class="btn btn-info" type="button" id="FailureReport_Upload">故障报告填写 / Fill Failure Report</button>
             <button class="btn btn-info" type="button" id="FailureReport_View">故障报告查阅 / View Failure Report</button>
             <button class="btn btn-info" type="button" id="FailureReport_Progress">故障报告进度 / Failure Report Progress</button>
+            <button class="btn btn-info" type="button" id="FailureReport_Followup">故障报告跟进验证 / Follow-up Verification</button>
           </div>
         </div>
       </div>
@@ -106,12 +142,32 @@
     </div>
   </div>
 
+  <!-- 工艺抽检 弹出窗口 -->
+  <div class="modal fade" id="processInspectionModal" tabindex="-1" aria-labelledby="processInspectionModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="processInspectionModalLabel">工艺抽检 / Process Inspection</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-grid gap-3">
+            <button class="btn btn-info" type="button" id="ProcessInspection_Execute">工艺抽检执行 / Process Inspection Execution</button>
+            <button class="btn btn-info" type="button" id="ProcessInspection_Report">工艺抽检报告 / Process Inspection Report</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 
 
 <?!=include("Kez_jquery@3.6.4_js") ?>
 <?!=include("Kez_datatables@1.13.6_js") ?>
 <?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
 <?!=include("Navigation_js") ?>
 
 

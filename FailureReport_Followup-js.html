@@ -1,0 +1,699 @@
+<script>
+    console.log('故障报告跟进验证页面JavaScript加载开始...');
+
+    let followupTable = null;
+    let followupData = [];
+    let userOptions = [];
+
+    const STATUS_OPTIONS = ['进行中 / Ongoing', '已完成 / Completed'];
+    const FIELD_LABELS = {
+        paPlan: '预防性措施 / PA Action',
+        paWho: '责任人 / Responsible Person',
+        paVerifier: '验证人 / Verifier',
+        status: '状态 / Status'
+    };
+
+    const loadingSpinner = {
+        show: function() {
+            $('#loadingSpinner').show();
+        },
+        hide: function() {
+            $('#loadingSpinner').hide();
+        }
+    };
+
+    $(document).ready(function() {
+        console.log('页面DOM加载完成，开始初始化...');
+
+        // 立即显示加载弹窗
+        Swal.fire({
+            title: '加载中 / Loading...',
+            text: '正在初始化页面 / Initializing page',
+            allowOutsideClick: false,
+            didOpen: function() { Swal.showLoading(); }
+        });
+
+        populateVerifyStatusOptions();
+
+        loadUserOptions().then(function() {
+            fetchFollowupRecords();
+        });
+    });
+
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function populateVerifyStatusOptions() {
+        const $select = $('#verifyStatus');
+        if (!$select.length) return;
+        const currentValue = $select.val();
+        $select.empty();
+        $select.append('<option value="">请选择 / Please Select</option>');
+        STATUS_OPTIONS.forEach(function(option) {
+            $select.append('<option value="' + option + '">' + option + '</option>');
+        });
+        if (STATUS_OPTIONS.indexOf(currentValue) !== -1) {
+            $select.val(currentValue);
+        }
+    }
+
+    function loadUserOptions() {
+        return new Promise(function(resolve) {
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    try {
+                        const parsed = JSON.parse(response || '[]');
+                        userOptions = Array.isArray(parsed) ? parsed : [];
+                    } catch (error) {
+                        console.error('解析用户列表失败:', error);
+                        userOptions = [];
+                    }
+                    resolve();
+                })
+                .withFailureHandler(function(error) {
+                    console.error('获取用户列表失败:', error);
+                    userOptions = [];
+                    resolve();
+                })
+                .getEDSUserNames();
+        });
+    }
+
+    function fetchFollowupRecords() {
+        // 如果已经有loading弹窗在显示，则更新文本，否则显示新的
+        if (Swal.isVisible()) {
+            Swal.update({
+                title: '加载中 / Loading...',
+                text: '正在获取跟进记录 / Loading follow-up records'
+            });
+        } else {
+            Swal.fire({
+                title: '加载中 / Loading...',
+                text: '正在获取跟进记录 / Loading follow-up records',
+                allowOutsideClick: false,
+                didOpen: function() { Swal.showLoading(); }
+            });
+        }
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                Swal.close();
+                console.log('跟进记录获取成功:', response);
+
+                if (response && response.success) {
+                    followupData = mapRowsToObjects(response.data || []);
+                    initializeTable(followupData);
+                } else {
+                    Swal.fire({
+                        title: '错误 / Error',
+                        text: (response && response.message) || '获取跟进记录失败 / Failed to get follow-up records',
+                        icon: 'error',
+                        confirmButtonText: '确定 / OK'
+                    });
+                }
+            })
+            .withFailureHandler(function(error) {
+                Swal.close();
+                console.error('获取跟进记录失败:', error);
+                Swal.fire({
+                    title: '错误 / Error',
+                    text: '获取跟进记录失败 / Failed to get follow-up records: ' + (error.message || ''),
+                    icon: 'error',
+                    confirmButtonText: '确定 / OK'
+                });
+            })
+            .getFollowupRecords();
+    }
+
+    function mapRowsToObjects(rows) {
+        return (rows || []).map(function(row) {
+            return {
+                followupId: String(row[0] || ''),
+                failureReportNo: String(row[1] || ''),
+                paType: String(row[2] || ''),
+                paPlan: String(row[3] || ''),
+                paWho: String(row[4] || ''),
+                paWhen: String(row[5] || ''),
+                paVerifier: String(row[6] || ''),
+                paVerifierWhen: String(row[7] || ''),
+                status: String(row[8] || ''),
+                createdDate: String(row[9] || ''),
+                updatedDate: String(row[10] || ''),
+                pdfUrl: String(row[11] || '')
+            };
+        });
+    }
+
+    function initializeTable(data) {
+        console.log('初始化表格，数据行数:', data.length);
+
+        if (followupTable) {
+            followupTable.clear();
+            followupTable.rows.add(data);
+            followupTable.draw();
+            return;
+        }
+
+        followupTable = $('#followupTable').DataTable({
+            data: data,
+            columns: [
+                { data: 'followupId' },
+                { data: 'failureReportNo' },
+                { data: 'paType' },
+                {
+                    data: 'paPlan',
+                    className: 'pa-action-cell',
+                    render: function(value, type) {
+                        if (type !== 'display') {
+                            return value || '';
+                        }
+                        const safe = escapeHtml(value || '');
+                        const formatted = safe.replace(/\n/g, '<br>');
+                        return '<div class="pa-action-content">' + (formatted || '<span class="text-muted">（未填写 / Not Provided）</span>') + '</div>';
+                    }
+                },
+                {
+                    data: 'paWho',
+                    className: 'pa-who-cell',
+                    orderable: false,
+                    render: function(value, type, row) {
+                        if (type !== 'display') {
+                            return value || '';
+                        }
+                        return buildUserSelectHtml('paWho', row.followupId, value);
+                    }
+                },
+                { data: 'paWhen' },
+                {
+                    data: 'paVerifier',
+                    className: 'pa-verifier-cell',
+                    orderable: false,
+                    render: function(value, type, row) {
+                        if (type !== 'display') {
+                            return value || '';
+                        }
+                        return buildUserSelectHtml('paVerifier', row.followupId, value);
+                    }
+                },
+                { data: 'paVerifierWhen' },
+                {
+                    data: 'status',
+                    className: 'pa-status-cell',
+                    orderable: false,
+                    render: function(value, type, row) {
+                        if (type !== 'display') {
+                            return value || '';
+                        }
+                        return buildStatusSelectHtml(row.followupId, value);
+                    }
+                },
+                { data: 'createdDate' },
+                { data: 'updatedDate' },
+                {
+                    data: null,
+                    orderable: false,
+                    render: function(data, type, row) {
+                        let actions = '';
+                        if (row.pdfUrl) {
+                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '">';
+                            actions += '<i class="fas fa-file-pdf"></i> 查看PDF / View PDF';
+                            actions += '</button>';
+                        }
+                        return actions;
+                    }
+                }
+            ],
+            language: {
+                search: '搜索 / Search:',
+                lengthMenu: '显示 _MENU_ 条记录 / Show _MENU_ entries',
+                info: '显示第 _START_ 至 _END_ 条记录，共 _TOTAL_ 条 / Showing _START_ to _END_ of _TOTAL_ entries',
+                infoEmpty: '没有记录 / No entries',
+                infoFiltered: '(从 _TOTAL_ 条记录中过滤 / filtered from _TOTAL_ total entries)',
+                paginate: {
+                    first: '首页 / First',
+                    last: '末页 / Last',
+                    next: '下一页 / Next',
+                    previous: '上一页 / Previous'
+                },
+                emptyTable: '暂无数据 / No data available'
+            },
+            order: [[9, 'desc']],
+            pageLength: 25,
+            responsive: true
+        });
+
+        $('#followupTable').on('draw.dt', function() {
+            enhanceSelects();
+        });
+
+        enhanceSelects();
+        console.log('表格初始化完成');
+    }
+
+    function extractNameFromDisplay(display) {
+        if (!display) return '';
+        const match = display.match(/^([^【]+)/);
+        return match ? match[1].trim() : display.trim();
+    }
+
+    function buildUserSelectHtml(fieldKey, followupId, currentValue) {
+        const safeId = escapeHtml(followupId);
+        const normalizedValue = String(currentValue || '').trim();
+        let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
+        let hasCurrent = normalizedValue === '';
+
+        (userOptions || []).forEach(function(user) {
+            const display = String((user && user.display) || '').trim();
+            const name = extractNameFromDisplay(display);
+            if (!display) return;
+            const selected = display === normalizedValue ? ' selected' : '';
+            if (selected) {
+                hasCurrent = true;
+            }
+            optionsHtml += '<option value="' + escapeHtml(display) + '" data-name="' + escapeHtml(name) + '"' + selected + '>' + escapeHtml(display) + '</option>';
+        });
+
+        if (!hasCurrent && normalizedValue) {
+            optionsHtml += '<option value="' + escapeHtml(normalizedValue) + '" selected>' + escapeHtml(normalizedValue) + '</option>';
+        }
+
+        return '<select class="form-select form-select-sm followup-select followup-select-user" data-field="' + escapeHtml(fieldKey) + '" data-id="' + safeId + '">' + optionsHtml + '</select>';
+    }
+
+    function buildStatusSelectHtml(followupId, currentValue) {
+        const safeId = escapeHtml(followupId);
+        const normalizedValue = String(currentValue || '').trim();
+        let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
+        let hasCurrent = normalizedValue === '';
+
+        STATUS_OPTIONS.forEach(function(option) {
+            const selected = option === normalizedValue ? ' selected' : '';
+            if (selected) {
+                hasCurrent = true;
+            }
+            optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
+        });
+
+        if (!hasCurrent && normalizedValue) {
+            optionsHtml += '<option value="' + escapeHtml(normalizedValue) + '" selected>' + escapeHtml(normalizedValue) + '</option>';
+        }
+
+        return '<select class="form-select form-select-sm followup-select followup-select-status" data-field="status" data-id="' + safeId + '">' + optionsHtml + '</select>';
+    }
+
+    function enhanceSelects() {
+        if (!$.fn.select2) return;
+        const $wrapper = $('#followupTable').closest('.dataTables_wrapper');
+
+        $('#followupTable select.followup-select-user').each(function() {
+            const $select = $(this);
+            if ($select.hasClass('select2-hidden-accessible')) {
+                $select.select2('destroy');
+            }
+            $select.select2({
+                width: '100%',
+                theme: 'bootstrap',
+                placeholder: '请选择 / Select',
+                dropdownParent: $wrapper.length ? $wrapper : $('body'),
+                allowClear: false,
+                dropdownAutoWidth: true,
+                templateSelection: function(data) {
+                    if (!data.id) return data.text;
+                    const name = $(data.element).data('name') || extractNameFromDisplay(data.text);
+                    return name;
+                }
+            });
+        });
+    }
+
+    function showToast(message, icon) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: icon || 'success',
+            title: message,
+            showConfirmButton: false,
+            timer: 1800,
+            timerProgressBar: true,
+            didOpen: function(toast) {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+    }
+
+    function mapFieldKeyToProperty(fieldKey) {
+        switch (fieldKey) {
+            case 'paPlan':
+                return 'paPlan';
+            case 'paWho':
+                return 'paWho';
+            case 'paVerifier':
+                return 'paVerifier';
+            case 'status':
+                return 'status';
+            default:
+                return '';
+        }
+    }
+
+    function buildDualMessage(fieldKey, suffixCn, suffixEn) {
+        const label = FIELD_LABELS[fieldKey] || '字段 / Field';
+        const parts = label.split(' / ');
+        const cn = parts[0] || label;
+        const en = parts[1] || 'Field';
+        return cn + suffixCn + ' / ' + en + suffixEn;
+    }
+
+    function updateFollowupField(fieldKey, followupId, value, onSuccess, onError) {
+        loadingSpinner.show();
+        google.script.run
+            .withSuccessHandler(function(response) {
+                loadingSpinner.hide();
+                if (response && response.success) {
+                    if (typeof onSuccess === 'function') onSuccess(response);
+                } else {
+                    if (typeof onError === 'function') onError(response ? response.message : '');
+                }
+            })
+            .withFailureHandler(function(error) {
+                loadingSpinner.hide();
+                console.error('更新跟进字段失败:', error);
+                if (typeof onError === 'function') onError(error && error.message ? error.message : '');
+            })
+            .updateFollowupFieldValue(followupId, fieldKey, value);
+    }
+
+    // 查看PDF按钮点击事件
+    $(document).on('click', '.view-pdf-btn', function() {
+        const pdfUrl = $(this).data('pdf');
+        const reportNo = $(this).data('report');
+        console.log('查看PDF:', { pdfUrl: pdfUrl, reportNo: reportNo });
+
+        if (pdfUrl) {
+            window.open(pdfUrl, '_blank');
+        } else {
+            Swal.fire({
+                title: '提示 / Info',
+                text: 'PDF链接无效 / Invalid PDF link',
+                icon: 'warning',
+                confirmButtonText: '确定 / OK'
+            });
+        }
+    });
+
+    // 预防性措施双击编辑 - 单元格内直接编辑
+    $('#followupTable tbody').on('dblclick', 'td.pa-action-cell', function(e) {
+        if (!followupTable) return;
+        const $cell = $(this);
+        if ($cell.find('textarea').length > 0) return;
+
+        const rowApi = followupTable.row($cell.closest('tr'));
+        const rowData = rowApi.data();
+        if (!rowData) return;
+
+        const originalValue = String(rowData.paPlan || '').trim();
+        const $content = $cell.find('.pa-action-content');
+
+        const $textarea = $('<textarea class="form-control pa-action-editor" rows="3">' + escapeHtml(originalValue) + '</textarea>');
+        $cell.empty().append($textarea);
+        $textarea.focus();
+        $textarea[0].setSelectionRange($textarea.val().length, $textarea.val().length);
+
+        let isSaved = false;
+
+        const saveEdit = function() {
+            if (isSaved) return;
+            isSaved = true;
+            const newValue = String($textarea.val() || '').trim();
+            $textarea.off('blur keydown');
+
+            if (newValue === originalValue) {
+                rowApi.draw(false);
+                return;
+            }
+
+            updateFollowupField('paPlan', rowData.followupId, newValue, function(response) {
+                const updatedRow = Object.assign({}, rowData, { paPlan: newValue });
+                if (response && response.updatedDate) {
+                    updatedRow.updatedDate = response.updatedDate;
+                }
+                rowApi.data(updatedRow).draw(false);
+                showToast(buildDualMessage('paPlan', '已更新', ' updated'), 'success');
+            }, function(message) {
+                rowApi.data(rowData).draw(false);
+                showToast(message || buildDualMessage('paPlan', '更新失败', ' update failed'), 'error');
+            });
+        };
+
+        const cancelEdit = function() {
+            if (isSaved) return;
+            isSaved = true;
+            $textarea.off('blur keydown');
+            rowApi.draw(false);
+        };
+
+        $textarea.on('blur', saveEdit);
+        $textarea.on('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+            } else if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                saveEdit();
+            }
+        });
+    });
+
+    // 责任人 / 验证人 / 状态下拉更新
+    $('#followupTable tbody').on('change', 'select.followup-select', function() {
+        if (!followupTable) return;
+        const $select = $(this);
+        const fieldKey = $select.data('field');
+        const followupId = $select.data('id');
+        const rowApi = followupTable.row($select.closest('tr'));
+        const rowData = rowApi.data();
+        if (!fieldKey || !followupId || !rowData) return;
+
+        const propertyKey = mapFieldKeyToProperty(fieldKey);
+        if (!propertyKey) return;
+
+        const newValue = String($select.val() || '').trim();
+        const previousValue = String(rowData[propertyKey] || '').trim();
+        if (newValue === previousValue) {
+            return;
+        }
+
+        const originalRow = Object.assign({}, rowData);
+        $select.prop('disabled', true);
+
+        updateFollowupField(fieldKey, followupId, newValue, function(response) {
+            $select.prop('disabled', false);
+            const updatedRow = Object.assign({}, rowData, {});
+            updatedRow[propertyKey] = newValue;
+            if (response && response.updatedDate) {
+                updatedRow.updatedDate = response.updatedDate;
+            }
+            rowApi.data(updatedRow).draw(false);
+            showToast(buildDualMessage(fieldKey, '已更新', ' updated'), 'success');
+        }, function(message) {
+            $select.prop('disabled', false);
+            rowApi.data(originalRow).draw(false);
+            showToast(message || buildDualMessage(fieldKey, '更新失败', ' update failed'), 'error');
+        });
+    });
+
+    // 验证按钮点击事件
+    $(document).on('click', '.verify-btn', function() {
+        if (!followupTable) return;
+        const followupId = $(this).data('id');
+        const rowData = followupTable.row($(this).closest('tr')).data();
+        if (!rowData) return;
+
+        console.log('验证跟进记录:', followupId, rowData);
+
+        $('#verifyFollowupId').val(rowData.followupId);
+        $('#verifyFailureReportNo').val(rowData.failureReportNo);
+        $('#verifyReportNo').val(rowData.failureReportNo);
+        $('#verifyPaType').val(rowData.paType);
+        $('#verifyPaPlan').val(rowData.paPlan);
+        $('#verifyPaWho').val(rowData.paWho);
+        $('#verifyPaWhen').val(rowData.paWhen);
+        $('#verifyPaVerifier').val(rowData.paVerifier);
+        $('#verifyPaVerifierWhen').val(rowData.paVerifierWhen);
+        $('#verifyStatus').val(rowData.status);
+        $('#verifyRemarks').val('');
+
+        $('#verifyModal').modal('show');
+    });
+
+    // 保存验证按钮点击事件
+    $('#btnSaveVerify').click(function() {
+        const followupId = $('#verifyFollowupId').val();
+        const status = $('#verifyStatus').val();
+        const remarks = $('#verifyRemarks').val();
+
+        console.log('保存验证:', { followupId: followupId, status: status, remarks: remarks });
+
+        if (!status) {
+            Swal.fire({
+                title: '提示 / Info',
+                text: '请选择验证状态 / Please select verification status',
+                icon: 'warning',
+                confirmButtonText: '确定 / OK'
+            });
+            return;
+        }
+
+        if (STATUS_OPTIONS.indexOf(status) === -1) {
+            Swal.fire({
+                title: '提示 / Info',
+                text: '状态选项无效，请重新选择 / Invalid status value',
+                icon: 'warning',
+                confirmButtonText: '确定 / OK'
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: '保存中 / Saving...',
+            text: '正在更新跟进状态 / Updating follow-up status',
+            allowOutsideClick: false,
+            didOpen: function() { Swal.showLoading(); }
+        });
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                console.log('跟进状态更新成功:', response);
+                Swal.close();
+
+                if (response && response.success) {
+                    $('#verifyModal').modal('hide');
+                    refreshFollowupData();
+                    Swal.fire({
+                        title: '成功 / Success',
+                        text: '跟进状态更新成功 / Follow-up status updated successfully',
+                        icon: 'success',
+                        confirmButtonText: '确定 / OK'
+                    });
+                } else {
+                    Swal.fire({
+                        title: '错误 / Error',
+                        text: (response && response.message) || '更新跟进状态失败 / Failed to update follow-up status',
+                        icon: 'error',
+                        confirmButtonText: '确定 / OK'
+                    });
+                }
+            })
+            .withFailureHandler(function(error) {
+                console.error('跟进状态更新失败:', error);
+                Swal.close();
+                Swal.fire({
+                    title: '错误 / Error',
+                    text: '更新跟进状态失败 / Failed to update follow-up status: ' + (error.message || ''),
+                    icon: 'error',
+                    confirmButtonText: '确定 / OK'
+                });
+            })
+            .updateFollowupStatus(followupId, status, remarks);
+    });
+
+    function refreshFollowupData() {
+        console.log('刷新跟进数据...');
+        loadingSpinner.show();
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                loadingSpinner.hide();
+                console.log('跟进记录刷新成功:', response);
+
+                if (response && response.success) {
+                    followupData = mapRowsToObjects(response.data || []);
+                    initializeTable(followupData);
+                } else {
+                    showToast((response && response.message) || '刷新数据失败 / Failed to refresh data', 'error');
+                }
+            })
+            .withFailureHandler(function(error) {
+                loadingSpinner.hide();
+                console.error('跟进记录刷新失败:', error);
+                showToast('刷新数据失败 / Failed to refresh data: ' + (error.message || ''), 'error');
+            })
+            .getFollowupRecords();
+    }
+
+    // 邮件提醒责任人按钮点击事件
+    $('#btnEmailResponsible').click(function() {
+        if (!followupData || followupData.length === 0) {
+            showToast('暂无数据可发送邮件 / No data available to send email', 'warning');
+            return;
+        }
+        Swal.fire({
+            title: '确认发送 / Confirm Send',
+            text: '确定要发送邮件提醒所有责任人吗？ / Are you sure you want to send email reminders to all responsible persons?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '发送 / Send',
+            cancelButtonText: '取消 / Cancel'
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                sendEmailReminder('responsible');
+            }
+        });
+    });
+
+    // 邮件提醒验证人按钮点击事件
+    $('#btnEmailVerifier').click(function() {
+        if (!followupData || followupData.length === 0) {
+            showToast('暂无数据可发送邮件 / No data available to send email', 'warning');
+            return;
+        }
+        Swal.fire({
+            title: '确认发送 / Confirm Send',
+            text: '确定要发送邮件提醒所有验证人吗？ / Are you sure you want to send email reminders to all verifiers?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '发送 / Send',
+            cancelButtonText: '取消 / Cancel'
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                sendEmailReminder('verifier');
+            }
+        });
+    });
+
+    // 发送邮件提醒函数
+    function sendEmailReminder(type) {
+        loadingSpinner.show();
+        google.script.run
+            .withSuccessHandler(function(response) {
+                loadingSpinner.hide();
+                if (response && response.success) {
+                    showToast('邮件发送成功 / Email sent successfully', 'success');
+                } else {
+                    showToast((response && response.message) || '邮件发送失败 / Email sending failed', 'error');
+                }
+            })
+            .withFailureHandler(function(error) {
+                loadingSpinner.hide();
+                console.error('邮件发送失败:', error);
+                showToast('邮件发送失败 / Email sending failed: ' + (error.message || ''), 'error');
+            })
+            .sendFollowupEmailReminder(type);
+    }
+
+    $(window).on('beforeunload', function() {
+        console.log('页面即将卸载，清理资源...');
+        if (followupTable) {
+            followupTable.destroy();
+        }
+    });
+
+    console.log('故障报告跟进验证页面JavaScript加载完成');
+</script>

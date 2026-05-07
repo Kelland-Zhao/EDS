@@ -239,6 +239,10 @@
   // 检查是否有前一周或后三周的数据，如果没有则显示提示
   if (obj.DateRange) {
     showDateRangeInfo(obj.DateRange);
+    let descHtml = 
+      '<div>当前显示的保养计划日期范围为<strong>前1周</strong>至<strong>后3周</strong>：' + obj.DateRange.startDate + ' 至 ' + obj.DateRange.endDate + '</div>' +
+      '<div>The PM plan date range displayed is from <strong>1 week before</strong> to <strong>3 weeks after</strong>: ' + obj.DateRange.startDate + ' to ' + obj.DateRange.endDate + '</div>';
+    $('#dateRangeDescription').html(descHtml).show();
   }
   
   let formattedRecords = record.map(item => {
@@ -417,24 +421,47 @@
 
   // --- 此处逻辑已修复 ---
   $("#table").on("click", ".btn-info", function () {
-   let data = table.row($(this).closest('tr')).data();
+   let $button = $(this);
+   let data = table.row($button.closest('tr')).data();
    sessionStorage.setItem("data", JSON.stringify(data))
-   console.log("本行数据为：", data);
-
+   
    const status = data['保养状态/ PM Status'];
+   const process = data['工序'] || data['Process'] || 'N/A';
+   const workcenter = data['AEM#'] || 'N/A';
+   
+   // 检测按钮状态
+   const isDisabled = $button.prop('disabled') || $button.hasClass('disabled');
+   const buttonClasses = $button.attr('class');
+   const buttonStyle = $button.attr('style');
+   
+   // 在控制台展示详细的状态信息
+   console.log("=== 跟进按钮点击信息 ===");
+   console.log("按钮是否禁用 / Button Disabled:", isDisabled);
+   console.log("按钮CSS类 / Button Classes:", buttonClasses);
+   console.log("按钮样式 / Button Style:", buttonStyle);
+   console.log("本行数据为：", data);
+   console.log("工序 / Process:", process);
+   console.log("机台号 / Workcenter:", workcenter);
+   console.log("保养状态 / PM Status:", status);
+   console.log("当前用户工序 / User Process:", global_Process);
+   console.log("========================");
 
-   // 1. 检查是否为“未开始”状态
-   if (status.includes("未开始")) {
-    sessionStorage.setItem('PM_Stauts', "Not Start"); // 正确设置为 "Not Start"
+   // 1. 检查是否为"未开始"状态（支持中英文）
+   if (status.includes("未开始") || status.includes("Not Start")) {
+    console.log("✅ 状态判断：未开始 - 允许跟进");
+    sessionStorage.setItem('PM_Stauts', "Not Start");
     let url = siWebPage + '?v=PM_Task_1.0';
     window.open(url);
-   // 2. 检查是否为其他可跟进的状态
-   } else if (status.includes("进行中") || status.includes("人员已分配") || status.includes("已添加临时任务")) {
-    sessionStorage.setItem('PM_Stauts', "Ongoing"); // 将所有其他情况统一设置为 "Ongoing"
+   // 2. 检查是否为其他可跟进的状态（支持中英文）
+   } else if (status.includes("进行中") || status.includes("Ongoing") || 
+              status.includes("人员已分配") || status.includes("已添加临时任务")) {
+    console.log("✅ 状态判断：进行中/Ongoing/人员已分配/已添加临时任务 - 允许跟进");
+    sessionStorage.setItem('PM_Stauts', "Ongoing");
     let url = siWebPage + '?v=PM_Task_1.0';
     window.open(url);
    } else {
-    // 对于“已完成”等其他状态，不执行任何操作
+    // 对于"已完成"等其他状态，不执行任何操作
+    console.log("❌ 状态判断：已完成或其他状态 - 不允许跟进，当前状态:", status);
     return false
    }
   })

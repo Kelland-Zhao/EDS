@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+</head>
+<?!=include("kez_Datatables_css");?>
+<?!=include("Kez_Bootstrap@5.3.1_css");?>
+<?!=include("Kez_datatables@1.11.5_css");?>
+<?!=include("Kez_Select2@4.0.13_css");?>
+<?!=include("Kez_Select2-bootstrap_css");?>
+<?!=include("CSS");?>
+<?!=include("Compressor_js");?>
+
+
+
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container">
+      <a class="navbar-brand" style="
+        color: white;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: xx-large;
+        font-weight: bold;">故障记录 / Fault Record</a>
+    </div>
+  </nav>
+  <div class="container mt-3 mb-3">
+    <h3 class="mt-3 mb-0">故障记录/ Failure Record</h3>
+    
+    <!-- 故障记录说明区域 -->
+    <div class="alert alert-info mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">填写说明 / Instructions</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>需要填写本班欠产大于半小时的机台情况 / Record machines with production shortage exceeding 30 minutes in current shift</li>
+        <li>需要填写重点质量问题的跟进情况 / Record follow-up on key quality issues:
+          <ul>
+            <li>注塑：工艺参数异常 / Injection Molding: Process parameter abnormalities</li>
+            <li>植磨毛：无金属丝 / Flocking: No metal wire issues</li>
+          </ul>
+        </li>
+        <li>故障处理过程填写方法 / How to fill in Failure Process:
+          <ol>
+            <li>找到维修该故障时对应的维修内容（如：主机/ 自动化/ 工艺等）/ Identify the related maintenance category (e.g., Main machine / Automation / Process, etc.)</li>
+            <li>将对应选项（是/否）选为"是"/ Select "Yes" for the corresponding option</li>
+            <li>在后续输入框中输入具体维修内容 / Enter detailed maintenance actions in the follow-up input box</li>
+          </ol>
+          <div class="mt-1"><strong>提示 / Tips:</strong></div>
+          <ul>
+            <li>默认所有部件都选"是"，请根据实际情况选择 / All items are defaulted to "Yes", please adjust based on actual situation</li>
+            <li>一旦选择"是"，后续输入框不可为空，否则无法提交 / If "Yes" is selected, the follow-up input cannot be empty, otherwise submission will be blocked</li>
+            <li><strong>直接原因 / Direct Cause</strong> 与 <strong>建议措施 / Suggested Action</strong> 为必填项，否则无法提交 / Direct Cause and Suggested Action are required fields, submission will be blocked if empty</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 数据源说明区域 -->
+    <div class="alert alert-warning mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">数据源说明 / Data Source Information</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>机台号已与三工序计划Matrix联动，所有有效机台实现自动同步，合并后文件名称：Workcenter_V202602 / Workcenter is synchronized with the 3-process planning Matrix, all valid workcenters are automatically synced, merged file name: Workcenter_V202602</li>
+        <li>故障代码已与OE故障代码联动，并增加了转规格代码，合并后文件名称：errorCode 2.0 / Failure codes are synchronized with OE failure codes, with additional changeover codes added, merged file name: errorCode 2.0</li>
+        <li>故障处理条目由各工序自行决定，数据来自于"故障处理选项设置"sheet / Failure process items are determined by each process, and the data source is the "故障处理选项设置" sheet</li>
+      </ul>
+    </div>
+
+    <div class="mt-3">
+      <div class="row">
+        <div class="col-3" id="htmlSelect">
+          <h5 class="col-auto mb-2">故障基础信息 / Basic Failure Information</h5>
+          <div class="col-auto mb-2">
+            <select id="workcenter" class="form-select">
+              <option selected disabled>机台号/ Workcenter</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2" style="display:none">
+            <select id="workshop" class="form-select">
+              <option selected disabled>车间/ Workshop</option>
+              <option value="TB1">TB1</option>
+              <option value="TB2">TB2</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="shift" class="form-select">
+              <option selected disabled>班次/ Shift</option>
+              <option value="A班">A班/ A Shift</option>
+              <option value="B班">B班/ B Shift</option>
+              <option value="C班">C班/ C Shift</option>
+              <option value="D班">D班/ D Shift</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="owner" class="form-select">
+              <option selected disabled>维修人/ Maintenance Owner</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="errorCode" class="form-control">
+              <option selected disabled>故障代码/ Failure Code</option>
+            </select>
+          </div>
+          <div class="col-auto mb-2">
+            <select id="Status" class="form-select">
+              <option selected disabled>状态/ Status</option>
+              <option value="已解决/ Solved">已解决/ Solved</option>
+              <option value="未解决/ Unsolved">未解决/ Unsolved</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-3" id="htmlInput">
+          <h5 class="col-auto mb-2">&nbsp;</h5>
+          <div class="col-auto mb-2">
+            <div class="input-group">
+              <input type="number" class="form-control" placeholder="维修时间/Maintenance Time" id="MaintenanceDuration" />
+              <span class="input-group-text">分钟/ mins</span>
+            </div>
+          </div>
+          <div class="col-auto mb-2">
+            <input type="number" step="1" class="form-control" id="Workorder" placeholder="工单号/ Workorder">
+          </div>
+          <div class="col-auto mb-2">
+            <textarea class="form-control" id="Description" rows="3" placeholder="故障描述/ Failure Description"></textarea>
+          </div>
+          <div class="col-auto mb-2">
+            <input type="text" class="form-control" id="DirectCause" placeholder="直接原因/Direct Cause">
+          </div>
+          <div class="col-auto mb-2">
+            <input type="text" class="form-control" id="SuggestedAction" placeholder="建议措施/Suggested Action">
+          </div>
+        </div>
+        <div class="col-6" id="htmlFailureprocess">
+          <h5 class="col-auto mb-2">故障处理/ Failure Process</h5>
+          <div id="failureProcessContainer"></div>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-3">
+      <button id="submitFailure" class="btn btn-primary">提交故障记录/ Submit Failure History</button>
+    </div>
+
+    <!-- 4D隐患汇报模块 -->
+    <hr style="margin-top:32px;margin-bottom:32px; border-top:2px solid #E60012;">
+    <h3 class="mt-3">4D隐患汇报 / 4D Hazard Report</h3>
+    
+    <!-- 4D隐患汇报说明区域 -->
+    <div class="alert alert-warning mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">填写说明 / Reporting Instructions</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li><strong>技术员</strong>可以将工作过程中遇到的任何安全隐患问题在此提出来 / <strong>Technicians</strong> can report any safety hazards encountered during work here</li>
+        <li>包括但不限于设备安全、环境安全、操作安全、人员安全等隐患 / Including but not limited to equipment safety, environmental safety, operational safety, personnel safety hazards</li>
+        <li>请详细描述隐患的具体情况、位置和可能的风险 / Please describe the specific situation, location, and potential risks of the hazard in detail</li>
+        <li>提交后相关部门将及时处理和跟进 / After submission, relevant departments will handle and follow up in a timely manner</li>
+      </ul>
+    </div>
+
+    <!-- 4D隐患汇报输入区域 -->
+    <div class="card mt-3">
+      <div class="card-header bg-light">
+        <h5 class="mb-0">隐患详情 / Hazard Details</h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-12">
+            <label class="form-label">隐患描述 / Hazard Description</label>
+            <textarea class="form-control" id="hazardDescription" rows="4" placeholder="请详细描述发现的隐患问题，包括具体位置、情况和可能的风险 / Please describe the hazard in detail, including specific location, situation, and potential risks"></textarea>
+          </div>
+        </div>
+        
+        <div class="row mt-3">
+          <div class="col-12">
+            <label class="form-label">建议措施 / Suggested Measures</label>
+            <textarea class="form-control" id="suggestedMeasures" rows="3" placeholder="请提出建议的处理措施或改进建议 / Please suggest treatment measures or improvement recommendations"></textarea>
+          </div>
+        </div>
+
+        <!-- 提交按钮 -->
+        <div class="row mt-4">
+          <div class="col-12">
+            <button type="button" class="btn btn-danger" id="submitHazardReport">提交隐患汇报 / Submit Hazard Report</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr style="margin-top:32px;margin-bottom:32px; border-top:2px solid #E60012;">
+    <h3 class="mt-3">故障历史/ Failure History</h3>
+    <div class="mt-2">
+      <div class="row">
+        <h5 class="mt-2">数据筛选/ Data Filter</h5>
+        <div class="col-2">
+          <select id="Workshop" class="form-select">
+            <option selected disabled>车间/ Workshop</option>
+            <option value="ALL" disabled>所有/ All</option>
+            <option value="TB1">TB1</option>
+            <option value="TB2">TB2</option>
+          </select>
+        </div>
+        <div class="col-2">
+          <select id="Process" class="form-select">
+            <option selected disabled>工序/ Process</option>
+            <option value="ALL" disabled>所有/ All</option>
+            <option value="INJ">注塑/ INJ</option>
+            <option value="TF">植磨毛/ TF</option>
+            <option value="PK">包装/ PK</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 故障历史说明区域 -->
+    <div class="alert alert-info mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">处理说明 / Follow-up Instructions</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>重大故障判定标准：注塑（IM）> 240分钟、植磨毛（TF）> 120分钟、包装（PK）> 60分钟 / Major failure criteria: IM > 240 mins, TF > 120 mins, PK > 60 mins</li>
+        <li>重大故障需要在每日SDM讨论，并决定后续措施（培训/ 改善/ 保养）/ Major failures must be discussed in daily SDM and determine follow-up actions (Training / Kaizen/CI / PM)</li>
+        <li>非重大故障由工序技术组长判定后续措施 / Non-major failures are determined by process technical team leader for follow-up actions</li>
+        <li>已解决和未解决故障都需要遵循上述规则 / Both solved and unsolved failures must follow the above rules</li>
+        <li><strong>直接原因 / Direct Cause</strong> 与 <strong>建议措施 / Suggested Action</strong> 为必填项，否则无法提交 / Direct Cause and Suggested Action are required fields, submission will be blocked if empty</li>
+      </ul>
+    </div>
+
+    
+    <!-- 故障历史显示范围说明区域 -->
+    <div class="alert alert-warning mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">显示范围说明 / Display Range Information</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li><strong>未解决故障 / Unsolved Failures</strong>：显示所有未解决的故障记录，无时间限制 / Display all unsolved failure records without time limitation</li>
+        <li><strong>已解决故障 / Solved Failures</strong>：仅显示最近30天内解决的故障记录 / Only display failure records resolved within the last 30 days</li>
+        <li><strong>历史数据 / Historical Data</strong>：30天前已解决的故障记录不会显示，以优化页面性能 / Failure records resolved more than 30 days ago are not displayed to optimize page performance</li>
+        <li><strong>数据来源 / Data Source</strong>：包含所有工序（注塑/植磨毛/包装）的故障记录 / Includes failure records from all processes (Injection/Flocking/Packaging)</li>
+      </ul>
+    </div>
+
+    <div class="mt-3">
+      <table id="Failure_History_Table" class="display table table-bordered table-striped table-hover"
+        style="width:100%">
+      </table>
+    </div>
+  </div>
+
+</body>
+
+
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
+<?!=include("Fault_Record_1.0-js") ?>
+
+</html>

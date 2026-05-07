@@ -1,0 +1,601 @@
+<script>
+$(document).ready(function () {
+
+  let draftKey = 'fr_draft_noId';
+  let autoSaveTimer = null;
+  let requiredFields = [];
+  let paFieldDefs = [];
+  let userNames = [];
+  let paTypes = [];
+
+  function normalizeUsers(rawUsers) {
+    return (rawUsers || []).map(function(u) {
+      if (typeof u === 'string') {
+        const m = u.match(/【([^】]+)】/);
+        const em = m ? m[1].trim() : '';
+        return { display: u, email: em, defaultVerifierEmail: '' };
+      }
+      return {
+        display: String((u && u.display) || '').trim(),
+        email: String((u && u.email) || '').trim(),
+        defaultVerifierEmail: String((u && u.defaultVerifierEmail) || '').trim()
+      };
+    }).filter(function(u) { return u.display; });
+  }
+
+  function collectFormData() {
+    const d = {};
+    d.aem_no         = $('#fld_aem_no').val() || '';
+    d.present_status = $('#fld_present_status').val() || '';
+    d.case_code      = $('#fld_case_code').val() || '';
+    d.analyst        = ($('#fld_analyst').val() || []).join(','); // 多选值用逗号连接
+    d.time_used      = $('#fld_time_used').val() || '';
+    d.what           = $('#fld_what').val() || '';
+    d.when           = $('#fld_when').val() || '';
+    d.where          = $('#fld_where').val() || '';
+    d.pdesc_who      = $('#fld_pdesc_who').val() || '';
+    d.trouble_desc   = $('#fld_trouble_desc').val() || '';
+    d.actions = [];
+    for (let i = 1; i <= 6; i++) {
+      d.actions.push({
+        proc:   $('[name=a_proc_' + i + ']').val() || '',
+        who:    $('[name=a_who_' + i + ']').val() || '',
+        date:   $('[name=a_date_' + i + ']').val() || '',
+        time:   $('[name=a_time_' + i + ']').val() || '',
+        result: $('[name=a_result_' + i + ']').val() || ''
+      });
+    }
+    d.fault_category = $('[name=fault_cat]:checked').map(function() { return this.value; }).get().join(',');
+    d.fault_category_text = $('[name=fault_cat]:checked').map(function() { return $(this).parent().text().trim(); }).get().join(' / ');
+    d.photo = $('#photo_preview').is(':visible') ? ($('#photo_preview').attr('src') || '') : '';
+    d.rca = [];
+    for (let i = 1; i <= 5; i++) {
+      d.rca.push({
+        desc:   $('[name=r_desc_' + i + ']').val() || '',
+        cause:  $('[name=r_cause_' + i + ']').val() || '',
+        action: $('[name=r_action_' + i + ']').val() || ''
+      });
+    }
+    d.pa_fields = paFieldDefs.map(function(f) { return { id: f.Field_ID, cn: f.Label_CN, en: f.Label_EN }; });
+    d.pa = [];
+    $('#paTableBody tr').each(function(i) {
+      const row = { type: $('[name=pa_type_' + i + ']').val() || '' };
+      paFieldDefs.forEach(function(f) { row[f.Field_ID] = $('[name=' + f.Field_ID + '_' + i + ']').val() || ''; });
+      d.pa.push(row);
+    });
+    return d;
+  }
+
+  function restoreFormData(d) {
+    if (d.present_status) $('#fld_present_status').val(d.present_status);
+    if (d.analyst) {
+      // 分析人员可能是逗号分隔的字符串或数组，转换为数组设置 Select2 值
+      const analystArray = Array.isArray(d.analyst) ? d.analyst : d.analyst.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+      $('#fld_analyst').val(analystArray).trigger('change');
+    }
+    if (d.time_used)      $('#fld_time_used').val(d.time_used);
+    if (d.what)           $('#fld_what').val(d.what);
+    if (d.when)           $('#fld_when').val(d.when);
+    if (d.where)          $('#fld_where').val(d.where);
+    if (d.pdesc_who)      $('#fld_pdesc_who').val(d.pdesc_who);
+    if (d.trouble_desc)   $('#fld_trouble_desc').val(d.trouble_desc);
+    if (d.actions) {
+      d.actions.forEach(function(a, i) {
+        const n = i + 1;
+        $('[name=a_proc_' + n + ']').val(a.proc);
+        const actionWhoEl = $('[name=a_who_' + n + ']');
+        actionWhoEl.val(a.who);
+        if (actionWhoEl.hasClass('sel2-user') && $.fn.select2) actionWhoEl.trigger('change');
+        $('[name=a_date_' + n + ']').val(a.date);
+        $('[name=a_time_' + n + ']').val(a.time);
+        $('[name=a_result_' + n + ']').val(a.result);
+      });
+    }
+    if (d.fault_category) {
+      $('[name=fault_cat]').prop('checked', false);
+      d.fault_category.split(',').forEach(function(v) {
+        $('[name=fault_cat][value="' + v + '"]').prop('checked', true);
+      });
+    }
+    if (d.photo) { $('#photo_preview').attr('src', d.photo).show(); }
+    if (d.rca) {
+      d.rca.forEach(function(r, i) {
+        const n = i + 1;
+        $('[name=r_desc_' + n + ']').val(r.desc);
+        $('[name=r_cause_' + n + ']').val(r.cause);
+        $('[name=r_action_' + n + ']').val(r.action);
+      });
+    }
+    if (d.pa) {
+      while ($('#paTableBody tr').length < d.pa.length) {
+        $('#btnPaAddRow').trigger('click');
+      }
+      const fids = d.pa_fields ? d.pa_fields.map(function(f){return f.id;}) : paFieldDefs.map(function(f){return f.Field_ID;});
+      d.pa.forEach(function(p, i) {
+        $('[name=pa_type_' + i + ']').val(p.type || '');
+        fids.forEach(function(fid) {
+          const el = $('[name=' + fid + '_' + i + ']');
+          el.val(p[fid] || '');
+          if (el.hasClass('sel2-user') && $.fn.select2) el.trigger('change');
+        });
+      });
+    }
+  }
+
+  function scheduleSave() {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(function() {
+      localStorage.setItem(draftKey, JSON.stringify(collectFormData()));
+    }, 2000);
+  }
+
+  Swal.fire({
+    title: '加载模板中... / Loading template...',
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    didOpen: function() { Swal.showLoading(); }
+  });
+
+  // ===== 模板加载 =====
+  google.script.run
+    .withSuccessHandler(function(r) {
+      const init = JSON.parse(r);
+      if (init.error) {
+        Swal.fire({ title: '加载失败 / Load Failed', text: init.error, icon: 'error', confirmButtonText: '确定 / OK' });
+        return;
+      }
+      const template = init.template;
+      userNames = normalizeUsers(init.users || []);
+      const fm = {};
+      template.forEach(function(f) { fm[f.Field_ID] = f; });
+      requiredFields = template
+        .filter(function(f) { return f.Required === 'Y'; })
+        .map(function(f) { return { id: f.Field_ID, label: f.Label_CN + ' / ' + f.Label_EN, section: f.Section, type: f.Type }; });
+
+      function lbl(id, f) {
+        if (f) $('#lbl_' + id).text(f.Label_CN + ' ' + f.Label_EN);
+      }
+      function splitOpts(str) {
+        return str.includes('|') ? str.split('|') : str.split('/');
+      }
+
+      if (fm['doc_no']) $('#doc_no_display').text(fm['doc_no'].Label_CN);
+
+      lbl('aem_no', fm['aem_no']);
+      lbl('present_status', fm['present_status']);
+      if (fm['present_status'] && fm['present_status'].Options) {
+        const opts = splitOpts(fm['present_status'].Options);
+        $('#fld_present_status').html('<option value=""></option>' +
+          opts.map(function(o) { return '<option value="' + o.trim() + '">' + o.trim() + '</option>'; }).join(''));
+      }
+      lbl('case_code', fm['case_code']);
+      lbl('analyst', fm['analyst']);
+      // 填充分析人员选项（多选下拉框，只需要名字）
+      if (userNames && userNames.length > 0) {
+        const analystOpts = userNames.map(function(u) {
+          // 从 display 中提取名字（去掉邮箱部分）
+          const name = String(u.display || '').replace(/【.+】/, '').trim();
+          return '<option value="' + name + '">' + name + '</option>';
+        }).join('');
+        $('#fld_analyst').html(analystOpts);
+        // 初始化 Select2，启用模糊搜索
+        $('#fld_analyst').select2({
+          placeholder: '请选择 / Select',
+          width: '100%',
+          minimumResultsForSearch: 1, // 始终显示搜索框
+          matcher: function(params, data) {
+            // 自定义模糊匹配函数
+            if ($.trim(params.term) === '') {
+              return data;
+            }
+            if (typeof data.text === 'undefined') {
+              return null;
+            }
+            // 转换为小写进行不区分大小写的匹配
+            var term = params.term.toLowerCase();
+            var text = data.text.toLowerCase();
+            // 支持模糊匹配（包含任意部分）
+            if (text.indexOf(term) > -1) {
+              return data;
+            }
+            return null;
+          }
+        });
+      }
+      lbl('time_used', fm['time_used']);
+      lbl('photo', fm['photo']);
+      lbl('what', fm['what']);
+      lbl('when', fm['when']);
+      lbl('where', fm['where']);
+      lbl('pdesc_who', fm['pdesc_who']);
+      lbl('trouble_desc', fm['trouble_desc']);
+
+      if (fm['action_proc'])   $('#th_action_proc').text(fm['action_proc'].Label_CN + ' / ' + fm['action_proc'].Label_EN);
+      if (fm['action_who'])    $('#th_action_who').html(fm['action_who'].Label_CN + '<br>' + fm['action_who'].Label_EN);
+      if (fm['action_date'])   $('#th_action_date').html(fm['action_date'].Label_CN + '<br>' + fm['action_date'].Label_EN);
+      if (fm['action_time'])   $('#th_action_time').html(fm['action_time'].Label_CN);
+      if (fm['action_result']) $('#th_action_result').html(fm['action_result'].Label_CN + '<br>Y/N');
+
+      const resultOpts = fm['action_result'] ? splitOpts(fm['action_result'].Options) : ['Y', 'N'];
+      const actionWhoOpts = userNames.map(function(u) { return u.display; });
+      let aRows = '';
+      for (let i = 1; i <= 6; i++) {
+        aRows += '<tr><td class="text-center">' + i + '</td>' +
+          '<td><input type="text" name="a_proc_' + i + '"></td>' +
+          '<td><select name="a_who_' + i + '" class="sel2-user"><option value=""></option>' +
+          actionWhoOpts.map(function(o){return '<option value="'+o.trim()+'">'+o.trim()+'</option>';}).join('') + '</select></td>' +
+          '<td><input type="date" name="a_date_' + i + '"></td>' +
+          '<td><input type="number" name="a_time_' + i + '" min="0"></td>' +
+          '<td><select name="a_result_' + i + '"><option value=""></option>' +
+          resultOpts.map(function(o) { return '<option>' + o.trim() + '</option>'; }).join('') +
+          '</select></td></tr>';
+      }
+      $('#actionTableBody').html(aRows);
+
+      lbl('fault_category', fm['fault_category']);
+      if (fm['fault_category'] && fm['fault_category'].Options) {
+        const opts = splitOpts(fm['fault_category'].Options);
+        let cbHtml = '';
+        opts.forEach(function(o, i) {
+          cbHtml += '<label><input type="checkbox" name="fault_cat" value="' + (i + 1) + '"> ' + (i + 1) + ') ' + o.trim() + '</label>';
+        });
+        $('#fault_category_group').html(cbHtml);
+      }
+
+      if (fm['rca_desc'])   $('#th_rca_desc').text(fm['rca_desc'].Label_CN + ' (' + fm['rca_desc'].Label_EN + ')');
+      if (fm['rca_cause'])  $('#th_rca_cause').text(fm['rca_cause'].Label_CN + ' (' + fm['rca_cause'].Label_EN + ')');
+      if (fm['rca_action']) $('#th_rca_action').text(fm['rca_action'].Label_CN + ' (' + fm['rca_action'].Label_EN + ')');
+
+      let rRows = '';
+      for (let i = 1; i <= 5; i++) {
+        rRows += '<tr><td class="text-center fw-bold">Why' + i + '</td>' +
+          '<td><textarea name="r_desc_' + i + '" rows="2"></textarea></td>' +
+          '<td><textarea name="r_cause_' + i + '" rows="2"></textarea></td>' +
+          '<td><textarea name="r_action_' + i + '" rows="2"></textarea></td></tr>';
+      }
+      $('#rcaTableBody').html(rRows);
+
+      paFieldDefs = template.filter(function(f) {
+        return f.Section === 'PreventiveAction' && f.Field_ID !== 'pa_type';
+      });
+      let paHdr = '<tr><th style="width:110px">序号<br>No.</th>';
+      paFieldDefs.forEach(function(f) { paHdr += '<th>' + f.Label_CN + '<br>' + f.Label_EN + '</th>'; });
+      $('#paTableHead').html(paHdr + '</tr>');
+
+      paTypes = fm['pa_type'] && fm['pa_type'].Options
+        ? splitOpts(fm['pa_type'].Options)
+        : ['OPL一点课', 'SOP指导书', 'AM基准书', 'PM基准书', 'Kaizen改善', '其他同类设备'];
+      function paInputHtml(f, i) {
+        if (f.Type === 'select') {
+          const isUsers = f.Options === '$users';
+          const opts = isUsers
+            ? userNames.map(function(u) { return u.display; })
+            : (f.Options ? splitOpts(f.Options) : []);
+          return '<select name="' + f.Field_ID + '_' + i + '"' + (isUsers ? ' class="sel2-user"' : '') + '><option value=""></option>' +
+            opts.map(function(o){return '<option value="'+o.trim()+'">'+o.trim()+'</option>';}).join('') + '</select>';
+        }
+        if (f.Type === 'date') {
+          return '<input type="date" name="' + f.Field_ID + '_' + i + '">';
+        }
+        return '<input type="text" name="' + f.Field_ID + '_' + i + '">';
+      }
+
+      function buildPaRow(typeVal, i, canDelete) {
+        let cells = '<td>' +
+          '<div class="d-flex align-items-center gap-1">' +
+          '<select name="pa_type_' + i + '"><option value=""></option>' +
+          paTypes.map(function(t){
+            const tt = t.trim();
+            const sel = String(typeVal || '') === tt ? ' selected' : '';
+            return '<option value="' + tt + '"' + sel + '>' + tt + '</option>';
+          }).join('') +
+          '</select>' +
+          (canDelete ? '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 pa-del" title="删除 / Delete">-</button>' : '') +
+          '</div>' +
+          '</td>';
+        paFieldDefs.forEach(function(f) {
+          cells += '<td>' + paInputHtml(f, i) + '</td>';
+        });
+        return '<tr>' + cells + '</tr>';
+      }
+
+      let pRows = '';
+      paTypes.forEach(function(t, i) {
+        pRows += buildPaRow(t.trim(), i, false);
+      });
+      $('#paTableBody').html(pRows);
+
+      function initUserSelect2(scope) {
+        if (!$.fn.select2) return;
+        const $targets = scope ? $(scope).find('.sel2-user') : $('#formBody .sel2-user');
+        $targets.each(function() {
+          const $el = $(this);
+          if ($el.hasClass('select2-hidden-accessible')) {
+            $el.select2('destroy');
+          }
+          $el.select2({
+            width: '100%',
+            theme: 'bootstrap',
+            placeholder: '请选择 / Select',
+            dropdownParent: $('body'),
+            dropdownAutoWidth: true,
+            templateResult: function(data) {
+              if (!data.id) return data.text;
+              const txt = data.text || '';
+              const m = txt.match(/^(.*)【(.*)】$/);
+              if (!m) return txt;
+              return $('<div><div style="font-weight:600;line-height:1.2;">' + m[1].trim() + '</div><div style="font-size:12px;color:#6c757d;line-height:1.2;">' + m[2].trim() + '</div></div>');
+            },
+            templateSelection: function(data) {
+              if (!data.id) return data.text;
+              const match = data.text.match(/^([^【]+)/);
+              return match ? match[1].trim() : data.text;
+            },
+            escapeMarkup: function(markup) {
+              return markup;
+            }
+          });
+        });
+      }
+
+      initUserSelect2();
+
+      function reindexPaRows() {
+        $('#paTableBody tr').each(function(i) {
+          $(this).find('[name]').each(function() {
+            const oldName = this.name;
+            this.name = oldName.replace(/_\d+$/, '_' + i);
+          });
+        });
+      }
+
+      $('#btnPaAddRow').on('click', function() {
+        const idx = $('#paTableBody tr').length;
+        const rowHtml = buildPaRow('', idx, true);
+        const $row = $(rowHtml);
+        $('#paTableBody').append($row);
+        initUserSelect2($row);
+      });
+
+      $('#paTableBody').on('click', '.pa-del', function() {
+        $(this).closest('tr').remove();
+        reindexPaRows();
+      });
+
+      const displayToUser = {};
+      const emailToDisplay = {};
+      userNames.forEach(function(u) {
+        displayToUser[u.display] = u;
+        if (u.email) emailToDisplay[u.email.toLowerCase()] = u.display;
+      });
+
+      $('#paTableBody').on('change', '[name^=pa_who_]', function() {
+        const whoName = this.name;
+        const idx = whoName.substring('pa_who_'.length);
+        const selectedDisplay = $(this).val() || '';
+        const selectedUser = displayToUser[selectedDisplay];
+        const verifierEl = $('[name=pa_verifier_' + idx + ']');
+        const unmatchedText = '未匹配 / Not Matched';
+        if (!verifierEl.length) return;
+
+        if (!selectedUser || !selectedUser.defaultVerifierEmail) {
+          verifierEl.find('option[value="' + unmatchedText + '"]').remove();
+          verifierEl.val('').trigger('change');
+          return;
+        }
+
+        const target = emailToDisplay[selectedUser.defaultVerifierEmail.toLowerCase()] || '';
+        if (!target) {
+          if (!verifierEl.find('option[value="' + unmatchedText + '"]').length) {
+            verifierEl.append('<option value="' + unmatchedText + '">' + unmatchedText + '</option>');
+          }
+          verifierEl.val(unmatchedText).trigger('change');
+          return;
+        }
+
+        verifierEl.find('option[value="' + unmatchedText + '"]').remove();
+        verifierEl.val(target).trigger('change');
+      });
+
+      Swal.close();
+      $('#formWrapper').show();
+      $('#formBody').show();
+      $('#formBody').on('input change', scheduleSave);
+
+      // URL参数预填 + 草稿检测
+      google.script.url.getLocation(function(loc) {
+        const p = loc.parameter || {};
+        if (p.reportId) {
+          draftKey = 'fr_draft_' + p.reportId;
+          $('#fld_case_code').val(p.reportId).prop('readonly', true).addClass('bg-secondary bg-opacity-10 text-muted');
+        }
+        if (p.machineNo) {
+          $('#fld_aem_no').val(p.machineNo).prop('readonly', true).addClass('bg-secondary bg-opacity-10 text-muted');
+        }
+        if (p.desc) $('#fld_trouble_desc').val(p.desc);
+
+        const saved = localStorage.getItem(draftKey);
+        if (saved) {
+          Swal.fire({
+            title: '发现未提交草稿 / Draft Found',
+            text: '检测到上次未提交的草稿，是否恢复？/ Restore last draft?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '恢复 / Restore',
+            cancelButtonText: '忽略 / Ignore'
+          }).then(function(result) {
+            if (result.isConfirmed) restoreFormData(JSON.parse(saved));
+          });
+        }
+      });
+    })
+    .withFailureHandler(function(e) {
+      Swal.fire({ title: '加载失败 / Load Failed', text: e.message, icon: 'error', confirmButtonText: '确定 / OK' });
+    })
+    .getFailureReportInit();
+
+  // 图片预览
+  $('#fld_photo').on('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const img = new Image();
+      img.onload = function() {
+        const MAX_W = 400, MAX_H = 300;
+        let w = img.width, h = img.height;
+        if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+        if (h > MAX_H) { w = Math.round(w * MAX_H / h); h = MAX_H; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const resized = canvas.toDataURL('image/jpeg', 0.75);
+        $('#photo_preview').attr('src', resized).show();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ===== 保存草稿 =====
+  $('#btnSaveDraft').on('click', function() {
+    localStorage.setItem(draftKey, JSON.stringify(collectFormData()));
+    Swal.fire({ title: '草稿已保存 / Draft Saved', icon: 'success', timer: 1500, showConfirmButton: false });
+  });
+
+  // ===== 清除草稿 =====
+  $('#btnClearDraft').on('click', function() {
+    Swal.fire({
+      title: '确认清除 / Confirm Clear',
+      text: '当前填写内容将全部清除 / All content will be cleared',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '清除 / Clear',
+      cancelButtonText: '取消 / Cancel'
+    }).then(function(result) {
+      if (!result.isConfirmed) return;
+      localStorage.removeItem(draftKey);
+      $('#formBody input:not([readonly]), #formBody select, #formBody textarea').val('');
+      $('[name=fault_cat]').prop('checked', false);
+      Swal.fire({ title: '已清除 / Cleared', icon: 'success', timer: 1000, showConfirmButton: false });
+    });
+  });
+
+  // ===== 提交 =====
+  $('#btnSubmit').on('click', function() {
+    $('#formBody .is-invalid').removeClass('is-invalid');
+    const data = collectFormData();
+    const missing = [];
+    const followupRequired = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
+    const followupLabel = {
+      pa_plan: '预防行动 / Action Plan',
+      pa_who: '责任人 / Responsible',
+      pa_when: '完成时间 / Due Date',
+      pa_verifier: '验证人 / Verifier',
+      pa_verifier_when: '验证时间 / Verify Date'
+    };
+    const tableFieldMap = {
+      'action_proc': 'a_proc_', 'action_who': 'a_who_',
+      'action_date': 'a_date_', 'action_time': 'a_time_', 'action_result': 'a_result_',
+      'rca_desc': 'r_desc_', 'rca_cause': 'r_cause_', 'rca_action': 'r_action_',
+      // PA字段由paFieldDefs动态填充
+    };
+    paFieldDefs.forEach(function(f) { tableFieldMap[f.Field_ID] = f.Field_ID + '_'; });
+    requiredFields.forEach(function(f) {
+      let isEmpty = false;
+      if (f.type === 'checkbox') {
+        isEmpty = $('[name=fault_cat]:checked').length === 0;
+      } else if (tableFieldMap[f.id]) {
+        isEmpty = $('[name^=' + tableFieldMap[f.id] + ']').toArray().every(function(el) {
+          return !$(el).val() || $(el).val().trim() === '';
+        });
+      } else {
+        const el = $('#fld_' + f.id);
+        isEmpty = !el.val() || el.val().trim() === '';
+        if (isEmpty) el.addClass('is-invalid');
+      }
+      if (isEmpty) missing.push(f.label);
+    });
+    if (missing.length > 0) {
+      Swal.fire({
+        title: '必填项未完成 / Required Fields Missing',
+        html: '<ul style="text-align:left">' + missing.map(function(m) { return '<li>' + m + '</li>'; }).join('') + '</ul>',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    const followupRowErrors = [];
+    let followupCompleteCount = 0;
+    (data.pa || []).forEach(function(row, idx) {
+      const missingFields = followupRequired.filter(function(fid) {
+        return !String((row && row[fid]) || '').trim();
+      });
+      if (missingFields.length === followupRequired.length) return;
+      if (missingFields.length > 0) {
+        followupRowErrors.push('第' + (idx + 1) + '行（' + (row.type || 'PA') + '）：' + missingFields.map(function(fid){ return followupLabel[fid]; }).join('、'));
+        return;
+      }
+      followupCompleteCount += 1;
+    });
+
+    if (followupRowErrors.length > 0) {
+      Swal.fire({
+        title: '预防对策未填写完整 / PA Row Incomplete',
+        html: '<div style="text-align:left">以下行已开始填写但未完整：<br/>Rows started but incomplete:<ul style="margin-top:6px">' +
+          followupRowErrors.map(function(m){ return '<li>' + m + '</li>'; }).join('') +
+          '</ul></div>',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    if (followupCompleteCount === 0) {
+      Swal.fire({
+        title: '缺少预防对策 / Missing Follow-up',
+        text: '请至少完整填写1条预防对策（PA）后再提交 / Please complete at least one PA row before submit.',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: '确认提交 / Confirm Submit',
+      text: '提交后数据将写入记录表 / Data will be saved to records',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '提交 / Submit',
+      cancelButtonText: '取消 / Cancel'
+    }).then(function(res) {
+      if (!res.isConfirmed) return;
+      Swal.fire({ title: '提交中... / Submitting...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+      google.script.run
+        .withSuccessHandler(function(r) {
+          Swal.close();
+          const result = JSON.parse(r);
+          if (result.success) {
+            localStorage.removeItem(draftKey);
+            Swal.fire({
+              title: '提交成功 / Submitted',
+              html: '报告已生成PDF并存档<br>Report PDF saved.<br><br>' +
+                '<a href="' + result.fileUrl + '" target="_blank">' + result.fileName + '</a>',
+              icon: 'success',
+              confirmButtonText: '确定 / OK'
+            });
+          } else {
+            Swal.fire({ title: '提交失败 / Failed', text: result.message, icon: 'error', confirmButtonText: '确定 / OK' });
+          }
+        })
+        .withFailureHandler(function(e) {
+          Swal.close();
+          Swal.fire({ title: '提交失败 / Failed', text: e.message, icon: 'error', confirmButtonText: '确定 / OK' });
+        })
+        .submitFailureReport(JSON.stringify(data));
+    });
+  });
+
+});
+</script>

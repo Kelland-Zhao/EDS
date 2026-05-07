@@ -584,7 +584,34 @@
           "任务备注数量"]
         let obj = {};
         for (let i = 0; i < head.length; i++) { obj[head[i]] = dataFilter[0][i] };
+        
+        // 字段名映射：中文 -> 英文（兼容不同数据源）
+        const fieldMapping = {
+          '任务编号': 'Task No',
+          '频率': 'Frecuency',
+          '单元': 'Section',
+          '模块': 'Function',
+          '失效模式': 'Failure Mode',
+          '任务类型': 'Task Type',
+          '任务描述': 'Task Description',
+          '状态': 'Line Status',
+          '任务属性': 'Strategy',
+          '工具': 'Tools & Equip',
+          '是否完成': 'Task Status',
+          '备注': 'Notes',
+          '图片': 'Image'
+        };
+        
+        // 转换字段名（如果存在中文字段名）
         let tasklist = JSON.parse(obj['任务明细']);
+        tasklist = tasklist.map(item => {
+          let newItem = {};
+          for (let key in item) {
+            let newKey = fieldMapping[key] || key; // 如果有映射就用映射，否则保持原样
+            newItem[newKey] = item[key];
+          }
+          return newItem;
+        });
 
         const isEditable = obj["PmStatus"].includes('进行中');
         const table_head = buildTableHead(isEditable);
@@ -1020,50 +1047,80 @@
     //   console.log('所有出现的MachineType值:', allMachineTypes);
     // }
 
-    let dataFilter = data.filter(function (r, index) {
-      const status = r["Status"];
+    // 先筛选出匹配机型的所有记录
+    let machineMatchedData = data.filter(function (r, index) {
       const machineType = r["MachineType"];
-
-      const isEffective = status == '生效/ Effective';
       const machineMatch = (machineType == Machine1 || machineType == Machine2 || machineType == Auto);
-
-      // 详细记录每条记录的筛选结果
-      // console.log(`第${index + 1}条记录筛选详情:`, {
-      //   Status: `"${status}"`,
-      //   isEffective: isEffective,
-      //   MachineType: `"${machineType}"`,
-      //   machineMatch: machineMatch,
-      //   最终结果: isEffective && machineMatch
-      // });
-
-      return isEffective && machineMatch;
+      return machineMatch;
     });
 
-    // 显示筛选后的数据
-    // if (dataFilter.length > 0) {
-    //   dataFilter.forEach((item, index) => {
-    //     console.log(`筛选后第${index + 1}条:`, {
-    //       Status: `"${item["Status"]}"`,
-    //       MachineType: `"${item["MachineType"]}"`,
-    //       Tasklist: item["Tasklist"] ? item["Tasklist"].substring(0, 100) + '...' : '无Tasklist'
-    //     });
-    //   });
-    // }
+    // 按状态分类
+    let effectiveRecords = machineMatchedData.filter(r => r["Status"] == '生效/ Effective');
+    let waitingRecords = machineMatchedData.filter(r => r["Status"] == '待发放/ Wait for Dissminater');
+    let pendingRecords = machineMatchedData.filter(r => r["Status"] == '待审批/ Pending');
 
-    return dataFilter;
+    // 返回分类后的结果
+    return {
+      effective: effectiveRecords,
+      waiting: waitingRecords,
+      pending: pendingRecords,
+      allMatched: machineMatchedData
+    };
   }
 
   // --- 此函数已重构 ---
   function DataProcess(data) {
     try {
-      if (!data || data.length === 0) {
+      if (!data || (!data.effective && !data.waiting && !data.pending)) {
         const machineTypes = [global_data["设备类型1"], global_data["设备类型2"], global_data["自动化类型"]].filter(Boolean).join(', ');
-        Swal.fire('加载失败', `未找到与设备 [${machineTypes}] 匹配的、状态为"生效"的标准任务清单。请检查后台数据。`, 'error');
+        Swal.fire('加载失败', `未找到与设备 [${machineTypes}] 匹配的、状态为"生效"的标准任务清单。请检查后台数据。<br>No standard task list with "Effective" status found matching equipment [${machineTypes}]. Please check backend data.`, 'error');
         return;
       }
 
+      // 按优先级处理状态
+      if (data.effective && data.effective.length > 0) {
+        // 有生效记录，正常处理
+        processEffectiveRecords(data.effective);
+      } else if (data.waiting && data.waiting.length > 0) {
+        // 仅有待发放记录
+        Swal.fire({
+          title: '提示 / Notice',
+          html: `
+            文件处于待发放状态<br>
+            Document is waiting for distribution
+          `,
+          icon: 'warning'
+        });
+        return;
+      } else if (data.pending && data.pending.length > 0) {
+        // 仅有待审批记录
+        Swal.fire({
+          title: '提示 / Notice',
+          html: `
+            该保养任务还未审批<br>
+            This PM task is still pending approval
+          `,
+          icon: 'warning'
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('DataProcess函数发生错误:', error);
+      Swal.fire({
+        title: '错误 / Error',
+        html: `
+          数据处理发生错误<br>
+          An error occurred during data processing
+        `,
+        icon: 'error'
+      });
+    }
+  }
+
+  function processEffectiveRecords(effectiveRecords) {
+    try {
       let finalTaskList = [];
-      data.forEach((machineTaskDefinition, index) => {
+      effectiveRecords.forEach((machineTaskDefinition, index) => {
         try {
           if (!machineTaskDefinition['Tasklist']) {
             console.warn(`第${index + 1}条数据缺少Tasklist字段`);
@@ -1084,7 +1141,7 @@
       // console.log('任务总数:', finalTaskList.length);
 
       if (finalTaskList.length === 0) {
-        Swal.fire('加载失败', '标准任务清单为空或格式错误。', 'error');
+        Swal.fire('加载失败', '标准任务清单为空或格式错误。<br>Standard task list is empty or format error.', 'error');
         return;
       }
 
@@ -1100,12 +1157,14 @@
       const table_head = buildTableHead(false); // 对于"未开始"的任务，表格总是不可编辑
       showTable(table_head, validTasks);
     } catch (error) {
-      console.error('DataProcess函数发生错误:', error);
+      console.error('processEffectiveRecords函数发生错误:', error);
       Swal.fire({
-        icon: 'error',
-        title: '数据处理失败',
-        text: '处理任务数据时发生错误，请刷新页面重试。',
-        confirmButtonText: '确定'
+        title: '错误 / Error',
+        html: `
+          有效记录处理发生错误<br>
+          An error occurred during effective records processing
+        `,
+        icon: 'error'
       });
     }
   }
@@ -1146,7 +1205,7 @@
       if (title === 'Task Status') {
         colDef.render = function (data, type, row) {
           const checked = data === true || row.taskStatus === true;
-          return `<input class="form-check-input" type="checkbox" value="" style="border: 2px solid #696969;" ${checked ? 'checked' : ''} ${!isEditable ? 'disabled' : ''}>`;
+          return `<input class="form-check-input" type="checkbox" value="" style="border: 2px solid #696969; width: 24px; height: 24px; cursor: pointer;" ${checked ? 'checked' : ''} ${!isEditable ? 'disabled' : ''}>`;
         };
       }
       if (title === '数值记录&备注') {
@@ -1196,10 +1255,14 @@
         columns: head,
         columnDefs: [
           {
-            targets: [0, 2, 3, 4, 5, 9, 10, 11, 12, 13],
+            targets: [0, 2, 3, 4, 9, 10, 11, 12, 13],
             visible: false
           },
+          { "width": "5%", "targets": 1 },
+          { "width": "5%", "targets": 5 },
+          { "width": "5%", "targets": 6 },
           { "width": "20%", "targets": 14 },
+          { "width": "15%", "targets": 16 },
           { "width": "10%", "targets": -1 }
         ],
         order: [
@@ -1542,7 +1605,7 @@
           let selectData = [];
           PM_Workorder_Database.forEach(function (item) {
             let order = item["订单"] || "";
-            let description = item["工单描述"] || ""; // 使用第一个"描述"字段作为工单描述（仅作为提示）
+            let description = item["描述"] || ""; // 使用J列的"描述"字段作为工单描述（仅作为提示）
             
             if (order) {
               selectData.push({
@@ -1562,7 +1625,7 @@
             multiple: true, // 启用多选
             dropdownParent: $('.swal2-modal'), // 指定下拉菜单的父容器为 SweetAlert2 弹窗
             // width: '100%', // 确保宽度100%
-            closeOnSelect: false, // 多选时不自动关闭下拉框
+            closeOnSelect: true, // 选择一个后自动关闭下拉框
             // 自定义搜索匹配逻辑：支持搜索订单号和描述
             matcher: function(params, data) {
               // 如果没有搜索词或搜索词为空，显示所有选项
@@ -1647,11 +1710,14 @@
               // 修复选择框的样式，确保与 input-group 对齐
               let $selection = $select2Container.find('.select2-selection');
               $selection.css({
-                'height': '38px',
+                'min-height': '38px',
+                'height': 'auto',
                 'border': '1px solid #ced4da',
                 'border-radius': '0 0.375rem 0.375rem 0',
                 'display': 'flex',
-                'align-items': 'center'
+                'align-items': 'center',
+                'flex-wrap': 'wrap',
+                'padding-bottom': '4px'
               });
               
               // 修复选中文本的样式
@@ -1738,7 +1804,7 @@
 
         let pmWorkingOrder = $("#PmWorkingOrder").val(); // 多选模式下返回数组
         // 将数组转换为字符串（用逗号分隔）
-        let pmWorkingOrderStr = Array.isArray(pmWorkingOrder) ? pmWorkingOrder.join(',') : (pmWorkingOrder || '');
+        let pmWorkingOrderStr = Array.isArray(pmWorkingOrder) ? pmWorkingOrder.join('/') : (pmWorkingOrder || '');
         global_workingorder = pmWorkingOrderStr;
         if (!pmWorkingOrder || (Array.isArray(pmWorkingOrder) && pmWorkingOrder.length === 0) || pmWorkingOrderStr === '') {
           alert("保养工单号不能为空/ PM Working Order cannot be empty.");
@@ -2127,6 +2193,71 @@
     })
   })
 
+  // 新增：计算周数的函数
+  function getWeekNumber(date) {
+    let d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    let dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    let yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    return `WK${Math.ceil((((d - yearStart) / 86400000) + 1)/7)}`;
+  }
+
+  // 新增：基于Logic类型判断是否超限
+  function checkPdMLimit(logic, record, llLimit, hhLimit) {
+    // 将字符串转换为数字
+    let recordValue = parseFloat(record);
+    let llValue = parseFloat(llLimit);
+    let hhValue = parseFloat(hhLimit);
+
+    // 如果无法转换为数字，返回false
+    if (isNaN(recordValue)) {
+      return false;
+    }
+
+    // 根据Logic类型进行判断
+    switch(logic) {
+      case 'HighAlarm_Max':
+        // 高报警_最大值：记录值 > HH限制值
+        return !isNaN(hhValue) && recordValue > hhValue;
+      
+      case 'HighAlarm_Min':
+        // 高报警_最小值：记录值 > HH限制值
+        return !isNaN(hhValue) && recordValue > hhValue;
+      
+      case 'HighAlarm_Average':
+        // 高报警_平均值：记录值 > HH限制值
+        return !isNaN(hhValue) && recordValue > hhValue;
+      
+      case 'HighAlarm_Slope':
+        // 高报警_斜率：记录值 > HH限制值
+        return !isNaN(hhValue) && recordValue > hhValue;
+      
+      case 'LowAlarm_Max':
+        // 低报警_最大值：记录值 < LL限制值
+        return !isNaN(llValue) && recordValue < llValue;
+      
+      case 'LowAlarm_Min':
+        // 低报警_最小值：记录值 < LL限制值
+        return !isNaN(llValue) && recordValue < llValue;
+      
+      case 'LowAlarm_Average':
+        // 低报警_平均值：记录值 < LL限制值
+        return !isNaN(llValue) && recordValue < llValue;
+      
+      case 'LowAlarm_Slope':
+        // 低报警_斜率：记录值 < LL限制值
+        return !isNaN(llValue) && recordValue < llValue;
+      
+      case 'Out_of_range':
+        // 超出范围：记录值 < LL限制值 或 记录值 > HH限制值
+        return (!isNaN(llValue) && recordValue < llValue) || 
+               (!isNaN(hhValue) && recordValue > hhValue);
+      
+      default:
+        return false;
+    }
+  }
+
   function PdMData() {
     // 从 table_tasklist 获取所有表格数据
     let tableData = getAllTableData();
@@ -2137,6 +2268,7 @@
     let Workcenter = $("#workcenter").val();
     let Workshop = global_data["车间"];
     let Equipment = $("#Equipment").val() || "";
+    let Process = global_data["工序"]; // 新增：获取工序信息
 
     // 生成Record Time（当前时间）
     let currentDate = new Date();
@@ -2147,6 +2279,10 @@
     let minutes = String(currentDate.getMinutes()).padStart(2, '0');
     let seconds = String(currentDate.getSeconds()).padStart(2, '0');
     let Record_Time = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+
+    // 新增：生成Month和Week
+    let Month = `${year}-${month}`; // 格式：YYYY-MM
+    let Week = getWeekNumber(currentDate); // 格式：WKXX
 
     let PdM_Data_Written_In = [];
 
@@ -2160,6 +2296,11 @@
       let HH_Limited = r['HH Limited'];
       let Record = r['数值记录&备注'];
 
+      // 新增：判断是否超限
+      let isOutOfLimit = checkPdMLimit(Logic, Record, LL_Limited, HH_Limited);
+      let Notification = isOutOfLimit ? 'Yes' : 'No';
+      let Alarm_information = isOutOfLimit ? `${TagName}超出设定范围！` : 'NA';
+
       let record = {
         Workshop: Workshop,
         Machine_Type: Machine_Type,
@@ -2172,7 +2313,12 @@
         HH_Limited: HH_Limited,
         Record: Record,
         Record_Time: Record_Time,
-        Equipment: Equipment
+        Equipment: Equipment,
+        Process: Process,           // 新增：工序字段
+        Month: Month,               // 新增：月份字段
+        Week: Week,                 // 新增：周数字段
+        Notification: Notification, // 新增：通知字段（Yes/No）
+        Alarm_information: Alarm_information // 新增：报警信息字段
       }
       PdM_Data_Written_In.push(record);
     });
@@ -2190,9 +2336,44 @@
   }
 
   $("#Test").on("click", function () {
-
-    let PdMdata = PdMData();
-
+    console.log("=== PdM数据结构测试 ===");
+    
+    // 测试getWeekNumber函数
+    let testDate = new Date();
+    let testWeek = getWeekNumber(testDate);
+    console.log("测试日期:", testDate);
+    console.log("计算周数:", testWeek);
+    
+    // 测试checkPdMLimit函数
+    console.log("\n=== 超限判断逻辑测试 ===");
+    
+    // 测试HighAlarm_Max
+    console.log("HighAlarm_Max (220 > 200):", checkPdMLimit('HighAlarm_Max', '220', '180', '200')); // 应该返回true
+    console.log("HighAlarm_Max (190 > 200):", checkPdMLimit('HighAlarm_Max', '190', '180', '200')); // 应该返回false
+    
+    // 测试LowAlarm_Min
+    console.log("LowAlarm_Min (170 < 180):", checkPdMLimit('LowAlarm_Min', '170', '180', '200')); // 应该返回true
+    console.log("LowAlarm_Min (190 < 180):", checkPdMLimit('LowAlarm_Min', '190', '180', '200')); // 应该返回false
+    
+    // 测试Out_of_range
+    console.log("Out_of_range (170 < 180 or > 200):", checkPdMLimit('Out_of_range', '170', '180', '200')); // 应该返回true
+    console.log("Out_of_range (220 < 180 or > 200):", checkPdMLimit('Out_of_range', '220', '180', '200')); // 应该返回true
+    console.log("Out_of_range (190 < 180 or > 200):", checkPdMLimit('Out_of_range', '190', '180', '200')); // 应该返回false
+    
+    // 模拟调用PdMData函数
+    console.log("\n=== PdM数据构建测试 ===");
+    try {
+      // 检查全局数据是否可用
+      console.log("global_data:", global_data);
+      console.log("车间:", global_data ? global_data["车间"] : "未定义");
+      console.log("工序:", global_data ? global_data["工序"] : "未定义");
+      
+      // 这里可以添加更多测试逻辑
+      let PdMdata = PdMData();
+      console.log("PdM数据测试完成");
+    } catch (error) {
+      console.error("PdM数据测试失败:", error);
+    }
   })
 
   function PdMData_empty_or_not(tableData) {
@@ -2420,7 +2601,7 @@
                 obj["Skill Level"] = "NA";
                 obj["Estimated Time"] = "基于任务需求";
                 obj["Task Description"] = r["Task_Description"];
-                obj["Task Status"] = '<input class="form-check-input" type="checkbox" value=""  style="border: 2px solid #696969;">';
+                obj["Task Status"] = '<input class="form-check-input" type="checkbox" value=""  style="border: 2px solid #696969; width: 24px; height: 24px; cursor: pointer;">';
                 obj["数值记录&备注"] = '';
                 obj["操作"] = button;
                 data.push(obj)

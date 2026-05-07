@@ -1,0 +1,541 @@
+<script>
+let processType, workshop, currentInspectionRow;
+
+$(document).ready(function() {
+  // 获取用户信息
+  let name = sessionStorage.getItem('Name');
+  let id = sessionStorage.getItem('ID');
+  let process = sessionStorage.getItem('Process');
+  workshop = sessionStorage.getItem('Workshop');
+  let siWebPage = sessionStorage.getItem('siWebPage');
+  
+  // 工序映射
+  processType = mapProcessType(process.trim());
+  
+  // 显示当前工序
+  $('#currentProcess').text(getProcessName(processType) + ' / ' + processType);
+  
+  // 初始化日期选择器
+  initializeDatePicker();
+  
+  // 默认加载当天数据
+  loadProcessData(processType, workshop, getCurrentDate());
+});
+
+function mapProcessType(process) {
+  switch(process) {
+    case 'INJ':
+    case 'IM':
+      return 'IM';
+    case 'TF':
+      return 'TF';
+    case 'PK':
+      return 'PK';
+    default:
+      return 'UNKNOWN';
+  }
+}
+
+function getProcessName(processType) {
+  let names = {
+    'IM': '注塑',
+    'TF': '植磨毛',
+    'PK': '包装'
+  };
+  return names[processType] || '未知';
+}
+
+function getCurrentDate() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function initializeDatePicker() {
+  let today = getCurrentDate();
+  $('#inspectionDate').val(today);
+  $('#inspectionDate').attr('max', today);
+  
+  $('#loadDataBtn').on('click', function() {
+    let selectedDate = $('#inspectionDate').val();
+    if (selectedDate) {
+      loadProcessData(processType, workshop, selectedDate);
+    } else {
+      Swal.fire({
+        title: '请选择日期 / Please Select Date',
+        text: '请先选择要查询的日期\nPlease select a date to query first',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+    }
+  });
+}
+
+function loadProcessData(processType, workshop, targetDate) {
+  // 使用SweetAlert显示加载状态
+  Swal.fire({
+    title: '正在加载数据...\nLoading data...',
+    text: '请稍候\nPlease wait',
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+  
+  $('#dataSection').hide();
+  
+  google.script.run
+    .withSuccessHandler(handleDataResponse)
+    .withFailureHandler(handleDataError)
+    .getProcessSamplingData(processType, workshop, targetDate);
+}
+
+function handleDataResponse(response) {
+  // 关闭加载提示
+  Swal.close();
+  
+  if (response.status === "under_development") {
+    showDevelopmentNotice();
+  } else if (response.status === "success") {
+    let targetDate = $('#inspectionDate').val();
+    
+    if (response.data.length === 0) {
+      $('#dataSection').html('<div class="alert alert-warning"><h5 class="alert-heading">无数据 / No Data</h5><p class="mb-0">' + targetDate + ' 夜班暂无工艺抽检数据<br>No process inspection data found for ' + targetDate + ' night shift</p></div>').show();
+      
+      // 使用SweetAlert显示无数据信息
+      Swal.fire({
+        icon: 'info',
+        title: '未找到数据 / No Data Found',
+        text: targetDate + ' 夜班暂无工艺抽检数据\nNo process inspection data found for ' + targetDate + ' night shift',
+        timer: 3000,
+        showConfirmButton: false
+      });
+    } else {
+      displayProcessData(response.data, response.headers);
+      
+      // 使用SweetAlert显示加载成功
+      Swal.fire({
+        title: '加载成功 / Loading Success',
+        text: '成功加载 ' + response.filteredCount + ' 条夜班数据\nSuccessfully loaded ' + response.filteredCount + ' night shift records',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    }
+  } else if (response.status === "error") {
+    showErrorMessage(response.message);
+  }
+}
+
+function handleDataError(error) {
+  // 关闭加载提示
+  Swal.close();
+  
+  Swal.fire({
+    title: '数据加载失败 / Loading Failed',
+    text: '请检查网络连接或联系工程师\nPlease check network connection or contact engineer',
+    html: '数据加载失败 / Data loading failed:<br>' + error.toString(),
+    icon: 'error'
+  });
+}
+
+function showDevelopmentNotice() {
+  $('#dataSection').html('<div class="alert alert-warning mt-3"><h5 class="alert-heading">功能开发中 / Under Development</h5><p class="mb-0">该工序的工艺抽检功能正在开发中，敬请期待。<br>The process inspection module for this process is under development.</p></div>').show();
+  
+  Swal.fire({
+    title: '功能开发中 / Under Development',
+    html: '该工序的工艺抽检功能正在开发中，敬请期待。<br><br>The process inspection module for this process is under development, please stay tuned.',
+    icon: 'info',
+    confirmButtonText: '确定 / OK',
+    showClass: {
+      popup: 'animate__animated animate__fadeInDown'
+    },
+    hideClass: {
+      popup: 'animate__animated animate__fadeOutUp'
+    }
+  });
+}
+
+function showErrorMessage(message) {
+  Swal.fire({
+    title: '错误 / Error',
+    html: message,
+    icon: 'error'
+  });
+}
+
+function displayProcessData(data, headers) {
+  // 先显示数据区域
+  $('#dataSection').show();
+  
+  // 等待DOM更新后再初始化表格
+  setTimeout(function() {
+    // 检查表格元素是否存在
+    let $table = $('#processDataTable');
+    
+    if ($table.length === 0) {
+      // 尝试重新创建表格
+      $('#dataSection').html(`
+        <div class="mt-3">
+          <table id="processDataTable" class="table table-striped table-hover" style="width:100%">
+            <thead>
+              <tr></tr>
+            </thead>
+          </table>
+        </div>
+      `);
+      
+      // 再次检查
+      $table = $('#processDataTable');
+      
+      if ($table.length === 0) {
+        return;
+      }
+    }
+    
+    // 销毁现有表格
+    if ($.fn.DataTable.isDataTable('#processDataTable')) {
+      $('#processDataTable').DataTable().destroy();
+    }
+    
+    // 构建列配置
+    let columns = buildColumnsConfig(headers);
+    
+    // 初始化DataTable
+    try {
+      let table = $('#processDataTable').DataTable({
+        data: data,
+        columns: columns,
+        language: {
+          "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json"
+        },
+        pageLength: 25,
+        autoWidth: false,
+        scrollX: true,
+        destroy: true,
+        ordering: true
+      });
+      
+    } catch (error) {
+      Swal.close();
+      Swal.fire({
+        title: '表格初始化失败 / Table Initialization Failed',
+        html: '数据表格初始化失败：' + error.toString() + '<br>Data table initialization failed: ' + error.toString(),
+        icon: 'error'
+      });
+    }
+  }, 200); // 增加延迟时间
+}
+
+function buildColumnsConfig(headers) {
+  // 关键列配置
+  let keyColumns = [
+    { index: 0, title: "周次 / Week", visible: false },
+    { index: 1, title: "机台号 / Workcenter", visible: true },
+    { index: 2, title: "责任人 / Responsible", visible: false },
+    { index: 3, title: "备份责任人 / Backup Responsible", visible: false },
+    { index: 4, title: "实际检查人 / Inspector", visible: true },
+    { index: 5, title: "工号 / Employee ID", visible: false },
+    { index: 6, title: "车间 / Workshop", visible: true },
+    { index: 7, title: "物料 / Material", visible: true },
+    { index: 8, title: "时间戳 / Timestamp", visible: false },
+    { index: 9, title: "工艺参数 / Parameters", visible: false },
+    { index: 10, title: "机台状态 / Machine Status", visible: true },
+    { index: 11, title: "豁免备注 / Exemption Remarks", visible: false },
+    { index: 12, title: "豁免原因 / Exemption Reason", visible: false },
+    { index: 13, title: "日期&班次 / Date & Shift", visible: true },
+    { index: 14, title: "抽检人 / Sampling Inspector", visible: true },
+    { index: 15, title: "抽检结果 / Result", visible: true },
+    { index: 18, title: "序号 / Serial Number", visible: true },
+    { index: 16, title: "工艺参数抽检问题记录 / Issue Record", visible: false },
+    { index: 17, title: "工艺参数 - 抽检 / Sampling Parameters", visible: false },
+    { index: 19, title: "转交接班 / Handover", visible: false },
+    { index: 20, title: "是否解决 / Resolved", visible: false }
+  ];
+  
+  let columns = keyColumns.map(function(col) {
+    let columnConfig = {
+      title: col.title,
+      data: col.index,
+      visible: col.visible
+    };
+    
+    // 为机台状态列添加状态映射和badge样式
+    if (col.index === 10) {
+      columnConfig.render = function(data, type, row, meta) {
+        let statusMapping = {
+          '通过': '<span class="badge bg-success">开机 / Running</span>',
+          '停机': '<span class="badge bg-danger">停机 / Stopped</span>'
+        };
+        return statusMapping[data] || data;
+      };
+      columnConfig.className = 'text-center';
+    } else if (col.index === 18) {
+      // 序号列显示行号
+      columnConfig.render = function(data, type, row, meta) {
+        return meta.row + 1;
+      };
+      columnConfig.className = 'text-center';
+      columnConfig.orderable = false;
+    } else if (col.index === 15) {
+      // 抽检结果列添加badge样式
+      columnConfig.render = function(data, type, row, meta) {
+        if (data === '通过/ Pass') {
+          return '<span class="badge bg-success">通过 / Pass</span>';
+        } else if (data === '未通过/ Failed') {
+          return '<span class="badge bg-danger">未通过 / Failed</span>';
+        } else {
+          return data || '';
+        }
+      };
+      columnConfig.className = 'text-center';
+    } else {
+      // 其他列居中显示
+      columnConfig.className = 'text-center';
+    }
+    
+    return columnConfig;
+  });
+  
+  // 添加操作列
+  columns.push({
+    title: "操作 / Action",
+    data: null,
+    orderable: false,
+    className: 'text-center',
+    render: function(data, type, row, meta) {
+      let result = row[15]; // 抽检结果（Pass/ Failed）
+      let inspectionBtn = '';
+      
+      if (!result || result.trim() === '') {
+        inspectionBtn = '<button class="btn btn-sm btn-primary inspection-btn" data-row="' + meta.row + '">抽检 / Inspection</button>';
+      } else {
+        inspectionBtn = '<button class="btn btn-sm btn-info view-btn" data-row="' + meta.row + '">查看 / View</button>';
+      }
+      
+      return inspectionBtn;
+    }
+  });
+  
+  return columns;
+}
+
+// 抽检按钮点击事件
+$(document).on('click', '.inspection-btn', function() {
+  let rowIndex = $(this).data('row');
+  let rowData = $('#processDataTable').DataTable().row(rowIndex).data();
+  currentInspectionRow = rowIndex;
+  
+  showInspectionModal(rowData, false);
+});
+
+// 查看按钮点击事件
+$(document).on('click', '.view-btn', function() {
+  let rowIndex = $(this).data('row');
+  let rowData = $('#processDataTable').DataTable().row(rowIndex).data();
+  
+  showInspectionModal(rowData, true);
+});
+
+function showInspectionModal(rowData, isView) {
+  let workcenter = rowData[1];
+  let material = rowData[7];
+  let nightParams = rowData[9];
+  let currentResult = rowData[15];
+  let currentIssue = rowData[16];
+  let samplingParams = rowData[17];
+  
+  let modalTitle = isView ? "查看抽检 / View Inspection" : "工艺抽检 / Process Inspection";
+  $('#inspectionModal .modal-title').text(modalTitle);
+  
+  let content = '<div class="row"><div class="col-md-6"><h6>基本信息 / Basic Information</h6><table class="table table-sm"><tr><td>机台号 / Workcenter:</td><td>' + workcenter + '</td></tr><tr><td>物料 / Material:</td><td>' + material + '</td></tr></table><h6 class="mt-3">工艺参数对比 / Parameter Comparison</h6><div class="mb-2"><label class="form-label">夜班工艺参数 / Night Shift Parameters:</label><div class="form-control-plaintext" style="background-color: #f8f9fa; padding: 8px; border-radius: 4px;">' + (nightParams || '无 / None') + '</div></div><div class="mb-2"><label class="form-label">抽检时工艺参数 / Sampling Parameters:</label><textarea class="form-control" id="samplingParamsInput" rows="3" placeholder="请输入抽检时看到的工艺参数 / Please enter parameters observed during sampling" ' + (isView ? 'readonly' : '') + '>' + (samplingParams || '') + '</textarea></div></div><div class="col-md-6"><h6>工艺参数检查 / Process Parameter Check</h6><div id="parameterChecks">' + (isView ? '' : '<p class="text-muted">输入抽检参数后自动检查 / Auto check after entering sampling parameters</p>') + '</div></div></div><div class="row mt-3"><div class="col-12"><h6>抽检结果 / Sampling Result</h6><div class="alert alert-info" id="judgmentResult"><strong>抽检结果 / Inspection Result:</strong> <span id="resultText">' + (isView ? currentResult : '待检查 / Pending') + '</span></div><div class="form-group"><label for="issueRecord">问题记录 / Issue Record:</label><textarea class="form-control" id="issueRecord" rows="3" readonly>' + (currentIssue || '') + '</textarea></div></div></div>';
+  
+  $('#inspectionContent').html(content);
+  
+  if (isView) {
+    $('#saveInspection').hide();
+    if (currentResult === 'Pass') {
+      $('#judgmentResult').removeClass('alert-info').addClass('alert-success');
+    } else {
+      $('#judgmentResult').removeClass('alert-info').addClass('alert-danger');
+    }
+  } else {
+    $('#saveInspection').show();
+    
+    // 输入抽检参数后自动检查
+    $('#samplingParamsInput').on('blur', function() {
+      let samplingParams = $(this).val();
+      if (samplingParams.trim()) {
+        performParameterCheck(material, samplingParams);
+      }
+    });
+  }
+  
+  $('#inspectionModal').modal('show');
+}
+
+function performParameterCheck(material, samplingParams) {
+  // 显示检查进度
+  Swal.fire({
+    title: '正在检查参数 / Checking Parameters',
+    text: '请稍候，正在对比工艺参数标准\nPlease wait, comparing process parameters with standards...',
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      Swal.close();
+      if (result.allPassed !== undefined) {
+        displayCheckResult(result);
+        
+        // 显示检查完成提示
+        Swal.fire({
+          title: '参数检查完成 / Parameter Check Completed',
+          text: result.allPassed ? '所有参数符合标准\nAll parameters meet the standards' : '发现不符合标准的参数\nFound parameters that do not meet standards',
+          icon: result.allPassed ? 'success' : 'warning',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else if (result.error) {
+        $('#parameterChecks').html('<div class="alert alert-warning"><strong>检查失败 / Check Failed:</strong><br>' + result.error + '</div>');
+        
+        Swal.fire({
+          title: '参数检查失败 / Parameter Check Failed',
+          html: '检查失败：' + result.error + '<br>Check failed: ' + result.error,
+          icon: 'error'
+        });
+      }
+    })
+    .withFailureHandler(function(error) {
+      Swal.close();
+      $('#parameterChecks').html('<div class="alert alert-danger"><strong>错误 / Error:</strong><br>' + error.toString() + '</div>');
+      
+      Swal.fire({
+        title: '参数检查错误 / Parameter Check Error',
+        html: '检查过程中发生错误：' + error.toString() + '<br>Error occurred during parameter check: ' + error.toString(),
+        icon: 'error'
+      });
+    })
+    .evaluateParameters(samplingParams, material);
+}
+
+function displayCheckResult(checkResult) {
+  // 显示标准信息
+  let standardInfo = '<div class="alert alert-secondary mb-2"><strong>工艺参数标准 / Parameter Standard:</strong><br>SKU: ' + checkResult.standardInfo.sku + '<br>机型 / Machine Model: ' + checkResult.standardInfo.machineModel + '</div>';
+  
+  // 显示参数检查结果
+  let checkHtml = '';
+  checkResult.results.forEach(function(result) {
+    let statusClass = result.passed ? 'text-success' : 'text-danger';
+    let statusIcon = result.passed ? '✓' : '✗';
+    let badgeClass = result.passed ? 'bg-success' : 'bg-danger';
+    
+    checkHtml += '<div class="d-flex justify-content-between align-items-center mb-2"><span class="' + statusClass + '">' + statusIcon + ' <strong>' + result.parameter + '</strong></span><span class="badge ' + badgeClass + '">' + (result.passed ? '通过 / Pass' : '未通过 / Failed') + '</span></div><div class="ms-3 mb-2"><small class="text-muted">当前值 / Current: <strong>' + result.currentValue + '</strong> | 标准 / Standard: <strong>' + result.standardRange + '</strong></small></div>';
+  });
+  
+  $('#parameterChecks').html(standardInfo + checkHtml);
+  
+  // 显示判断结果
+  let resultText = checkResult.allPassed ? '通过 / Pass' : '未通过 / Failed';
+  let resultClass = checkResult.allPassed ? 'alert-success' : 'alert-danger';
+  let resultIcon = checkResult.allPassed ? '✅' : '❌';
+  
+  $('#resultText').html(resultIcon + ' ' + resultText);
+  $('#judgmentResult').removeClass('alert-info').addClass(resultClass);
+  $('#issueRecord').val(checkResult.issueRecord);
+  
+  // 保存检查结果供提交使用
+  window.currentInspectionResult = checkResult.allPassed ? 'Pass' : 'Failed';
+  window.currentIssueRecord = checkResult.issueRecord;
+}
+
+// 提交抽检
+$('#saveInspection').on('click', function() {
+  let samplingParams = $('#samplingParamsInput').val();
+  
+  if (!samplingParams.trim()) {
+    Swal.fire({
+      title: '请输入工艺参数 / Please Enter Parameters',
+      text: '请输入抽检时观察到的工艺参数\nPlease enter the process parameters observed during sampling',
+      icon: 'warning',
+      confirmButtonText: '确定 / OK'
+    });
+    return;
+  }
+  
+  if (!window.currentInspectionResult) {
+    Swal.fire({
+      title: '请完成参数检查 / Please Complete Parameter Check',
+      text: '请先完成工艺参数检查\nPlease complete the process parameter check first',
+      icon: 'warning',
+      confirmButtonText: '确定 / OK'
+    });
+    return;
+  }
+  
+  // 显示确认对话框
+  Swal.fire({
+    title: '确认提交抽检 / Confirm Submit Inspection',
+    html: '确定要提交抽检结果吗？<br><br>抽检结果：<strong>' + window.currentInspectionResult + '</strong><br>Are you sure you want to submit the inspection result?<br><br>Inspection Result: <strong>' + window.currentInspectionResult + '</strong>',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: '确认提交 / Submit',
+    cancelButtonText: '取消 / Cancel',
+    confirmButtonColor: '#3085d6',
+    cancelButtonColor: '#d33'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      // 显示提交进度
+      Swal.fire({
+        title: '正在提交... / Submitting...',
+        text: '请稍候，正在保存抽检结果\nPlease wait, saving inspection results...',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      
+      let rowData = $('#processDataTable').DataTable().row(currentInspectionRow).data();
+      let inspectionResult = window.currentInspectionResult;
+      let issueRecord = window.currentIssueRecord;
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          Swal.close();
+          if (response.status === 'success') {
+            Swal.fire({
+              title: '提交成功 / Submit Success',
+              text: '抽检结果已成功保存！\nInspection result has been successfully saved!',
+              icon: 'success',
+              timer: 2000,
+              showConfirmButton: false
+            }).then(function() {
+              $('#inspectionModal').modal('hide');
+              // 刷新表格数据
+              let targetDate = $('#inspectionDate').val();
+              loadProcessData(processType, workshop, targetDate);
+            });
+          } else {
+            Swal.fire({
+              title: '提交失败 / Submit Failed',
+              html: '保存失败：' + response.message + '<br>Save failed: ' + response.message,
+              icon: 'error'
+            });
+          }
+        })
+        .withFailureHandler(function(error) {
+          Swal.close();
+          Swal.fire({
+            title: '提交失败 / Submit Failed',
+            html: '保存失败：' + error.toString() + '<br>Save failed: ' + error.toString(),
+            icon: 'error'
+          });
+        })
+        .saveProcessInspection(rowData, inspectionResult, issueRecord, samplingParams);
+    }
+  });
+});
+</script>

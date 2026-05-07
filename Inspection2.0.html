@@ -89,11 +89,20 @@
     <div class="alert alert-info mt-3 mb-3" role="alert">
       <h5 class="alert-heading mb-2">使用说明 / Instructions</h5>
       <ul class="mb-0" style="text-align: left;">
+        <li><strong>机台主数据维护 / Machine Master Data Maintenance:</strong> 一旦涉及到任何机台增加，请各工序管理员在主数据MachineList sheet中维护主数据 / Once any machine is added, please have each process manager maintain the master data in the MachineList sheet</li>
         <li>点检执行人需要手动输入工号，姓名会自动显示 / Inspector needs to manually enter employee ID, name will be displayed automatically</li>
         <li>班次需要自行选择 / Shift needs to be selected manually</li>
         <li><strong>任务参数选择顺序 / Task Parameters Selection Order:</strong> 点检人类型 → 任务类型 → 机台号 → 车间 → 工序 / Inspector Type → Task Type → Workcenter → Workshop → Process</li>
         <li>机台号需要手动选择（有红色备注的是RBM到期未及时完成的点检机台）/ Workcenter needs to be selected manually (those with red notes are RBM overdue inspection machines)</li>
         <li>其余信息会基于已选择的参数自动联动显示 / Other information will be automatically filtered based on selected parameters</li>
+      </ul>
+    </div>
+
+    <!-- 数据源说明区域 -->
+    <div class="alert alert-warning mt-3 mb-3" role="alert">
+      <h5 class="alert-heading mb-2">数据源说明 / Data Source Information</h5>
+      <ul class="mb-0" style="text-align: left;">
+        <li>任务类型来自于Tasklist MoC状态生效的任务清单，见Tasklist_history文件 / Task types are sourced from task lists with "Effective" MoC status in the Tasklist_history file</li>
       </ul>
     </div>
 

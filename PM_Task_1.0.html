@@ -14,6 +14,36 @@
 <?!=include("CSS");?>
 <?!=include("Compressor_js");?>
 
+<style>
+  #table_tasklist th,
+  #table_tasklist td {
+    padding: 5px 6px;
+    font-size: 12px;
+    vertical-align: middle;
+  }
+  #table_tasklist td .form-check-input {
+    display: block;
+    margin: 0 auto;
+  }
+  #table_tasklist td .preview-btn,
+  #table_tasklist td .take-photo-btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 4px;
+  }
+  .input-group-text,
+  .input-group .form-control,
+  .input-group .btn {
+    font-size: 13px;
+  }
+  #PmStart:disabled {
+    background-color: #aaaaaa !important;
+    color: #eeeeee !important;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+</style>
+
 <body>
 	<nav class="navbar navbar-expand-lg">
 		<div class="container-fluid">
