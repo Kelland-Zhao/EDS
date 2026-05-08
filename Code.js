@@ -6464,7 +6464,7 @@ function getFilteredFailureReportData() {
  * 用于故障报告进度页面显示
  * 直接从Failure_Database sheet获取数据
  */
-function getFailureReportProgressData() {
+function getFailureReportProgressData(userEmail, userName) {
   try {
     console.log(
       "开始获取故障报告进度数据 / Starting to get failure report progress data"
@@ -6493,6 +6493,18 @@ function getFailureReportProgressData() {
         TF: [],
         PK: [],
       };
+    }
+
+    // 如果传入了用户身份信息，检查是否管理员（决定是否过滤数据）
+    let shouldFilter = false;
+    let userNameTrimmed = '';
+    const hasUserIdentity = (userEmail !== undefined && userEmail !== null && String(userEmail).trim() !== '') ||
+                            (userName !== undefined && userName !== null && String(userName).trim() !== '');
+    if (hasUserIdentity) {
+      const isAdmin = checkFailureReportFillPermission(userEmail, userName);
+      userNameTrimmed = String(userName || '').trim();
+      shouldFilter = !isAdmin;
+      console.log("权限过滤模式: isAdmin=" + isAdmin + ", shouldFilter=" + shouldFilter + ", userName=" + userNameTrimmed);
     }
 
     // 存储进度数据
@@ -6561,6 +6573,16 @@ function getFailureReportProgressData() {
       }
 
       const attachments = row[9] || ""; // 附件
+      const responsiblePerson = String(row[12] || '').trim(); // 责任人
+
+      // 权限过滤：非管理员只能看到自己作为责任人 or 责任人为空的报告
+      if (shouldFilter) {
+        const isResponsible = responsiblePerson && responsiblePerson.includes(userNameTrimmed);
+        const isEmptyResponsible = !responsiblePerson;
+        if (!isResponsible && !isEmptyResponsible) {
+          continue;
+        }
+      }
 
       // 调试：检查提取的数据
       if (i === 1) {
@@ -6569,6 +6591,7 @@ function getFailureReportProgressData() {
         console.log("  机台号:", machineNo);
         console.log("  提交日期:", submitDate);
         console.log("  工序:", process);
+        console.log("  责任人:", responsiblePerson);
       }
 
       // 根据工序分类数据
@@ -9251,6 +9274,81 @@ function setupFailureReportManagePermissionColumn() {
 
     sheet.insertColumnAfter(lastCol);
     sheet.getRange(1, lastCol + 1).setValue('故障报告管理权限');
+    return 'Column added successfully / 列添加成功';
+  } catch (error) {
+    console.error('初始化权限列失败:', error);
+    return 'Error: ' + error.message;
+  }
+}
+
+/**
+ * 检查故障报告填写权限
+ * Check failure report filling permission
+ * @param {string} userEmail - 用户邮箱
+ * @param {string} userName - 用户姓名
+ * @returns {boolean}
+ */
+function checkFailureReportFillPermission(userEmail, userName) {
+  try {
+    const ss = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const sheet = ss.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!sheet) return false;
+
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 3) return false;
+
+    const emailLower = String(userEmail || '').trim().toLowerCase();
+    const nameTrimmed = String(userName || '').trim();
+    const headers = values[1];
+    let permColIndex = -1;
+    for (let c = 0; c < headers.length; c++) {
+      if (String(headers[c] || '').trim() === '故障报告填写权限') {
+        permColIndex = c;
+        break;
+      }
+    }
+    if (permColIndex === -1) return false;
+
+    for (let i = 2; i < values.length; i++) {
+      const row = values[i];
+      const rowName = String(row[1] || '').trim();
+      const rowEmail = String(row[9] || row[0] || '').trim().toLowerCase();
+      const permission = String(row[permColIndex] || '').trim();
+
+      const matchByEmail = emailLower && rowEmail && rowEmail === emailLower;
+      const matchByName = nameTrimmed && rowName && rowName === nameTrimmed;
+
+      if ((matchByEmail || matchByName) && permission === 'Y') {
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('检查故障报告填写权限失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 初始化故障报告填写权限列（一次性操作）
+ * 在权限表最后新增一列，表头为"故障报告填写权限"
+ */
+function setupFailureReportFillPermissionColumn() {
+  try {
+    const ss = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const sheet = ss.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!sheet) return 'Sheet userID not found';
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const lastHeader = String(headers[lastCol - 1] || '').trim();
+
+    if (lastHeader === '故障报告填写权限') {
+      return 'Column already exists, no action needed / 列已存在，无需操作';
+    }
+
+    sheet.insertColumnAfter(lastCol);
+    sheet.getRange(1, lastCol + 1).setValue('故障报告填写权限');
     return 'Column added successfully / 列添加成功';
   } catch (error) {
     console.error('初始化权限列失败:', error);

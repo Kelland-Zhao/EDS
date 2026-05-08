@@ -249,7 +249,12 @@ function formatDate(dateStr) {
 // 加载故障报告数据
 function loadFailureReportData() {
     console.log('开始加载故障报告数据...');
-    
+
+    // 读取当前用户身份用于权限过滤
+    const currentUserEmail = sessionStorage.getItem('Email') || '';
+    const currentUserName = sessionStorage.getItem('Name') || '';
+    console.log('当前用户身份: Email=' + currentUserEmail + ', Name=' + currentUserName);
+
     // 调用后端API获取数据
     google.script.run
         .withSuccessHandler(function(response) {
@@ -276,7 +281,7 @@ function loadFailureReportData() {
             // 加载失败时也关闭加载提示框
             Swal.close();
         })
-        .getFailureReportProgressData();
+        .getFailureReportProgressData(currentUserEmail, currentUserName);
 }
 
 // 处理故障报告数据
