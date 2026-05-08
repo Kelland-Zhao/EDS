@@ -6514,6 +6514,9 @@ function getFailureReportProgressData(userEmail, userName) {
       PK: [],
     };
 
+    // 收集每行的完成天数，用于批量回写后端表格
+    const completionDaysBackfill = [];
+
     // 从第2行开始遍历数据（第1行是表头）
     for (let i = 1; i < data.length; i++) {
       let row = data[i];
@@ -6575,15 +6578,6 @@ function getFailureReportProgressData(userEmail, userName) {
       const attachments = row[9] || ""; // 附件
       const responsiblePerson = String(row[11] || '').trim(); // 责任人（第12列，索引11）
 
-      // 权限过滤：非管理员只能看到自己作为责任人 or 责任人为空的报告
-      if (shouldFilter) {
-        const isResponsible = responsiblePerson && responsiblePerson.includes(userNameTrimmed);
-        const isEmptyResponsible = !responsiblePerson;
-        if (!isResponsible && !isEmptyResponsible) {
-          continue;
-        }
-      }
-
       // 计算完成天数：上传日期-分配日期，上传日期为空则用当前日期
       let completionDays = '';
       try {
@@ -6600,6 +6594,18 @@ function getFailureReportProgressData(userEmail, userName) {
         }
       } catch (e) {
         completionDays = '';
+      }
+
+      // 收集完成天数用于批量回写后端表格
+      completionDaysBackfill.push([completionDays]);
+
+      // 权限过滤：非管理员只能看到自己作为责任人 or 责任人为空的报告
+      if (shouldFilter) {
+        const isResponsible = responsiblePerson && responsiblePerson.includes(userNameTrimmed);
+        const isEmptyResponsible = !responsiblePerson;
+        if (!isResponsible && !isEmptyResponsible) {
+          continue;
+        }
       }
 
       // 调试：检查提取的数据
@@ -6652,6 +6658,22 @@ function getFailureReportProgressData(userEmail, userName) {
           uploadDate: uploadDate,
           attachments: attachments,
         });
+      }
+    }
+
+    // 批量回写完成天数到后端表格列13
+    if (completionDaysBackfill.length > 0) {
+      try {
+        const COMPLETION_DAYS_COL = 13;
+        const headerCell = failureDatabaseSheet.getRange(1, COMPLETION_DAYS_COL);
+        if (!headerCell.getValue()) {
+          headerCell.setValue("完成天数");
+        }
+        failureDatabaseSheet.getRange(2, COMPLETION_DAYS_COL, completionDaysBackfill.length, 1)
+          .setValues(completionDaysBackfill);
+        console.log("完成天数批量回写完成，共" + completionDaysBackfill.length + "行");
+      } catch (e) {
+        console.error("完成天数批量回写失败:", e);
       }
     }
 

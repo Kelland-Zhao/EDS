@@ -4,15 +4,6 @@ let imTable, tfTable, pkTable;
 
 const buildBilingualTitle = (cn, en) => `<span class="label-cn">${cn}</span><span class="label-en">${en}</span>`;
 
-const renderCompletionDays = (data) => {
-    const val = parseInt(data);
-    let style = 'text-align:center;';
-    if (!isNaN(val) && val > 7) {
-        style += 'background-color:#ffcccc;font-weight:bold;';
-    }
-    return `<div style="${style}">${data !== null && data !== undefined && data !== '' ? data : ''}</div>`;
-};
-
 // 页面加载完成后初始化
 $(document).ready(function() {
     console.log('故障报告进度页面初始化开始...');
@@ -94,7 +85,7 @@ function initializeTables() {
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
-            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), render: renderCompletionDays },
+            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
                 data: 'attachments', 
                 title: buildBilingualTitle('附件', 'Attachments'),
@@ -131,7 +122,7 @@ function initializeTables() {
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
-            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), render: renderCompletionDays },
+            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
                 data: 'attachments', 
                 title: buildBilingualTitle('附件', 'Attachments'),
@@ -168,7 +159,7 @@ function initializeTables() {
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
-            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), render: renderCompletionDays },
+            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
                 data: 'attachments', 
                 title: buildBilingualTitle('附件', 'Attachments'),
