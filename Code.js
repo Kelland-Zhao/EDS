@@ -6573,7 +6573,7 @@ function getFailureReportProgressData(userEmail, userName) {
       }
 
       const attachments = row[9] || ""; // 附件
-      const responsiblePerson = String(row[12] || '').trim(); // 责任人
+      const responsiblePerson = String(row[11] || '').trim(); // 责任人（第12列，索引11）
 
       // 权限过滤：非管理员只能看到自己作为责任人 or 责任人为空的报告
       if (shouldFilter) {
