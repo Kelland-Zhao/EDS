@@ -6813,6 +6813,14 @@ function writeToFailureDatabase(rowData, process, responsiblePerson) {
     }
     failureDatabaseSheet.getRange(nextRow, RESPONSIBLE_COL).setValue(responsibleName);
 
+    // 完成天数：新记录分配日期=今天、上传日期为空，完成天数=0
+    const COMPLETION_DAYS_COL = 13;
+    const completionDaysHeader = failureDatabaseSheet.getRange(1, COMPLETION_DAYS_COL);
+    if (!completionDaysHeader.getValue()) {
+      completionDaysHeader.setValue("完成天数");
+    }
+    failureDatabaseSheet.getRange(nextRow, COMPLETION_DAYS_COL).setValue(0);
+
     console.log(
       "成功写入Failure_Database sheet / Successfully wrote to Failure_Database sheet"
     );
