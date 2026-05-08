@@ -1,4 +1,6 @@
 <script>
+const buildBilingualTitle = (cn, en) => `<span class="label-cn">${cn}</span><span class="label-en">${en}</span>`;
+
 $(document).ready(function() {
     // 全局变量
     let imTable, tfTable, pkTable;
@@ -79,15 +81,15 @@ $(document).ready(function() {
             order: [[0, 'desc']], // 按故障报告编号降序排列
             responsive: true,
             columns: [
-                { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
-                { data: 'workshop', title: '车间 / Workshop' },
-                { data: 'process', title: '工序 / Process' },
-                { data: 'machineNo', title: '机台号 / Machine No.' },
-                { data: 'submitDate', title: '提交日期 / Submit Date' },
-                { data: 'problemDescription', title: '问题描述 / Problem Description' },
-                { data: 'assignDate', title: '分配日期 / Assignment Date' },
-                { data: 'uploadDate', title: '上传日期 / Upload Date' },
-                { data: 'attachment', title: '附件 / Attachments' }
+                { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
+                { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
+                { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+                { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
+                { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
+                { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
+                { data: 'assignDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
+                { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+                { data: 'attachment', title: buildBilingualTitle('附件', 'Attachments') }
             ],
             columnDefs: getColumnDefs(),
             dom: '<"top"lf>rt<"bottom"ip><"clear">'
@@ -100,15 +102,15 @@ $(document).ready(function() {
             order: [[0, 'desc']], // 按故障报告编号降序排列
             responsive: true,
             columns: [
-                { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
-                { data: 'workshop', title: '车间 / Workshop' },
-                { data: 'process', title: '工序 / Process' },
-                { data: 'machineNo', title: '机台号 / Machine No.' },
-                { data: 'submitDate', title: '提交日期 / Submit Date' },
-                { data: 'problemDescription', title: '问题描述 / Problem Description' },
-                { data: 'assignDate', title: '分配日期 / Assignment Date' },
-                { data: 'uploadDate', title: '上传日期 / Upload Date' },
-                { data: 'attachment', title: '附件 / Attachments' }
+                { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
+                { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
+                { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+                { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
+                { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
+                { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
+                { data: 'assignDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
+                { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+                { data: 'attachment', title: buildBilingualTitle('附件', 'Attachments') }
             ],
             columnDefs: getColumnDefs(),
             dom: '<"top"lf>rt<"bottom"ip><"clear">'
@@ -121,15 +123,15 @@ $(document).ready(function() {
             order: [[0, 'desc']], // 按故障报告编号降序排列
             responsive: true,
             columns: [
-                { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
-                { data: 'workshop', title: '车间 / Workshop' },
-                { data: 'process', title: '工序 / Process' },
-                { data: 'machineNo', title: '机台号 / Machine No.' },
-                { data: 'submitDate', title: '提交日期 / Submit Date' },
-                { data: 'problemDescription', title: '问题描述 / Problem Description' },
-                { data: 'assignDate', title: '分配日期 / Assignment Date' },
-                { data: 'uploadDate', title: '上传日期 / Upload Date' },
-                { data: 'attachment', title: '附件 / Attachments' }
+                { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
+                { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
+                { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+                { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
+                { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
+                { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
+                { data: 'assignDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
+                { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+                { data: 'attachment', title: buildBilingualTitle('附件', 'Attachments') }
             ],
             columnDefs: getColumnDefs(),
             dom: '<"top"lf>rt<"bottom"ip><"clear">'

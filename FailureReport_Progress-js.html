@@ -2,6 +2,17 @@
 // 全局变量
 let imTable, tfTable, pkTable;
 
+const buildBilingualTitle = (cn, en) => `<span class="label-cn">${cn}</span><span class="label-en">${en}</span>`;
+
+const renderCompletionDays = (data) => {
+    const val = parseInt(data);
+    let style = 'text-align:center;';
+    if (!isNaN(val) && val > 7) {
+        style += 'background-color:#ffcccc;font-weight:bold;';
+    }
+    return `<div style="${style}">${data !== null && data !== undefined && data !== '' ? data : ''}</div>`;
+};
+
 // 页面加载完成后初始化
 $(document).ready(function() {
     console.log('故障报告进度页面初始化开始...');
@@ -75,18 +86,18 @@ function initializeTables() {
         order: [[0, 'desc']], // 按故障报告编号降序排列
         responsive: true,
         columns: [
-            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
-            { data: 'workshop', title: '车间 / Workshop' },
-            { data: 'process', title: '工序 / Process' },
-            { data: 'machineNo', title: '机台号 / Machine No.' },
-            { data: 'submitDate', title: '提交日期 / Submit Date' },
-            { data: 'problemDescription', title: '问题描述 / Problem Description' },
-            { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
-            { data: 'uploadDate', title: '上传日期 / Upload Date' },
-            { data: 'completionDays', title: '完成天数 / Completion Days' },
+            { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
+            { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
+            { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+            { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
+            { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
+            { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
+            { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
+            { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), render: renderCompletionDays },
             {
                 data: 'attachments', 
-                title: '附件 / Attachments',
+                title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
                         return `<span class="badge bg-success">已上传 / Uploaded</span>`;
@@ -112,18 +123,18 @@ function initializeTables() {
         order: [[0, 'desc']], // 按故障报告编号降序排列
         responsive: true,
         columns: [
-            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
-            { data: 'workshop', title: '车间 / Workshop' },
-            { data: 'process', title: '工序 / Process' },
-            { data: 'machineNo', title: '机台号 / Machine No.' },
-            { data: 'submitDate', title: '提交日期 / Submit Date' },
-            { data: 'problemDescription', title: '问题描述 / Problem Description' },
-            { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
-            { data: 'uploadDate', title: '上传日期 / Upload Date' },
-            { data: 'completionDays', title: '完成天数 / Completion Days' },
+            { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
+            { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
+            { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+            { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
+            { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
+            { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
+            { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
+            { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), render: renderCompletionDays },
             {
                 data: 'attachments', 
-                title: '附件 / Attachments',
+                title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
                         return `<span class="badge bg-success">已上传 / Uploaded</span>`;
@@ -149,18 +160,18 @@ function initializeTables() {
         order: [[0, 'desc']], // 按故障报告编号降序排列
         responsive: true,
         columns: [
-            { data: 'failureReportNumber', title: '故障报告编号 / Failure Report No.' },
-            { data: 'workshop', title: '车间 / Workshop' },
-            { data: 'process', title: '工序 / Process' },
-            { data: 'machineNo', title: '机台号 / Machine No.' },
-            { data: 'submitDate', title: '提交日期 / Submit Date' },
-            { data: 'problemDescription', title: '问题描述 / Problem Description' },
-            { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
-            { data: 'uploadDate', title: '上传日期 / Upload Date' },
-            { data: 'completionDays', title: '完成天数 / Completion Days' },
+            { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
+            { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
+            { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+            { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
+            { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
+            { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
+            { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
+            { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+            { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), render: renderCompletionDays },
             {
                 data: 'attachments', 
-                title: '附件 / Attachments',
+                title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
                         return `<span class="badge bg-success">已上传 / Uploaded</span>`;
