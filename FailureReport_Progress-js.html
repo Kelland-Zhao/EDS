@@ -83,7 +83,8 @@ function initializeTables() {
             { data: 'problemDescription', title: '问题描述 / Problem Description' },
             { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
             { data: 'uploadDate', title: '上传日期 / Upload Date' },
-            { 
+            { data: 'completionDays', title: '完成天数 / Completion Days' },
+            {
                 data: 'attachments', 
                 title: '附件 / Attachments',
                 render: function(data, type, row) {
@@ -119,7 +120,8 @@ function initializeTables() {
             { data: 'problemDescription', title: '问题描述 / Problem Description' },
             { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
             { data: 'uploadDate', title: '上传日期 / Upload Date' },
-            { 
+            { data: 'completionDays', title: '完成天数 / Completion Days' },
+            {
                 data: 'attachments', 
                 title: '附件 / Attachments',
                 render: function(data, type, row) {
@@ -155,7 +157,8 @@ function initializeTables() {
             { data: 'problemDescription', title: '问题描述 / Problem Description' },
             { data: 'assignmentDate', title: '分配日期 / Assignment Date' },
             { data: 'uploadDate', title: '上传日期 / Upload Date' },
-            { 
+            { data: 'completionDays', title: '完成天数 / Completion Days' },
+            {
                 data: 'attachments', 
                 title: '附件 / Attachments',
                 render: function(data, type, row) {
@@ -240,6 +243,7 @@ function processFailureReportProgressData(data) {
                 problemDescription: item.problemDescription || '',
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
+                completionDays: item.completionDays || '',
                 attachments: item.attachments || ''
             }));
             imTable.rows.add(imData).draw();
@@ -257,11 +261,12 @@ function processFailureReportProgressData(data) {
                 problemDescription: item.problemDescription || '',
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
+                completionDays: item.completionDays || '',
                 attachments: item.attachments || ''
             }));
             tfTable.rows.add(tfData).draw();
         }
-        
+
         // 处理PK工序数据
         if (data.PK && data.PK.length > 0) {
             console.log('处理PK工序数据，共', data.PK.length, '条');
@@ -274,6 +279,7 @@ function processFailureReportProgressData(data) {
                 problemDescription: item.problemDescription || '',
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
+                completionDays: item.completionDays || '',
                 attachments: item.attachments || ''
             }));
             pkTable.rows.add(pkData).draw();

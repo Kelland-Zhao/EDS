@@ -6584,6 +6584,24 @@ function getFailureReportProgressData(userEmail, userName) {
         }
       }
 
+      // 计算完成天数：上传日期-分配日期，上传日期为空则用当前日期
+      let completionDays = '';
+      try {
+        const assignDate = assignmentDate ? new Date(assignmentDate) : null;
+        let endDate = null;
+        if (uploadDate) {
+          endDate = new Date(uploadDate);
+        } else {
+          endDate = new Date();
+        }
+        if (assignDate && !isNaN(assignDate.getTime()) && endDate && !isNaN(endDate.getTime())) {
+          const diffTime = endDate.getTime() - assignDate.getTime();
+          completionDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+      } catch (e) {
+        completionDays = '';
+      }
+
       // 调试：检查提取的数据
       if (i === 1) {
         // 只对第一行数据进行调试
@@ -6604,6 +6622,7 @@ function getFailureReportProgressData(userEmail, userName) {
           submitDate: submitDate,
           problemDescription: problemDescription,
           assignmentDate: assignmentDate,
+          completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
         });
@@ -6616,6 +6635,7 @@ function getFailureReportProgressData(userEmail, userName) {
           submitDate: submitDate,
           problemDescription: problemDescription,
           assignmentDate: assignmentDate,
+          completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
         });
@@ -6628,6 +6648,7 @@ function getFailureReportProgressData(userEmail, userName) {
           submitDate: submitDate,
           problemDescription: problemDescription,
           assignmentDate: assignmentDate,
+          completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
         });
