@@ -36,9 +36,11 @@
         if (userHasManagePermission) {
             $('#manualAddBtn').show();
             $('#permissionNotice').hide();
+            $('#userLevelBadge').removeClass('bg-secondary').addClass('bg-success').text('管理员 / Admin');
         } else {
             $('#manualAddBtn').hide();
             $('#permissionNotice').show();
+            $('#userLevelBadge').removeClass('bg-secondary').addClass('bg-warning text-dark').text('普通用户 / User');
         }
     }
 
