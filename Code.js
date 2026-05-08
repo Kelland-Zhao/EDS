@@ -9219,7 +9219,7 @@ function checkFailureReportManagePermission(userEmail, userName) {
       const matchByEmail = emailLower && rowEmail && rowEmail === emailLower;
       const matchByName = nameTrimmed && rowName && rowName === nameTrimmed;
 
-      if ((matchByEmail || matchByName) && permission.includes('故障报告管理')) {
+      if ((matchByEmail || matchByName) && permission === 'Y') {
         return true;
       }
     }
