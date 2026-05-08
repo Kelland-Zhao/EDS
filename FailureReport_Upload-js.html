@@ -56,7 +56,29 @@ $(document).ready(function() {
             Swal.showLoading();
         }
     });
-    
+
+    // 检查用户填写权限并显示级别
+    (function checkUserPermissionLevel() {
+        const userEmail = sessionStorage.getItem('Email') || '';
+        const userName = sessionStorage.getItem('Name') || '';
+        google.script.run
+            .withSuccessHandler(function(hasPermission) {
+                const $badge = $('#userLevelBadge');
+                if (hasPermission) {
+                    $badge.removeClass('bg-secondary').addClass('bg-success')
+                          .text('管理员 / Admin');
+                } else {
+                    $badge.removeClass('bg-secondary').addClass('bg-warning text-dark')
+                          .text('普通用户 / User');
+                }
+            })
+            .withFailureHandler(function() {
+                $('#userLevelBadge').removeClass('bg-secondary').addClass('bg-warning text-dark')
+                                    .text('普通用户 / User');
+            })
+            .checkFailureReportFillPermission(userEmail, userName);
+    })();
+
     initializeTables();
     loadFailureReportData();
 });
