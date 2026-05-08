@@ -6577,23 +6577,29 @@ function getFailureReportProgressData(userEmail, userName) {
 
       const attachments = row[9] || ""; // 附件
       const responsiblePerson = String(row[11] || '').trim(); // 责任人（第12列，索引11）
+      const existingCompletionDays = String(row[12] || '').trim(); // 已有的完成天数（列13）
 
-      // 计算完成天数：上传日期-分配日期，上传日期为空则用当前日期
+      // 计算完成天数
+      // 已上传且有已有值：复用，不重新计算；未上传或无值：动态计算
       let completionDays = '';
-      try {
-        const assignDate = assignmentDate ? new Date(assignmentDate) : null;
-        let endDate = null;
-        if (uploadDate) {
-          endDate = new Date(uploadDate);
-        } else {
-          endDate = new Date();
+      if (uploadDate && existingCompletionDays !== '') {
+        completionDays = parseInt(existingCompletionDays) || '';
+      } else {
+        try {
+          const assignDate = assignmentDate ? new Date(assignmentDate) : null;
+          let endDate = null;
+          if (uploadDate) {
+            endDate = new Date(uploadDate);
+          } else {
+            endDate = new Date();
+          }
+          if (assignDate && !isNaN(assignDate.getTime()) && endDate && !isNaN(endDate.getTime())) {
+            const diffTime = endDate.getTime() - assignDate.getTime();
+            completionDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          }
+        } catch (e) {
+          completionDays = '';
         }
-        if (assignDate && !isNaN(assignDate.getTime()) && endDate && !isNaN(endDate.getTime())) {
-          const diffTime = endDate.getTime() - assignDate.getTime();
-          completionDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-      } catch (e) {
-        completionDays = '';
       }
 
       // 收集完成天数用于批量回写后端表格
