@@ -1114,74 +1114,52 @@ function getPlan_weekly() {
       array.push(obj);
     });
 
-    // 获取状态数据（优化：只读B/E/J三列，PmStatus/Plan PM Date/Workcenter，跳过任务明细等大字段）
-    let sheetName = [
-      "INJ-TB1",
-      "INJ-TB2",
-      "TF-TB1",
-      "TF-TB2",
-      "PK-TB1",
-      "PK-TB2",
-    ];
-
+    // 获取状态数据（优化：直接读Master_PM_Data合并表，替代6个分表循环，减少10次API调用）
     const STATUS_SHEET_DATE_COL = 5; // Plan PM Date 列
     let record_obj = [];
-    sheetName.forEach((name) => {
-      let wss = ss.getSheetByName(name);
-      let lastRowStatus = wss.getLastRow();
-      if (lastRowStatus <= 1) {
-        return;
-      }
-
-      let statusDates = wss.getRange(2, STATUS_SHEET_DATE_COL, lastRowStatus - 1, 1).getValues();
+    let wsMaster = ss.getSheetByName("Master_PM_Data");
+    let lastRowMaster = wsMaster.getLastRow();
+    if (lastRowMaster > 1) {
+      let masterDates = wsMaster.getRange(2, STATUS_SHEET_DATE_COL, lastRowMaster - 1, 1).getValues();
       let matchedStatusRows = [];
 
-      statusDates.forEach((row, idx) => {
+      masterDates.forEach((row, idx) => {
         let cell = row[0];
-        if (!cell) {
-          return;
-        }
-
+        if (!cell) return;
         let dateStr = "";
         if (cell instanceof Date) {
           dateStr = Utilities.formatDate(cell, TIMEZONE, DATE_FORMAT);
         } else if (typeof cell === "string") {
           dateStr = cell.trim();
         }
-
-        if (!dateStr) {
-          return;
-        }
-
+        if (!dateStr) return;
         if (dateStr >= lastWeekSundayStr && dateStr <= threeWeeksLaterSaturdayStr) {
           matchedStatusRows.push(idx + 2);
         }
       });
 
-      if (matchedStatusRows.length === 0) {
-        return;
+      if (matchedStatusRows.length > 0) {
+        let minStatusRow = Math.min.apply(null, matchedStatusRows);
+        let maxStatusRow = Math.max.apply(null, matchedStatusRows);
+        let statusRowsToFetch = maxStatusRow - minStatusRow + 1;
+        // 只读B-J列（9列）：PmStatus[0], Plan PM Date[3], Workcenter[8]
+        let rowValues = wsMaster
+          .getRange(minStatusRow, 2, statusRowsToFetch, 9)
+          .getValues();
+        let statusRowSet = new Set(matchedStatusRows);
+
+        rowValues.forEach((r, idx) => {
+          let actualRow = minStatusRow + idx;
+          if (statusRowSet.has(actualRow)) {
+            record_obj.push({
+              PmStatus: r[0],
+              "Plan PM Date": r[3],
+              Workcenter: r[8],
+            });
+          }
+        });
       }
-
-      let minStatusRow = Math.min.apply(null, matchedStatusRows);
-      let maxStatusRow = Math.max.apply(null, matchedStatusRows);
-      let statusRowsToFetch = maxStatusRow - minStatusRow + 1;
-      // 只读B-J列（9列）：PmStatus[0], Plan PM Date[3], Workcenter[8]，跳过K列(任务明细)等大字段
-      let rowValues = wss
-        .getRange(minStatusRow, 2, statusRowsToFetch, 9)
-        .getValues();
-      let statusRowSet = new Set(matchedStatusRows);
-
-      rowValues.forEach((r, idx) => {
-        let actualRow = minStatusRow + idx;
-        if (statusRowSet.has(actualRow)) {
-          record_obj.push({
-            PmStatus: r[0],
-            "Plan PM Date": r[3],
-            Workcenter: r[8],
-          });
-        }
-      });
-    });
+    }
 
     var result = {
       Head: head,
