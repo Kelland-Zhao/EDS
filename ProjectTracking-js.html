@@ -175,6 +175,7 @@
     headHtml += '<th rowspan="2">Leader</th>';
     headHtml += '<th rowspan="2">状态<br><small>Status</small></th>';
     headHtml += '<th colspan="1" style="font-size:11px;">甘特图 / Gantt Chart</th>';
+    headHtml += '<th rowspan="2">操作<br><small>Action</small></th>';
     headHtml += '</tr>';
 
     // Second header row with months
@@ -240,26 +241,16 @@
       bodyHtml += '<td class="gantt-timeline" style="position:relative;min-width:' + timelineMinWidth + 'px;">';
 
       // Bar
-      bodyHtml += '<div class="gantt-bar" style="left:' + barLeft + '%;width:' + barWidth + '%;background:' + statusColor + ';" title="' + proj.projectName + ' | ' + statusText + '" data-project="' + proj.projectName + '"></div>';
+      bodyHtml += '<div class="gantt-bar" style="left:' + barLeft + '%;width:' + barWidth + '%;background:' + statusColor + ';" title="' + proj.projectName + ' | ' + statusText + '"></div>';
 
-      // Track NA milestone offset
-      var naOffset = 0;
+      // Milestone markers — only for milestones with planned dates from backend
       proj.milestones.forEach(function(ms, mi) {
         var planned = parseDate(ms.planned);
+        if (!planned) return; // skip NA milestones
+        var pos = getPositionPct(planned);
         var color = getMilestoneColor(ms);
         var title = getMilestoneTitle(ms);
-        var shapeClass = '';
-        var pos;
-        if (planned) {
-          pos = getPositionPct(planned);
-          shapeClass = 'ms-diamond';
-        } else {
-          // NA milestones: position near start of bar with offset
-          pos = barLeft + naOffset * 1.2;
-          naOffset++;
-          shapeClass = 'ms-circle ms-na';
-        }
-        bodyHtml += '<div class="gantt-milestone ' + shapeClass + '" style="left:' + pos + '%;background:' + color + ';" title="' + title + '" data-ms="' + mi + '"></div>';
+        bodyHtml += '<div class="gantt-milestone ms-diamond" style="left:' + pos + '%;background:' + color + ';" title="' + title + '" data-ms="' + mi + '"></div>';
       });
 
       // Today line
@@ -268,13 +259,18 @@
         bodyHtml += '<div class="gantt-today-line" style="left:' + todayPos + '%;height:100%;"></div>';
       }
 
-      bodyHtml += '</td></tr>';
+      bodyHtml += '</td>';
+
+      // Update button
+      bodyHtml += '<td style="text-align:center;white-space:nowrap;"><button class="btn btn-sm btn-outline-danger gantt-update-btn" data-project="' + proj.projectName + '">更新<br><small>Update</small></button></td>';
+
+      bodyHtml += '</tr>';
     });
 
     $('#ganttBody').html(bodyHtml);
 
-    // Bind click on bars
-    $('#ganttBody').on('click', '.gantt-bar', function() {
+    // Bind click on update buttons
+    $('#ganttBody').on('click', '.gantt-update-btn', function() {
       var projectName = $(this).data('project');
       openUpdateModal(projectName);
     });
