@@ -230,15 +230,34 @@
       return date >= month.start && date <= month.end;
     }
 
-    // Header
-    var headHtml = '<tr>';
-    headHtml += '<th>项目名称<br><small>Project Name</small></th>';
-    headHtml += '<th>Leader</th>';
-    headHtml += '<th>状态<br><small>Status</small></th>';
+    // Year row: group months by year
+    var yearSpans = [];
+    var lastYear = -1;
     for (var m = 0; m < months.length; m++) {
-      headHtml += '<th style="font-size:9px;min-width:54px;">' + months[m].label + '</th>';
+      var yr = parseInt(months[m].label.split('.')[0]);
+      if (yr !== lastYear) {
+        yearSpans.push({ year: yr, count: 1, start: m });
+        lastYear = yr;
+      } else {
+        yearSpans[yearSpans.length - 1].count++;
+      }
     }
-    headHtml += '<th>操作<br><small>Action</small></th>';
+
+    // Header: year row + month row
+    var headHtml = '<tr>';
+    headHtml += '<th rowspan="2">项目名称<br><small>Project Name</small></th>';
+    headHtml += '<th rowspan="2">Leader<br><small>状态 Status</small></th>';
+    for (var y = 0; y < yearSpans.length; y++) {
+      var ys = yearSpans[y];
+      headHtml += '<th colspan="' + ys.count + '" style="font-size:10px;">' + ys.year + '</th>';
+    }
+    headHtml += '<th rowspan="2" style="width:72px;">操作<br><small>Action</small></th>';
+    headHtml += '</tr>';
+
+    headHtml += '<tr>';
+    for (var m = 0; m < months.length; m++) {
+      headHtml += '<th style="font-size:9px;min-width:54px;">' + months[m].label.split('.')[1] + '月</th>';
+    }
     headHtml += '</tr>';
     $('#ganttHead').html(headHtml);
 
@@ -259,7 +278,7 @@
         }
       });
 
-      // Build milestone lookup: monthIndex → [{color, title, name}]
+      // Build milestone lookup: monthIndex → [{color, title}]
       var msByMonth = {};
       proj.milestones.forEach(function(ms) {
         var planned = parseDate(ms.planned);
@@ -269,8 +288,7 @@
             if (!msByMonth[m]) msByMonth[m] = [];
             msByMonth[m].push({
               color: getMilestoneColor(ms),
-              title: getMilestoneTitle(ms),
-              name: getMilestoneShortName(ms.name)
+              title: getMilestoneTitle(ms)
             });
             break;
           }
@@ -279,8 +297,8 @@
 
       bodyHtml += '<tr class="gantt-row">';
       bodyHtml += '<td class="gantt-info">' + proj.projectName + '</td>';
-      bodyHtml += '<td class="gantt-leader">' + proj.leader + '</td>';
-      bodyHtml += '<td class="gantt-status"><span class="status-badge" style="background:' + stColor + ';">' + stText + '</span></td>';
+      // Leader + Status merged cell
+      bodyHtml += '<td style="text-align:center;white-space:nowrap;font-size:12px;">' + proj.leader + '<br><span class="status-badge" style="background:' + stColor + ';">' + stText + '</span></td>';
 
       // Month cells
       for (var m = 0; m < months.length; m++) {
@@ -296,25 +314,33 @@
         // Today highlight
         var tdClass = inMonth(today, month) ? ' class="today-col"' : '';
 
-        // Milestone diamonds
+        // Milestone ◆ diamonds — 16px with white border via text-shadow
         if (msByMonth[m]) {
           for (var n = 0; n < msByMonth[m].length; n++) {
             var item = msByMonth[m][n];
-            cellContent += '<span style="display:inline-block;margin:0 1px;font-size:14px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:0 0 2px #fff;" title="' + item.title + '">&#9670;</span>';
+            cellContent += '<span style="display:inline-block;margin:0 1px;font-size:16px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;" title="' + item.title + '">&#9670;</span>';
           }
         }
 
         bodyHtml += '<td' + tdClass + ' style="' + cellStyle + '">' + cellContent + '</td>';
       }
 
-      // Update button
-      bodyHtml += '<td style="text-align:center;white-space:nowrap;"><button class="btn btn-sm btn-outline-danger gantt-update-btn" data-project="' + proj.projectName + '">更新<br><small>Update</small></button></td>';
+      // Action buttons — icon style, fixed width
+      bodyHtml += '<td style="text-align:center;white-space:nowrap;width:72px;">';
+      bodyHtml += '<button class="btn btn-sm btn-outline-secondary gantt-update-btn" data-project="' + proj.projectName + '" title="编辑 / Edit" style="padding:2px 5px;font-size:12px;">&#9998;</button> ';
+      bodyHtml += '<button class="btn btn-sm btn-outline-info gantt-view-btn" data-project="' + proj.projectName + '" title="查看 / View" style="padding:2px 5px;font-size:12px;">&#128269;</button>';
+      bodyHtml += '</td>';
       bodyHtml += '</tr>';
     });
 
     $('#ganttBody').html(bodyHtml);
 
+    // Edit button → open modal
     $('#ganttBody').on('click', '.gantt-update-btn', function() {
+      openUpdateModal($(this).data('project'));
+    });
+    // View button → open modal read-only (same modal, just for viewing)
+    $('#ganttBody').on('click', '.gantt-view-btn', function() {
       openUpdateModal($(this).data('project'));
     });
 
