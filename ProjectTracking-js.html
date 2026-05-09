@@ -200,68 +200,47 @@
 
   function renderGantt() {
     calculateDateRange();
+    var wrapperWidth = Math.max(800, totalDays * 5);
 
-    // Build month columns
-    var months = [];
+    function toPx(date) {
+      if (!date) return 0;
+      var days = Math.ceil((date - minDate) / (1000 * 60 * 60 * 24));
+      return Math.round((days / totalDays) * wrapperWidth);
+    }
+
+    // Header
+    var headHtml = '<tr>';
+    headHtml += '<th rowspan="2">项目名称<br><small>Project Name</small></th>';
+    headHtml += '<th rowspan="2">Leader</th>';
+    headHtml += '<th rowspan="2">状态<br><small>Status</small></th>';
+    headHtml += '<th colspan="1" style="font-size:11px;">甘特图 / Gantt Chart</th>';
+    headHtml += '<th rowspan="2">操作<br><small>Action</small></th>';
+    headHtml += '</tr>';
+
+    // Month header row
+    headHtml += '<tr>';
+    headHtml += '<th style="padding:0;background-color:#E60012;">';
+    headHtml += '<div style="display:flex;height:28px;align-items:center;width:' + wrapperWidth + 'px;">';
     var cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
     while (cur <= maxDate) {
-      months.push({
-        label: (cur.getFullYear()) + '.' + (cur.getMonth() + 1),
-        start: new Date(cur),
-        end: new Date(cur.getFullYear(), cur.getMonth() + 1, 0)
-      });
+      var mStart = new Date(cur.getFullYear(), cur.getMonth(), 1);
+      var mEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+      var effS = mStart < minDate ? minDate : mStart;
+      var effE = mEnd > maxDate ? maxDate : mEnd;
+      var w = Math.max(toPx(effE) - toPx(effS), 12);
+      headHtml += '<div style="flex:0 0 ' + w + 'px;text-align:center;border-left:1px solid rgba(255,255,255,0.3);padding:4px 0;font-size:9px;overflow:hidden;">' + cur.getFullYear() + '.' + (cur.getMonth() + 1) + '</div>';
       cur.setMonth(cur.getMonth() + 1);
     }
-
-    // Headers
-    var headHtml = '<tr>';
-    headHtml += '<th>项目名称<br><small>Project Name</small></th>';
-    headHtml += '<th>Leader</th>';
-    headHtml += '<th>状态<br><small>Status</small></th>';
-    for (var m = 0; m < months.length; m++) {
-      headHtml += '<th style="font-size:9px;min-width:52px;">' + months[m].label + '</th>';
-    }
-    headHtml += '<th>操作<br><small>Action</small></th>';
-    headHtml += '</tr>';
+    headHtml += '</div></th></tr>';
     $('#ganttHead').html(headHtml);
 
-    // Helper: does a date fall in a given month?
-    function inMonth(date, month) {
-      return date >= month.start && date <= month.end;
-    }
-
-    var todayStr = formatDateYMD(today);
-
-    // Rows
+    // Body rows
     var bodyHtml = '';
     globalData.projects.forEach(function(proj, idx) {
-      var statusColor = getStatusColor(proj.status);
-      var statusText = getStatusText(proj.status);
+      var stColor = getStatusColor(proj.status);
+      var stText = getStatusText(proj.status);
 
-      // Collect valid milestone dates with labels
-      var validMs = [];
-      proj.milestones.forEach(function(ms) {
-        var d = parseDate(ms.planned);
-        if (d) {
-          validMs.push({
-            date: d,
-            color: getMilestoneColor(ms),
-            label: getMilestoneShortName(ms.name),
-            title: getMilestoneTitle(ms)
-          });
-        }
-        d = parseDate(ms.actual);
-        if (d) {
-          validMs.push({
-            date: d,
-            color: '#28a745',
-            label: '✓',
-            title: getMilestoneShortName(ms.name) + ' 实际: ' + normalizeDate(ms.actual)
-          });
-        }
-      });
-
-      // Find overall date range
+      // Bar range from milestones with planned dates
       var projStart = null, projEnd = null;
       proj.milestones.forEach(function(ms) {
         var d = parseDate(ms.planned) || parseDate(ms.actual);
@@ -270,49 +249,53 @@
           if (!projEnd || d > projEnd) projEnd = d;
         }
       });
+      if (!projStart) projStart = minDate;
+      if (!projEnd) projEnd = maxDate;
+      var barL = toPx(projStart);
+      var barW = Math.max(toPx(projEnd) - barL, 4);
 
-      bodyHtml += '<tr class="gantt-row" data-project="' + proj.projectName + '">';
+      bodyHtml += '<tr class="gantt-row">';
       bodyHtml += '<td class="gantt-info">' + proj.projectName + '</td>';
       bodyHtml += '<td class="gantt-leader">' + proj.leader + '</td>';
-      bodyHtml += '<td class="gantt-status"><span class="status-badge" style="background:' + statusColor + ';">' + statusText + '</span></td>';
+      bodyHtml += '<td class="gantt-status"><span class="status-badge" style="background:' + stColor + ';">' + stText + '</span></td>';
+      bodyHtml += '<td style="padding:2px 4px;">';
+      bodyHtml += '<div style="position:relative;width:' + wrapperWidth + 'px;height:54px;">';
 
-      // Month cells
-      for (var m = 0; m < months.length; m++) {
-        var month = months[m];
-        var cellBg = '';
-        var cellContent = '';
-        var cellTitle = '';
+      // Bar
+      bodyHtml += '<div style="position:absolute;left:' + barL + 'px;width:' + barW + 'px;top:2px;height:16px;border-radius:3px;opacity:0.28;z-index:1;background:' + stColor + ';" title="' + proj.projectName + ' | ' + stText + '"></div>';
 
-        // Check if project spans this month
-        if (projStart && projEnd && projEnd >= month.start && projStart <= month.end) {
-          cellBg = 'background:' + statusColor + ';opacity:0.2;';
-        }
+      // Milestone diamonds
+      proj.milestones.forEach(function(ms, mi) {
+        var planned = parseDate(ms.planned);
+        if (!planned) return;
+        var px = toPx(planned) - 4;
+        var color = getMilestoneColor(ms);
+        var title = getMilestoneTitle(ms);
+        var label = getMilestoneShortName(ms.name);
+        // Small colored square as diamond indicator
+        bodyHtml += '<div style="position:absolute;left:' + px + 'px;top:1px;width:8px;height:8px;transform:rotate(45deg);z-index:5;background:' + color + ';border:1px solid rgba(255,255,255,0.8);" title="' + title + '"></div>';
+        // Text badge below
+        bodyHtml += '<div style="position:absolute;left:' + toPx(planned) + 'px;top:24px;z-index:6;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:bold;color:#fff;background:' + color + ';border:1px solid rgba(0,0,0,0.2);white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.3);" title="' + title + '">' + label + '</div>';
+      });
 
-        // Check for milestones in this month
-        for (var v = 0; v < validMs.length; v++) {
-          if (inMonth(validMs[v].date, month)) {
-            cellContent += '<span class="ms-cell-badge" style="background:' + validMs[v].color + ';" title="' + validMs[v].title + '">' + validMs[v].label + '</span>';
-          }
-        }
-
-        // Today highlight
-        var tdClass = inMonth(today, month) ? ' class="today-col"' : '';
-        bodyHtml += '<td' + tdClass + ' style="' + cellBg + 'text-align:center;vertical-align:middle;font-size:10px;">' + cellContent + '</td>';
+      // Today line
+      var todayPx = toPx(today);
+      if (todayPx >= 0 && todayPx <= wrapperWidth) {
+        bodyHtml += '<div style="position:absolute;left:' + todayPx + 'px;top:0;width:2px;height:100%;background:#E60012;z-index:3;pointer-events:none;"></div>';
       }
 
-      // Update button
+      bodyHtml += '</div></td>';
       bodyHtml += '<td style="text-align:center;white-space:nowrap;"><button class="btn btn-sm btn-outline-danger gantt-update-btn" data-project="' + proj.projectName + '">更新<br><small>Update</small></button></td>';
       bodyHtml += '</tr>';
     });
 
     $('#ganttBody').html(bodyHtml);
 
-    // Bind click on update buttons
     $('#ganttBody').on('click', '.gantt-update-btn', function() {
       openUpdateModal($(this).data('project'));
     });
 
-    $('#dataRangeInfo').text('时间范围: ' + formatDateYMD(minDate) + ' ~ ' + formatDateYMD(maxDate) + ' | 共 ' + months.length + ' 个月');
+    $('#dataRangeInfo').text('时间范围: ' + formatDateYMD(minDate) + ' ~ ' + formatDateYMD(maxDate) + ' | 共 ' + totalDays + ' 天');
   }
 
   function scrollToToday() {
