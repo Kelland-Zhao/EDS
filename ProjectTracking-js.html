@@ -185,6 +185,14 @@
 
   function renderGantt() {
     calculateDateRange();
+    var wrapperWidth = Math.max(700, totalDays * 4); // shared pixel width for header + body
+
+    // Helper: date → pixel position
+    function toPx(date) {
+      if (!date) return 0;
+      var days = Math.ceil((date - minDate) / (1000 * 60 * 60 * 24));
+      return Math.round((days / totalDays) * wrapperWidth);
+    }
 
     // Main header row
     var headHtml = '<tr>';
@@ -195,10 +203,10 @@
     headHtml += '<th rowspan="2">操作<br><small>Action</small></th>';
     headHtml += '</tr>';
 
-    // Second header row with months
+    // Second header row with months (pixel-based, aligned with wrapper)
     headHtml += '<tr>';
     headHtml += '<th style="padding:0;background-color:#E60012;">';
-    headHtml += '<div style="display:flex;height:28px;align-items:center;position:relative;min-width:600px;">';
+    headHtml += '<div style="display:flex;height:28px;align-items:center;width:' + wrapperWidth + 'px;">';
 
     var cur = new Date(minDate);
     var monthDivs = '';
@@ -208,10 +216,10 @@
       var monthEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
       var effStart = monthStart < minDate ? minDate : monthStart;
       var effEnd = monthEnd > maxDate ? maxDate : monthEnd;
-      var startPct = getPositionPct(effStart);
-      var endPct = getPositionPct(effEnd);
-      var width = Math.max(endPct - startPct, 0.5);
-      monthDivs += '<div style="flex:0 0 ' + width + '%;text-align:center;border-left:1px solid rgba(255,255,255,0.3);padding:4px 0;font-size:9px;overflow:hidden;">' + monthLabel + '</div>';
+      var startPx = toPx(effStart);
+      var endPx = toPx(effEnd);
+      var width = Math.max(endPx - startPx, 10);
+      monthDivs += '<div style="flex:0 0 ' + width + 'px;text-align:center;border-left:1px solid rgba(255,255,255,0.3);padding:4px 0;font-size:9px;overflow:hidden;">' + monthLabel + '</div>';
       cur.setMonth(cur.getMonth() + 1);
     }
     headHtml += monthDivs;
@@ -221,7 +229,6 @@
 
     // Build rows
     var bodyHtml = '';
-    var timelineMinWidth = 600;
 
     globalData.projects.forEach(function(proj, idx) {
       var statusColor = getStatusColor(proj.status);
@@ -246,36 +253,34 @@
       if (!startDate) startDate = minDate;
       if (!endDate) endDate = maxDate;
 
-      var barLeft = getPositionPct(startDate);
-      var barRight = getPositionPct(endDate);
-      var barWidth = barRight - barLeft;
-      if (barWidth < 1) barWidth = 1;
+      var barLeftPx = toPx(startDate);
+      var barWidthPx = Math.max(toPx(endDate) - barLeftPx, 4);
 
       bodyHtml += '<tr class="gantt-row" data-project="' + proj.projectName + '" data-idx="' + idx + '">';
       bodyHtml += '<td class="gantt-info">' + proj.projectName + '</td>';
       bodyHtml += '<td class="gantt-leader">' + proj.leader + '</td>';
       bodyHtml += '<td class="gantt-status"><span class="status-badge" style="background:' + statusColor + ';">' + statusText + '</span></td>';
-      bodyHtml += '<td style="min-width:' + timelineMinWidth + 'px;padding:2px 4px;">';
-      bodyHtml += '<div style="position:relative;width:100%;height:52px;">';
+      bodyHtml += '<td style="padding:2px 4px;">';
+      bodyHtml += '<div style="position:relative;width:' + wrapperWidth + 'px;height:52px;">';
 
-      // Bar
-      bodyHtml += '<div style="position:absolute;left:' + barLeft + '%;width:' + barWidth + '%;top:2px;height:14px;border-radius:3px;opacity:0.25;z-index:1;min-width:2px;background:' + statusColor + ';" title="' + proj.projectName + ' | ' + statusText + '"></div>';
+      // Bar (pixel positioned)
+      bodyHtml += '<div style="position:absolute;left:' + barLeftPx + 'px;width:' + barWidthPx + 'px;top:2px;height:14px;border-radius:3px;opacity:0.3;z-index:1;background:' + statusColor + ';" title="' + proj.projectName + ' | ' + statusText + '"></div>';
 
-      // Milestone badge markers
+      // Milestone badge markers (pixel positioned)
       proj.milestones.forEach(function(ms, mi) {
         var planned = parseDate(ms.planned);
         if (!planned) return;
-        var pos = getPositionPct(planned);
+        var leftPx = toPx(planned);
         var color = getMilestoneColor(ms);
         var title = getMilestoneTitle(ms);
         var label = getMilestoneShortName(ms.name);
-        bodyHtml += '<div style="position:absolute;left:' + pos + '%;top:22px;z-index:8;padding:2px 5px;border-radius:3px;font-size:10px;font-weight:bold;color:#fff;background:' + color + ';border:2px solid #fff;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1.4;" title="' + title + '">' + label + '</div>';
+        bodyHtml += '<div style="position:absolute;left:' + leftPx + 'px;top:22px;z-index:8;padding:2px 5px;border-radius:3px;font-size:10px;font-weight:bold;color:#fff;background:' + color + ';border:2px solid #fff;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1.4;" title="' + title + '">' + label + '</div>';
       });
 
-      // Today line
-      var todayPos = getPositionPct(today);
-      if (todayPos >= 0 && todayPos <= 100) {
-        bodyHtml += '<div style="position:absolute;left:' + todayPos + '%;top:0;width:2px;height:100%;background:#E60012;z-index:3;pointer-events:none;"></div>';
+      // Today line (pixel positioned)
+      var todayPx = toPx(today);
+      if (todayPx >= 0 && todayPx <= wrapperWidth) {
+        bodyHtml += '<div style="position:absolute;left:' + todayPx + 'px;top:0;width:2px;height:100%;background:#E60012;z-index:3;pointer-events:none;"></div>';
       }
 
       bodyHtml += '</div></td>';
