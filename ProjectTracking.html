@@ -48,48 +48,23 @@
     }
     .gantt-timeline {
       position: relative;
-      min-height: 42px;
+      min-height: 52px;
     }
     .gantt-bar {
       position: absolute;
-      height: 16px;
-      top: 3px;
+      height: 14px;
+      top: 2px;
       border-radius: 3px;
-      opacity: 0.35;
-      transition: opacity 0.2s;
-      z-index: 2;
+      opacity: 0.25;
+      z-index: 1;
       min-width: 2px;
-    }
-    .gantt-bar:hover {
-      opacity: 0.6;
-      box-shadow: 0 0 4px rgba(0,0,0,0.3);
-    }
-    .gantt-milestone-badge {
-      position: absolute;
-      top: 22px;
-      z-index: 4;
-      cursor: pointer;
-      padding: 2px 5px;
-      border-radius: 3px;
-      font-size: 9px;
-      color: #fff;
-      white-space: nowrap;
-      line-height: 1.3;
-      border: 1px solid rgba(0,0,0,0.15);
-      transform: translateX(-50%);
-      pointer-events: auto;
-    }
-    .gantt-milestone-badge:hover {
-      transform: translateX(-50%) scale(1.15);
-      box-shadow: 0 0 4px rgba(0,0,0,0.4);
-      z-index: 10;
     }
     .gantt-today-line {
       position: absolute;
       top: 0;
       width: 2px;
       background-color: #E60012;
-      z-index: 5;
+      z-index: 3;
       pointer-events: none;
     }
     .gantt-today-label {
