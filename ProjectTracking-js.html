@@ -139,6 +139,23 @@
     }
   }
 
+  function getMilestoneShortName(name) {
+    if (!name) return '';
+    var parts = name.split(' / ');
+    var cn = parts[0] || name;
+    // Use short label for display
+    var map = {
+      '模具/自动化改造（供应商）': '模具改造',
+      'FAT': 'FAT',
+      '现场安装': '现场安装',
+      'IQ/OQ': 'IQ/OQ',
+      '工程测试': '工程测试',
+      'PQ': 'PQ',
+      'Mass Production': 'MP'
+    };
+    return map[cn] || cn.substring(0, 6);
+  }
+
   function getMilestoneColor(ms) {
     var actual = parseDate(ms.actual);
     if (actual) return '#28a745'; // green - has actual date
@@ -243,14 +260,15 @@
       // Bar
       bodyHtml += '<div class="gantt-bar" style="left:' + barLeft + '%;width:' + barWidth + '%;background:' + statusColor + ';" title="' + proj.projectName + ' | ' + statusText + '"></div>';
 
-      // Milestone markers — only for milestones with planned dates from backend
+      // Milestone badge markers — only for milestones with planned dates
       proj.milestones.forEach(function(ms, mi) {
         var planned = parseDate(ms.planned);
-        if (!planned) return; // skip NA milestones
+        if (!planned) return; // skip NA
         var pos = getPositionPct(planned);
         var color = getMilestoneColor(ms);
         var title = getMilestoneTitle(ms);
-        bodyHtml += '<div class="gantt-milestone ms-diamond" style="left:' + pos + '%;background:' + color + ';" title="' + title + '" data-ms="' + mi + '"></div>';
+        var label = getMilestoneShortName(ms.name);
+        bodyHtml += '<div class="gantt-milestone-badge" style="left:' + pos + '%;background:' + color + ';" title="' + title + '">' + label + '</div>';
       });
 
       // Today line
