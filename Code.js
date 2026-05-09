@@ -980,6 +980,14 @@ function getPlan_new() {
 // 新增：获取当前日期前一周和后三周的数据
 function getPlan_weekly() {
   try {
+    // 缓存：按周缓存，5分钟内重复访问直接返回
+    var cache = CacheService.getScriptCache();
+    var cacheKey = "PM_Plan_weekly_" + Utilities.formatDate(new Date(), "Asia/Hong_Kong", "yyyyWW");
+    var cached = cache.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
     let id =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     let ss = SpreadsheetApp.openByUrl(id);
@@ -1106,7 +1114,7 @@ function getPlan_weekly() {
       array.push(obj);
     });
 
-    // 获取状态数据（与getPlan_new相同的逻辑）
+    // 获取状态数据（优化：只读B/E/J三列，PmStatus/Plan PM Date/Workcenter，跳过任务明细等大字段）
     let sheetName = [
       "INJ-TB1",
       "INJ-TB2",
@@ -1115,10 +1123,6 @@ function getPlan_weekly() {
       "PK-TB1",
       "PK-TB2",
     ];
-    let ws_head = ss.getSheetByName("INJ-TB1");
-    let head_record = ws_head
-      .getRange(1, 1, 1, ws_head.getLastColumn())
-      .getValues()[0];
 
     const STATUS_SHEET_DATE_COL = 5; // Plan PM Date 列
     let record_obj = [];
@@ -1161,24 +1165,25 @@ function getPlan_weekly() {
       let minStatusRow = Math.min.apply(null, matchedStatusRows);
       let maxStatusRow = Math.max.apply(null, matchedStatusRows);
       let statusRowsToFetch = maxStatusRow - minStatusRow + 1;
+      // 只读B-J列（9列）：PmStatus[0], Plan PM Date[3], Workcenter[8]，跳过K列(任务明细)等大字段
       let rowValues = wss
-        .getRange(minStatusRow, 1, statusRowsToFetch, wss.getLastColumn())
+        .getRange(minStatusRow, 2, statusRowsToFetch, 9)
         .getValues();
       let statusRowSet = new Set(matchedStatusRows);
 
       rowValues.forEach((r, idx) => {
         let actualRow = minStatusRow + idx;
         if (statusRowSet.has(actualRow)) {
-          let obj_2 = {};
-          for (let i = 0; i < head_record.length; i++) {
-            obj_2[head_record[i]] = r[i];
-          }
-          record_obj.push(obj_2);
+          record_obj.push({
+            PmStatus: r[0],
+            "Plan PM Date": r[3],
+            Workcenter: r[8],
+          });
         }
       });
     });
 
-    return {
+    var result = {
       Head: head,
       Content: array,
       Record_obj: JSON.stringify(record_obj),
@@ -1189,6 +1194,12 @@ function getPlan_weekly() {
         hasNextThreeWeeksData: hasNextThreeWeeksData,
       },
     };
+    try {
+      cache.put(cacheKey, JSON.stringify(result), 300);
+    } catch (e) {
+      // 缓存写入失败（可能超100KB限制），跳过
+    }
+    return result;
   } catch (e) {
     return ["NO", "保养计划获取出错：" + e.toString()];
   }
