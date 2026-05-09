@@ -136,7 +136,7 @@ function loadPM_Task_new() {
 function loadPM_Plan_new() {
   let webPage = getReleaseWebPage();
   return render("PM_Plan_1.0", { webPage: webPage })
-    .setTitle("保养计划/ PM Plan")
+    .setTitle("保养计划 PM Plan")
     .setFaviconUrl(webIconUrl);
 }
 

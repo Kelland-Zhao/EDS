@@ -280,17 +280,35 @@
 
   global_data = obj;
 
+  // 表头显示映射：中文在上，英文在下，不使用"/"
+  const titleMap = {
+    "月份": "月份<br>Month",
+    "日历周次": "日历周次<br>Calendar Week",
+    "车间": "车间<br>Workshop",
+    "工序": "工序<br>Process",
+    "开始日期": "开始日期<br>Start Date",
+    "状态": "状态<br>Status",
+    "AEM#": "AEM#",
+    "保养时间": "保养时间<br>PM Time",
+    "保养类型": "保养类型<br>PM Type",
+    "机型": "机型<br>Machine Model",
+    "类别": "类别<br>Category",
+    "设备类型1": "设备类型1<br>Equipment Type 1",
+    "设备类型2": "设备类型2<br>Equipment Type 2",
+    "自动化类型": "自动化类型<br>Automation Type"
+  };
+
   let table_array = [];
   for (let i = 0; i < head.length; i++) {
    let obj = {};
-   obj.title = head[i];
+   obj.title = titleMap[head[i]] || head[i];
    obj.data = head[i];
    table_array.push(obj);
   }
   table_array.push(
-   { title: "保养状态/ PM Status", data: "保养状态/ PM Status" },
-   { title: "操作/ Operation", data: "操作/ Operation" },
-   { title: "班组确认/ Production Confirm", data: "班组确认/ Production Confirm" }
+   { title: "保养状态<br>PM Status", data: "保养状态/ PM Status" },
+   { title: "操作<br>Operation", data: "操作/ Operation" },
+   { title: "班组确认<br>Production Confirm", data: "班组确认/ Production Confirm" }
   )
 
   table = $('#table').DataTable({
