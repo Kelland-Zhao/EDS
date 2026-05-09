@@ -225,11 +225,21 @@
 
     $('#moldSurfaceCleanButton').on('click', () => {
         let url = siWebPage + '?v=MoldSurfaceClean'
-            + '&ID=' + encodeURIComponent(id || '') 
-            + '&Name=' + encodeURIComponent(name || '') 
+            + '&ID=' + encodeURIComponent(id || '')
+            + '&Name=' + encodeURIComponent(name || '')
             + '&Process=' + encodeURIComponent(process || '')
-            + '&Workshop=' + encodeURIComponent(workshop || ''); 
-        window.open(url); 
+            + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
+    });
+
+    // 项目跟进
+    $('#ProjectTracking').on('click', () => {
+        let url = siWebPage + '?v=ProjectTracking'
+            + '&ID=' + encodeURIComponent(id || '')
+            + '&Name=' + encodeURIComponent(name || '')
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
     });
 
     $('#ProcessSamplingInspection').click(() => {

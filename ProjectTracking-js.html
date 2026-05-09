@@ -1,0 +1,388 @@
+<script>
+  var globalName = sessionStorage.getItem('Name') || '';
+  var globalId = sessionStorage.getItem('ID') || '';
+  var globalProcess = sessionStorage.getItem('Process') || '';
+  var globalWorkshop = sessionStorage.getItem('Workshop') || '';
+  var siWebPage = sessionStorage.getItem('siWebPage') || '';
+  sessionStorage.setItem('siWebPage', siWebPage);
+
+  var globalData = null;
+  var minDate = null;
+  var maxDate = null;
+  var totalDays = 0;
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  $(document).ready(function() {
+    $('#userInfo').text(globalName + ' | ' + globalProcess);
+    loadData();
+
+    $('#refreshBtn').click(function() { loadData(); });
+    $('#todayBtn').click(function() { scrollToToday(); });
+    $('#saveBtn').click(function() { saveUpdates(); });
+
+    // Status editor check
+    var isLyon = (globalName === 'Lyon Zhang');
+    if (isLyon) {
+      $('#modalStatus').prop('disabled', false);
+      $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
+    }
+  });
+
+  function loadData() {
+    $('#loadingOverlay').show();
+    $('#ganttContainer').hide();
+    google.script.run
+      .withSuccessHandler(function(result) {
+        $('#loadingOverlay').hide();
+        $('#ganttContainer').show();
+        try {
+          var data = typeof result === 'string' ? JSON.parse(result) : result;
+          if (data.error) { Swal.fire('错误 / Error', data.error, 'error'); return; }
+          globalData = data;
+          renderGantt();
+        } catch(e) {
+          Swal.fire('错误 / Error', '数据解析失败 / Data parse error: ' + e.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        $('#loadingOverlay').hide();
+        Swal.fire('错误 / Error', '加载失败 / Load failed: ' + err.message, 'error');
+      })
+      .getProjectTrackingData();
+  }
+
+  function parseDate(str) {
+    if (!str || str === 'NA' || str === '') return null;
+    var s = String(str).trim();
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+    if (m) {
+      var year = m[3] ? parseInt(m[3]) : today.getFullYear();
+      return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
+    }
+    return null;
+  }
+
+  function formatDateYMD(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+  }
+
+  function formatHeader(header) {
+    if (!header) return '';
+    var parts = header.split(' / ');
+    if (parts.length >= 2) {
+      return parts[0] + '<br><small style="font-weight:normal;font-size:10px;">' + parts.slice(1).join(' / ') + '</small>';
+    }
+    return header;
+  }
+
+  function calculateDateRange() {
+    if (!globalData || !globalData.projects) return;
+    var allDates = [];
+    globalData.projects.forEach(function(proj) {
+      proj.milestones.forEach(function(ms) {
+        var d = parseDate(ms.planned);
+        if (d) allDates.push(d);
+        d = parseDate(ms.actual);
+        if (d) allDates.push(d);
+      });
+    });
+    if (allDates.length === 0) {
+      minDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      maxDate = new Date(today.getFullYear(), today.getMonth() + 3, 1);
+    } else {
+      allDates.sort(function(a, b) { return a - b; });
+      minDate = new Date(allDates[0]);
+      maxDate = new Date(allDates[allDates.length - 1]);
+    }
+    // Add 1 month margin on each side
+    minDate = new Date(minDate.getFullYear(), minDate.getMonth() - 1, 1);
+    maxDate = new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
+    totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
+    if (totalDays < 30) totalDays = 30;
+  }
+
+  function getPositionPct(date) {
+    if (!date) return -1;
+    var days = Math.ceil((date - minDate) / (1000 * 60 * 60 * 24));
+    return (days / totalDays) * 100;
+  }
+
+  function getStatusColor(status) {
+    switch (status) {
+      case 'Done': return '#28a745';
+      case 'Ongoing': return '#007bff';
+      case 'Delayed': return '#dc3545';
+      case 'Not start': return '#6c757d';
+      default: return '#6c757d';
+    }
+  }
+
+  function getStatusText(status) {
+    switch (status) {
+      case 'Done': return '已完成';
+      case 'Ongoing': return '进行中';
+      case 'Delayed': return '延误';
+      case 'Not start': return '未开始';
+      default: return status;
+    }
+  }
+
+  function getMilestoneColor(ms) {
+    var actual = parseDate(ms.actual);
+    if (actual) return '#28a745'; // green - has actual date
+    var planned = parseDate(ms.planned);
+    if (!planned) return '#adb5bd'; // gray - no date
+    if (planned < today) return '#dc3545'; // red - overdue
+    return '#adb5bd'; // gray - pending (future)
+  }
+
+  function getMilestoneTitle(ms) {
+    var parts = ms.name.split(' / ');
+    var shortName = parts[0] || ms.name;
+    var title = shortName;
+    if (ms.actual) {
+      title += ' | 实际: ' + ms.actual;
+    } else if (ms.planned && ms.planned !== 'NA') {
+      title += ' | 计划: ' + ms.planned;
+      var planned = parseDate(ms.planned);
+      if (planned && planned < today) title += ' (逾期/Overdue)';
+    }
+    return title;
+  }
+
+  function renderGantt() {
+    calculateDateRange();
+    var monthsHtml = buildMonthHeaders();
+
+    // Main header row
+    var headHtml = '<tr>';
+    headHtml += '<th rowspan="2" style="min-width:140px;">项目名称<br><small>Project Name</small></th>';
+    headHtml += '<th rowspan="2" style="min-width:90px;">Leader</th>';
+    headHtml += '<th rowspan="2" style="min-width:70px;">状态<br><small>Status</small></th>';
+    headHtml += '<th colspan="1" style="font-size:10px;">甘特图 / Gantt Chart</th>';
+    headHtml += '</tr>';
+
+    // Second header row with months
+    headHtml += '<tr>';
+    headHtml += '<th style="padding:0;background-color:#E60012;">';
+    headHtml += '<div style="display:flex;height:28px;align-items:center;position:relative;min-width:600px;">';
+
+    var cur = new Date(minDate);
+    var monthDivs = '';
+    while (cur <= maxDate) {
+      var monthLabel = (cur.getFullYear()) + '.' + (cur.getMonth() + 1);
+      var monthStart = new Date(cur.getFullYear(), cur.getMonth(), 1);
+      var monthEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+      var effStart = monthStart < minDate ? minDate : monthStart;
+      var effEnd = monthEnd > maxDate ? maxDate : monthEnd;
+      var startPct = getPositionPct(effStart);
+      var endPct = getPositionPct(effEnd);
+      var width = Math.max(endPct - startPct, 0.5);
+      monthDivs += '<div style="flex:0 0 ' + width + '%;text-align:center;border-left:1px solid rgba(255,255,255,0.3);padding:4px 0;font-size:9px;overflow:hidden;">' + monthLabel + '</div>';
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    headHtml += monthDivs;
+    headHtml += '</div></th></tr>';
+
+    $('#ganttHead').html(headHtml);
+
+    // Build rows
+    var bodyHtml = '';
+    var timelineMinWidth = 600;
+
+    globalData.projects.forEach(function(proj, idx) {
+      var statusColor = getStatusColor(proj.status);
+      var statusText = getStatusText(proj.status);
+
+      // Find bar start/end from milestones
+      var startDate = null;
+      var endDate = null;
+      proj.milestones.forEach(function(ms) {
+        var d = parseDate(ms.planned);
+        if (d) {
+          if (!startDate || d < startDate) startDate = d;
+          if (!endDate || d > endDate) endDate = d;
+        }
+        d = parseDate(ms.actual);
+        if (d) {
+          if (!startDate || d < startDate) startDate = d;
+          if (!endDate || d > endDate) endDate = d;
+        }
+      });
+
+      if (!startDate) startDate = minDate;
+      if (!endDate) endDate = maxDate;
+
+      var barLeft = getPositionPct(startDate);
+      var barRight = getPositionPct(endDate);
+      var barWidth = barRight - barLeft;
+      if (barWidth < 1) barWidth = 1;
+
+      bodyHtml += '<tr class="gantt-row" data-project="' + proj.projectName + '" data-idx="' + idx + '">';
+      bodyHtml += '<td class="gantt-info" style="font-size:12px;">' + proj.projectName + '</td>';
+      bodyHtml += '<td style="font-size:12px;">' + proj.leader + '</td>';
+      bodyHtml += '<td style="text-align:center;"><span class="status-badge" style="background:' + statusColor + ';">' + statusText + '</span></td>';
+      bodyHtml += '<td class="gantt-timeline" style="position:relative;min-width:' + timelineMinWidth + 'px;height:42px;">';
+
+      // Bar
+      bodyHtml += '<div class="gantt-bar" style="left:' + barLeft + '%;width:' + barWidth + '%;background:' + statusColor + ';" title="' + proj.projectName + ' | ' + statusText + '" data-project="' + proj.projectName + '"></div>';
+
+      // Milestone diamonds
+      proj.milestones.forEach(function(ms, mi) {
+        var planned = parseDate(ms.planned);
+        if (planned) {
+          var pos = getPositionPct(planned);
+          var color = getMilestoneColor(ms);
+          var title = getMilestoneTitle(ms);
+          bodyHtml += '<div class="gantt-milestone" style="left:' + (pos - 0.25) + '%;background:' + color + ';" title="' + title + '" data-ms="' + mi + '"></div>';
+        }
+      });
+
+      // Today line
+      var todayPos = getPositionPct(today);
+      if (todayPos >= 0 && todayPos <= 100) {
+        bodyHtml += '<div class="gantt-today-line" style="left:' + todayPos + '%;height:100%;"></div>';
+      }
+
+      bodyHtml += '</td></tr>';
+    });
+
+    $('#ganttBody').html(bodyHtml);
+
+    // Bind click on bars
+    $('#ganttBody').on('click', '.gantt-bar', function() {
+      var projectName = $(this).data('project');
+      openUpdateModal(projectName);
+    });
+
+    // Update range info
+    $('#dataRangeInfo').text('时间范围: ' + formatDateYMD(minDate) + ' ~ ' + formatDateYMD(maxDate) + ' | 共 ' + totalDays + ' 天');
+  }
+
+  function scrollToToday() {
+    var todayPos = getPositionPct(today);
+    if (todayPos < 0 || todayPos > 100) return;
+    var container = $('#ganttContainer');
+    var scrollWidth = container[0].scrollWidth;
+    var clientWidth = container[0].clientWidth;
+    var scrollTo = (todayPos / 100) * scrollWidth - clientWidth / 2;
+    container.animate({ scrollLeft: Math.max(0, scrollTo) }, 500);
+  }
+
+  function openUpdateModal(projectName) {
+    if (!globalData) return;
+    var proj = null;
+    for (var i = 0; i < globalData.projects.length; i++) {
+      if (globalData.projects[i].projectName === projectName) {
+        proj = globalData.projects[i];
+        break;
+      }
+    }
+    if (!proj) return;
+
+    $('#modalProjectName').val(proj.projectName);
+    $('#modalLeader').val(proj.leader);
+    $('#modalStatus').val(proj.status);
+
+    // Check if current user is Lyon Zhang
+    var isLyon = (globalName === 'Lyon Zhang');
+    $('#modalStatus').prop('disabled', !isLyon);
+
+    // Build milestone rows
+    var msHtml = '';
+    proj.milestones.forEach(function(ms, i) {
+      msHtml += '<div class="modal-milestone-row">';
+      msHtml += '<div class="modal-milestone-label">' + formatHeader(ms.name) + '</div>';
+      msHtml += '<div class="modal-milestone-dates">';
+      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="text" class="form-control form-control-sm readonly-field" value="' + (ms.planned || '') + '" readonly></div>';
+      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="text" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + (ms.actual || '') + '" placeholder="YYYY-MM-DD"></div>';
+      msHtml += '</div>';
+      msHtml += '</div>';
+    });
+    $('#modalMilestones').html(msHtml);
+
+    // Store current project for save
+    $('#updateModal').data('projectName', proj.projectName);
+    $('#updateModal').modal('show');
+  }
+
+  function saveUpdates() {
+    var projectName = $('#updateModal').data('projectName');
+    var newStatus = $('#modalStatus').val();
+    var isStatusChanged = false;
+
+    // Find project to compare status
+    var proj = null;
+    for (var i = 0; i < globalData.projects.length; i++) {
+      if (globalData.projects[i].projectName === projectName) {
+        proj = globalData.projects[i];
+        break;
+      }
+    }
+    if (proj && proj.status !== newStatus) {
+      isStatusChanged = true;
+    }
+
+    var milestones = [];
+    $('#modalMilestones .ms-actual').each(function() {
+      var idx = parseInt($(this).data('msIndex'));
+      var actual = $(this).val().trim();
+      milestones.push({ index: idx, actual: actual });
+    });
+
+    var updates = { milestones: milestones };
+    if (isStatusChanged) {
+      updates.status = newStatus;
+    }
+
+    Swal.fire({
+      title: '正在保存... / Saving...',
+      allowOutsideClick: false,
+      didOpen: function() { Swal.showLoading(); }
+    });
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        Swal.close();
+        try {
+          var res = typeof result === 'string' ? JSON.parse(result) : result;
+          if (res.success) {
+            Swal.fire('成功 / Success', res.message, 'success').then(function() {
+              $('#updateModal').modal('hide');
+              loadData();
+            });
+          } else {
+            Swal.fire('失败 / Failed', res.message, 'error');
+          }
+        } catch(e) {
+          Swal.fire('错误 / Error', e.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        Swal.close();
+        Swal.fire('错误 / Error', '保存失败 / Save failed: ' + err.message, 'error');
+      })
+      .updateProjectTracking(projectName, JSON.stringify(updates), globalName);
+  }
+
+  // Handle empty state
+  function onFailure(error) {
+    $('#loadingOverlay').hide();
+    Swal.fire({
+      icon: 'error',
+      title: '加载失败 / Load Failed',
+      text: error.message || '未知错误 / Unknown error',
+      confirmButtonText: '重试 / Retry',
+      showCancelButton: true,
+      cancelButtonText: '取消 / Cancel'
+    }).then(function(result) {
+      if (result.isConfirmed) loadData();
+    });
+  }
+</script>

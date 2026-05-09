@@ -46,6 +46,7 @@ function doGet(e) {
   Route.path("Handover_1.0", loadHandover_1_0); // 新增交接班页面路由
   Route.path("Fault_Record_1.0", loadFault_Record_1_0); // 新增故障记录页面路由
   Route.path("FailureReport_Template", loadFailureReport_Template);
+  Route.path("ProjectTracking", loadProjectTracking);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
@@ -159,6 +160,13 @@ function loadFailureReport_Template() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Template", { webPage: webPage })
     .setTitle("故障报告模板 / Failure Report Template")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadProjectTracking() {
+  let webPage = getReleaseWebPage();
+  return render("ProjectTracking", { webPage: webPage })
+    .setTitle("项目跟进 / Project Tracking")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -9554,5 +9562,115 @@ function deleteMessageBoardMessage(messageId) {
     return { success: false, message: '留言不存在 / Message not found' };
   } catch (error) {
     return { success: false, message: '删除留言失败 / Failed to delete message: ' + error.toString() };
+  }
+}
+
+// ==========================================
+// 项目跟进模块 / Project Tracking Module
+// ==========================================
+const PROJECT_TRACKING_SS_ID = '1aoQDjeWU9Xa9clloyTwiXL6WS62tYVbB0-VOavpAgAM';
+const PROJECT_TRACKING_SHEET_NAME = '项目总表';
+const PROJECT_MILESTONE_COLS = [
+  { name: '模具/自动化改造（供应商）/ Tooling & Automation (Supplier)', planned: 3, actual: 4 },
+  { name: 'FAT / FAT', planned: 5, actual: 6 },
+  { name: '现场安装 / On-site Installation', planned: 7, actual: 8 },
+  { name: 'IQ/OQ / IQ/OQ', planned: 9, actual: 10 },
+  { name: '工程测试 / Engineering Test', planned: 11, actual: 12 },
+  { name: 'PQ / PQ', planned: 13, actual: 14 },
+  { name: 'Mass Production / Mass Production', planned: 15, actual: 16 }
+];
+const PROJECT_STATUS_COL = 17;
+const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
+
+/**
+ * 获取项目跟进数据
+ * Get project tracking data
+ * @returns {string} JSON string
+ */
+function getProjectTrackingData() {
+  try {
+    const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!ws) return JSON.stringify({ error: 'Sheet 项目总表 not found' });
+
+    const data = ws.getDataRange().getValues();
+    const headers = data[0];
+    const rows = data.slice(1).filter(function(row) {
+      return row[0] && String(row[0]).trim() !== '';
+    });
+
+    const projects = rows.map(function(row, index) {
+      const project = {
+        rowIndex: index + 2,
+        projectName: String(row[0] || ''),
+        leader: String(row[1] || ''),
+        technician: String(row[2] || ''),
+        status: String(row[PROJECT_STATUS_COL] || ''),
+        milestones: PROJECT_MILESTONE_COLS.map(function(ms) {
+          return {
+            name: ms.name,
+            planned: String(row[ms.planned] || '').trim(),
+            actual: String(row[ms.actual] || '').trim()
+          };
+        })
+      };
+      return project;
+    });
+
+    return JSON.stringify({ headers: headers, projects: projects });
+  } catch (e) {
+    return JSON.stringify({ error: e.toString() });
+  }
+}
+
+/**
+ * 更新项目跟进数据
+ * Update project tracking data
+ * @param {string} projectName - 项目名称
+ * @param {string} updatesStr - JSON string with milestone actual dates and/or status
+ * @param {string} editorName - 编辑人姓名
+ * @returns {string} JSON string
+ */
+function updateProjectTracking(projectName, updatesStr, editorName) {
+  try {
+    const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!ws) return JSON.stringify({ success: false, message: 'Sheet 项目总表 not found' });
+
+    const updates = JSON.parse(updatesStr);
+    const data = ws.getDataRange().getValues();
+
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === projectName) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) {
+      return JSON.stringify({ success: false, message: '项目未找到 / Project not found' });
+    }
+
+    // Update milestone actual dates
+    if (updates.milestones && Array.isArray(updates.milestones)) {
+      updates.milestones.forEach(function(ms) {
+        if (ms.index >= 0 && ms.index < PROJECT_MILESTONE_COLS.length) {
+          const actualCol = PROJECT_MILESTONE_COLS[ms.index].actual;
+          ws.getRange(rowIndex, actualCol + 1).setValue(ms.actual || '');
+        }
+      });
+    }
+
+    // Update status (only specific editors)
+    if (updates.status !== undefined) {
+      if (PROJECT_STATUS_EDITORS.indexOf(editorName) === -1) {
+        return JSON.stringify({ success: false, message: '仅 ' + PROJECT_STATUS_EDITORS.join(', ') + ' 可修改状态 / Only specific editors can change status' });
+      }
+      ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
+    }
+
+    return JSON.stringify({ success: true, message: '更新成功 / Update successful' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: '更新失败 / Update failed: ' + e.toString() });
   }
 }

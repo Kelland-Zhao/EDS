@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("CSS");?>
+  <style>
+    .gantt-container {
+      overflow-x: auto;
+      position: relative;
+    }
+    .gantt-table {
+      border-collapse: collapse;
+      min-width: 100%;
+    }
+    .gantt-table th {
+      background-color: #E60012;
+      color: white;
+      vertical-align: middle;
+      text-align: center;
+      padding: 6px 4px;
+      font-size: 11px;
+      white-space: nowrap;
+      border: 1px solid #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .gantt-table td {
+      vertical-align: middle;
+      padding: 4px;
+      border: 1px solid #eee;
+    }
+    .gantt-info {
+      min-width: 220px;
+      font-size: 12px;
+    }
+    .gantt-timeline {
+      position: relative;
+      min-height: 36px;
+    }
+    .gantt-bar {
+      position: absolute;
+      height: 18px;
+      top: 9px;
+      border-radius: 3px;
+      cursor: pointer;
+      opacity: 0.85;
+      transition: opacity 0.2s;
+      z-index: 2;
+    }
+    .gantt-bar:hover {
+      opacity: 1;
+      box-shadow: 0 0 4px rgba(0,0,0,0.3);
+    }
+    .gantt-milestone {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      top: 13px;
+      transform: rotate(45deg);
+      z-index: 3;
+      cursor: pointer;
+      border: 1px solid rgba(0,0,0,0.2);
+    }
+    .gantt-milestone:hover {
+      transform: rotate(45deg) scale(1.4);
+    }
+    .gantt-today-line {
+      position: absolute;
+      top: 0;
+      width: 2px;
+      background-color: #E60012;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .gantt-today-label {
+      position: absolute;
+      top: 0;
+      background: #E60012;
+      color: white;
+      font-size: 9px;
+      padding: 1px 4px;
+      white-space: nowrap;
+      z-index: 6;
+      pointer-events: none;
+    }
+    .month-header {
+      font-size: 10px;
+      text-align: center;
+      border-left: 1px solid #ccc;
+    }
+    .month-header-row th {
+      background-color: #E60012;
+      color: white;
+      font-size: 10px;
+      padding: 4px 0;
+      border-left: 1px solid rgba(255,255,255,0.3);
+    }
+    .status-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      color: white;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-right: 16px;
+      font-size: 12px;
+    }
+    .legend-diamond {
+      width: 10px;
+      height: 10px;
+      transform: rotate(45deg);
+      display: inline-block;
+      border: 1px solid rgba(0,0,0,0.2);
+    }
+    legend-bar {
+      width: 20px;
+      height: 12px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    .modal-milestone-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .modal-milestone-row:last-child {
+      border-bottom: none;
+    }
+    .modal-milestone-label {
+      flex: 0 0 180px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .modal-milestone-dates {
+      flex: 1;
+      display: flex;
+      gap: 10px;
+    }
+    .modal-milestone-dates input {
+      font-size: 12px;
+    }
+    .readonly-field {
+      background-color: #e9ecef !important;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <a class="navbar-brand nav-css" style="font-size: x-large;">项目跟进 / Project Tracking</a>
+      <span class="navbar-text text-white" id="userInfo"></span>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-3 mt-2">
+    <!-- Legend -->
+    <div class="d-flex align-items-center flex-wrap mb-2 p-2 border rounded bg-light">
+      <span class="fw-bold me-3" style="font-size:12px;">图例 / Legend:</span>
+      <span class="legend-item">
+        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#007bff;"></span> 进行中 / Ongoing
+      </span>
+      <span class="legend-item">
+        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#dc3545;"></span> 延误 / Delayed
+      </span>
+      <span class="legend-item">
+        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#28a745;"></span> 已完成 / Done
+      </span>
+      <span class="legend-item">
+        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#6c757d;"></span> 未开始 / Not Start
+      </span>
+      <span class="legend-item ms-3">
+        <span class="legend-diamond" style="background:#28a745;"></span> 已完成 / Completed
+      </span>
+      <span class="legend-item">
+        <span class="legend-diamond" style="background:#dc3545;"></span> 逾期 / Overdue
+      </span>
+      <span class="legend-item">
+        <span class="legend-diamond" style="background:#adb5bd;"></span> 待完成 / Pending
+      </span>
+    </div>
+
+    <!-- Controls -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div>
+        <button class="btn btn-sm btn-outline-secondary" id="refreshBtn">刷新 / Refresh</button>
+        <button class="btn btn-sm btn-outline-secondary" id="todayBtn">定位今天 / Go to Today</button>
+      </div>
+      <div id="dataRangeInfo" style="font-size:11px;color:#666;"></div>
+    </div>
+
+    <!-- Gantt Chart -->
+    <div class="gantt-container border rounded" id="ganttContainer" style="max-height:70vh;overflow-y:auto;">
+      <table class="gantt-table" id="ganttTable">
+        <thead id="ganttHead"></thead>
+        <tbody id="ganttBody"></tbody>
+      </table>
+    </div>
+    <div id="loadingOverlay" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">加载中... / Loading...</span>
+      </div>
+      <p class="mt-2 text-muted">正在加载项目数据... / Loading project data...</p>
+    </div>
+  </div>
+
+  <!-- Update Modal -->
+  <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background-color:#E60012;color:white;">
+          <h5 class="modal-title" id="updateModalLabel">更新项目 / Update Project</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row mb-3">
+            <div class="col-6">
+              <label class="form-label fw-bold" style="font-size:12px;">项目名称<br><small>Project Name</small></label>
+              <input type="text" class="form-control readonly-field" id="modalProjectName" readonly>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-bold" style="font-size:12px;">项目 Leader<br><small>Project Leader</small></label>
+              <input type="text" class="form-control readonly-field" id="modalLeader" readonly>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold" style="font-size:13px;">里程碑节点 / Milestones</label>
+            <div class="text-muted mb-2" style="font-size:11px;">计划日期（只读） / 实际完成日期（可编辑）</div>
+            <div id="modalMilestones"></div>
+          </div>
+          <div class="row">
+            <div class="col-6">
+              <label class="form-label fw-bold" style="font-size:12px;">状态<br><small>Status</small></label>
+              <select class="form-select" id="modalStatus" disabled>
+                <option value="Ongoing">进行中 / Ongoing</option>
+                <option value="Delayed">延误 / Delayed</option>
+                <option value="Done">已完成 / Done</option>
+                <option value="Not start">未开始 / Not Start</option>
+              </select>
+              <div class="form-text" id="statusHelp" style="font-size:10px;">仅 Lyon Zhang 可修改状态</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
+          <button type="button" class="btn btn-danger" id="saveBtn">保存 / Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <?!=include("Kez_jquery@3.6.4_js");?>
+  <?!=include("Kez_bootstrap@5.3.1_js");?>
+  <?!=include("Kez_sweetalert2_js");?>
+  <?!=include("ProjectTracking-js");?>
+</body>
+
+</html>
