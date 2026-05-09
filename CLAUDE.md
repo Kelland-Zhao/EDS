@@ -41,6 +41,7 @@ git commit -m "VYYYYMMDD.XX_描述"  # 提交（版本命名规范）
   - 正确：`<th>保养计划<br>PM Plan</th>`
   - 错误：`<th>保养计划 / PM Plan</th>` 或 `<th>保养计划/ PM Plan</th>`
 - 数据 key 保持不变（如 `"保养状态/ PM Status"`），仅前端显示 title 做转换
+- **Navbar 标题例外**：navbar 品牌标题使用 `"中文 / English"` 格式（`/` 分隔），不套用上述 `<br>` 规则
 
 ### 版本命名规范
 - 提交格式：`VYYYYMMDD.XX_修改描述`，如 `V20260506.01_登录界面版本号升级至2.0`
