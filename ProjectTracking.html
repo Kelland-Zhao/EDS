@@ -46,49 +46,20 @@
       text-align: center;
       white-space: nowrap;
     }
-    .gantt-timeline {
-      position: relative;
-      min-height: 52px;
+    .gantt-table td.today-col {
+      border-left: 2px solid #E60012 !important;
+      border-right: 2px solid #E60012 !important;
     }
-    .gantt-bar {
-      position: absolute;
-      height: 14px;
-      top: 2px;
-      border-radius: 3px;
-      opacity: 0.25;
-      z-index: 1;
-      min-width: 2px;
-    }
-    .gantt-today-line {
-      position: absolute;
-      top: 0;
-      width: 2px;
-      background-color: #E60012;
-      z-index: 3;
-      pointer-events: none;
-    }
-    .gantt-today-label {
-      position: absolute;
-      top: 0;
-      background: #E60012;
-      color: white;
-      font-size: 9px;
+    .ms-cell-badge {
+      display: inline-block;
       padding: 1px 4px;
+      margin: 1px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: bold;
+      color: #fff;
       white-space: nowrap;
-      z-index: 6;
-      pointer-events: none;
-    }
-    .month-header {
-      font-size: 10px;
-      text-align: center;
-      border-left: 1px solid #ccc;
-    }
-    .month-header-row th {
-      background-color: #E60012;
-      color: white;
-      font-size: 10px;
-      padding: 4px 0;
-      border-left: 1px solid rgba(255,255,255,0.3);
+      line-height: 1.5;
     }
     .status-badge {
       font-size: 11px;
