@@ -72,6 +72,12 @@
     return y + '-' + m + '-' + day;
   }
 
+  function normalizeDate(str) {
+    if (!str || str === 'NA' || str === '') return '';
+    var d = parseDate(str);
+    return d ? formatDateYMD(d) : str;
+  }
+
   function formatHeader(header) {
     if (!header) return '';
     var parts = header.split(' / ');
@@ -146,10 +152,14 @@
     var parts = ms.name.split(' / ');
     var shortName = parts[0] || ms.name;
     var title = shortName;
+    if (ms.planned && ms.planned !== 'NA') {
+      title += ' | 计划: ' + normalizeDate(ms.planned);
+    } else {
+      title += ' | 计划: NA';
+    }
     if (ms.actual) {
-      title += ' | 实际: ' + ms.actual;
+      title += ' | 实际: ' + normalizeDate(ms.actual);
     } else if (ms.planned && ms.planned !== 'NA') {
-      title += ' | 计划: ' + ms.planned;
       var planned = parseDate(ms.planned);
       if (planned && planned < today) title += ' (逾期/Overdue)';
     }
@@ -161,10 +171,10 @@
 
     // Main header row
     var headHtml = '<tr>';
-    headHtml += '<th rowspan="2" style="min-width:140px;">项目名称<br><small>Project Name</small></th>';
-    headHtml += '<th rowspan="2" style="min-width:90px;">Leader</th>';
-    headHtml += '<th rowspan="2" style="min-width:70px;">状态<br><small>Status</small></th>';
-    headHtml += '<th colspan="1" style="font-size:10px;">甘特图 / Gantt Chart</th>';
+    headHtml += '<th rowspan="2">项目名称<br><small>Project Name</small></th>';
+    headHtml += '<th rowspan="2">Leader</th>';
+    headHtml += '<th rowspan="2">状态<br><small>Status</small></th>';
+    headHtml += '<th colspan="1" style="font-size:11px;">甘特图 / Gantt Chart</th>';
     headHtml += '</tr>';
 
     // Second header row with months
@@ -224,23 +234,32 @@
       if (barWidth < 1) barWidth = 1;
 
       bodyHtml += '<tr class="gantt-row" data-project="' + proj.projectName + '" data-idx="' + idx + '">';
-      bodyHtml += '<td class="gantt-info" style="font-size:12px;">' + proj.projectName + '</td>';
-      bodyHtml += '<td style="font-size:12px;">' + proj.leader + '</td>';
-      bodyHtml += '<td style="text-align:center;"><span class="status-badge" style="background:' + statusColor + ';">' + statusText + '</span></td>';
-      bodyHtml += '<td class="gantt-timeline" style="position:relative;min-width:' + timelineMinWidth + 'px;height:42px;">';
+      bodyHtml += '<td class="gantt-info">' + proj.projectName + '</td>';
+      bodyHtml += '<td class="gantt-leader">' + proj.leader + '</td>';
+      bodyHtml += '<td class="gantt-status"><span class="status-badge" style="background:' + statusColor + ';">' + statusText + '</span></td>';
+      bodyHtml += '<td class="gantt-timeline" style="position:relative;min-width:' + timelineMinWidth + 'px;">';
 
       // Bar
       bodyHtml += '<div class="gantt-bar" style="left:' + barLeft + '%;width:' + barWidth + '%;background:' + statusColor + ';" title="' + proj.projectName + ' | ' + statusText + '" data-project="' + proj.projectName + '"></div>';
 
-      // Milestone diamonds
+      // Track NA milestone offset
+      var naOffset = 0;
       proj.milestones.forEach(function(ms, mi) {
         var planned = parseDate(ms.planned);
+        var color = getMilestoneColor(ms);
+        var title = getMilestoneTitle(ms);
+        var shapeClass = '';
+        var pos;
         if (planned) {
-          var pos = getPositionPct(planned);
-          var color = getMilestoneColor(ms);
-          var title = getMilestoneTitle(ms);
-          bodyHtml += '<div class="gantt-milestone" style="left:' + (pos - 0.25) + '%;background:' + color + ';" title="' + title + '" data-ms="' + mi + '"></div>';
+          pos = getPositionPct(planned);
+          shapeClass = 'ms-diamond';
+        } else {
+          // NA milestones: position near start of bar with offset
+          pos = barLeft + naOffset * 1.2;
+          naOffset++;
+          shapeClass = 'ms-circle ms-na';
         }
+        bodyHtml += '<div class="gantt-milestone ' + shapeClass + '" style="left:' + pos + '%;background:' + color + ';" title="' + title + '" data-ms="' + mi + '"></div>';
       });
 
       // Today line
@@ -296,19 +315,40 @@
     // Build milestone rows
     var msHtml = '';
     proj.milestones.forEach(function(ms, i) {
+      var plannedDisplay = normalizeDate(ms.planned) || (ms.planned === 'NA' ? 'NA' : ms.planned);
       msHtml += '<div class="modal-milestone-row">';
       msHtml += '<div class="modal-milestone-label">' + formatHeader(ms.name) + '</div>';
       msHtml += '<div class="modal-milestone-dates">';
-      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="text" class="form-control form-control-sm readonly-field" value="' + (ms.planned || '') + '" readonly></div>';
-      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="text" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + (ms.actual || '') + '" placeholder="YYYY-MM-DD"></div>';
+      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned (YYYY-MM-DD)</small></label><input type="text" class="form-control form-control-sm readonly-field" value="' + (plannedDisplay || '') + '" readonly></div>';
+      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual (YYYY-MM-DD)</small></label><input type="text" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + normalizeDate(ms.actual) + '" placeholder="YYYY-MM-DD"></div>';
       msHtml += '</div>';
       msHtml += '</div>';
     });
     $('#modalMilestones').html(msHtml);
 
+    // Initialize datepicker on actual date inputs
+    $('.ms-actual').datepicker({
+      format: 'yyyy-mm-dd',
+      autoclose: true,
+      todayHighlight: true,
+      weekStart: 1,
+      clearBtn: true
+    });
+
     // Store current project for save
     $('#updateModal').data('projectName', proj.projectName);
     $('#updateModal').modal('show');
+
+    // Re-init datepicker when modal is shown (Bootstrap 5 event)
+    $('#updateModal').off('shown.bs.modal').on('shown.bs.modal', function() {
+      $('.ms-actual').datepicker({
+        format: 'yyyy-mm-dd',
+        autoclose: true,
+        todayHighlight: true,
+        weekStart: 1,
+        clearBtn: true
+      });
+    });
   }
 
   function saveUpdates() {
