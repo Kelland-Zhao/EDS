@@ -52,16 +52,28 @@
       .getProjectTrackingData();
   }
 
-  function parseDate(str) {
-    if (!str || str === 'NA' || str === '') return null;
-    var s = String(str).trim();
+  function parseDate(val) {
+    if (!val || val === 'NA' || val === '') return null;
+    // Handle Date objects (GAS getValues returns Date for date cells)
+    if (Object.prototype.toString.call(val) === '[object Date]') {
+      return new Date(val.getFullYear(), val.getMonth(), val.getDate());
+    }
+    var s = String(val).trim();
+    // ISO timestamp from JSON: "2026-04-04T00:00:00.000Z"
+    var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]));
+    // YYYY-MM-DD
     var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    // M/D or M/D/YYYY
     m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
     if (m) {
       var year = m[3] ? parseInt(m[3]) : today.getFullYear();
       return new Date(year, parseInt(m[1]) - 1, parseInt(m[2]));
     }
+    // Full date string from GAS: "Mon Apr 04 2026 ..."
+    var jsDate = new Date(s);
+    if (!isNaN(jsDate.getTime())) return new Date(jsDate.getFullYear(), jsDate.getMonth(), jsDate.getDate());
     return null;
   }
 
@@ -72,10 +84,13 @@
     return y + '-' + m + '-' + day;
   }
 
-  function normalizeDate(str) {
-    if (!str || str === 'NA' || str === '') return '';
-    var d = parseDate(str);
-    return d ? formatDateYMD(d) : str;
+  function normalizeDate(val) {
+    if (!val || val === 'NA' || val === '') return '';
+    if (Object.prototype.toString.call(val) === '[object Date]') {
+      return formatDateYMD(val);
+    }
+    var d = parseDate(val);
+    return d ? formatDateYMD(d) : String(val);
   }
 
   function formatHeader(header) {

@@ -9583,6 +9583,27 @@ const PROJECT_STATUS_COL = 17;
 const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
 
 /**
+ * Format a sheet cell value as YYYY-MM-DD string
+ * @param {*} val - Cell value (Date object, string, etc.)
+ * @returns {string}
+ */
+function formatSheetDate_(val) {
+  if (!val || val === 'NA' || val === '') return val === 'NA' ? 'NA' : '';
+  if (Object.prototype.toString.call(val) === '[object Date]') {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+  if (m) {
+    var now = new Date();
+    var year = m[3] ? parseInt(m[3]) : now.getFullYear();
+    return year + '-' + ('0' + parseInt(m[1])).slice(-2) + '-' + ('0' + parseInt(m[2])).slice(-2);
+  }
+  return s;
+}
+
+/**
  * 获取项目跟进数据
  * Get project tracking data
  * @returns {string} JSON string
@@ -9609,8 +9630,8 @@ function getProjectTrackingData() {
         milestones: PROJECT_MILESTONE_COLS.map(function(ms) {
           return {
             name: ms.name,
-            planned: String(row[ms.planned] || '').trim(),
-            actual: String(row[ms.actual] || '').trim()
+            planned: formatSheetDate_(row[ms.planned]),
+            actual: formatSheetDate_(row[ms.actual])
           };
         })
       };
