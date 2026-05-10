@@ -429,8 +429,22 @@
     if (!proj) return;
 
     $('#modalProjectName').val(proj.projectName);
-    $('#modalLeader').val(proj.leader);
     $('#modalStatus').val(proj.status);
+
+    // Init Select2 for leader in update modal
+    if ($('#modalLeader').hasClass('select2-hidden-accessible')) {
+      $('#modalLeader').select2('destroy');
+    }
+    $('#modalLeader').empty().append('<option value="' + (proj.leader || '') + '" selected>' + (proj.leader ? proj.leader.replace(/\(.*\)/, '').trim() : '') + '</option>');
+    $('#modalLeader').select2({
+      data: userListCache || [],
+      dropdownParent: $('#updateModal'),
+      templateResult: function(item) { return item.display || item.text; },
+      templateSelection: function(item) { return item.name || item.text || ''; },
+      placeholder: '请选择 / Select',
+      allowClear: false,
+      width: '100%'
+    });
 
     // Admin can edit status and planned dates
     $('#modalStatus').prop('disabled', !isAdmin);
@@ -484,6 +498,13 @@
     });
 
     var updates = { milestones: milestones };
+
+    // Leader change
+    var newLeader = $('#modalLeader').val();
+    if (newLeader && proj && newLeader !== proj.leader) {
+      updates.leader = newLeader;
+    }
+
     if (isAdmin) {
       var plannedDates = [];
       var hasPlannedChanges = false;

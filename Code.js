@@ -9673,6 +9673,11 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
       return JSON.stringify({ success: false, message: '项目未找到 / Project not found' });
     }
 
+    // Update leader
+    if (updates.leader) {
+      ws.getRange(rowIndex, 2).setValue(updates.leader);
+    }
+
     // Update milestone actual dates
     if (updates.milestones && Array.isArray(updates.milestones)) {
       updates.milestones.forEach(function(ms) {
