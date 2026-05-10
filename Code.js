@@ -9581,6 +9581,7 @@ const PROJECT_MILESTONE_COLS = [
 ];
 const PROJECT_STATUS_COL = 17;
 const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
+const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -9682,17 +9683,58 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
       });
     }
 
-    // Update status (only specific editors)
+    // Update status and planned dates (only admin)
+    var isAdmin = false;
+    if (updates.status !== undefined || (updates.milestones && updates.hasPlannedChanges)) {
+      const permCheck = JSON.parse(checkProjectPermission(editorName));
+      isAdmin = permCheck.isAdmin;
+    }
     if (updates.status !== undefined) {
-      if (PROJECT_STATUS_EDITORS.indexOf(editorName) === -1) {
-        return JSON.stringify({ success: false, message: '仅 ' + PROJECT_STATUS_EDITORS.join(', ') + ' 可修改状态 / Only specific editors can change status' });
+      if (!isAdmin && PROJECT_STATUS_EDITORS.indexOf(editorName) === -1) {
+        return JSON.stringify({ success: false, message: '仅管理员可修改状态 / Only admin can change status' });
       }
       ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
+    }
+    // Update milestone planned dates (admin only)
+    if (updates.plannedDates && isAdmin) {
+      updates.plannedDates.forEach(function(pd) {
+        if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
+          const plannedCol = PROJECT_MILESTONE_COLS[pd.index].planned;
+          ws.getRange(rowIndex, plannedCol + 1).setValue(pd.planned || 'NA');
+        }
+      });
     }
 
     return JSON.stringify({ success: true, message: '更新成功 / Update successful' });
   } catch (e) {
     return JSON.stringify({ success: false, message: '更新失败 / Update failed: ' + e.toString() });
+  }
+}
+
+/**
+ * 检查当前用户是否为项目跟进管理员
+ * Check if current user is project tracking admin
+ * @param {string} userName - 用户姓名
+ * @returns {string} JSON string {isAdmin: bool, userLevel: string}
+ */
+function checkProjectPermission(userName) {
+  try {
+    const ws = SpreadsheetApp.openById('1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM').getSheetByName('userID');
+    if (!ws) return JSON.stringify({ isAdmin: false, userLevel: '普通用户 / User' });
+    const vals = ws.getDataRange().getValues();
+    for (let i = 2; i < vals.length; i++) {
+      const name = String(vals[i][1] || '').trim();
+      if (name === userName) {
+        const perm = String(vals[i][PROJECT_PERMISSION_COL] || '').trim();
+        if (perm === 'Y') {
+          return JSON.stringify({ isAdmin: true, userLevel: '管理员 / Admin' });
+        }
+        break;
+      }
+    }
+    return JSON.stringify({ isAdmin: false, userLevel: '普通用户 / User' });
+  } catch (e) {
+    return JSON.stringify({ isAdmin: false, userLevel: '普通用户 / User' });
   }
 }
 

@@ -12,11 +12,13 @@
   var totalDays = 0;
   var today = new Date();
   today.setHours(0, 0, 0, 0);
+  var isAdmin = false;
 
   $(document).ready(function() {
     $('#userInfo').text(globalName + ' | ' + globalProcess);
     loadData();
     preloadUserList();
+    checkAdminPermission();
 
     $('#refreshBtn').click(function() { loadData(); });
     $('#todayBtn').click(function() { scrollToToday(); });
@@ -31,6 +33,26 @@
       $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
     }
   });
+
+  function checkAdminPermission() {
+    google.script.run.withSuccessHandler(function(result) {
+      try {
+        var res = typeof result === 'string' ? JSON.parse(result) : result;
+        isAdmin = res.isAdmin || false;
+        var badge = $('#userLevelBadge');
+        if (isAdmin) {
+          badge.removeClass('bg-secondary').addClass('badge bg-success').text('管理员 / Admin');
+        } else {
+          badge.removeClass('bg-secondary').addClass('badge bg-warning text-dark').text('普通用户 / User');
+        }
+        // Enable status field for admins
+        if (isAdmin) {
+          $('#modalStatus').prop('disabled', false);
+          $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
+        }
+      } catch(e) {}
+    }).checkProjectPermission(globalName);
+  }
 
   // Preload user list at page init for instant add-modal open
   function preloadUserList() {
@@ -99,6 +121,13 @@
     var m = ('0' + (d.getMonth() + 1)).slice(-2);
     var day = ('0' + d.getDate()).slice(-2);
     return y + '-' + m + '-' + day;
+  }
+
+  function normalizeDateInput(val) {
+    // Convert user-entered date to YYYY-MM-DD, or return as-is for NA/empty
+    if (!val || val === 'NA' || val === '') return val;
+    var d = parseDate(val);
+    return d ? formatDateYMD(d) : val;
   }
 
   function normalizeDate(val) {
@@ -404,9 +433,13 @@
     $('#modalLeader').val(proj.leader);
     $('#modalStatus').val(proj.status);
 
-    // Check if current user is Lyon Zhang
-    var isLyon = (globalName === 'Lyon Zhang');
-    $('#modalStatus').prop('disabled', !isLyon);
+    // Admin can edit status and planned dates
+    $('#modalStatus').prop('disabled', !isAdmin);
+    if (!isAdmin) {
+      $('#statusHelp').text('仅管理员可修改状态 / Only admin can edit status');
+    } else {
+      $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
+    }
 
     // Build milestone rows
     var msHtml = '';
@@ -415,7 +448,7 @@
       msHtml += '<div class="modal-milestone-row">';
       msHtml += '<div class="modal-milestone-label">' + formatHeader(ms.name) + '</div>';
       msHtml += '<div class="modal-milestone-dates">';
-      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned (YYYY-MM-DD)</small></label><input type="text" class="form-control form-control-sm readonly-field" value="' + (plannedDisplay || '') + '" readonly></div>';
+      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="text" class="form-control form-control-sm ms-planned' + (isAdmin ? '' : ' readonly-field') + '" data-ms-idx="' + i + '" value="' + (plannedDisplay || '') + '"' + (isAdmin ? ' placeholder="YYYY-MM-DD or NA"' : ' readonly') + '></div>';
       msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + normalizeDate(ms.actual) + '"></div>';
       msHtml += '</div>';
       msHtml += '</div>';
@@ -452,6 +485,24 @@
     });
 
     var updates = { milestones: milestones };
+    if (isAdmin) {
+      var plannedDates = [];
+      var hasPlannedChanges = false;
+      $('#modalMilestones .ms-planned').each(function() {
+        var idx = parseInt($(this).data('msIdx'));
+        var val = $(this).val().trim();
+        if (val && val !== 'NA') val = normalizeDateInput(val);
+        if (proj && proj.milestones[idx]) {
+          var oldVal = proj.milestones[idx].planned;
+          if (val !== oldVal) hasPlannedChanges = true;
+        }
+        plannedDates.push({ index: idx, planned: val || 'NA' });
+      });
+      if (hasPlannedChanges) {
+        updates.plannedDates = plannedDates;
+        updates.hasPlannedChanges = true;
+      }
+    }
     if (isStatusChanged) {
       updates.status = newStatus;
     }
