@@ -16,6 +16,7 @@
   $(document).ready(function() {
     $('#userInfo').text(globalName + ' | ' + globalProcess);
     loadData();
+    preloadUserList();
 
     $('#refreshBtn').click(function() { loadData(); });
     $('#todayBtn').click(function() { scrollToToday(); });
@@ -30,6 +31,20 @@
       $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
     }
   });
+
+  // Preload user list at page init for instant add-modal open
+  function preloadUserList() {
+    google.script.run.withSuccessHandler(function(result) {
+      try {
+        var users = typeof result === 'string' ? JSON.parse(result) : result;
+        if (!users.error && Array.isArray(users)) {
+          userListCache = users.map(function(u) {
+            return { id: u.display, text: u.display, name: u.name, display: u.display };
+          });
+        }
+      } catch(e) { /* degrade gracefully */ }
+    }).getUserList();
+  }
 
   function loadData() {
     $('#loadingOverlay').show();
@@ -496,44 +511,26 @@
     });
     $('#addMilestones').html(msHtml);
 
-    // Load user list for Select2 if not cached
-    function initSelect2() {
-      $('.select2-user').select2({
-        data: userListCache,
-        dropdownParent: $('#addModal'),
-        templateResult: function(item) { return item.display || item.text; },
-        templateSelection: function(item) { return item.name || item.text || ''; },
-        placeholder: '选择人员 / Select Person',
-        allowClear: false,
-        width: '100%'
-      });
-    }
+    // Reset form
+    $('#addProjectName').val('');
+    $('#addStatus').val('Not start');
 
-    if (userListCache) {
-      $('.select2-user').val(null).trigger('change');
-      initSelect2();
-      $('#addProjectName').val('');
-      $('#addStatus').val('Not start');
-      $('#addModal').modal('show');
-      return;
+    // Init Select2 from cache (preloaded at page init)
+    $('.select2-user').val(null).trigger('change');
+    if ($('.select2-user').hasClass('select2-hidden-accessible')) {
+      $('.select2-user').select2('destroy');
     }
+    $('.select2-user').select2({
+      data: userListCache || [],
+      dropdownParent: $('#addModal'),
+      templateResult: function(item) { return item.display || item.text; },
+      templateSelection: function(item) { return item.name || item.text || ''; },
+      placeholder: '请选择 / Select',
+      allowClear: false,
+      width: '100%'
+    });
 
-    // Fetch user list from backend
-    google.script.run.withSuccessHandler(function(result) {
-      try {
-        var users = typeof result === 'string' ? JSON.parse(result) : result;
-        if (users.error) { Swal.fire('错误', users.error, 'error'); return; }
-        userListCache = users.map(function(u) {
-          return { id: u.display, text: u.display, name: u.name, display: u.display };
-        });
-        initSelect2();
-        $('#addProjectName').val('');
-        $('#addStatus').val('Not start');
-        $('#addModal').modal('show');
-      } catch(e) {
-        Swal.fire('错误', '用户列表加载失败 / User list load failed', 'error');
-      }
-    }).getUserList();
+    $('#addModal').modal('show');
   }
 
   function submitAddProject() {
