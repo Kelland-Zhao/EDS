@@ -177,19 +177,26 @@
   function getMilestoneTitle(ms) {
     var parts = ms.name.split(' / ');
     var shortName = parts[0] || ms.name;
-    var title = shortName;
+    var lines = [shortName];
     if (ms.planned && ms.planned !== 'NA') {
-      title += ' | 计划: ' + normalizeDate(ms.planned);
+      lines.push('计划: ' + normalizeDate(ms.planned));
     } else {
-      title += ' | 计划: NA';
+      lines.push('计划: NA');
     }
     if (ms.actual) {
-      title += ' | 实际: ' + normalizeDate(ms.actual);
-    } else if (ms.planned && ms.planned !== 'NA') {
+      lines.push('实际完成: ' + normalizeDate(ms.actual));
+      lines.push('状态: 已完成 / Completed');
+    } else {
       var planned = parseDate(ms.planned);
-      if (planned && planned < today) title += ' (逾期/Overdue)';
+      if (planned && planned < today) {
+        lines.push('状态: 逾期未完成 / Overdue');
+      } else if (planned) {
+        lines.push('状态: 待完成 / Pending');
+      } else {
+        lines.push('状态: 无计划 / Not Scheduled');
+      }
     }
-    return title;
+    return lines.join('\n');
   }
 
   function rgba(color, alpha) {
