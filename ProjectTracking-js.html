@@ -325,17 +325,16 @@
         if (msByMonth[m]) {
           for (var n = 0; n < msByMonth[m].length; n++) {
             var item = msByMonth[m][n];
-            cellContent += '<span data-bs-toggle="tooltip" data-bs-html="true" data-bs-title="' + item.title.replace(/"/g, '&quot;') + '" style="display:inline-block;margin:0 1px;font-size:16px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span>';
+            cellContent += '<span data-bs-toggle="tooltip" data-bs-html="true" data-bs-title="' + item.title.replace(/"/g, '&quot;') + '" style="display:inline-block;margin:0 2px;font-size:20px;padding:2px 4px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span>';
           }
         }
 
         bodyHtml += '<td' + tdClass + ' style="' + cellStyle + '">' + cellContent + '</td>';
       }
 
-      // Action buttons — icon style, fixed width
+      // Update button — icon + text
       bodyHtml += '<td style="text-align:center;white-space:nowrap;width:72px;">';
-      bodyHtml += '<button class="btn btn-sm btn-outline-secondary gantt-update-btn" data-project="' + proj.projectName + '" title="编辑 / Edit" style="padding:2px 5px;font-size:12px;">&#9998;</button> ';
-      bodyHtml += '<button class="btn btn-sm btn-outline-info gantt-view-btn" data-project="' + proj.projectName + '" title="查看 / View" style="padding:2px 5px;font-size:12px;">&#128269;</button>';
+      bodyHtml += '<button class="btn btn-sm btn-outline-danger gantt-update-btn" data-project="' + proj.projectName + '" title="更新 / Update" style="font-size:11px;">&#9998; 更新<br><small>Update</small></button>';
       bodyHtml += '</td>';
       bodyHtml += '</tr>';
     });
@@ -350,12 +349,8 @@
       placement: 'top'
     });
 
-    // Edit button → open modal
+    // Update button → open modal
     $('#ganttBody').on('click', '.gantt-update-btn', function() {
-      openUpdateModal($(this).data('project'));
-    });
-    // View button → open modal read-only (same modal, just for viewing)
-    $('#ganttBody').on('click', '.gantt-view-btn', function() {
       openUpdateModal($(this).data('project'));
     });
 
