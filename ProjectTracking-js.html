@@ -401,35 +401,15 @@
       msHtml += '<div class="modal-milestone-label">' + formatHeader(ms.name) + '</div>';
       msHtml += '<div class="modal-milestone-dates">';
       msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned (YYYY-MM-DD)</small></label><input type="text" class="form-control form-control-sm readonly-field" value="' + (plannedDisplay || '') + '" readonly></div>';
-      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual (YYYY-MM-DD)</small></label><input type="text" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + normalizeDate(ms.actual) + '" placeholder="YYYY-MM-DD"></div>';
+      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + normalizeDate(ms.actual) + '"></div>';
       msHtml += '</div>';
       msHtml += '</div>';
     });
     $('#modalMilestones').html(msHtml);
 
-    // Initialize datepicker on actual date inputs
-    $('.ms-actual').datepicker({
-      format: 'yyyy-mm-dd',
-      autoclose: true,
-      todayHighlight: true,
-      weekStart: 1,
-      clearBtn: true
-    });
-
     // Store current project for save
     $('#updateModal').data('projectName', proj.projectName);
     $('#updateModal').modal('show');
-
-    // Re-init datepicker when modal is shown (Bootstrap 5 event)
-    $('#updateModal').off('shown.bs.modal').on('shown.bs.modal', function() {
-      $('.ms-actual').datepicker({
-        format: 'yyyy-mm-dd',
-        autoclose: true,
-        todayHighlight: true,
-        weekStart: 1,
-        clearBtn: true
-      });
-    });
   }
 
   function saveUpdates() {
@@ -511,19 +491,10 @@
     msNames.forEach(function(label, i) {
       msHtml += '<div class="modal-milestone-row">';
       msHtml += '<div class="modal-milestone-label" style="font-size:12px;font-weight:500;">' + label + '</div>';
-      msHtml += '<div style="flex:1;"><input type="text" class="form-control form-control-sm add-ms-planned" data-ms-idx="' + i + '" placeholder="YYYY-MM-DD"></div>';
+      msHtml += '<div style="flex:1;"><input type="date" class="form-control form-control-sm add-ms-planned" data-ms-idx="' + i + '"></div>';
       msHtml += '</div>';
     });
     $('#addMilestones').html(msHtml);
-
-    // Init datepicker on milestone inputs
-    $('.add-ms-planned').datepicker({
-      format: 'yyyy-mm-dd',
-      autoclose: true,
-      todayHighlight: true,
-      weekStart: 1,
-      clearBtn: true
-    });
 
     // Load user list for Select2 if not cached
     function initSelect2() {
@@ -563,17 +534,6 @@
         Swal.fire('错误', '用户列表加载失败 / User list load failed', 'error');
       }
     }).getUserList();
-
-    // Re-init datepickers when modal is fully shown
-    $('#addModal').off('shown.bs.modal').on('shown.bs.modal', function() {
-      $('.add-ms-planned').datepicker({
-        format: 'yyyy-mm-dd',
-        autoclose: true,
-        todayHighlight: true,
-        weekStart: 1,
-        clearBtn: true
-      });
-    });
   }
 
   function submitAddProject() {
