@@ -565,11 +565,11 @@
     $('#addProjectName').val('');
     $('#addStatus').val('Not start');
 
-    // Init Select2 from cache (preloaded at page init)
-    $('.select2-user').val(null).trigger('change');
+    // Reset Select2 — destroy old, add empty option, re-init
     if ($('.select2-user').hasClass('select2-hidden-accessible')) {
       $('.select2-user').select2('destroy');
     }
+    $('.select2-user').empty().append('<option value=""></option>').val('');
     $('.select2-user').select2({
       data: userListCache || [],
       dropdownParent: $('#addModal'),
