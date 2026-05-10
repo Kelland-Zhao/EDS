@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <?!=include("Kez_Bootstrap@5.3.1_css");?>
   <?!=include("Kez_bootstrap-datepicker_css");?>
+  <?!=include("Kez_Select2@4.0.13_css");?>
+  <?!=include("Kez_Select2-bootstrap_css");?>
   <?!=include("CSS");?>
   <style>
     .gantt-container {
@@ -138,6 +140,7 @@
       <div>
         <button class="btn btn-sm btn-outline-secondary" id="refreshBtn">刷新 / Refresh</button>
         <button class="btn btn-sm btn-outline-secondary" id="todayBtn">定位今天 / Go to Today</button>
+        <button class="btn btn-sm btn-outline-success" id="addProjectBtn">＋ 添加项目<br><small>Add Project</small></button>
       </div>
       <div id="dataRangeInfo" style="font-size:11px;color:#666;"></div>
     </div>
@@ -202,9 +205,58 @@
     </div>
   </div>
 
+  <!-- Add Project Modal -->
+  <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background-color:#E60012;color:white;">
+          <h5 class="modal-title" id="addModalLabel">添加项目 / Add Project</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row mb-3">
+            <div class="col-6">
+              <label class="form-label fw-bold" style="font-size:12px;">项目名称<br><small>Project Name</small></label>
+              <input type="text" class="form-control" id="addProjectName" placeholder="输入项目名称 / Enter Project Name" required>
+            </div>
+            <div class="col-3">
+              <label class="form-label fw-bold" style="font-size:12px;">项目 Leader<br><small>Project Leader</small></label>
+              <select class="form-select select2-user" id="addLeader" style="width:100%;"></select>
+            </div>
+            <div class="col-3">
+              <label class="form-label fw-bold" style="font-size:12px;">测试责任技术员<br><small>Test Technician</small></label>
+              <select class="form-select select2-user" id="addTechnician" style="width:100%;"></select>
+            </div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-6">
+              <label class="form-label fw-bold" style="font-size:12px;">状态<br><small>Status</small></label>
+              <select class="form-select" id="addStatus">
+                <option value="Ongoing">进行中 / Ongoing</option>
+                <option value="Delayed">延误 / Delayed</option>
+                <option value="Done">已完成 / Done</option>
+                <option value="Not start" selected>未开始 / Not Start</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold" style="font-size:13px;">里程碑计划日期<br><small>Milestone Planned Dates (YYYY-MM-DD)</small></label>
+            <div class="text-muted mb-2" style="font-size:11px;">非必填，留空表示 NA / Optional, blank = NA</div>
+          </div>
+          <div id="addMilestones"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
+          <button type="button" class="btn btn-danger" id="addSubmitBtn">提交 / Submit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <?!=include("Kez_jquery@3.6.4_js");?>
   <?!=include("Kez_bootstrap@5.3.1_js");?>
   <?!=include("Kez_bootstrap-datepicker-js");?>
+  <?!=include("Kez_select2@4.0.13_js");?>
   <?!=include("Kez_sweetalert2_js");?>
   <?!=include("ProjectTracking-js");?>
 </body>

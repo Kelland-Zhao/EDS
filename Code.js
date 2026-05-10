@@ -9695,3 +9695,64 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     return JSON.stringify({ success: false, message: '更新失败 / Update failed: ' + e.toString() });
   }
 }
+
+/**
+ * 获取用户列表（姓名 + 邮箱）
+ * Get user list for dropdowns
+ * @returns {string} JSON string
+ */
+function getUserList() {
+  try {
+    const ws = SpreadsheetApp.openById('1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM').getSheetByName('userID');
+    if (!ws) return JSON.stringify([]);
+    const vals = ws.getDataRange().getValues();
+    const users = [];
+    for (let i = 2; i < vals.length; i++) {
+      const name  = String(vals[i][1]  || '').trim();
+      const email = String(vals[i][9]  || '').trim();
+      if (name && name !== 'NAME') {
+        users.push({
+          name: name,
+          email: email,
+          display: email ? name + ' (' + email + ')' : name
+        });
+      }
+    }
+    return JSON.stringify(users);
+  } catch(e) {
+    return JSON.stringify({ error: e.toString() });
+  }
+}
+
+/**
+ * 添加新项目
+ * Add new project
+ * @param {string} dataStr - JSON with project data
+ * @returns {string} JSON string
+ */
+function addProject(dataStr) {
+  try {
+    const data = JSON.parse(dataStr);
+    const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!ws) return JSON.stringify({ success: false, message: 'Sheet 项目总表 not found' });
+
+    // Build new row: 18 columns
+    const row = [];
+    row.push(data.projectName || '');                         // 0: 项目名称
+    row.push(data.leader || '');                              // 1: Leader
+    row.push(data.technician || '');                          // 2: 测试责任技术员
+    // 7 milestones: planned (odd indices) + actual (even indices, blank)
+    const milestonePlanned = data.milestones || [];
+    for (let i = 0; i < 7; i++) {
+      row.push(milestonePlanned[i] || '');                    // planned date
+      row.push('');                                            // actual date (blank)
+    }
+    row.push(data.status || 'Not start');                     // 17: Status
+
+    ws.appendRow(row);
+    return JSON.stringify({ success: true, message: '添加成功 / Project added successfully' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: '添加失败 / Add failed: ' + e.toString() });
+  }
+}

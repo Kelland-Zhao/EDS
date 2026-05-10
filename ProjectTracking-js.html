@@ -20,6 +20,8 @@
     $('#refreshBtn').click(function() { loadData(); });
     $('#todayBtn').click(function() { scrollToToday(); });
     $('#saveBtn').click(function() { saveUpdates(); });
+    $('#addProjectBtn').click(function() { openAddModal(); });
+    $('#addSubmitBtn').click(function() { submitAddProject(); });
 
     // Status editor check
     var isLyon = (globalName === 'Lyon Zhang');
@@ -487,6 +489,143 @@
         Swal.fire('错误 / Error', '保存失败 / Save failed: ' + err.message, 'error');
       })
       .updateProjectTracking(projectName, JSON.stringify(updates), globalName);
+  }
+
+  // ==========================================
+  // 添加项目 / Add Project
+  // ==========================================
+  var userListCache = null;
+
+  function openAddModal() {
+    // Build milestone date inputs
+    var msNames = [
+      '模具/自动化改造（供应商）<br><small>Tooling & Automation (Supplier)</small>',
+      'FAT<br><small>FAT</small>',
+      '现场安装<br><small>On-site Installation</small>',
+      'IQ/OQ<br><small>IQ/OQ</small>',
+      '工程测试<br><small>Engineering Test</small>',
+      'PQ<br><small>PQ</small>',
+      'Mass Production<br><small>Mass Production</small>'
+    ];
+    var msHtml = '';
+    msNames.forEach(function(label, i) {
+      msHtml += '<div class="modal-milestone-row">';
+      msHtml += '<div class="modal-milestone-label" style="font-size:12px;font-weight:500;">' + label + '</div>';
+      msHtml += '<div style="flex:1;"><input type="text" class="form-control form-control-sm add-ms-planned" data-ms-idx="' + i + '" placeholder="YYYY-MM-DD"></div>';
+      msHtml += '</div>';
+    });
+    $('#addMilestones').html(msHtml);
+
+    // Init datepicker on milestone inputs
+    $('.add-ms-planned').datepicker({
+      format: 'yyyy-mm-dd',
+      autoclose: true,
+      todayHighlight: true,
+      weekStart: 1,
+      clearBtn: true
+    });
+
+    // Load user list for Select2 if not cached
+    function initSelect2() {
+      $('.select2-user').select2({
+        data: userListCache,
+        dropdownParent: $('#addModal'),
+        templateResult: function(item) { return item.display || item.text; },
+        templateSelection: function(item) { return item.name || item.text || ''; },
+        placeholder: '选择人员 / Select Person',
+        allowClear: true,
+        width: '100%'
+      });
+    }
+
+    if (userListCache) {
+      $('.select2-user').val(null).trigger('change');
+      initSelect2();
+      $('#addProjectName').val('');
+      $('#addStatus').val('Not start');
+      $('#addModal').modal('show');
+      return;
+    }
+
+    // Fetch user list from backend
+    google.script.run.withSuccessHandler(function(result) {
+      try {
+        var users = typeof result === 'string' ? JSON.parse(result) : result;
+        if (users.error) { Swal.fire('错误', users.error, 'error'); return; }
+        userListCache = users.map(function(u) {
+          return { id: u.display, text: u.display, name: u.name, display: u.display };
+        });
+        initSelect2();
+        $('#addProjectName').val('');
+        $('#addStatus').val('Not start');
+        $('#addModal').modal('show');
+      } catch(e) {
+        Swal.fire('错误', '用户列表加载失败 / User list load failed', 'error');
+      }
+    }).getUserList();
+
+    // Re-init datepickers when modal is fully shown
+    $('#addModal').off('shown.bs.modal').on('shown.bs.modal', function() {
+      $('.add-ms-planned').datepicker({
+        format: 'yyyy-mm-dd',
+        autoclose: true,
+        todayHighlight: true,
+        weekStart: 1,
+        clearBtn: true
+      });
+    });
+  }
+
+  function submitAddProject() {
+    var projectName = $('#addProjectName').val().trim();
+    if (!projectName) {
+      Swal.fire('提示 / Notice', '请输入项目名称 / Project name required', 'warning');
+      return;
+    }
+
+    // Collect milestone planned dates
+    var milestones = [];
+    $('.add-ms-planned').each(function() {
+      var val = $(this).val().trim();
+      milestones.push(val || 'NA');
+    });
+
+    var data = {
+      projectName: projectName,
+      leader: $('#addLeader').val() || '',
+      technician: $('#addTechnician').val() || '',
+      status: $('#addStatus').val() || 'Not start',
+      milestones: milestones
+    };
+
+    Swal.fire({
+      title: '正在提交... / Submitting...',
+      allowOutsideClick: false,
+      didOpen: function() { Swal.showLoading(); }
+    });
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        Swal.close();
+        try {
+          var res = typeof result === 'string' ? JSON.parse(result) : result;
+          if (res.success) {
+            Swal.fire('成功 / Success', res.message, 'success').then(function() {
+              $('#addModal').modal('hide');
+              loadData();
+            });
+          } else {
+            Swal.fire('失败 / Failed', res.message, 'error');
+          }
+        } catch(e) {
+          Swal.fire('错误 / Error', e.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        Swal.close();
+        Swal.fire('错误 / Error', '提交失败 / Submit failed: ' + err.message, 'error');
+      })
+      .addProject(JSON.stringify(data));
   }
 
   // Handle empty state
