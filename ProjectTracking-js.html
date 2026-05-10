@@ -325,7 +325,7 @@
         if (msByMonth[m]) {
           for (var n = 0; n < msByMonth[m].length; n++) {
             var item = msByMonth[m][n];
-            cellContent += '<span data-bs-toggle="tooltip" data-bs-html="true" data-bs-title="' + item.title.replace(/"/g, '&quot;') + '" style="display:inline-block;margin:0 2px;font-size:20px;padding:2px 4px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span>';
+            cellContent += '<span class="ms-node" data-ms-title="' + item.title.replace(/"/g, '&quot;') + '" style="display:inline-block;margin:0 2px;font-size:20px;padding:2px 4px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span>';
           }
         }
 
@@ -341,12 +341,18 @@
 
     $('#ganttBody').html(bodyHtml);
 
-    // Init Bootstrap tooltips on milestone ◆ nodes
-    $('[data-bs-toggle="tooltip"]').tooltip('dispose');
-    $('[data-bs-toggle="tooltip"]').tooltip({
-      html: true,
-      delay: { show: 100, hide: 100 },
-      placement: 'top'
+    // Custom jQuery hover tooltip — no Bootstrap/Popper dependency
+    $('.ms-node').off('mouseenter mouseleave').on('mouseenter', function(e) {
+      var $tip = $('#msTooltip');
+      if (!$tip.length) {
+        $tip = $('<div id="msTooltip" style="position:fixed;z-index:9999;max-width:200px;padding:6px 10px;background:rgba(0,0,0,0.85);color:#fff;border-radius:4px;font-size:12px;line-height:1.6;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>');
+        $('body').append($tip);
+      }
+      $tip.html($(this).data('ms-title')).css({ left: e.clientX + 12, top: e.clientY - 8 }).show();
+    }).on('mousemove', function(e) {
+      $('#msTooltip').css({ left: e.clientX + 12, top: e.clientY - 8 });
+    }).on('mouseleave', function() {
+      $('#msTooltip').hide();
     });
 
     // Update button → open modal
