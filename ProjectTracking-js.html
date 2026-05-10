@@ -196,7 +196,7 @@
         lines.push('状态: 无计划 / Not Scheduled');
       }
     }
-    return lines.join('\n');
+    return lines.join('<br>');
   }
 
   function rgba(color, alpha) {
@@ -325,7 +325,7 @@
         if (msByMonth[m]) {
           for (var n = 0; n < msByMonth[m].length; n++) {
             var item = msByMonth[m][n];
-            cellContent += '<span style="display:inline-block;margin:0 1px;font-size:16px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;" title="' + item.title + '">&#9670;</span>';
+            cellContent += '<span data-bs-toggle="tooltip" data-bs-html="true" data-bs-title="' + item.title.replace(/"/g, '&quot;') + '" style="display:inline-block;margin:0 1px;font-size:16px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span>';
           }
         }
 
@@ -341,6 +341,14 @@
     });
 
     $('#ganttBody').html(bodyHtml);
+
+    // Init Bootstrap tooltips on milestone ◆ nodes
+    $('[data-bs-toggle="tooltip"]').tooltip('dispose');
+    $('[data-bs-toggle="tooltip"]').tooltip({
+      html: true,
+      delay: { show: 100, hide: 100 },
+      placement: 'top'
+    });
 
     // Edit button → open modal
     $('#ganttBody').on('click', '.gantt-update-btn', function() {
