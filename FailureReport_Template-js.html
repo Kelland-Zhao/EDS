@@ -301,7 +301,7 @@ $(document).ready(function () {
 
       let pRows = '';
       paTypes.forEach(function(t, i) {
-        pRows += buildPaRow(t.trim(), i, false);
+        pRows += buildPaRow(t.trim(), i, true);
       });
       $('#paTableBody').html(pRows);
 
