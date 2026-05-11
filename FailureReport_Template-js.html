@@ -422,8 +422,16 @@ $(document).ready(function () {
           $('#btnSubmit').text('更新 / Update');
           $('.navbar-brand').text('编辑故障报告 / Edit Breakdown Analysis');
 
+          Swal.fire({
+            title: '加载数据中... / Loading Data...',
+            text: '正在获取已有报告数据 / Fetching existing report data',
+            allowOutsideClick: false,
+            didOpen: function() { Swal.showLoading(); }
+          });
+
           google.script.run
             .withSuccessHandler(function(r) {
+              Swal.close();
               const result = JSON.parse(r);
               if (result.success && result.formData) {
                 restoreFormData(result.formData);
@@ -434,6 +442,7 @@ $(document).ready(function () {
               }
             })
             .withFailureHandler(function(e) {
+              Swal.close();
               Swal.fire({ title: '加载失败 / Load Failed', text: e.message, icon: 'error', confirmButtonText: '确定 / OK' });
             })
             .getFailureReportFormData(p.reportId);
