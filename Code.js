@@ -350,6 +350,9 @@ function submitFailureReport(dataStr) {
     const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
     const requiredPa = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
     const PA_INDEX_COL = 13;
+    // 确保 paIndex 列有表头
+    const paIndexHeader = wsFollow.getRange(1, PA_INDEX_COL + 1);
+    if (!paIndexHeader.getValue()) paIndexHeader.setValue('paIndex');
 
     function isPaRowFilled(row) {
       const missing = requiredPa.filter(function(fid) { return !String((row && row[fid]) || '').trim(); });
