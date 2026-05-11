@@ -58,9 +58,23 @@ $(document).ready(function() {
             Swal.showLoading();
         }
     });
-    
+
     initializeTables();
-    loadFailureReportProgressData();
+
+    // 检查编辑权限后再加载数据
+    google.script.run
+        .withSuccessHandler(function(hasPermission) {
+            window._userCanEdit = hasPermission;
+            loadFailureReportProgressData();
+        })
+        .withFailureHandler(function(e) {
+            window._userCanEdit = false;
+            loadFailureReportProgressData();
+        })
+        .checkFailureReportFillPermission(
+            sessionStorage.getItem('Email') || '',
+            sessionStorage.getItem('Name') || ''
+        );
 });
 
 // 初始化DataTables
@@ -87,7 +101,7 @@ function initializeTables() {
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
-                data: 'attachments', 
+                data: 'attachments',
                 title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
@@ -95,6 +109,17 @@ function initializeTables() {
                     } else {
                         return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
                     }
+                }
+            },
+            {
+                data: null,
+                title: buildBilingualTitle('操作', 'Actions'),
+                orderable: false,
+                render: function(data, type, row) {
+                    if (row.hasFormData && window._userCanEdit) {
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑 / Edit</button>';
+                    }
+                    return '';
                 }
             }
         ],
@@ -124,7 +149,7 @@ function initializeTables() {
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
-                data: 'attachments', 
+                data: 'attachments',
                 title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
@@ -132,6 +157,17 @@ function initializeTables() {
                     } else {
                         return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
                     }
+                }
+            },
+            {
+                data: null,
+                title: buildBilingualTitle('操作', 'Actions'),
+                orderable: false,
+                render: function(data, type, row) {
+                    if (row.hasFormData && window._userCanEdit) {
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑 / Edit</button>';
+                    }
+                    return '';
                 }
             }
         ],
@@ -161,7 +197,7 @@ function initializeTables() {
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
-                data: 'attachments', 
+                data: 'attachments',
                 title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
@@ -169,6 +205,17 @@ function initializeTables() {
                     } else {
                         return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
                     }
+                }
+            },
+            {
+                data: null,
+                title: buildBilingualTitle('操作', 'Actions'),
+                orderable: false,
+                render: function(data, type, row) {
+                    if (row.hasFormData && window._userCanEdit) {
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑 / Edit</button>';
+                    }
+                    return '';
                 }
             }
         ],
@@ -246,7 +293,8 @@ function processFailureReportProgressData(data) {
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
                 completionDays: item.completionDays || '',
-                attachments: item.attachments || ''
+                attachments: item.attachments || '',
+                hasFormData: item.hasFormData || false
             }));
             imTable.rows.add(imData).draw();
         }
@@ -264,7 +312,8 @@ function processFailureReportProgressData(data) {
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
                 completionDays: item.completionDays || '',
-                attachments: item.attachments || ''
+                attachments: item.attachments || '',
+                hasFormData: item.hasFormData || false
             }));
             tfTable.rows.add(tfData).draw();
         }
@@ -282,7 +331,8 @@ function processFailureReportProgressData(data) {
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
                 completionDays: item.completionDays || '',
-                attachments: item.attachments || ''
+                attachments: item.attachments || '',
+                hasFormData: item.hasFormData || false
             }));
             pkTable.rows.add(pkData).draw();
         }
@@ -312,6 +362,19 @@ function showStatistics(data) {
 }
 
 
+
+// 编辑按钮点击事件
+$(document).on('click', '.edit-progress-btn', function() {
+    const reportId = $(this).data('id');
+    const machineNo = $(this).data('machine');
+    const desc = $(this).data('desc');
+    const base = sessionStorage.getItem('siWebPage') || '';
+    const url = base + '?v=FailureReport_Template&editMode=1'
+        + '&reportId=' + encodeURIComponent(reportId)
+        + '&machineNo=' + encodeURIComponent(machineNo)
+        + '&desc=' + encodeURIComponent(desc);
+    window.open(url);
+});
 
 // 显示错误信息
 function showError(message) {

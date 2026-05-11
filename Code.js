@@ -258,6 +258,37 @@ function getWorkshopProcessOptions() {
   }
 }
 
+function getFailureReportFormData(reportId) {
+  try {
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const ws = ss.getSheetByName('Failure_Database');
+    if (!ws) throw new Error('Failure_Database sheet not found');
+    const values = ws.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][6]).trim() === String(reportId).trim()) {
+        rowIndex = i;
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('未找到故障报告编号 / Report not found: ' + reportId);
+    const jsonStr = String(values[rowIndex][10] || '');
+    if (!jsonStr || !jsonStr.trim().startsWith('{')) {
+      throw new Error('该报告暂无表单数据 / No form data found');
+    }
+    const formData = JSON.parse(jsonStr);
+    let existingFileUrl = '', existingFileName = '';
+    const cellJ = values[rowIndex][9];
+    if (cellJ) {
+      const match = String(cellJ).match(/HYPERLINK\("([^"]+)","([^"]*)"\)/);
+      if (match) { existingFileUrl = match[1]; existingFileName = match[2]; }
+    }
+    return JSON.stringify({ success: true, formData: formData, existingFileUrl: existingFileUrl, existingFileName: existingFileName });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
 function submitFailureReport(dataStr) {
   try {
     const data = JSON.parse(dataStr);
@@ -266,6 +297,7 @@ function submitFailureReport(dataStr) {
     const wsFollow = ss.getSheetByName('Failure_Report_followup');
     if (!ws) throw new Error('Sheet Failure_Database not found');
     if (!wsFollow) throw new Error('Sheet Failure_Report_followup not found');
+    const isEditMode = data._editMode === true;
     const values = ws.getDataRange().getValues();
     let rowIndex = -1;
     for (let i = 1; i < values.length; i++) {
@@ -278,13 +310,35 @@ function submitFailureReport(dataStr) {
     const dataForSheet = Object.assign({}, data);
     delete dataForSheet.photo;
     delete dataForSheet.fault_category_text;
+    delete dataForSheet._editMode;
     ws.getRange(rowIndex, 11).setValue(JSON.stringify(dataForSheet));
-    // 生成PDF并写入J列
+
+    // 编辑模式：删除旧 PDF + 版本化文件名
+    let pdfVersionSuffix = '';
+    if (isEditMode) {
+      const oldCellJ = values[rowIndex - 1][9];
+      if (oldCellJ) {
+        const oldMatch = String(oldCellJ).match(/HYPERLINK\("([^"]+)","([^"]*)"\)/);
+        if (oldMatch) {
+          try {
+            const oldUrl = oldMatch[1];
+            const idMatch = oldUrl.match(/\/d\/([^\/]+)/);
+            if (idMatch) DriveApp.getFileById(idMatch[1]).setTrashed(true);
+          } catch (e) { /* 旧文件不存在则忽略 */ }
+          const oldName = oldMatch[2] || '';
+          const vMatch = oldName.match(/_v(\d+)\.pdf$/);
+          const newVer = vMatch ? parseInt(vMatch[1]) + 1 : 2;
+          pdfVersionSuffix = '_v' + newVer;
+        }
+      }
+    }
+
+    // 生成 PDF 并写入 J 列
     const pdfBlob = generateFailureReportPDF_(data);
     const reportNo = String(data.case_code || '').trim();
     const workshop = String(values[rowIndex - 1][4] || '').trim();
     const processFromRow = String(values[rowIndex - 1][5] || '').trim();
-    const fileName = reportNo + '_' + workshop + '_' + processFromRow + '.pdf';
+    const fileName = reportNo + '_' + workshop + '_' + processFromRow + pdfVersionSuffix + '.pdf';
     pdfBlob.setName(fileName);
     const folder = DriveApp.getFolderById('1mMKiMFOzbpqB_V2iIQcIqF2o4ZyRRcNL');
     const pdfFile = folder.createFile(pdfBlob);
@@ -294,40 +348,111 @@ function submitFailureReport(dataStr) {
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
     const now = new Date();
     const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
-    const followRows = [];
     const requiredPa = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
+    const PA_INDEX_COL = 13;
 
-    (data.pa || []).forEach(function(row) {
-      const missing = requiredPa.filter(function(fid) {
-        return !String((row && row[fid]) || '').trim();
-      });
-      if (missing.length === requiredPa.length) return;
-      if (missing.length > 0) {
-        throw new Error('预防对策存在未填写完整行，请补全后提交 / Incomplete PA row exists');
-      }
-      const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
-      followRows.push([
-        followId,
-        String(data.case_code || '').trim(),
-        String((row && row.type) || '').trim(),
-        String((row && row.pa_plan) || '').trim(),
-        String((row && row.pa_who) || '').trim(),
-        String((row && row.pa_when) || '').trim(),
-        String((row && row.pa_verifier) || '').trim(),
-        String((row && row.pa_verifier_when) || '').trim(),
-        '进行中 / Ongoing',
-        nowYmd,
-        nowYmd,
-        fileUrl,
-        '未验证 / Not Verified'
-      ]);
-    });
+    function isPaRowFilled(row) {
+      const missing = requiredPa.filter(function(fid) { return !String((row && row[fid]) || '').trim(); });
+      return missing.length < requiredPa.length;
+    }
 
-    if (followRows.length === 0) {
+    const filledCount = (data.pa || []).filter(isPaRowFilled).length;
+    if (filledCount === 0) {
       throw new Error('请至少完整填写1条预防对策后再提交 / Please complete at least one PA row');
     }
 
-    wsFollow.getRange(wsFollow.getLastRow() + 1, 1, followRows.length, followRows[0].length).setValues(followRows);
+    if (isEditMode) {
+      // 编辑模式：按 paIndex 精确匹配，同步更新已有跟进记录
+      const followData = wsFollow.getDataRange().getValues();
+      const existingMap = {};
+      const compatIndices = [];
+
+      for (let i = 1; i < followData.length; i++) {
+        if (String(followData[i][1]).trim() === String(data.case_code).trim()) {
+          const storedIdx = followData[i][PA_INDEX_COL];
+          if (storedIdx !== undefined && String(storedIdx).trim() !== '') {
+            existingMap[parseInt(storedIdx)] = { rowIndex: i + 1, data: followData[i] };
+          } else {
+            compatIndices.push({ rowIndex: i + 1, data: followData[i] });
+          }
+        }
+      }
+      let compatCursor = 0;
+      compatIndices.forEach(function(item) {
+        while (existingMap[compatCursor] !== undefined) compatCursor++;
+        existingMap[compatCursor] = item;
+        compatCursor++;
+      });
+
+      const usedExisting = new Set();
+      (data.pa || []).forEach(function(row, paIdx) {
+        if (!isPaRowFilled(row)) return;
+
+        const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
+        const newRow = [
+          followId,
+          String(data.case_code || '').trim(),
+          String((row && row.type) || '').trim(),
+          String((row && row.pa_plan) || '').trim(),
+          String((row && row.pa_who) || '').trim(),
+          String((row && row.pa_when) || '').trim(),
+          String((row && row.pa_verifier) || '').trim(),
+          String((row && row.pa_verifier_when) || '').trim(),
+          '进行中 / Ongoing',
+          nowYmd,
+          nowYmd,
+          fileUrl,
+          '未验证 / Not Verified',
+          paIdx
+        ];
+
+        if (existingMap[paIdx] !== undefined) {
+          const existing = existingMap[paIdx].data;
+          newRow[8] = String(existing[8] || '进行中 / Ongoing').trim();
+          newRow[9] = String(existing[9] || nowYmd).trim();
+          newRow[10] = nowYmd;
+          newRow[12] = String(existing[12] || '未验证 / Not Verified').trim();
+          usedExisting.add(paIdx);
+          wsFollow.getRange(existingMap[paIdx].rowIndex, 1, 1, newRow.length).setValues([newRow]);
+        } else {
+          wsFollow.getRange(wsFollow.getLastRow() + 1, 1, 1, newRow.length).setValues([newRow]);
+        }
+      });
+
+      const existingIndices = Object.keys(existingMap).map(Number);
+      const toDelete = existingIndices
+        .filter(function(idx) { return !usedExisting.has(idx); })
+        .map(function(idx) { return existingMap[idx].rowIndex; })
+        .sort(function(a, b) { return b - a; });
+      toDelete.forEach(function(rowIdx) { wsFollow.deleteRow(rowIdx); });
+
+    } else {
+      // 新建模式：创建新跟进记录（含 paIndex 列）
+      const followRows = [];
+      data.pa.forEach(function(row, paIdx) {
+        const missing = requiredPa.filter(function(fid) { return !String((row && row[fid]) || '').trim(); });
+        if (missing.length === requiredPa.length) return;
+        const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
+        followRows.push([
+          followId,
+          String(data.case_code || '').trim(),
+          String((row && row.type) || '').trim(),
+          String((row && row.pa_plan) || '').trim(),
+          String((row && row.pa_who) || '').trim(),
+          String((row && row.pa_when) || '').trim(),
+          String((row && row.pa_verifier) || '').trim(),
+          String((row && row.pa_verifier_when) || '').trim(),
+          '进行中 / Ongoing',
+          nowYmd,
+          nowYmd,
+          fileUrl,
+          '未验证 / Not Verified',
+          paIdx
+        ]);
+      });
+      wsFollow.getRange(wsFollow.getLastRow() + 1, 1, followRows.length, followRows[0].length).setValues(followRows);
+    }
+
     return JSON.stringify({ success: true, fileUrl: fileUrl, fileName: fileName });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
@@ -6634,6 +6759,7 @@ function getFailureReportProgressData(userEmail, userName) {
           completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
+          hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
         });
       } else if (process === "TF") {
         result.TF.push({
@@ -6647,6 +6773,7 @@ function getFailureReportProgressData(userEmail, userName) {
           completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
+          hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
         });
       } else if (process === "PK") {
         result.PK.push({
@@ -6660,6 +6787,7 @@ function getFailureReportProgressData(userEmail, userName) {
           completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
+          hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
         });
       }
     }

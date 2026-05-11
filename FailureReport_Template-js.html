@@ -402,11 +402,13 @@ $(document).ready(function () {
       $('#formBody').show();
       $('#formBody').on('input change', scheduleSave);
 
-      // URL参数预填 + 草稿检测
+      // URL参数预填 + 编辑模式检测
       google.script.url.getLocation(function(loc) {
         const p = loc.parameter || {};
+        const isEditMode = p.editMode === '1';
+
         if (p.reportId) {
-          draftKey = 'fr_draft_' + p.reportId;
+          draftKey = isEditMode ? 'fr_draft_edit_' + p.reportId : 'fr_draft_' + p.reportId;
           $('#fld_case_code').val(p.reportId).prop('readonly', true).addClass('bg-secondary bg-opacity-10 text-muted');
         }
         if (p.machineNo) {
@@ -414,6 +416,33 @@ $(document).ready(function () {
         }
         if (p.desc) $('#fld_trouble_desc').val(p.desc);
 
+        // 编辑模式：从服务器加载已有数据
+        if (isEditMode && p.reportId) {
+          window._isEditMode = true;
+          $('#btnSubmit').text('更新 / Update');
+          $('.navbar-brand').text('编辑故障报告 / Edit Breakdown Analysis');
+
+          google.script.run
+            .withSuccessHandler(function(r) {
+              const result = JSON.parse(r);
+              if (result.success && result.formData) {
+                restoreFormData(result.formData);
+                if (result.formData.photo) $('#photo_preview').attr('src', result.formData.photo).show();
+                Swal.fire({ title: '数据已加载 / Data Loaded', icon: 'info', timer: 1200, showConfirmButton: false });
+              } else {
+                Swal.fire({ title: '加载失败 / Load Failed', text: result.message || '无法获取已有报告数据', icon: 'error', confirmButtonText: '确定 / OK' });
+              }
+            })
+            .withFailureHandler(function(e) {
+              Swal.fire({ title: '加载失败 / Load Failed', text: e.message, icon: 'error', confirmButtonText: '确定 / OK' });
+            })
+            .getFailureReportFormData(p.reportId);
+
+          // 编辑模式下：加载完服务器数据后再检查草稿
+          return;
+        }
+
+        // 新建模式：检查本地草稿
         const saved = localStorage.getItem(draftKey);
         if (saved) {
           Swal.fire({
@@ -485,6 +514,7 @@ $(document).ready(function () {
   $('#btnSubmit').on('click', function() {
     $('#formBody .is-invalid').removeClass('is-invalid');
     const data = collectFormData();
+    if (window._isEditMode) data._editMode = true;
     const missing = [];
     const followupRequired = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
     const followupLabel = {
@@ -511,7 +541,8 @@ $(document).ready(function () {
         });
       } else {
         const el = $('#fld_' + f.id);
-        isEmpty = !el.val() || el.val().trim() === '';
+        const val = el.val();
+        isEmpty = !val || (Array.isArray(val) ? val.length === 0 : val.trim() === '');
         if (isEmpty) el.addClass('is-invalid');
       }
       if (isEmpty) missing.push(f.label);
@@ -578,9 +609,10 @@ $(document).ready(function () {
           const result = JSON.parse(r);
           if (result.success) {
             localStorage.removeItem(draftKey);
+            const isEdit = window._isEditMode;
             Swal.fire({
-              title: '提交成功 / Submitted',
-              html: '报告已生成PDF并存档<br>Report PDF saved.<br><br>' +
+              title: isEdit ? '更新成功 / Updated' : '提交成功 / Submitted',
+              html: (isEdit ? '报告已更新并重新生成PDF<br>Report updated and PDF regenerated.<br><br>' : '报告已生成PDF并存档<br>Report PDF saved.<br><br>') +
                 '<a href="' + result.fileUrl + '" target="_blank">' + result.fileName + '</a>',
               icon: 'success',
               confirmButtonText: '确定 / OK'
