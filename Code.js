@@ -9839,11 +9839,66 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
           ws.getRange(rowIndex, plannedCol + 1).setValue(pd.planned || 'NA');
         }
       });
+      sendPlannedDateChangeNotification(projectName, editorName, updates.plannedDates);
     }
 
     return JSON.stringify({ success: true, message: '更新成功 / Update successful' });
   } catch (e) {
     return JSON.stringify({ success: false, message: '更新失败 / Update failed: ' + e.toString() });
+  }
+}
+
+/**
+ * 发送计划日期变更通知给所有"管理员"权限用户
+ * @param {string} projectName
+ * @param {string} editorName
+ * @param {Array} plannedDates
+ */
+function sendPlannedDateChangeNotification(projectName, editorName, plannedDates) {
+  try {
+    const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!permWs) return;
+    const permVals = permWs.getDataRange().getValues();
+    const adminEmails = [];
+    for (let i = 2; i < permVals.length; i++) {
+      const perm = String(permVals[i][PROJECT_PERMISSION_COL] || '').trim();
+      if (perm === '管理员') {
+        const email = String(permVals[i][9] || '').trim();
+        if (email) adminEmails.push(email);
+      }
+    }
+    if (adminEmails.length === 0) return;
+    const webPage = getReleaseWebPage();
+    const subject = '【项目跟进】计划日期变更通知 / Planned Date Change - ' + projectName;
+    var htmlBody = '<html><body>';
+    htmlBody += '<h2>项目跟进 - 计划日期变更通知 / Project Tracking - Planned Date Change</h2>';
+    htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
+    htmlBody += '<tr><td><b>项目 / Project</b></td><td>' + escapeHtml(projectName) + '</td></tr>';
+    htmlBody += '<tr><td><b>编辑人 / Editor</b></td><td>' + escapeHtml(editorName) + '</td></tr>';
+    htmlBody += '</table>';
+    htmlBody += '<br><b>变更里程碑 / Changed Milestones:</b>';
+    htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
+    htmlBody += '<tr><th>里程碑 / Milestone</th><th>新计划日期 / New Planned Date</th></tr>';
+    plannedDates.forEach(function(pd) {
+      if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
+        htmlBody += '<tr><td>' + escapeHtml(PROJECT_MILESTONE_COLS[pd.index].name) + '</td><td>' + escapeHtml(pd.planned || 'NA') + '</td></tr>';
+      }
+    });
+    htmlBody += '</table>';
+    htmlBody += '<p><a href="' + webPage + '?v=ProjectTracking">点击查看项目跟进 / View Project Tracking</a></p>';
+    htmlBody += '<p>此邮件由系统自动发送 / Auto-sent by system.</p>';
+    htmlBody += '</body></html>';
+    adminEmails.forEach(function(email) {
+      try {
+        GmailApp.sendEmail(email, subject, '', { htmlBody: htmlBody });
+        console.log('计划日期变更通知已发送 / Notification sent to: ' + email);
+      } catch (e) {
+        console.error('发送通知失败 / Failed to send to ' + email + ': ' + e);
+      }
+    });
+  } catch (e) {
+    console.error('sendPlannedDateChangeNotification error: ' + e);
   }
 }
 
@@ -9862,7 +9917,7 @@ function checkProjectPermission(userName) {
       const name = String(vals[i][1] || '').trim();
       if (name === userName) {
         const perm = String(vals[i][PROJECT_PERMISSION_COL] || '').trim();
-        if (perm === 'Y') {
+        if (perm === '超级用户' || perm === '管理员') {
           return JSON.stringify({ isAdmin: true, userLevel: '管理员 / Admin' });
         }
         break;
