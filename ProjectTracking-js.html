@@ -265,19 +265,36 @@
       return;
     }
 
-    // 从未完成项目计算日期范围
-    var allDates = [];
+    // 开始日期：仅从进行中+未开始项目取第一个milestone
+    var startDates = [];
+    var activeProjects = projects.filter(function(proj) {
+      return proj.status === 'Ongoing' || proj.status === 'Not start';
+    });
+    var startSource = activeProjects.length > 0 ? activeProjects : projects;
+    startSource.forEach(function(proj) {
+      proj.milestones.forEach(function(ms) {
+        var d = parseDate(ms.planned);
+        if (d) startDates.push(d);
+        d = parseDate(ms.actual);
+        if (d) startDates.push(d);
+      });
+    });
+    startDates.sort(function(a, b) { return a - b; });
+
+    // 结束日期：使用所有显示项目的最后一个milestone
+    var endDates = [];
     projects.forEach(function(proj) {
       proj.milestones.forEach(function(ms) {
         var d = parseDate(ms.planned);
-        if (d) allDates.push(d);
+        if (d) endDates.push(d);
         d = parseDate(ms.actual);
-        if (d) allDates.push(d);
+        if (d) endDates.push(d);
       });
     });
-    allDates.sort(function(a, b) { return a - b; });
-    var localMin = allDates.length > 0 ? new Date(allDates[0]) : new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    var localMax = allDates.length > 0 ? new Date(allDates[allDates.length - 1]) : new Date(today.getFullYear(), today.getMonth() + 3, 1);
+    endDates.sort(function(a, b) { return a - b; });
+
+    var localMin = startDates.length > 0 ? new Date(startDates[0]) : new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    var localMax = endDates.length > 0 ? new Date(endDates[endDates.length - 1]) : new Date(today.getFullYear(), today.getMonth() + 3, 1);
     localMin = new Date(localMin.getFullYear(), localMin.getMonth() - 1, 1);
     localMax = new Date(localMax.getFullYear(), localMax.getMonth() + 2, 0);
 
