@@ -295,18 +295,17 @@
 
     var localMin = startDates.length > 0 ? new Date(startDates[0]) : new Date(today.getFullYear(), today.getMonth() - 1, 1);
     var localMax = endDates.length > 0 ? new Date(endDates[endDates.length - 1]) : new Date(today.getFullYear(), today.getMonth() + 3, 1);
-    localMin = new Date(localMin.getFullYear(), localMin.getMonth() - 1, 1);
-    localMax = new Date(localMax.getFullYear(), localMax.getMonth() + 2, 0);
+    // 使用精确日期，不加月余量
 
-    // Trim leading empty days
+    // Trim leading empty days（仅基于进行中+未开始项目）
     var trimStart = localMax;
-    projects.forEach(function(proj) {
+    startSource.forEach(function(proj) {
       proj.milestones.forEach(function(ms) {
         var d = parseDate(ms.planned) || parseDate(ms.actual);
         if (d && d < trimStart) trimStart = d;
       });
     });
-    var effectiveMin = new Date(trimStart.getFullYear(), trimStart.getMonth(), 1);
+    var effectiveMin = new Date(trimStart);
 
     // Build day columns
     var days = [];
