@@ -7,9 +7,6 @@
   sessionStorage.setItem('siWebPage', siWebPage);
 
   var globalData = null;
-  var minDate = null;
-  var maxDate = null;
-  var totalDays = 0;
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var isAdmin = false;
@@ -147,32 +144,6 @@
     return header;
   }
 
-  function calculateDateRange() {
-    if (!globalData || !globalData.projects) return;
-    var allDates = [];
-    globalData.projects.forEach(function(proj) {
-      proj.milestones.forEach(function(ms) {
-        var d = parseDate(ms.planned);
-        if (d) allDates.push(d);
-        d = parseDate(ms.actual);
-        if (d) allDates.push(d);
-      });
-    });
-    if (allDates.length === 0) {
-      minDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      maxDate = new Date(today.getFullYear(), today.getMonth() + 3, 1);
-    } else {
-      allDates.sort(function(a, b) { return a - b; });
-      minDate = new Date(allDates[0]);
-      maxDate = new Date(allDates[allDates.length - 1]);
-    }
-    // Add 1 month margin on each side
-    minDate = new Date(minDate.getFullYear(), minDate.getMonth() - 1, 1);
-    maxDate = new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
-    totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
-    if (totalDays < 30) totalDays = 30;
-  }
-
   function getStatusColor(status) {
     switch (status) {
       case 'Done': return '#28a745';
@@ -293,19 +264,8 @@
     });
     endDates.sort(function(a, b) { return a - b; });
 
-    var localMin = startDates.length > 0 ? new Date(startDates[0]) : new Date(today.getFullYear(), today.getMonth() - 1, 1);
     var localMax = endDates.length > 0 ? new Date(endDates[endDates.length - 1]) : new Date(today.getFullYear(), today.getMonth() + 3, 1);
-    // 使用精确日期，不加月余量
-
-    // Trim leading empty days（仅基于进行中+未开始项目）
-    var trimStart = localMax;
-    startSource.forEach(function(proj) {
-      proj.milestones.forEach(function(ms) {
-        var d = parseDate(ms.planned) || parseDate(ms.actual);
-        if (d && d < trimStart) trimStart = d;
-      });
-    });
-    var effectiveMin = new Date(trimStart);
+    var effectiveMin = startDates.length > 0 ? new Date(startDates[0]) : new Date(today.getFullYear(), today.getMonth(), 1);
 
     // Build day columns
     var days = [];
@@ -702,20 +662,5 @@
         Swal.fire('错误 / Error', '提交失败 / Submit failed: ' + err.message, 'error');
       })
       .addProject(JSON.stringify(data));
-  }
-
-  // Handle empty state
-  function onFailure(error) {
-    $('#loadingOverlay').hide();
-    Swal.fire({
-      icon: 'error',
-      title: '加载失败 / Load Failed',
-      text: error.message || '未知错误 / Unknown error',
-      confirmButtonText: '重试 / Retry',
-      showCancelButton: true,
-      cancelButtonText: '取消 / Cancel'
-    }).then(function(result) {
-      if (result.isConfirmed) loadData();
-    });
   }
 </script>
