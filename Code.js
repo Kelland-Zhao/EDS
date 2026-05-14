@@ -348,6 +348,7 @@ function submitFailureReport(dataStr) {
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
     const now = new Date();
     const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    ws.getRange(rowIndex, 9).setValue(nowYmd);
     const requiredPa = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
     const PA_INDEX_COL = 13;
     // 确保 paIndex 列有表头
