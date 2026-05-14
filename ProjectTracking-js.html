@@ -275,32 +275,6 @@
       cur.setDate(cur.getDate() + 1);
     }
 
-    // Month spans for header
-    var monthSpans = [];
-    var lastKey = -1;
-    for (var d = 0; d < days.length; d++) {
-      var key = days[d].year * 100 + days[d].month;
-      if (key !== lastKey) {
-        monthSpans.push({ year: days[d].year, month: days[d].month, count: 1 });
-        lastKey = key;
-      } else {
-        monthSpans[monthSpans.length - 1].count++;
-      }
-    }
-
-    // Year spans
-    var yearSpans = [];
-    var lastYear = -1;
-    for (var m = 0; m < monthSpans.length; m++) {
-      var yr = monthSpans[m].year;
-      if (yr !== lastYear) {
-        yearSpans.push({ year: yr, count: monthSpans[m].count });
-        lastYear = yr;
-      } else {
-        yearSpans[yearSpans.length - 1].count += monthSpans[m].count;
-      }
-    }
-
     function inDay(date, dayObj) {
       return date.getFullYear() === dayObj.date.getFullYear()
         && date.getMonth() === dayObj.date.getMonth()
@@ -309,26 +283,93 @@
 
     var monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
+    // Collapse empty stretches: days with no milestone across all projects
+    var COLLAPSE_BUFFER = 3;  // keep N days around each milestone
+    var COLLAPSE_GAP = 14;    // only collapse gaps >= N days
+    var activeDaySet = {};
+    // Always keep today
+    for (var di = 0; di < days.length; di++) {
+      if (inDay(today, days[di])) activeDaySet[di] = true;
+    }
+    projects.forEach(function(proj) {
+      proj.milestones.forEach(function(ms) {
+        [parseDate(ms.planned), parseDate(ms.actual)].forEach(function(dt) {
+          if (!dt) return;
+          for (var di = 0; di < days.length; di++) {
+            if (Math.abs((days[di].date - dt) / 86400000) <= COLLAPSE_BUFFER) activeDaySet[di] = true;
+          }
+        });
+      });
+    });
+
+    var displayCols = [];
+    var ci = 0;
+    while (ci < days.length) {
+      if (activeDaySet[ci]) {
+        displayCols.push({ type: 'day', dayIdx: ci });
+        ci++;
+      } else {
+        var gapStart = ci;
+        while (ci < days.length && !activeDaySet[ci]) ci++;
+        var gapLen = ci - gapStart;
+        if (gapLen >= COLLAPSE_GAP) {
+          displayCols.push({ type: 'collapse', gapStart: gapStart, gapEnd: ci - 1, count: gapLen, startDate: days[gapStart].date, endDate: days[ci - 1].date });
+        } else {
+          for (var j = gapStart; j < ci; j++) displayCols.push({ type: 'day', dayIdx: j });
+        }
+      }
+    }
+
+    // Month spans from displayCols
+    var monthSpans = [];
+    var lastKey = -1;
+    displayCols.forEach(function(col) {
+      var date = col.type === 'day' ? days[col.dayIdx].date : col.startDate;
+      var key = date.getFullYear() * 100 + date.getMonth();
+      if (key !== lastKey) {
+        monthSpans.push({ year: date.getFullYear(), month: date.getMonth(), count: 1 });
+        lastKey = key;
+      } else {
+        monthSpans[monthSpans.length - 1].count++;
+      }
+    });
+
+    // Year spans
+    var yearSpans = [];
+    var lastYear = -1;
+    monthSpans.forEach(function(ms) {
+      if (ms.year !== lastYear) {
+        yearSpans.push({ year: ms.year, count: ms.count });
+        lastYear = ms.year;
+      } else {
+        yearSpans[yearSpans.length - 1].count += ms.count;
+      }
+    });
+
     // Header: year row + month row + day row
     var headHtml = '<tr>';
     headHtml += '<th rowspan="3">项目名称<br><small>Project Name</small></th>';
     headHtml += '<th rowspan="3">Leader<br><small>状态 Status</small></th>';
-    for (var y = 0; y < yearSpans.length; y++) {
-      headHtml += '<th colspan="' + yearSpans[y].count + '" style="font-size:10px;">' + yearSpans[y].year + '</th>';
-    }
+    yearSpans.forEach(function(ys) {
+      headHtml += '<th colspan="' + ys.count + '" style="font-size:10px;">' + ys.year + '</th>';
+    });
     headHtml += '<th rowspan="3" style="width:72px;">操作<br><small>Action</small></th>';
     headHtml += '</tr>';
 
     headHtml += '<tr>';
-    for (var m = 0; m < monthSpans.length; m++) {
-      headHtml += '<th colspan="' + monthSpans[m].count + '" style="font-size:9px;">' + monthNames[monthSpans[m].month] + '</th>';
-    }
+    monthSpans.forEach(function(ms) {
+      headHtml += '<th colspan="' + ms.count + '" style="font-size:9px;">' + monthNames[ms.month] + '</th>';
+    });
     headHtml += '</tr>';
 
     headHtml += '<tr>';
-    for (var d = 0; d < days.length; d++) {
-      headHtml += '<th style="font-size:8px;min-width:28px;padding:2px 1px;">' + days[d].label + '</th>';
-    }
+    displayCols.forEach(function(col) {
+      if (col.type === 'day') {
+        headHtml += '<th style="font-size:8px;min-width:28px;padding:2px 1px;">' + days[col.dayIdx].label + '</th>';
+      } else {
+        headHtml += '<th class="collapsed-col" title="折叠 ' + col.count + ' 天 / Collapsed ' + col.count + ' days&#10;' + formatDateYMD(col.startDate) + ' ~ ' + formatDateYMD(col.endDate) + '" style="font-size:8px;min-width:18px;max-width:18px;padding:2px 0;background:#e9ecef;color:#adb5bd;letter-spacing:-1px;">···</th>';
+      }
+    });
     headHtml += '</tr>';
     $('#ganttHead').html(headHtml);
 
@@ -338,6 +379,7 @@
       var stColor = getStatusColor(proj.status);
       var stText = getStatusText(proj.status);
       var barBg = rgba(stColor, 0.25);
+      var barBgCollapse = rgba(stColor, 0.12);
 
       var projStart = null, projEnd = null;
       proj.milestones.forEach(function(ms) {
@@ -366,26 +408,25 @@
       bodyHtml += '<td class="gantt-info">' + proj.projectName + '</td>';
       bodyHtml += '<td style="text-align:center;white-space:nowrap;font-size:12px;">' + proj.leader + '<br><span class="status-badge" style="background:' + stColor + ';">' + stText + '</span></td>';
 
-      for (var d = 0; d < days.length; d++) {
-        var day = days[d];
-        var cellStyle = 'text-align:center;vertical-align:middle;';
-        var cellContent = '';
-
-        if (projStart && projEnd && projEnd >= day.date && projStart <= day.date) {
-          cellStyle += 'background:' + barBg + ';';
-        }
-
-        var tdClass = inDay(today, day) ? ' class="today-col"' : '';
-
-        if (msByDay[d]) {
-          for (var n = 0; n < msByDay[d].length; n++) {
-            var item = msByDay[d][n];
-            cellContent += '<span class="ms-node" data-ms-title="' + item.title.replace(/"/g, '&quot;') + '" style="display:inline-block;margin:0 1px;font-size:14px;padding:1px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span>';
+      displayCols.forEach(function(col) {
+        if (col.type === 'day') {
+          var d = col.dayIdx;
+          var day = days[d];
+          var cellStyle = 'text-align:center;vertical-align:middle;';
+          var cellContent = '';
+          if (projStart && projEnd && projEnd >= day.date && projStart <= day.date) cellStyle += 'background:' + barBg + ';';
+          var tdClass = inDay(today, day) ? ' class="today-col"' : '';
+          if (msByDay[d]) {
+            msByDay[d].forEach(function(item) {
+              cellContent += '<span class="ms-node" data-ms-title="' + item.title.replace(/"/g, '&quot;') + '" style="display:inline-block;margin:0 1px;font-size:14px;padding:1px;line-height:1;color:' + item.color + ';cursor:pointer;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span>';
+            });
           }
+          bodyHtml += '<td' + tdClass + ' style="' + cellStyle + '">' + cellContent + '</td>';
+        } else {
+          var inRange = projStart && projEnd && col.endDate >= projStart && col.startDate <= projEnd;
+          bodyHtml += '<td style="min-width:18px;max-width:18px;background:' + (inRange ? barBgCollapse : '#f8f9fa') + ';border-left:1px dashed #dee2e6;border-right:1px dashed #dee2e6;"></td>';
         }
-
-        bodyHtml += '<td' + tdClass + ' style="' + cellStyle + '">' + cellContent + '</td>';
-      }
+      });
 
       bodyHtml += '<td style="text-align:center;white-space:nowrap;width:72px;">';
       bodyHtml += '<button class="btn btn-sm btn-outline-danger gantt-update-btn" data-project="' + proj.projectName + '" title="更新 / Update" style="font-size:11px;">&#9998; 更新<br><small>Update</small></button>';
@@ -413,7 +454,10 @@
       openUpdateModal($(this).data('project'));
     });
 
-    $('#dataRangeInfo').text('时间范围: ' + formatDateYMD(effectiveMin) + ' ~ ' + formatDateYMD(localMax) + ' | 共 ' + days.length + ' 天 | 仅未完成项目');
+    var collapsedCount = displayCols.filter(function(c) { return c.type === 'collapse'; }).length;
+    var collapsedDays = displayCols.filter(function(c) { return c.type === 'collapse'; }).reduce(function(s, c) { return s + c.count; }, 0);
+    var collapseInfo = collapsedDays > 0 ? ' | 已折叠 ' + collapsedDays + ' 天（' + collapsedCount + ' 段）/ Collapsed ' + collapsedDays + ' days' : '';
+    $('#dataRangeInfo').text('时间范围: ' + formatDateYMD(effectiveMin) + ' ~ ' + formatDateYMD(localMax) + ' | 共 ' + days.length + ' 天 | 仅未完成项目' + collapseInfo);
   }
 
   function scrollToToday() {
