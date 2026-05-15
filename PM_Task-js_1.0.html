@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   let global_Name = sessionStorage.getItem('Name');
   let global_Process = sessionStorage.getItem('Process');
   let global_ID = sessionStorage.getItem('ID');
@@ -166,12 +166,12 @@
   // 执行提交流程的函数（全局作用域）
   function executeSubmissionProcess(confirmUser, incompleteTaskInfo) {
     Swal.fire({
-      title: "确认提交？/ Confirm to submit?",
-      text: "一旦提交将无法修改/ Once submitted, changes will not be allowed",
+      title: "确认提交？",
+      text: "一旦提交将无法修改",
       icon: "question",
       showCancelButton: true,
-      confirmButtonText: "确认/ Confirmed",
-      cancelButtonText: "取消/ Cancel"
+      confirmButtonText: "确认",
+      cancelButtonText: "取消"
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
@@ -192,7 +192,7 @@
           seconds = seconds < 10 ? '0' + seconds : seconds;
           let formattedTime = hours + ':' + minutes + ':' + seconds;
 
-          $("#PmStatus").val("已完成/ Done");
+          $("#PmStatus").val("已完成");
           $("#PmEndDate").val(formattedDate);
           $("#PmEndTime").val(formattedTime);
           $('#PmEnd').prop('disabled', true);
@@ -656,7 +656,8 @@
         showTable(table_head, tasklist);
         Swal.close();
         Swal.fire({
-          title: '加载成功/ Loading Success',
+          title: '加载成功',
+          html: '<span style="font-size:14px;color:#6c757d;">LOADING SUCCESS</span>',
           icon: 'success'
         });
       }).getPMrecord(PM_Info);
@@ -676,7 +677,7 @@
       // 优先用rowData.imageContent
       if (rowData.imageContent) {
         Swal.fire({
-          title: '图片预览/ Image Preview',
+          title: '图片预览',
           imageUrl: rowData.imageContent,
           imageAlt: 'Custom image',
           showConfirmButton: false,
@@ -691,7 +692,7 @@
         let reader = new FileReader();
         reader.onload = function (e) {
           Swal.fire({
-            title: '图片预览/ Image Preview',
+            title: '图片预览',
             imageUrl: e.target.result,
             imageAlt: 'Custom image',
             showConfirmButton: false,
@@ -701,9 +702,9 @@
       } else {
         Swal.fire({
           icon: 'warning',
-          title: '警告/ Warning',
-          text: '请先选择一张图片/ Please select an image first.',
-          confirmButtonText: '确定/ OK'
+          title: '警告',
+          text: '请先选择一张图片',
+          confirmButtonText: '确定'
         });
       }
     });
@@ -1013,7 +1014,8 @@
   function Tasklist(data) {
     Swal.close();
     Swal.fire({
-      title: '加载成功/ Loading Success',
+      title: '加载成功',
+          html: '<span style="font-size:14px;color:#6c757d;">LOADING SUCCESS</span>',
       icon: 'success'
     });
 
@@ -1084,7 +1086,7 @@
       } else if (data.waiting && data.waiting.length > 0) {
         // 仅有待发放记录
         Swal.fire({
-          title: '提示 / Notice',
+          title: '提示',
           html: `
             文件处于待发放状态<br>
             Document is waiting for distribution
@@ -1095,7 +1097,7 @@
       } else if (data.pending && data.pending.length > 0) {
         // 仅有待审批记录
         Swal.fire({
-          title: '提示 / Notice',
+          title: '提示',
           html: `
             该保养任务还未审批<br>
             This PM task is still pending approval
@@ -1107,10 +1109,10 @@
     } catch (error) {
       console.error('DataProcess函数发生错误:', error);
       Swal.fire({
-        title: '错误 / Error',
+        title: '错误',
         html: `
           数据处理发生错误<br>
-          An error occurred during data processing
+          <span style="font-size:14px;color:#6c757d;">AN ERROR OCCURRED DURING DATA PROCESSING</span>
         `,
         icon: 'error'
       });
@@ -1159,10 +1161,10 @@
     } catch (error) {
       console.error('processEffectiveRecords函数发生错误:', error);
       Swal.fire({
-        title: '错误 / Error',
+        title: '错误',
         html: `
           有效记录处理发生错误<br>
-          An error occurred during effective records processing
+          <span style="font-size:14px;color:#6c757d;">AN ERROR OCCURRED DURING EFFECTIVE RECORDS PROCESSING</span>
         `,
         icon: 'error'
       });
@@ -1211,14 +1213,14 @@
       if (title === '数值记录&备注') {
         colDef.render = function (data, type, row) {
           const noteValue = data || row.valueAndNote || '';
-          return `<input type="text" class="form-control text-center" value="${noteValue}" placeholder="输入数值/ Input Value" ${!isEditable ? 'readonly' : ''}>`;
+          return `<input type="text" class="form-control text-center" value="${noteValue}" placeholder="输入数值" ${!isEditable ? 'readonly' : ''}>`;
         };
       }
       if (title === '操作') {
         colDef.render = function (data, type, row) {
-          return `<button class="btn btn-info btn-sm text-center preview-btn">预览/ Preview</button>
+          return `<button class="btn btn-info btn-sm text-center preview-btn">预览<br>PREVIEW</button>
                         <input type="file" accept="image/*" capture="camera" style="display: none;" class="photo-input">
-                        <button class="btn btn-warning btn-sm text-center take-photo-btn" ${!isEditable ? 'disabled' : ''}>拍照/ Photo</button>`;
+                        <button class="btn btn-warning btn-sm text-center take-photo-btn" ${!isEditable ? 'disabled' : ''}>拍照<br>PHOTO</button>`;
         };
       }
       table_head.push(colDef);
@@ -1359,12 +1361,12 @@
   function alert(message) {
     if (message == '确认提交') {
       Swal.fire({
-        title: "确认提交？/ Confirm to submit?",
-        text: "一旦提交将无法修改/ Once submitted, changes will not be allowed",
+        title: "确认提交？",
+        text: "一旦提交将无法修改",
         icon: "question",
         showCancelButton: true,
-        confirmButtonText: "确认/ Confirmed",
-        cancelButtonText: "取消/ Cancel"
+        confirmButtonText: "确认",
+        cancelButtonText: "取消"
       }).then((result) => {
         if (result.isConfirmed) {
           return true
@@ -1376,14 +1378,14 @@
     } else if (message == "提交成功") {
       Swal.close();
       Swal.fire({
-        title: '保存成功/ Saving Success',
+        title: '保存成功',
         icon: 'success'
       });
 
     } else if (message == "提交中") {
       Swal.fire({
-        title: '数据提交中/ Data Uploading',
-        text: '数据提交中，请稍后.../ Data uploading, please wait...',
+        title: '数据提交中',
+        text: '数据提交中，请稍后...',
         icon: 'info',
         allowOutsideClick: false,
         showConfirmButton: false,
@@ -1391,12 +1393,12 @@
     } else if (message !== '确认提交') {
       Swal.fire({
         icon: 'warning',
-        title: '警告/ Warning',
+        title: '警告',
         text: message,
         confirmButtonText: '确定'
       }).then((result) => {
         if (result.isConfirmed) {
-          return "警告/ Warning"
+          return "警告"
         }
       })
     }
@@ -1497,7 +1499,7 @@
       html: htmlContent,
       width: '80%',
       showConfirmButton: true,
-      confirmButtonText: '确认保养信息/ Confirm PM Info',
+      confirmButtonText: '确认保养信息',
       didOpen: () => {
         serialNo = global_data["开始日期"].replace(/-/g, '') + global_data["AEM#"]
         $("#PmSerialNo").val(serialNo);
@@ -1558,7 +1560,7 @@
             $("#PmWorkingOrder").select2({
               theme: 'bootstrap',
               data: [],
-              placeholder: '工单数据加载中.../ Loading work order data...',
+              placeholder: '工单数据加载中...',
               dropdownParent: $('.swal2-modal')
             });
             // 调整宽度
@@ -1769,7 +1771,7 @@
             let code = $("#WorkingCode").val();
             let name = $("#Name").val();
             if (code && name) {
-              let deleteButton = '<button type="button" class="btn btn-danger btn-sm delete-btn">删除/Delete</button>';
+              let deleteButton = '<button type="button" class="btn btn-danger btn-sm delete-btn">删除<br>DELETE</button>';
               table.row.add({ WorkingCode: code, Name: name, Operation: deleteButton }).draw(false);
               $("#WorkingCode").val('');
               $("#Name").val('');
@@ -1807,25 +1809,25 @@
         let pmWorkingOrderStr = Array.isArray(pmWorkingOrder) ? pmWorkingOrder.join('/') : (pmWorkingOrder || '');
         global_workingorder = pmWorkingOrderStr;
         if (!pmWorkingOrder || (Array.isArray(pmWorkingOrder) && pmWorkingOrder.length === 0) || pmWorkingOrderStr === '') {
-          alert("保养工单号不能为空/ PM Working Order cannot be empty.");
+          alert("保养工单号不能为空");
           return false;
         }
 
         if (!currentStatus.includes('人员已分配')) {
           let rowCount = table.rows().count();
           if (rowCount === 0) {
-            alert("表格中必须至少有一条保养人员信息/ The table must have at least one PM person info.");
+            alert("表格中必须至少有一条保养人员信息");
             return false;
           }
         }
 
         Swal.fire({
-          title: "确认提交？/ Confirm to submit?",
-          text: "一旦提交将无法修改/ Once submitted, changes will not be allowed",
+          title: "确认提交？",
+          text: "一旦提交将无法修改",
           icon: "question",
           showCancelButton: true,
-          confirmButtonText: "确认/ Confirmed",
-          cancelButtonText: "取消/ Cancel"
+          confirmButtonText: "确认",
+          cancelButtonText: "取消"
         }).then(async function (result) {
           if (result.isConfirmed) {
             Swal.fire({
@@ -1996,21 +1998,21 @@
   $("#Submit_wo_End").on("click", function () {
     let PM_Stauts = $("#PmStatus").val();
     if (PM_Stauts.includes('Not Start')) {
-      let message = "保养未开始/ PM has not started";
+      let message = "保养未开始";
       alert(message);
       return false
     } else if (PM_Stauts.includes('Done')) {
-      let message = "保养已结束/ PM has been done";
+      let message = "保养已结束";
       alert(message);
       return false
     }
 
     Swal.fire({
-      title: "确认提交？/ Confirm to submit?",
+      title: "确认提交？",
       icon: "question",
       showCancelButton: true,
-      confirmButtonText: "确认/ Confirmed",
-      cancelButtonText: "取消/ Cancel"
+      confirmButtonText: "确认",
+      cancelButtonText: "取消"
     }).then(async function (result) {
       if (result.isConfirmed) {
         let status = $("#PmStatus").val();
@@ -2526,7 +2528,7 @@
       html: htmlContent,
       width: '80%',
       showConfirmButton: true,
-      confirmButtonText: '确认添加/ Confirm Add',
+      confirmButtonText: '确认添加',
       didOpen: () => {
         table_TempTask = $("#TempTask").DataTable({
           columns: table_array,
@@ -2537,10 +2539,10 @@
           'color': 'white'
         });
         $("#AddTask").on("click", function () {
-          let deleteButton = '<button type="button" class="btn btn-danger btn-sm delete-btn">删除/Delete</button>';
+          let deleteButton = '<button type="button" class="btn btn-danger btn-sm delete-btn">删除<br>DELETE</button>';
           let TaskDescription = $("#TemTask").val().trim();
           if (TaskDescription == "") {
-            message = '临时保养任务不能为空/ Temporary task cannot be empty';
+            message = '临时保养任务不能为空';
             alert(message)
             return false
           }
@@ -2561,7 +2563,7 @@
       if (result.isConfirmed) {
         let tableData = table_TempTask.rows().data().toArray();
         if (tableData.length === 0) {
-          message = '临时保养任务不能为空/ Temporary task cannot be empty'
+          message = '临时保养任务不能为空'
           Swal.fire({
             icon: 'warning',
             title: '警告',
@@ -2572,17 +2574,17 @@
         } else {
           message = '确认提交'
           Swal.fire({
-            title: "确认提交？/ Confirm to submit?",
+            title: "确认提交？",
             text: "提交后请点击【提交但不结束保养】按钮，否则新增任务不会被保存",
             icon: "question",
             showCancelButton: true,
-            confirmButtonText: "确认/ Confirmed",
-            cancelButtonText: "取消/ Cancel"
+            confirmButtonText: "确认",
+            cancelButtonText: "取消"
           }).then((result) => {
             if (result.isConfirmed) {
-              let button = `<button class="btn btn-info btn-sm text-center preview-btn">预览/ Preview</button>
+              let button = `<button class="btn btn-info btn-sm text-center preview-btn">预览<br>PREVIEW</button>
                            <input type="file" capture="camera" style="display: none;"  class="photo-input">
-                           <button class="btn btn-warning btn-sm text-center take-photo-btn">拍照/ Photo</button> `;
+                           <button class="btn btn-warning btn-sm text-center take-photo-btn">拍照<br>PHOTO</button> `;
               let data = [];
               tableData.forEach((r) => {
                 let obj = {};
@@ -2615,7 +2617,7 @@
                   let reader = new FileReader();
                   reader.onload = function (e) {
                     Swal.fire({
-                      title: '图片预览/ Image Preview',
+                      title: '图片预览',
                       imageUrl: e.target.result,
                       imageAlt: 'Custom image',
                       showConfirmButton: false,
@@ -2625,9 +2627,9 @@
                 } else {
                   Swal.fire({
                     icon: 'warning',
-                    title: '警告/ Warning',
-                    text: '请先选择一张图片/ Please select an image first.',
-                    confirmButtonText: '确定/ OK'
+                    title: '警告',
+                    text: '请先选择一张图片',
+                    confirmButtonText: '确定'
                   });
                 }
               });
