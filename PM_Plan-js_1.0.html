@@ -127,12 +127,13 @@
       </div>
     </div>
   </div>`
+  let queryMode = 'date';
   Swal.fire({
-   title: '输入保养计划查询信息/ Please input the PM inquiry info',
+   title: '输入保养计划查询信息<br><small>Please input the PM inquiry info</small>',
    width: '50%',
    html: htmlContent,
-   showConfirmButton: true, // 显示确认按钮
-   confirmButtonText: '确认/ Confirm', // 确认按钮的文本
+   showConfirmButton: true,
+   confirmButtonText: '确认<br><small>Confirm</small>',
    didOpen: () => {
     // 初始化日期选择器
     $('.datepicker').datepicker({
@@ -174,7 +175,6 @@
      theme: 'bootstrap',
      dropdownParent: $('.swal2-modal')
     });
-    let queryMode = 'date';
     function setQueryMode(mode) {
      queryMode = mode;
      var isDate = mode === 'date';
