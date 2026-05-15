@@ -1,31 +1,31 @@
-param([string]$msg = "")
+﻿param([string]$msg = "")
 chcp 65001 | Out-Null
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 1. Commit Message：无参数时自动生成时间戳版本号
-if (-not $msg) { $msg = "V$(Get-Date -Format 'yyyyMMdd.HHmm')_自动提交" }
-Write-Host "📝 Commit: $msg" -ForegroundColor Cyan
+# 1. Commit Message
+if (-not $msg) { $msg = "V$(Get-Date -Format 'yyyyMMdd.HHmm')_auto-commit" }
+Write-Host "[INFO] Commit: $msg" -ForegroundColor Cyan
 
-# 2. 推送至 Google Apps Script
-Write-Host "🚀 正在推送至 Google Apps Script..." -ForegroundColor Cyan
+# 2. Push to Google Apps Script
+Write-Host "[INFO] Pushing to Google Apps Script..." -ForegroundColor Cyan
 clasp push
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Clasp push 失败，操作终止！" -ForegroundColor Red
+    Write-Host "[ERROR] Clasp push failed!" -ForegroundColor Red
     exit
 }
 
-# 3. Git 推送
-Write-Host "📦 正在推送至 Git 仓库..." -ForegroundColor Cyan
+# 3. Git push
+Write-Host "[INFO] Pushing to Git..." -ForegroundColor Cyan
 git add .
 git commit -m $msg
 git push
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "⚠️ Git Push 失败！请先运行 pull.ps1 同步远程更新。" -ForegroundColor Yellow
+    Write-Host "[WARN] Git push failed! Run pull.ps1 first." -ForegroundColor Yellow
     exit
 }
 
-# 4. 同步到 Google Drive（自动检测路径）
+# 4. Sync to Google Drive (auto-detect path)
 $src = $PSScriptRoot
 $drivePath = $null
 $candidate = "$env:USERPROFILE\Google Drive\050 - Script\EDS"
@@ -37,13 +37,13 @@ if (-not $drivePath) {
     }
 }
 if ($drivePath) {
-    Write-Host "☁️ 正在同步至 Google Drive: $drivePath" -ForegroundColor Cyan
+    Write-Host "[INFO] Syncing to Google Drive: $drivePath" -ForegroundColor Cyan
     robocopy $src $drivePath /MIR /XD ".git" /XF "*.ps1" /NFL /NDL /NJH /NJS | Out-Null
     if ($LASTEXITCODE -le 7) {
-        Write-Host "✅ 全部同步完成！" -ForegroundColor Green
+        Write-Host "[OK] All done!" -ForegroundColor Green
     } else {
-        Write-Host "⚠️ Google Drive 同步失败（robocopy 错误码：$LASTEXITCODE）" -ForegroundColor Yellow
+        Write-Host "[WARN] Google Drive sync failed (robocopy exit code: $LASTEXITCODE)" -ForegroundColor Yellow
     }
 } else {
-    Write-Host "⚠️ 未找到 Google Drive 路径，跳过同步。" -ForegroundColor Yellow
+    Write-Host "[WARN] Google Drive path not found, sync skipped." -ForegroundColor Yellow
 }

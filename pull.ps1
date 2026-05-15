@@ -2,20 +2,26 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Write-Host "--- 开始同步 ---" -ForegroundColor Cyan
-
 # 1. Git Pull
-Write-Host "正在从 GitHub 拉取..." -ForegroundColor Cyan
+Write-Host "[INFO] Pulling from GitHub..." -ForegroundColor Cyan
+$before = git rev-parse HEAD
 git pull
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Git pull 失败，请检查是否有冲突。" -ForegroundColor Red
+    Write-Host "[ERROR] Git pull failed!" -ForegroundColor Red
+    exit
+}
+$after = git rev-parse HEAD
+if ($before -ne $after) {
+    Write-Host "[INFO] Changed files:" -ForegroundColor Cyan
+    git --no-pager diff --stat $before..$after
 }
 
 # 2. Clasp Pull
-Write-Host "正在从 Google Apps Script 拉取..." -ForegroundColor Cyan
+Write-Host "[INFO] Pulling from Google Apps Script..." -ForegroundColor Cyan
 clasp pull
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Clasp pull 失败。" -ForegroundColor Red
+    Write-Host "[ERROR] Clasp pull failed!" -ForegroundColor Red
+    exit
 }
 
-Write-Host "--- 同步完成，可以开始编码 ---" -ForegroundColor Green
+Write-Host "[OK] Sync complete." -ForegroundColor Green
