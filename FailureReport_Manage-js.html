@@ -160,6 +160,18 @@
         };
         let responsibleOptions = [];
         let responsibleOptionsLoaded = false;
+        let machineNoOptions = [];
+
+        const loadMachineNoOptions = () => {
+            if (typeof google === 'undefined' || typeof google.script === 'undefined' || typeof google.script.run === 'undefined') return;
+            google.script.run
+                .withSuccessHandler(function(result) {
+                    try { machineNoOptions = typeof result === 'string' ? JSON.parse(result) : (result || []); }
+                    catch(err) { console.error('解析机台号列表失败:', err); }
+                })
+                .withFailureHandler(function(error) { console.error('获取机台号列表失败:', error); })
+                .getMachineNumbers();
+        };
 
         const normalizeResponsibleDisplay = (user) => {
             if (!user) return '';
@@ -283,6 +295,22 @@
             });
         };
 
+        const enhanceMachineNoSelects = (scope) => {
+            if (!$.fn.select2) return;
+            const $targets = scope ? $(scope).find('.machine-no-select') : $('.machine-no-select');
+            $targets.each(function() {
+                const $el = $(this);
+                if ($el.hasClass('select2-hidden-accessible')) $el.select2('destroy');
+                $el.select2({
+                    width: '140px',
+                    theme: 'bootstrap',
+                    dropdownParent: $('body'),
+                    placeholder: '请选择机台号 / Select Machine No.',
+                    allowClear: false
+                });
+            });
+        };
+
         const enhanceManualSelects = (scope) => {
             if (!$.fn.select2) return;
             const $targets = scope ? $(scope).find('.manual-select') : $('.manual-select');
@@ -313,9 +341,11 @@
             });
             enhanceResponsibleSelects();
             enhanceManualSelects();
+            enhanceMachineNoSelects();
         };
 
         loadResponsibleOptions();
+        loadMachineNoOptions();
 
         const renderNeedFailureBadge = (value) => {
             if (value === '是' || value === true || value === 'true') {
@@ -401,7 +431,20 @@
             workshop: createManualSelectRenderer('workshop', '请选择车间 / Select Workshop', [
                 { value: 'TB1', text: 'TB1 车间 / TB1 Workshop' },
                 { value: 'TB2', text: 'TB2 车间 / TB2 Workshop' }
-            ])
+            ]),
+            machineNo: function(data, type, row) {
+                if (type !== 'display') return escapeHtml(data);
+                if (row && row.manualEntry) {
+                    const identifier = getRowIdentifier(row);
+                    const opts = ['<option value=""></option>'];
+                    machineNoOptions.forEach(m => {
+                        const sel = (row.machineNo === m) ? ' selected' : '';
+                        opts.push(`<option value="${escapeHtml(m)}"${sel}>${escapeHtml(m)}</option>`);
+                    });
+                    return `<select class="form-select form-select-sm machine-no-select" data-field="machineNo" data-report="${identifier}">${opts.join('')}</select>`;
+                }
+                return escapeHtml(data);
+            }
         };
 
         const manualFieldRenderer = (field, placeholder) => {
@@ -515,6 +558,7 @@
                     const $table = $('#imTable');
                     enhanceResponsibleSelects($table);
                     enhanceManualSelects($table);
+                    enhanceMachineNoSelects($table);
                 });
             } else {
                 console.error('imTable 元素未找到 / imTable element not found');
@@ -535,6 +579,7 @@
                     const $table = $('#tfTable');
                     enhanceResponsibleSelects($table);
                     enhanceManualSelects($table);
+                    enhanceMachineNoSelects($table);
                 });
             } else {
                 console.error('tfTable 元素未找到 / tfTable element not found');
@@ -555,6 +600,7 @@
                     const $table = $('#pkTable');
                     enhanceResponsibleSelects($table);
                     enhanceManualSelects($table);
+                    enhanceMachineNoSelects($table);
                 });
             } else {
                 console.error('pkTable 元素未找到 / pkTable element not found');
@@ -785,6 +831,14 @@
             const { table, rowIndex, rowData } = locateRowByIdentifier(reportId);
             if (!table || rowIndex === undefined || !rowData) return;
             rowData[field] = $(this).val();
+        });
+
+        $(document).on('change', '.machine-no-select', function () {
+            const reportId = $(this).data('report');
+            if (!reportId) return;
+            const { table, rowIndex, rowData } = locateRowByIdentifier(reportId);
+            if (!table || rowIndex === undefined || !rowData) return;
+            rowData.machineNo = $(this).val() || '';
         });
 
         $(document).on('change', '.manual-select', function () {

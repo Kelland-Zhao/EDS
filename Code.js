@@ -189,6 +189,17 @@ function getFailureReportTemplate() {
   }
 }
 
+function getMachineNumbers() {
+  try {
+    const ws = SpreadsheetApp.openById('1BeoCokGiWAdkfFTSVOkxNr4Gr9O6FlnwTvnOmLYNY_U').getSheetByName('Database');
+    if (!ws) return JSON.stringify([]);
+    const lastRow = ws.getLastRow();
+    if (lastRow < 2) return JSON.stringify([]);
+    const vals = ws.getRange(2, 1, lastRow - 1, 1).getValues();
+    return JSON.stringify(vals.map(r => String(r[0] || '').trim()).filter(Boolean));
+  } catch(e) { return JSON.stringify([]); }
+}
+
 function getEDSUserNames() {
   try {
     const ws = SpreadsheetApp.openById('1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM').getSheetByName('userID');
