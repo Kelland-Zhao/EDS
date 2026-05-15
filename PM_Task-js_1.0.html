@@ -1303,7 +1303,7 @@
     // 页面加载时显示加载提示框（参考TaskManagement_js.html的样式）
     Swal.fire({
       title: '加载数据中...',
-      text: '正在从服务器获取任务列表，请稍候。',
+      html: '<span style="font-size:14px;color:#6c757d;">LOADING DATA</span><br>正在从服务器获取任务列表，请稍候。',
       allowOutsideClick: false,
       didOpen: () => {
         Swal.showLoading();
