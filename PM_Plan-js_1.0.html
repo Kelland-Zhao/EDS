@@ -91,11 +91,19 @@
   Swal.close();
   let htmlContent = `
   <div class="container mt-2">
+    <div class="row mb-2">
+      <div class="col text-center">
+        <div class="btn-group" role="group">
+          <button type="button" class="btn btn-sm btn-primary" id="modeDate">按日期查询<br><small>By Date</small></button>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="modeWeek">按周次查询<br><small>By Week</small></button>
+        </div>
+      </div>
+    </div>
     <div class="row">
-      <div class="col mb-2">
+      <div class="col mb-2" id="dateSection">
         <input id="date" type="text" class="form-control datepicker" placeholder="保养日期/ PM Date">
       </div>
-      <div class="col mb-2">
+      <div class="col mb-2" id="weekSection" style="display:none;">
         <select id="WeekNo" class="form-control">
           <option selected disabled>保养周次/ PM Week</option>
         </select>
@@ -116,11 +124,6 @@
           <option value="TF">植磨毛/ TF</option>
           <option value="PK">包装/ PK</option>
         </select>
-      </div>
-    </div>
-    <div class="row">
-      <div class = "col-auto">
-        <span>提示：【保养日期】与【保养周次】二者任填其一筛选，避免使用这两个一起筛选</span> 
       </div>
     </div>
   </div>`
@@ -178,12 +181,25 @@
      theme: 'bootstrap', // 使用 Bootstrap 主题
      dropdownParent: $('.swal2-modal'), // 指定下拉菜单的父容器为 SweetAlert2 弹窗
     });
+    // 查询模式切换
+    $('#modeDate').on('click', function() {
+     $('#modeDate').removeClass('btn-outline-primary').addClass('btn-primary');
+     $('#modeWeek').removeClass('btn-primary').addClass('btn-outline-primary');
+     $('#dateSection').show();
+     $('#weekSection').hide();
+    });
+    $('#modeWeek').on('click', function() {
+     $('#modeWeek').removeClass('btn-outline-primary').addClass('btn-primary');
+     $('#modeDate').removeClass('btn-primary').addClass('btn-outline-primary');
+     $('#weekSection').show();
+     $('#dateSection').hide();
+    });
    },
    preConfirm: () => {
     let process = $("#process").val();
     let workshop = $("#workshop").val();
-    let date = $("#date").val();
-    let WeekNo = $("#WeekNo").val();
+    let date = $('#dateSection').is(':visible') ? $("#date").val() : '';
+    let WeekNo = $('#weekSection').is(':visible') ? $("#WeekNo").val() : '';
     return { Process: process, Workshop: workshop, Date: date, WeekNo: WeekNo }
    }
   }).then((r) => {
@@ -333,7 +349,7 @@
         return `<button class="btn btn-sm text-center btn-danger" style="background-color:#FF6F91;color:white;font-weight:bold;">班组确认/ Production Confirm</button>`;
       } else {
         // 其他状态显示禁用按钮
-        return `<button class="btn btn-sm text-center" style="background-color:#ccc;color:#666;font-weight:bold;" disabled>班组确认/ Production Confirm</button>`;
+        return `<button class="btn btn-outline-secondary btn-sm text-center" disabled>班组确认<br><small>Production Confirm</small></button>`;
       }
      },
      orderable: false,
@@ -359,15 +375,15 @@
       }
       if (type === 'display' || type === 'filter') {
         if (data && (data.includes('Finished') || data.includes('已完成'))) {
-          return '<span class="badge bg-success">已完成/ Finished</span>';
+          return '<span class="badge bg-success" style="white-space:normal;line-height:1.5;">已完成<br>Finished</span>';
         } else if (data && (data.includes('Ongoing') || data.includes('进行中'))) {
-          return '<span class="badge bg-warning text-dark">进行中/ Ongoing</span>';
+          return '<span class="badge bg-warning text-dark" style="white-space:normal;line-height:1.5;">进行中<br>Ongoing</span>';
         } else if (data && data.includes('已添加临时任务')) {
-          return '<span class="badge" style="background-color:#9370DB;color:white;">已添加临时任务</span>';
+          return '<span class="badge" style="background-color:#9370DB;color:white;white-space:normal;line-height:1.5;">已添加临时任务</span>';
         } else if (data && data.includes('人员已分配')) {
-          return '<span class="badge" style="background-color:#00BFFF;color:white;">人员已分配</span>';
+          return '<span class="badge" style="background-color:#00BFFF;color:white;white-space:normal;line-height:1.5;">人员已分配</span>';
         } else if (data && data.includes('未开始')) {
-          return '<span class="badge" style="background-color:#FFB6C1;color:white;">未开始/ Not Start</span>';
+          return '<span class="badge" style="background-color:#FFB6C1;color:white;white-space:normal;line-height:1.5;">未开始<br>Not Start</span>';
         } else {
           return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
         }
@@ -418,7 +434,7 @@
     }
    }
   });
-  $("div.toolbar").html('<button id="resetFilters" class="btn btn-secondary">重置筛选</button>');
+  $('div.toolbar').html('<button id="resetFilters" class="btn btn-outline-secondary">重置筛选<br><small>Reset Filter</small></button>');
   $('#table thead th').css({
    'background-color': '#E60012',
    'color': 'white'

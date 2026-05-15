@@ -21,6 +21,9 @@
     #table thead th {
       background-color: #E60012 !important;
       color: white !important;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
 
     /* 确保第14、15、16列内容居中显示 */
@@ -34,6 +37,14 @@
     #table tbody tr td:nth-child(15) .badge {
       display: inline-block;
       text-align: center;
+    }
+
+    /* 操作按钮热区优化 */
+    #table tbody tr td:nth-child(16) button,
+    #table tbody tr td:nth-child(17) button {
+      min-height: 36px;
+      margin: 3px 0;
+      padding: 5px 10px;
     }
   </style>
 </head>
