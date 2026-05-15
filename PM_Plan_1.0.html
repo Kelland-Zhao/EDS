@@ -5,6 +5,13 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
+    #table th,
+    #table td {
+      padding: 5px 6px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+
     .operation-column {
       background-color: transparent !important;
       color: inherit !important;
@@ -32,6 +39,11 @@
     .badge-pm-status {
       white-space: normal;
       line-height: 1.5;
+    }
+
+    /* 表格宽度与navbar对齐 */
+    #table_wrapper {
+      width: 100% !important;
     }
 
     .operation-column button,
