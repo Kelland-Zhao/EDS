@@ -1,8 +1,51 @@
-﻿<html>
+﻿<!DOCTYPE html>
+<html>
 
 <head>
 	<base target="_top">
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    .navbar {
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+    }
+    #table_tasklist th,
+    #table_tasklist td {
+      padding: 5px 6px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    #table_tasklist td .form-check-input {
+      display: block;
+      margin: 0 auto;
+    }
+    #table_tasklist td .preview-btn,
+    #table_tasklist td .take-photo-btn {
+      display: block;
+      width: 100%;
+      margin-bottom: 4px;
+    }
+    .input-group-text,
+    .input-group .form-control,
+    .input-group .btn {
+      font-size: 13px;
+    }
+    #PmStart:disabled {
+      background-color: #aaaaaa !important;
+      color: #eeeeee !important;
+      cursor: not-allowed;
+      opacity: 1;
+    }
+  </style>
 </head>
 
 <?!=include("kez_Datatables_css");?>
@@ -14,51 +57,8 @@
 <?!=include("CSS");?>
 <?!=include("Compressor_js");?>
 
-<style>
-  * {
-    box-sizing: border-box;
-  }
-
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  .navbar {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-  }
-  #table_tasklist th,
-  #table_tasklist td {
-    padding: 5px 6px;
-    font-size: 12px;
-    vertical-align: middle;
-  }
-  #table_tasklist td .form-check-input {
-    display: block;
-    margin: 0 auto;
-  }
-  #table_tasklist td .preview-btn,
-  #table_tasklist td .take-photo-btn {
-    display: block;
-    width: 100%;
-    margin-bottom: 4px;
-  }
-  .input-group-text,
-  .input-group .form-control,
-  .input-group .btn {
-    font-size: 13px;
-  }
-  #PmStart:disabled {
-    background-color: #aaaaaa !important;
-    color: #eeeeee !important;
-    cursor: not-allowed;
-    opacity: 1;
-  }
-</style>
-
-<body style="margin:0;padding:0">
-	<nav class="navbar navbar-expand-lg" style="margin-top:0">
+<body>
+	<nav class="navbar navbar-expand-lg">
 		<div class="container-fluid">
 			<a class="navbar-brand" style="
 				color: white;
