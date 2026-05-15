@@ -154,23 +154,16 @@
 
     if (global_Workshop.includes('TB1')) {
      $('#workshop').val('TB1');
-    } else if (global_Process.includes('TB2')) {
+    } else if (global_Workshop.includes('TB2')) {
      $('#workshop').val('TB2');
     } else {
      $('#workshop').val('ALL');
     }
 
-    // 更新 select2 插件以显示新设置的值
-    $('#process').select2().trigger('change');
-    $('#workshop').select2().trigger('change');
-    $("#process,#workshop,#WeekNo").select2({
-     theme: 'bootstrap', // 使用 Bootstrap 主题
-     minimumResultsForSearch: -1, // 禁用搜索框
-     dropdownParent: $('.swal2-modal') // 指定下拉菜单的父容器为 SweetAlert2 弹窗
-    });
-    $("#WeekNo").select2({
-     theme: 'bootstrap', // 使用 Bootstrap 主题
-     dropdownParent: $('.swal2-modal') // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+    $("#process,#workshop").select2({
+     theme: 'bootstrap',
+     minimumResultsForSearch: -1,
+     dropdownParent: $('.swal2-modal')
     });
     let week = [];
     global_data.Content.forEach((r) => { week.push(r["日历周次"]) })
@@ -178,28 +171,26 @@
     uniqueWeek.sort()
     $('#WeekNo').select2({
      data: uniqueWeek,
-     theme: 'bootstrap', // 使用 Bootstrap 主题
-     dropdownParent: $('.swal2-modal'), // 指定下拉菜单的父容器为 SweetAlert2 弹窗
+     theme: 'bootstrap',
+     dropdownParent: $('.swal2-modal')
     });
-    // 查询模式切换
-    $('#modeDate').on('click', function() {
-     $('#modeDate').removeClass('btn-outline-primary').addClass('btn-primary');
-     $('#modeWeek').removeClass('btn-primary').addClass('btn-outline-primary');
-     $('#dateSection').show();
-     $('#weekSection').hide();
-    });
-    $('#modeWeek').on('click', function() {
-     $('#modeWeek').removeClass('btn-outline-primary').addClass('btn-primary');
-     $('#modeDate').removeClass('btn-primary').addClass('btn-outline-primary');
-     $('#weekSection').show();
-     $('#dateSection').hide();
-    });
+    let queryMode = 'date';
+    function setQueryMode(mode) {
+     queryMode = mode;
+     var isDate = mode === 'date';
+     $('#modeDate').toggleClass('btn-primary', isDate).toggleClass('btn-outline-primary', !isDate);
+     $('#modeWeek').toggleClass('btn-primary', !isDate).toggleClass('btn-outline-primary', isDate);
+     $('#dateSection').toggle(isDate);
+     $('#weekSection').toggle(!isDate);
+    }
+    $('#modeDate').on('click', function() { setQueryMode('date'); });
+    $('#modeWeek').on('click', function() { setQueryMode('week'); });
    },
    preConfirm: () => {
     let process = $("#process").val();
     let workshop = $("#workshop").val();
-    let date = $('#dateSection').is(':visible') ? $("#date").val() : '';
-    let WeekNo = $('#weekSection').is(':visible') ? $("#WeekNo").val() : '';
+    let date = queryMode === 'date' ? $("#date").val() : '';
+    let WeekNo = queryMode === 'week' ? $("#WeekNo").val() : '';
     return { Process: process, Workshop: workshop, Date: date, WeekNo: WeekNo }
    }
   }).then((r) => {
@@ -221,21 +212,12 @@
   
   console.log('🔍 开始执行筛选操作...');
 
-  // 清除所有的筛选条件
-  table.search('').columns().search('').draw();
-  // 根据用户选择的信息来设置筛选条件
-  if (filterInfo.Process !== 'ALL') {
-   table.column(3).search(filterInfo.Process).draw();
-  }
-  if (filterInfo.Workshop !== 'ALL') {
-   table.column(2).search(filterInfo.Workshop).draw();
-  }
-  if (filterInfo.Date) {
-   table.column(4).search(filterInfo.Date).draw();
-  }
-  if (filterInfo.WeekNo) {
-   table.column(1).search(filterInfo.WeekNo).draw();
-  }
+  table.search('').columns().search('');
+  if (filterInfo.Process !== 'ALL') table.column(3).search(filterInfo.Process);
+  if (filterInfo.Workshop !== 'ALL') table.column(2).search(filterInfo.Workshop);
+  if (filterInfo.Date) table.column(4).search(filterInfo.Date);
+  if (filterInfo.WeekNo) table.column(1).search(filterInfo.WeekNo);
+  table.draw();
   
   const filterEndTime = performance.now();
   const filterTime = ((filterEndTime - filterStartTime) / 1000).toFixed(2);
@@ -336,7 +318,7 @@
      data: null, 
      defaultContent: '<button class="btn btn-info btn-sm text-center">跟进</button>',
      orderable: false,
-     className: 'operation-column text-center' // 添加CSS类名和居中样式
+     className: 'operation-column text-center'
     },
     {
      targets: 16,
@@ -353,84 +335,43 @@
       }
      },
      orderable: false,
-     className: 'text-center' // 添加居中样式
+     className: 'col-prod-confirm text-center'
     },
     {
      targets: [5],
      visible: false,
     },
-    // 对“保养状态/ PM Status”列（第14列，索引为14）进行格式化显示
     {
      targets: 14,
      render: function (data, type, row) {
-      // 排序时返回数值，显示时返回带样式的HTML
-      if (type === 'sort') {
-        if (data && (data.includes('Finished') || data.includes('已完成'))) {
-          return 2;
-        } else if (data && (data.includes('Ongoing') || data.includes('进行中') || data.includes('已添加临时任务') || data.includes('人员已分配'))) {
-          return 1;
-        } else {
-          return 0;
-        }
-      }
-      if (type === 'display' || type === 'filter') {
-        if (data && (data.includes('Finished') || data.includes('已完成'))) {
-          return '<span class="badge bg-success" style="white-space:normal;line-height:1.5;">已完成<br>Finished</span>';
-        } else if (data && (data.includes('Ongoing') || data.includes('进行中'))) {
-          return '<span class="badge bg-warning text-dark" style="white-space:normal;line-height:1.5;">进行中<br>Ongoing</span>';
-        } else if (data && data.includes('已添加临时任务')) {
-          return '<span class="badge" style="background-color:#9370DB;color:white;white-space:normal;line-height:1.5;">已添加临时任务</span>';
-        } else if (data && data.includes('人员已分配')) {
-          return '<span class="badge" style="background-color:#00BFFF;color:white;white-space:normal;line-height:1.5;">人员已分配</span>';
-        } else if (data && data.includes('未开始')) {
-          return '<span class="badge" style="background-color:#FFB6C1;color:white;white-space:normal;line-height:1.5;">未开始<br>Not Start</span>';
-        } else {
-          return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
-        }
-      }
-      return data;
+      if (!data) return type === 'sort' ? 0 : '';
+      var badgeMap = [
+        { keys: ['Finished', '已完成'], html: '<span class=”badge bg-success badge-pm-status”>已完成<br>Finished</span>', sort: 2 },
+        { keys: ['Ongoing', '进行中'], html: '<span class=”badge bg-warning text-dark badge-pm-status”>进行中<br>Ongoing</span>', sort: 1 },
+        { keys: ['已添加临时任务'], html: '<span class=”badge badge-pm-status” style=”background-color:#9370DB;color:white;”>已添加临时任务</span>', sort: 1 },
+        { keys: ['人员已分配'], html: '<span class=”badge badge-pm-status” style=”background-color:#00BFFF;color:white;”>人员已分配</span>', sort: 1 },
+        { keys: ['未开始'], html: '<span class=”badge badge-pm-status” style=”background-color:#FFB6C1;color:white;”>未开始<br>Not Start</span>', sort: 0 }
+      ];
+      var match = badgeMap.find(function(m) { return m.keys.some(function(k) { return data.includes(k); }); });
+      if (!match) return type === 'sort' ? 0 : '<span class=”badge bg-secondary”>' + data + '</span>';
+      return type === 'sort' ? match.sort : match.html;
      },
-     className: 'text-center' // 添加居中样式
+     className: 'col-pm-status text-center'
     }
    ],
    createdRow: function (row, data, dataIndex) {
-    let statusIndex = 14; 
-    let statusValue = data["保养状态/ PM Status"]; 
-
-    // 确保第15列（操作列）保持默认背景色，使用 !important 确保优先级
-    $(row).children('td').eq(15).attr('style', 'background-color: transparent !important; color: inherit !important;');
-
-    // 只设置第14列（保养状态）单元格的底色
-    if (statusValue && (statusValue.includes('Finished') || statusValue.includes('已完成'))) {
-     $(row).children('td').eq(statusIndex).css({
-      'font-weight': 'bold',
-      'background-color': '#32CD32',//绿色
-      'color': 'white'
-     });
-    } else if (statusValue && (statusValue.includes('Ongoing') || statusValue.includes('进行中'))) {
-     $(row).children('td').eq(statusIndex).css({
-      'font-weight': 'bold',
-      'background-color': '#FFC300',//黄色
-      'color': 'white'
-     });
-    } else if (statusValue && statusValue.includes('已添加临时任务')) {
-     $(row).children('td').eq(statusIndex).css({
-      'font-weight': 'bold',
-      'background-color': '#9370DB',//中紫色
-      'color': 'white'
-     });
-    } else if (statusValue && statusValue.includes('人员已分配')) {
-     $(row).children('td').eq(statusIndex).css({
-      'font-weight': 'bold',
-      'background-color': '#00BFFF',//天蓝色
-      'color': 'white'
-     });
-    } else if (statusValue && statusValue.includes('未开始')) {
-     $(row).children('td').eq(statusIndex).css({
-      'font-weight': 'bold',
-      'background-color': '#FFB6C1',//红色
-      'color': 'white'
-     });
+    var statusValue = data["保养状态/ PM Status"];
+    if (!statusValue) return;
+    var colorMap = [
+      { keys: ['Finished', '已完成'], bg: '#32CD32' },
+      { keys: ['Ongoing', '进行中'], bg: '#FFC300' },
+      { keys: ['已添加临时任务'], bg: '#9370DB' },
+      { keys: ['人员已分配'], bg: '#00BFFF' },
+      { keys: ['未开始'], bg: '#FFB6C1' }
+    ];
+    var match = colorMap.find(function(m) { return m.keys.some(function(k) { return statusValue.includes(k); }); });
+    if (match) {
+     $('td', row).eq(14).css({ 'font-weight': 'bold', 'background-color': match.bg, 'color': 'white' });
     }
    }
   });

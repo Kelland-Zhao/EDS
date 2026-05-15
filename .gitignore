@@ -18,3 +18,13 @@ desktop.ini
 
 # Google API 凭据（含私钥，禁止提交）
 Google API/
+
+# Claude Code / 工具配置
+.claude/
+.codex/
+.mcp.json
+AGENTS.md
+
+# GAS 本地配置
+.clasprc.json
+node_modules/

@@ -5,19 +5,11 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    /* 确保操作列保持默认背景色 */
     .operation-column {
       background-color: transparent !important;
       color: inherit !important;
     }
 
-    /* 确保第15列不受其他样式影响，只影响表格内容，不影响表头 */
-    #table tbody tr td:nth-child(16) {
-      background-color: transparent !important;
-      color: inherit !important;
-    }
-
-    /* 确保表头保持原来的红色背景色 */
     #table thead th {
       background-color: #E60012 !important;
       color: white !important;
@@ -26,22 +18,24 @@
       z-index: 10;
     }
 
-    /* 确保第14、15、16列内容居中显示 */
-    #table tbody tr td:nth-child(15),
-    #table tbody tr td:nth-child(16),
-    #table tbody tr td:nth-child(17) {
+    .col-pm-status,
+    .operation-column,
+    .col-prod-confirm {
       text-align: center !important;
     }
 
-    /* 确保badge标签在单元格内居中 */
-    #table tbody tr td:nth-child(15) .badge {
+    .col-pm-status .badge {
       display: inline-block;
       text-align: center;
     }
 
-    /* 操作按钮热区优化 */
-    #table tbody tr td:nth-child(16) button,
-    #table tbody tr td:nth-child(17) button {
+    .badge-pm-status {
+      white-space: normal;
+      line-height: 1.5;
+    }
+
+    .operation-column button,
+    .col-prod-confirm button {
       min-height: 36px;
       margin: 3px 0;
       padding: 5px 10px;
