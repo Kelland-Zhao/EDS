@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   let global_Name = sessionStorage.getItem('Name');
  let global_Process = sessionStorage.getItem('Process');
  let global_ID = sessionStorage.getItem('ID');
@@ -346,14 +346,14 @@
      render: function (data, type, row) {
       if (!data) return type === 'sort' ? 0 : '';
       var badgeMap = [
-        { keys: ['Finished', '已完成'], html: '<span class="badge bg-success badge-pm-status">已完成<br>Finished</span>', sort: 2 },
-        { keys: ['Ongoing', '进行中'], html: '<span class="badge bg-warning text-dark badge-pm-status">进行中<br>Ongoing</span>', sort: 1 },
-        { keys: ['已添加临时任务'], html: '<span class="badge badge-pm-status badge-temp-task">已添加临时任务</span>', sort: 1 },
-        { keys: ['人员已分配'], html: '<span class="badge badge-pm-status badge-assigned">人员已分配</span>', sort: 1 },
-        { keys: ['未开始'], html: '<span class="badge badge-pm-status badge-not-start">未开始<br>Not Start</span>', sort: 0 }
+        { keys: ['Finished', '已完成'], html: '<span class=”badge bg-success badge-pm-status”>已完成<br>Finished</span>', sort: 2 },
+        { keys: ['Ongoing', '进行中'], html: '<span class=”badge bg-warning text-dark badge-pm-status”>进行中<br>Ongoing</span>', sort: 1 },
+        { keys: ['已添加临时任务'], html: '<span class=”badge badge-pm-status” style=”background-color:#9370DB;color:white;”>已添加临时任务</span>', sort: 1 },
+        { keys: ['人员已分配'], html: '<span class=”badge badge-pm-status” style=”background-color:#00BFFF;color:white;”>人员已分配</span>', sort: 1 },
+        { keys: ['未开始'], html: '<span class=”badge badge-pm-status” style=”background-color:#FFB6C1;color:white;”>未开始<br>Not Start</span>', sort: 0 }
       ];
       var match = badgeMap.find(function(m) { return m.keys.some(function(k) { return data.includes(k); }); });
-      if (!match) return type === 'sort' ? 0 : '<span class="badge bg-secondary">' + data + '</span>';
+      if (!match) return type === 'sort' ? 0 : '<span class=”badge bg-secondary”>' + data + '</span>';
       return type === 'sort' ? match.sort : match.html;
      },
      className: 'col-pm-status text-center'
