@@ -15,33 +15,37 @@
 <?!=include("Compressor_js");?>
 
 <style>
-  #table_tasklist th,
-  #table_tasklist td {
-    padding: 5px 6px;
-    font-size: 12px;
-    vertical-align: middle;
-  }
-  #table_tasklist td .form-check-input {
-    display: block;
-    margin: 0 auto;
-  }
-  #table_tasklist td .preview-btn,
-  #table_tasklist td .take-photo-btn {
-    display: block;
-    width: 100%;
-    margin-bottom: 4px;
-  }
-  .input-group-text,
-  .input-group .form-control,
-  .input-group .btn {
-    font-size: 13px;
-  }
-  #PmStart:disabled {
-    background-color: #aaaaaa !important;
-    color: #eeeeee !important;
-    cursor: not-allowed;
-    opacity: 1;
-  }
+	#table_tasklist th,
+	#table_tasklist td {
+		padding: 5px 6px;
+		font-size: 12px;
+		vertical-align: middle;
+	}
+
+	#table_tasklist td .form-check-input {
+		display: block;
+		margin: 0 auto;
+	}
+
+	#table_tasklist td .preview-btn,
+	#table_tasklist td .take-photo-btn {
+		display: block;
+		width: 100%;
+		margin-bottom: 4px;
+	}
+
+	.input-group-text,
+	.input-group .form-control,
+	.input-group .btn {
+		font-size: 13px;
+	}
+
+	#PmStart:disabled {
+		background-color: #aaaaaa !important;
+		color: #eeeeee !important;
+		cursor: not-allowed;
+		opacity: 1;
+	}
 </style>
 
 <body>
@@ -53,10 +57,27 @@
 				font-size: xx-large;
 				font-weight: bold;
 			  ">保养任务/ PM Task</a>
-
-				<div class="collapse navbar-collapse" id="navbarSupportedContent"></div>
-			</div>
-		</nav>
+			<ul id="nav-mobile">
+				<li><a class='dropdown-trigger' data-target="dropdown1">保养<i
+							class="material-icons right">arrow_drop_down</i></a></li>
+				<li><a href="<?!=webPage?>?v=addItem_manage" style="display:none">转保养项目管理</a></li>
+				<li><a href="<?!=webPage?>?v=tmp_stop_machine" style="display:none">计划外停机</a></li>
+				<li><a href="<?!=webPage?>?v=Shift">交接班</a></li>
+				<li><a href="<?!=webPage?>?v=PointCheck">点检</a></li>
+				<li><a href="<?!=webPage?>?v=MaintenanceReport_Manage" style="display:none">故障报告管理<span
+							class="new badge">待定</span></a></li>
+				<li><a href="https://script.google.com/a/colpal.com/macros/s/AKfycbyaKWHcTSogglvVN7sKaTOgDTXOg5IMYUIGKdy7/exec"
+						target="_blank">工艺参数管理</a></li>
+				<li><a href="https://script.google.com/a/colpal.com/macros/s/AKfycbzX8unrThQsGqjz0gpwfTp3Y6HSl_2oyfuqBpw5/exec"
+						target="_blank">二手备件</a></li>
+				<li><a onclick="todView()">文档索引</a></li>
+				<li><a onclick="toMoldManager()">模具管理</a></li>
+				<li><a href="https://script.google.com/a/macros/colpal.com/s/AKfycbx3i7PBxvqejgeGF2LA_XQ4HfOZxII2cku3BzQBtetYHPFEvlNd6egmt4SxAm8lxjkgnA/exec"
+						target="_blank">特种设备检查</a></li>
+			</ul>
+			<div class="collapse navbar-collapse" id="navbarSupportedContent"></div>
+		</div>
+	</nav>
 
 	<div class="container">
 		<div class="row mt-3">
@@ -150,7 +171,8 @@
 				<div class="input-group">
 					<span class="input-group-text">设备号/ Equipment</span>
 					<input type="text" id="Equipment" class="form-control" placeholder="设备号/ Equipment"
-						aria-label="设备号/ Equipment" aria-describedby="设备号/ Equipment" style="text-align: center;" readonly>
+						aria-label="设备号/ Equipment" aria-describedby="设备号/ Equipment" style="text-align: center;"
+						readonly>
 				</div>
 			</div>
 			<div class="col-8 d-flex justify-content-end">
@@ -171,8 +193,10 @@
 
 		<div class="row mt-3">
 			<div class="col-12 d-flex justify-content-end">
-				<button type="button" class="btn btn-secondary" id="TestImageUploadBtn" style="margin-bottom: 10px; display: none;">测试图片上传</button>
-				<button type="button" class="btn btn-info" id="TestCheckboxValidationBtn" style="margin-bottom: 10px; display: none;">测试选中框验证</button>
+				<button type="button" class="btn btn-secondary" id="TestImageUploadBtn"
+					style="margin-bottom: 10px; display: none;">测试图片上传</button>
+				<button type="button" class="btn btn-info" id="TestCheckboxValidationBtn"
+					style="margin-bottom: 10px; display: none;">测试选中框验证</button>
 			</div>
 		</div>
 
