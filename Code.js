@@ -1595,10 +1595,25 @@ function getPMrecord(PM_Info) {
       Logger.log("第" + (index + 2) + "行 - v[9](Workcenter): '" + v[9] + "', v[4](Plan PM Date): '" + v[4] + "'");
     });
     
+    // 归一化日期字符串为 yyyy-MM-dd 格式，避免 getDisplayValues() 与传入格式不一致
+    function normalizeDate(val) {
+      if (!val) return '';
+      var str = val.toString().trim();
+      // 尝试解析为 Date 对象
+      var d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return Utilities.formatDate(d, "Asia/Shanghai", "yyyy-MM-dd");
+      }
+      // 无法解析则去掉非数字分隔符后比较
+      return str.replace(/[^0-9]/g, '');
+    }
+
     var data = allData.filter((v) => {
       var workcenterMatch = v[9].toString().trim() == PM_Info.workcenter.toString().trim();
-      var dateMatch = v[4].toString().trim() == PM_Info.Plan_SD.toString().trim();
-      Logger.log("过滤判断 - Workcenter匹配: " + workcenterMatch + ", 日期匹配: " + dateMatch);
+      var recordDate = normalizeDate(v[4]);
+      var queryDate = normalizeDate(PM_Info.Plan_SD);
+      var dateMatch = recordDate == queryDate;
+      Logger.log("过滤判断 - Workcenter匹配: " + workcenterMatch + ", 日期匹配: " + dateMatch + " (recordDate=" + recordDate + ", queryDate=" + queryDate + ")");
       return workcenterMatch && dateMatch;
     });
     

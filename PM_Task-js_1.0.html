@@ -565,100 +565,129 @@
       };
 
       google.script.run.withSuccessHandler((r) => {
-        let dataFilter = JSON.parse(r[1]);
-        let head = ["PM No.",
-          "PmStatus",
-          "Notification",
-          "PM People",
-          "Plan PM Date",
-          "SatrtDate",
-          "StartTime",
-          "EndDate",
-          "EndTime",
-          "Workcenter",
-          "任务明细",
-          "总任务数量",
-          "任务未完成明细",
-          "任务未完成数量",
-          "任务备注明细",
-          "任务备注数量"]
-        let obj = {};
-        for (let i = 0; i < head.length; i++) { obj[head[i]] = dataFilter[0][i] };
-        
-        // 字段名映射：中文 -> 英文（兼容不同数据源）
-        const fieldMapping = {
-          '任务编号': 'Task No',
-          '频率': 'Frecuency',
-          '单元': 'Section',
-          '模块': 'Function',
-          '失效模式': 'Failure Mode',
-          '任务类型': 'Task Type',
-          '任务描述': 'Task Description',
-          '状态': 'Line Status',
-          '任务属性': 'Strategy',
-          '工具': 'Tools & Equip',
-          '是否完成': 'Task Status',
-          '备注': 'Notes',
-          '图片': 'Image'
-        };
-        
-        // 转换字段名（如果存在中文字段名）
-        let tasklist = JSON.parse(obj['任务明细']);
-        tasklist = tasklist.map(item => {
-          let newItem = {};
-          for (let key in item) {
-            let newKey = fieldMapping[key] || key; // 如果有映射就用映射，否则保持原样
-            newItem[newKey] = item[key];
+        try {
+          let dataFilter = JSON.parse(r[1]);
+          if (!Array.isArray(dataFilter) || dataFilter.length === 0) {
+            console.error('getPMrecord: 未找到匹配的保养记录');
+            Swal.fire({
+              icon: 'warning',
+              title: '未找到记录',
+              text: '未找到匹配的保养记录，请联系管理员检查数据。',
+              confirmButtonText: '确定'
+            });
+            return;
           }
-          return newItem;
-        });
 
-        const isEditable = obj["PmStatus"].includes('进行中');
-        const table_head = buildTableHead(isEditable);
+          let head = ["PM No.",
+            "PmStatus",
+            "Notification",
+            "PM People",
+            "Plan PM Date",
+            "SatrtDate",
+            "StartTime",
+            "EndDate",
+            "EndTime",
+            "Workcenter",
+            "任务明细",
+            "总任务数量",
+            "任务未完成明细",
+            "任务未完成数量",
+            "任务备注明细",
+            "任务备注数量"]
+          let obj = {};
+          for (let i = 0; i < head.length; i++) { obj[head[i]] = dataFilter[0][i] };
 
-        $('#PmNo').val(obj["PM No."]);
-        $('#PmPeople').val(obj["PM People"]);
-        $('#PmStartDate').val(obj["SatrtDate"]);
-        $('#PmStartTime').val(obj["StartTime"]);
+          // 字段名映射：中文 -> 英文（兼容不同数据源）
+          const fieldMapping = {
+            '任务编号': 'Task No',
+            '频率': 'Frecuency',
+            '单元': 'Section',
+            '模块': 'Function',
+            '失效模式': 'Failure Mode',
+            '任务类型': 'Task Type',
+            '任务描述': 'Task Description',
+            '状态': 'Line Status',
+            '任务属性': 'Strategy',
+            '工具': 'Tools & Equip',
+            '是否完成': 'Task Status',
+            '备注': 'Notes',
+            '图片': 'Image'
+          };
 
-        if (obj["PmStatus"].includes('进行中')) {
-          $('#PmStart').prop('disabled', true);
-        } else {
-          $('#PmStart').prop('disabled', false);
-        }
+          // 转换字段名（如果存在中文字段名）
+          let tasklist = JSON.parse(obj['任务明细']);
+          tasklist = tasklist.map(item => {
+            let newItem = {};
+            for (let key in item) {
+              let newKey = fieldMapping[key] || key; // 如果有映射就用映射，否则保持原样
+              newItem[newKey] = item[key];
+            }
+            return newItem;
+          });
 
-        // showTable(table_head, tasklist) 之前，统一处理"执行人员"字段为数组
-        tasklist.forEach(row => {
-          if (row['执行人员']) {
-            if (Array.isArray(row['执行人员'])) {
-              // 已经是数组，无需处理
-            } else if (typeof row['执行人员'] === 'string') {
-              try {
-                // 尝试解析为数组
-                let arr = JSON.parse(row['执行人员']);
-                if (Array.isArray(arr)) {
-                  row['执行人员'] = arr;
-                } else {
+          const isEditable = obj["PmStatus"].includes('进行中');
+          const table_head = buildTableHead(isEditable);
+
+          $('#PmNo').val(obj["PM No."]);
+          $('#PmPeople').val(obj["PM People"]);
+          $('#PmStartDate').val(obj["SatrtDate"]);
+          $('#PmStartTime').val(obj["StartTime"]);
+
+          if (obj["PmStatus"].includes('进行中')) {
+            $('#PmStart').prop('disabled', true);
+          } else {
+            $('#PmStart').prop('disabled', false);
+          }
+
+          // showTable(table_head, tasklist) 之前，统一处理"执行人员"字段为数组
+          tasklist.forEach(row => {
+            if (row['执行人员']) {
+              if (Array.isArray(row['执行人员'])) {
+                // 已经是数组，无需处理
+              } else if (typeof row['执行人员'] === 'string') {
+                try {
+                  // 尝试解析为数组
+                  let arr = JSON.parse(row['执行人员']);
+                  if (Array.isArray(arr)) {
+                    row['执行人员'] = arr;
+                  } else {
+                    // 逗号分隔字符串
+                    row['执行人员'] = row['执行人员'].split(',').map(s => s.trim());
+                  }
+                } catch {
                   // 逗号分隔字符串
                   row['执行人员'] = row['执行人员'].split(',').map(s => s.trim());
                 }
-              } catch {
-                // 逗号分隔字符串
-                row['执行人员'] = row['执行人员'].split(',').map(s => s.trim());
+              } else {
+                row['执行人员'] = [];
               }
             } else {
               row['执行人员'] = [];
             }
-          } else {
-            row['执行人员'] = [];
-          }
-        });
-        showTable(table_head, tasklist);
-        Swal.close();
+          });
+          showTable(table_head, tasklist);
+          Swal.close();
+          Swal.fire({
+            title: '加载成功',
+            html: '<span style="font-size:14px;color:#6c757d;">LOADING SUCCESS</span>',
+            icon: 'success'
+          });
+        } catch (e) {
+          console.error('处理PM记录数据失败:', e);
+          Swal.fire({
+            icon: 'error',
+            title: '数据处理失败',
+            text: '保养记录数据解析异常，请联系管理员。',
+            confirmButtonText: '确定'
+          });
+        }
+      }).withFailureHandler(function (error) {
+        console.error('获取PM记录失败:', error);
         Swal.fire({
-          title: '加载成功',
-          html: '<span style="font-size:14px;color:#6c757d;">LOADING SUCCESS</span>',
-          icon: 'success'
+          icon: 'error',
+          title: '数据加载失败',
+          text: '无法从服务器获取保养记录，请检查网络后重试。',
+          confirmButtonText: '确定'
         });
       }).getPMrecord(PM_Info);
     } else {
@@ -1052,7 +1081,7 @@
     // 先筛选出匹配机型的所有记录
     let machineMatchedData = data.filter(function (r, index) {
       const machineType = r["MachineType"];
-      const machineMatch = (machineType == Machine1 || machineType == Machine2 || machineType == Auto);
+      const machineMatch = (machineType == Machine1 || machineType == Machine2 || (Auto !== 'NA' && machineType == Auto));
       return machineMatch;
     });
 
@@ -1073,8 +1102,8 @@
   // --- 此函数已重构 ---
   function DataProcess(data) {
     try {
-      if (!data || (!data.effective && !data.waiting && !data.pending)) {
-        const machineTypes = [global_data["设备类型1"], global_data["设备类型2"], global_data["自动化类型"]].filter(Boolean).join(', ');
+      if (!data || (data.effective.length === 0 && data.waiting.length === 0 && data.pending.length === 0)) {
+        const machineTypes = [global_data["设备类型1"], global_data["设备类型2"], global_data["自动化类型"]].filter(v => v && v !== 'NA').join(', ');
         Swal.fire('加载失败', `未找到与设备 [${machineTypes}] 匹配的、状态为"生效"的标准任务清单。请检查后台数据。<br>No standard task list with "Effective" status found matching equipment [${machineTypes}]. Please check backend data.`, 'error');
         return;
       }
