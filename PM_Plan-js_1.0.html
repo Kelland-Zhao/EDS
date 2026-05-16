@@ -129,13 +129,14 @@
   </div>`
   let queryMode = 'date';
   Swal.fire({
-   title: '输入保养计划查询信息<br><small>Please input the PM inquiry info</small>',
+   title: '输入保养计划查询信息<br><span style="font-size:14px;color:#6c757d;">Please input the PM inquiry info</span>',
    width: '50%',
    html: htmlContent,
    showConfirmButton: true,
    confirmButtonText: '确认<br><small>Confirm</small>',
    didOpen: () => {
-    // 初始化日期选择器
+    // 初始化日期选择器，默认填入当天日期
+    $('#date').val(new Date().toISOString().split('T')[0]);
     $('.datepicker').datepicker({
      format: 'yyyy-mm-dd',
      todayHighlight: true,
