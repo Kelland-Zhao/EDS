@@ -255,7 +255,11 @@
             },
             order: [[8, 'desc']],
             pageLength: 25,
-            responsive: true
+            responsive: true,
+            drawCallback: function() {
+                $('#followupTable tbody tr.odd td').css('background-color', '#f5f5f5');
+                $('#followupTable tbody tr.even td').css('background-color', '#ffffff');
+            }
         });
 
         console.log('表格初始化完成');
