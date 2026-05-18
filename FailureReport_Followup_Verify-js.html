@@ -6,7 +6,7 @@
     let currentUserName = '';
 
     const STATUS_OPTIONS = ['进行中 / Ongoing', '已完成 / Completed'];
-    const VERIFY_OPTIONS = ['已验证 / Verified', '未验证 / Not Verified'];
+    const VERIFY_OPTIONS = ['已完成 / Completed', '未完成 / Not Completed'];
 
     const FIELD_LABELS = {
         paPlan: '预防性措施 / PA Action',
@@ -34,6 +34,11 @@
 
         currentUserName = getCurrentUser();
         console.log('当前用户:', currentUserName);
+        if (currentUserName) {
+            $('#userLevelBadge').text(currentUserName).removeClass('bg-secondary').addClass('bg-info');
+        } else {
+            $('#userLevelBadge').text('未知用户 / Unknown').removeClass('bg-secondary').addClass('bg-warning');
+        }
 
         // 立即显示加载弹窗
         Swal.fire({
@@ -194,13 +199,14 @@
                     className: 'pa-verify-cell editable-cell',
                     orderable: false,
                     render: function(value, type, row) {
-                        if (type !== 'display') {
-                            return value || '';
-                        }
-                        return buildVerifySelectHtml(row.followupId, value, row.status);
+                        if (type !== 'display') return value || '';
+                        return buildVerifySelectHtml(row.followupId, value);
                     }
                 }, // 验证下拉选择列（可编辑高亮）
-                { data: 'createdDate' },
+                { data: 'createdDate', render: function(value, type) {
+                    if (type !== 'display') return value || '';
+                    return formatDateYMD(value);
+                }},
                 { data: 'updatedDate' },
                 {
                     data: null,
@@ -268,24 +274,16 @@
         return '<select class="form-select form-select-sm followup-select followup-select-status ' + statusColorClass + '" data-field="status" data-id="' + safeId + '">' + optionsHtml + '</select>';
     }
 
-    function buildVerifySelectHtml(followupId, currentValue, status) {
+    function buildVerifySelectHtml(followupId, currentValue) {
         const safeId = escapeHtml(followupId);
         const normalizedValue = String(currentValue || '').trim();
-        const isCompleted = status === '已完成 / Completed';
-
-        // 如果状态不是已完成，显示提示文本
-        if (!isCompleted) {
-            return '<span class="text-muted" title="状态需为已完成才能验证 / Status must be Completed to verify">-</span>';
-        }
 
         let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
         let hasCurrent = normalizedValue === '';
 
         VERIFY_OPTIONS.forEach(function(option) {
             const selected = option === normalizedValue ? ' selected' : '';
-            if (selected) {
-                hasCurrent = true;
-            }
+            if (selected) { hasCurrent = true; }
             optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
         });
 
@@ -294,6 +292,20 @@
         }
 
         return '<select class="form-select form-select-sm followup-select followup-select-verify" data-field="verification" data-id="' + safeId + '">' + optionsHtml + '</select>';
+    }
+
+    function formatDateYMD(val) {
+        if (!val) return '';
+        var s = String(val);
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+        var d = new Date(s);
+        if (!isNaN(d.getTime())) {
+            var y = d.getFullYear();
+            var m = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+        return s;
     }
 
     function showToast(message, icon) {
