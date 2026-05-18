@@ -80,13 +80,13 @@
                 if (userIsAdmin) {
                     $('#userLevelBadge').text('管理员 / Admin').removeClass('bg-secondary bg-info bg-warning').addClass('bg-success');
                 } else {
-                    $('#userLevelBadge').text(currentUserName || '用户').removeClass('bg-secondary bg-warning').addClass('bg-info');
+                    $('#userLevelBadge').text('普通用户 / User').removeClass('bg-secondary bg-warning').addClass('bg-warning text-dark');
                 }
                 fetchFollowupRecords();
             })
             .withFailureHandler(function() {
                 userIsAdmin = false;
-                $('#userLevelBadge').text(currentUserName || '用户').removeClass('bg-secondary').addClass('bg-info');
+                $('#userLevelBadge').text('普通用户 / User').removeClass('bg-secondary').addClass('bg-warning text-dark');
                 fetchFollowupRecords();
             })
             .checkFailureReportManagePermission(currentUserEmail, currentUserName);
