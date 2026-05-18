@@ -32,10 +32,18 @@
             color: white !important;
         }
 
-        .bilingual-table thead th {
+        .bilingual-table tbody td {
             white-space: normal;
             line-height: 1.2;
             text-align: center;
+        }
+
+        #imTable tbody tr.odd > td, #tfTable tbody tr.odd > td, #pkTable tbody tr.odd > td {
+            background-color: #f5f5f5;
+        }
+
+        #imTable tbody tr.even > td, #tfTable tbody tr.even > td, #pkTable tbody tr.even > td {
+            background-color: #ffffff;
         }
 
         .bilingual-table thead th .label-cn {
@@ -183,7 +191,7 @@
                                     <div class="tab-pane fade show active" id="im-content" role="tabpanel" aria-labelledby="im-tab">
                                         <div class="mt-3">
                                             <div class="table-responsive">
-                                                <table id="imTable" class="display table table-bordered table-striped table-hover bilingual-table" style="width:100%">
+                                                <table id="imTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
                                                     <thead>
                                                         <tr>
                                                             <th><span class="label-cn">编号</span><span class="label-en">Report No.</span></th>
@@ -211,7 +219,7 @@
                                     <div class="tab-pane fade" id="tf-content" role="tabpanel" aria-labelledby="tf-tab">
                                         <div class="mt-3">
                                             <div class="table-responsive">
-                                                <table id="tfTable" class="display table table-bordered table-striped table-hover bilingual-table" style="width:100%">
+                                                <table id="tfTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
                                                     <thead>
                                                         <tr>
                                                             <th><span class="label-cn">编号</span><span class="label-en">Report No.</span></th>
@@ -239,7 +247,7 @@
                                     <div class="tab-pane fade" id="pk-content" role="tabpanel" aria-labelledby="pk-tab">
                                         <div class="mt-3">
                                             <div class="table-responsive">
-                                                <table id="pkTable" class="display table table-bordered table-striped table-hover bilingual-table" style="width:100%">
+                                                <table id="pkTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
                                                     <thead>
                                                         <tr>
                                                             <th><span class="label-cn">编号</span><span class="label-en">Report No.</span></th>
