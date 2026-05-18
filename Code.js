@@ -416,20 +416,19 @@ function submitFailureReport(dataStr) {
           String((row && row.pa_when) || '').trim(),
           String((row && row.pa_verifier) || '').trim(),
           String((row && row.pa_verifier_when) || '').trim(),
-          '进行中 / Ongoing',
+          'NA',
           nowYmd,
           nowYmd,
           fileUrl,
-          '未验证 / Not Verified',
-          paIdx
+          paIdx,
+          ''
         ];
 
         if (existingMap[paIdx] !== undefined) {
           const existing = existingMap[paIdx].data;
-          newRow[8] = String(existing[8] || '进行中 / Ongoing').trim();
+          newRow[8] = String(existing[8] || 'NA').trim();
           newRow[9] = String(existing[9] || nowYmd).trim();
           newRow[10] = nowYmd;
-          newRow[12] = String(existing[12] || '未验证 / Not Verified').trim();
           usedExisting.add(paIdx);
           wsFollow.getRange(existingMap[paIdx].rowIndex, 1, 1, newRow.length).setValues([newRow]);
         } else {
@@ -461,12 +460,12 @@ function submitFailureReport(dataStr) {
           String((row && row.pa_when) || '').trim(),
           String((row && row.pa_verifier) || '').trim(),
           String((row && row.pa_verifier_when) || '').trim(),
-          '进行中 / Ongoing',
+          'NA',
           nowYmd,
           nowYmd,
           fileUrl,
-          '未验证 / Not Verified',
-          paIdx
+          paIdx,
+          ''
         ];
         followRows.push(newRow);
         followupRowsForEmail.push(newRow);
@@ -7288,7 +7287,7 @@ function getFollowupRecords() {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[12] || '')
+        String(row[13] || '')  // Column N - 跟进内容
       ];
 
       if (!formattedRow[0]) {
@@ -7398,7 +7397,7 @@ function updateFollowupFieldValue(followupId, fieldKey, value) {
       paWho: 5,
       paVerifier: 7,
       status: 9,
-      verification: 13
+      followupContent: 14
     };
 
     if (!fieldMap.hasOwnProperty(fieldKey)) {
@@ -7432,18 +7431,10 @@ function updateFollowupFieldValue(followupId, fieldKey, value) {
     }
 
     if (fieldKey === 'status') {
-      const allowedStatus = ['进行中 / Ongoing', '已完成 / Completed'];
+      const allowedStatus = ['进行中 / Ongoing', '已完成 / Completed', '未验证 / Not Verified', '未通过 / Not Passed', '已通过 / Passed'];
       normalizedValue = String(normalizedValue).trim();
       if (!allowedStatus.includes(normalizedValue)) {
         throw new Error('状态值无效 / Invalid status value: ' + normalizedValue);
-      }
-    }
-
-    if (fieldKey === 'verification') {
-      const allowedVerification = ['已验证 / Verified', '未验证 / Not Verified'];
-      normalizedValue = String(normalizedValue).trim();
-      if (normalizedValue && !allowedVerification.includes(normalizedValue)) {
-        throw new Error('验证值无效 / Invalid verification value: ' + normalizedValue);
       }
     }
 
@@ -7452,6 +7443,11 @@ function updateFollowupFieldValue(followupId, fieldKey, value) {
     const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
 
     wsFollow.getRange(rowIndex, fieldMap[fieldKey]).setValue(normalizedValue);
+
+    // 跟进内容保存后，自动将状态改为"未验证"
+    if (fieldKey === 'followupContent' && normalizedValue) {
+      wsFollow.getRange(rowIndex, 9).setValue('未验证 / Not Verified');
+    }
 
     const rangeUpdatedDate = wsFollow.getRange(rowIndex, 11);
     const currentUpdatedValue = String(rangeUpdatedDate.getValue() || '').trim();
@@ -8005,10 +8001,6 @@ function getFollowupRecordsForResponsiblePerson(userName) {
       // 如果不匹配当前用户，跳过
       if (paWhoName !== userName) continue;
 
-      // 检查验证状态，已验证的记录不显示（第13列，索引12）
-      const verification = String(row[12] || '');
-      if (verification === '已验证 / Verified') continue;
-
       const formattedRow = [
         String(row[0] || ''),
         String(row[1] || ''),
@@ -8022,7 +8014,7 @@ function getFollowupRecordsForResponsiblePerson(userName) {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[12] || '')
+        String(row[13] || '')  // Column N - 跟进内容
       ];
 
       if (!formattedRow[0]) {
@@ -8093,10 +8085,6 @@ function getFollowupRecordsForVerifier(userName) {
       // 如果不匹配当前用户，跳过
       if (paVerifierName !== userName) continue;
 
-      // 检查验证状态，已验证的记录不显示（第13列，索引12）
-      const verification = String(row[12] || '');
-      if (verification === '已验证 / Verified') continue;
-
       const formattedRow = [
         String(row[0] || ''),
         String(row[1] || ''),
@@ -8110,7 +8098,7 @@ function getFollowupRecordsForVerifier(userName) {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[12] || '')
+        String(row[13] || '')  // Column N - 跟进内容
       ];
 
       if (!formattedRow[0]) {

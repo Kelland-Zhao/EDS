@@ -4,12 +4,13 @@
     let followupTable = null;
     let followupData = [];
     let currentUserName = '';
-
-    const STATUS_OPTIONS = ['进行中 / Ongoing', '已完成 / Completed'];
+    let currentUserEmail = '';
+    let userIsAdmin = false;
 
     const FIELD_LABELS = {
         paPlan: '预防性措施 / PA Action',
-        status: '状态 / Status'
+        status: '状态 / Status',
+        followupContent: '跟进内容 / Follow-up Content'
     };
 
     const loadingSpinner = {
@@ -31,6 +32,7 @@
         console.log('页面DOM加载完成，开始初始化...');
 
         currentUserName = getCurrentUser();
+        currentUserEmail = sessionStorage.getItem('Email') || '';
         console.log('当前用户:', currentUserName);
 
         // 立即显示加载弹窗
@@ -41,7 +43,7 @@
             didOpen: function() { Swal.showLoading(); }
         });
 
-        fetchFollowupRecords();
+        checkUserPermission();
     });
 
     function escapeHtml(text) {
@@ -51,6 +53,60 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    function toYMD(d) {
+        const y = d.getFullYear();
+        if (y < 2000 || y > 2100) return '';
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+
+    function formatDisplayDate(value) {
+        if (!value) return '';
+        // Date 对象 → YYYY-MM-DD
+        if (value instanceof Date && !isNaN(value)) return toYMD(value) || '';
+        const str = String(value).trim();
+        if (!str) return '';
+        // ISO 时间戳 "2026-04-04T00:00:00.000Z"
+        var isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+        if (isoMatch) return isoMatch[1] + '-' + isoMatch[2] + '-' + isoMatch[3];
+        // YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+        // 纯数字时间戳（毫秒13位 或 秒10位）
+        if (/^\d{10,13}$/.test(str)) {
+            var ms = str.length === 10 ? parseInt(str) * 1000 : parseInt(str);
+            return toYMD(new Date(ms)) || '';
+        }
+        // M/D/YYYY
+        var mdMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (mdMatch) {
+            return mdMatch[3] + '-' + String(mdMatch[1]).padStart(2, '0') + '-' + String(mdMatch[2]).padStart(2, '0');
+        }
+        // 兜底：尝试用 Date 解析（覆盖 "Wed May 18 2026..." 等格式）
+        var fallback = new Date(str);
+        if (!isNaN(fallback)) return toYMD(fallback) || '';
+        return str;
+    }
+
+    function checkUserPermission() {
+        google.script.run
+            .withSuccessHandler(function(isAdmin) {
+                userIsAdmin = isAdmin === true;
+                if (userIsAdmin) {
+                    $('#userLevelBadge').text('管理员 / Admin').removeClass('bg-secondary bg-info bg-warning').addClass('bg-success');
+                } else {
+                    $('#userLevelBadge').text('普通用户 / User').removeClass('bg-secondary bg-warning').addClass('bg-warning text-dark');
+                }
+                fetchFollowupRecords();
+            })
+            .withFailureHandler(function() {
+                userIsAdmin = false;
+                $('#userLevelBadge').text('普通用户 / User').removeClass('bg-secondary').addClass('bg-warning text-dark');
+                fetchFollowupRecords();
+            })
+            .checkFailureReportManagePermission(currentUserEmail, currentUserName);
     }
 
     function fetchFollowupRecords() {
@@ -67,6 +123,9 @@
                 didOpen: function() { Swal.showLoading(); }
             });
         }
+
+        const serverFn = userIsAdmin ? 'getFollowupRecords' : 'getFollowupRecordsForResponsiblePerson';
+        const serverArgs = userIsAdmin ? [] : [currentUserName];
 
         google.script.run
             .withSuccessHandler(function(response) {
@@ -94,8 +153,7 @@
                     icon: 'error',
                     confirmButtonText: '确定 / OK'
                 });
-            })
-            .getFollowupRecordsForResponsiblePerson(currentUserName);
+            })[serverFn](...serverArgs);
     }
 
     function mapRowsToObjects(rows) {
@@ -111,7 +169,8 @@
                 status: String(row[8] || ''),
                 createdDate: String(row[9] || ''),
                 updatedDate: String(row[10] || ''),
-                pdfUrl: String(row[11] || '')
+                pdfUrl: String(row[11] || ''),
+                followupContent: String(row[12] || '')
             };
         });
     }
@@ -152,8 +211,9 @@
                 }}, // 责任人只显示名字
                 { data: 'paWhen', render: function(value, type) {
                     if (type !== 'display') return value || '';
-                    return value || '<span class="text-muted">-</span>';
-                }}, // 计划完成日期
+                    const formatted = formatDisplayDate(value);
+                    return formatted || '<span class="text-muted">-</span>';
+                }},
                 { data: 'paVerifier', render: function(value, type) {
                     if (type !== 'display') return value || '';
                     // 从"名字【邮箱】"格式中提取名字
@@ -162,27 +222,47 @@
                 }}, // 验证人只显示名字
                 {
                     data: 'status',
-                    className: 'pa-status-cell',
+                    className: 'pa-status-cell text-center',
                     orderable: false,
-                    render: function(value, type, row) {
-                        if (type !== 'display') {
-                            return value || '';
-                        }
-                        return buildStatusSelectHtml(row.followupId, value);
+                    render: function(value, type) {
+                        if (type !== 'display') return value || '';
+                        return buildStatusBadgeHtml(value);
                     }
                 },
-                { data: 'createdDate' },
-                { data: 'updatedDate' },
+                { data: 'createdDate', render: function(value, type) {
+                    if (type !== 'display') return value || '';
+                    const formatted = formatDisplayDate(value);
+                    return formatted || '<span class="text-muted">-</span>';
+                }},
+                { data: 'updatedDate', render: function(value, type) {
+                    if (type !== 'display') return value || '';
+                    const formatted = formatDisplayDate(value);
+                    return formatted || '<span class="text-muted">-</span>';
+                }},
+                {
+                    data: 'followupContent',
+                    className: 'pa-content-cell',
+                    orderable: false,
+                    render: function(value, type) {
+                        if (type !== 'display') return value || '';
+                        const safe = escapeHtml(value || '');
+                        return '<textarea class="form-control followup-content-textarea" rows="2" style="min-width:180px;font-size:0.875rem;" placeholder="输入跟进内容...">' + safe + '</textarea>';
+                    }
+                },
                 {
                     data: null,
                     orderable: false,
                     render: function(data, type, row) {
-                        let actions = '';
+                        if (type !== 'display') return '';
+                        const btnStyle = 'font-size:0.75rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;';
+                        let actions = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;">';
+                        actions += '<button class="btn btn-sm btn-primary save-content-btn" data-id="' + row.followupId + '" style="' + btnStyle + '"><i class="fas fa-save"></i><br>保存<br>Save</button>';
                         if (row.pdfUrl) {
-                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '">';
-                            actions += '<i class="fas fa-file-pdf"></i> 查看PDF / View PDF';
+                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '">';
+                            actions += '<i class="fas fa-file-pdf"></i><br>查看PDF<br>View PDF';
                             actions += '</button>';
                         }
+                        actions += '</div>';
                         return actions;
                     }
                 }
@@ -209,34 +289,19 @@
         console.log('表格初始化完成');
     }
 
-    function buildStatusSelectHtml(followupId, currentValue) {
-        const safeId = escapeHtml(followupId);
-        const normalizedValue = String(currentValue || '').trim();
-
-        // 根据状态值设置颜色类
-        let statusColorClass = '';
-        if (normalizedValue === '已完成 / Completed') {
-            statusColorClass = 'status-completed';
-        } else if (normalizedValue === '进行中 / Ongoing') {
-            statusColorClass = 'status-ongoing';
-        }
-
-        let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
-        let hasCurrent = normalizedValue === '';
-
-        STATUS_OPTIONS.forEach(function(option) {
-            const selected = option === normalizedValue ? ' selected' : '';
-            if (selected) {
-                hasCurrent = true;
-            }
-            optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
-        });
-
-        if (!hasCurrent && normalizedValue) {
-            optionsHtml += '<option value="' + escapeHtml(normalizedValue) + '" selected>' + escapeHtml(normalizedValue) + '</option>';
-        }
-
-        return '<select class="form-select form-select-sm followup-select followup-select-status ' + statusColorClass + '" data-field="status" data-id="' + safeId + '">' + optionsHtml + '</select>';
+    function buildStatusBadgeHtml(value) {
+        const v = String(value || '').trim();
+        if (!v) return '<span class="text-muted">-</span>';
+        // 提取中文和英文部分
+        const parts = v.split(' / ');
+        const cn = parts[0] || v;
+        const en = parts[1] || '';
+        let bg = 'bg-secondary';
+        if (v === '已完成 / Completed') bg = 'bg-success';
+        else if (v === '进行中 / Ongoing') bg = 'bg-warning text-dark';
+        else if (v === '未验证 / Not Verified') bg = 'bg-info text-dark';
+        const display = en ? (cn + '<br>' + en) : cn;
+        return '<span class="badge ' + bg + '" style="font-size:0.8rem;">' + display + '</span>';
     }
 
     function showToast(message, icon) {
@@ -281,6 +346,73 @@
             })
             .updateFollowupFieldValue(followupId, fieldKey, value);
     }
+
+    // 保存跟进内容按钮点击事件
+    $(document).on('click', '.save-content-btn', function() {
+        if (!followupTable) return;
+        const followupId = $(this).data('id');
+        const $btn = $(this);
+        const $row = $btn.closest('tr');
+        const $textarea = $row.find('.followup-content-textarea');
+        const newValue = String($textarea.val() || '').trim();
+
+        if (!newValue) {
+            showToast('请先输入跟进内容 / Please enter follow-up content first', 'warning');
+            return;
+        }
+
+        const rowApi = followupTable.row($row);
+        const rowData = rowApi.data();
+        if (!rowData) return;
+
+        if (newValue === String(rowData.followupContent || '').trim()) {
+            showToast('内容未变更 / Content unchanged', 'info');
+            return;
+        }
+
+        $btn.prop('disabled', true);
+
+        // 保存中toast
+        const toastInstance = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 0,
+            timerProgressBar: false,
+            didOpen: function(toast) {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+        toastInstance.fire({
+            icon: 'info',
+            title: '保存中 / Saving...'
+        });
+
+        updateFollowupField('followupContent', followupId, newValue, function(response) {
+            Swal.close();
+            $btn.prop('disabled', false);
+            const updatedRow = Object.assign({}, rowData, {
+                followupContent: newValue,
+                status: '未验证 / Not Verified'
+            });
+            if (response && response.updatedDate) {
+                updatedRow.updatedDate = response.updatedDate;
+            }
+            rowApi.data(updatedRow).draw(false);
+            // 保存成功，该行闪淡绿色
+            var $savedTr = $(rowApi.node());
+            $savedTr.addClass('row-saved-flash');
+            setTimeout(function() { $savedTr.removeClass('row-saved-flash'); }, 2000);
+            const index = followupData.findIndex(function(r) { return r.followupId === followupId; });
+            if (index !== -1) { followupData[index] = updatedRow; }
+            showToast('跟进内容已保存，状态已更新为未验证 / Follow-up content saved, status updated to Not Verified', 'success');
+        }, function(message) {
+            Swal.close();
+            $btn.prop('disabled', false);
+            showToast(message || '保存失败 / Save failed', 'error');
+        });
+    });
 
     // 查看PDF按钮点击事件
     $(document).on('click', '.view-pdf-btn', function() {
@@ -359,47 +491,6 @@
                 e.preventDefault();
                 saveEdit();
             }
-        });
-    });
-
-    // 状态下拉更新
-    $('#followupTable tbody').on('change', 'select.followup-select', function() {
-        if (!followupTable) return;
-        const $select = $(this);
-        const fieldKey = $select.data('field');
-        const followupId = $select.data('id');
-        const rowApi = followupTable.row($select.closest('tr'));
-        const rowData = rowApi.data();
-        if (!fieldKey || !followupId || !rowData) return;
-
-        const newValue = String($select.val() || '').trim();
-        const previousValue = String(rowData.status || '').trim();
-        if (newValue === previousValue) {
-            return;
-        }
-
-        const originalRow = Object.assign({}, rowData);
-        $select.prop('disabled', true);
-
-        updateFollowupField(fieldKey, followupId, newValue, function(response) {
-            $select.prop('disabled', false);
-            const updatedRow = Object.assign({}, rowData, { status: newValue });
-            if (response && response.updatedDate) {
-                updatedRow.updatedDate = response.updatedDate;
-            }
-            rowApi.data(updatedRow).draw(false);
-            // 同步更新全局 followupData 数组
-            const index = followupData.findIndex(function(r) {
-                return r.followupId === followupId;
-            });
-            if (index !== -1) {
-                followupData[index] = updatedRow;
-            }
-            showToast(buildDualMessage('status', '已更新', ' updated'), 'success');
-        }, function(message) {
-            $select.prop('disabled', false);
-            rowApi.data(originalRow).draw(false);
-            showToast(message || buildDualMessage('status', '更新失败', ' update failed'), 'error');
         });
     });
 

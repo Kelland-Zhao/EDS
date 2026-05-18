@@ -7,13 +7,10 @@
     let currentUserEmail = '';
     let userIsAdmin = false;
 
-    const STATUS_OPTIONS = ['进行中 / Ongoing', '已完成 / Completed'];
-    const VERIFY_OPTIONS = ['已完成 / Completed', '未完成 / Not Completed'];
-
+    const STATUS_OPTIONS = ['未验证 / Not Verified', '未通过 / Not Passed', '已通过 / Passed'];
     const FIELD_LABELS = {
         paPlan: '预防性措施 / PA Action',
-        status: '状态 / Status',
-        verification: '验证 / Verification'
+        status: '状态 / Status'
     };
 
     const loadingSpinner = {
@@ -148,7 +145,7 @@
                 paWhen: String(row[5] || ''),
                 paVerifier: String(row[6] || ''),
                 status: String(row[8] || ''),
-                verification: String(row[12] || ''), // 验证状态列
+                followupContent: String(row[12] || ''),
                 createdDate: String(row[9] || ''),
                 updatedDate: String(row[10] || ''),
                 pdfUrl: String(row[11] || '')
@@ -200,26 +197,25 @@
                     const name = String(value || '').replace(/【.+】/, '').trim();
                     return name || '<span class="text-muted">-</span>';
                 }}, // 验证人只显示名字
-                { data: 'status', render: function(value, type) {
-                    if (type !== 'display') return value || '';
-                    const normalizedValue = String(value || '').trim();
-                    let statusClass = '';
-                    if (normalizedValue === '进行中 / Ongoing') {
-                        statusClass = 'status-ongoing';
-                    } else if (normalizedValue === '已完成 / Completed') {
-                        statusClass = 'status-completed';
-                    }
-                    return '<span class="' + statusClass + '">' + (value || '<span class="text-muted">-</span>') + '</span>';
-                }}, // 状态改为纯文本显示，带颜色标识
                 {
-                    data: 'verification',
-                    className: 'pa-verify-cell editable-cell',
+                    data: 'status',
+                    className: 'pa-status-cell',
                     orderable: false,
                     render: function(value, type, row) {
                         if (type !== 'display') return value || '';
-                        return buildVerifySelectHtml(row.followupId, value);
+                        return buildStatusSelectHtml(row.followupId, value);
                     }
-                }, // 验证下拉选择列（可编辑高亮）
+                },
+                {
+                    data: 'followupContent',
+                    className: 'pa-content-cell',
+                    orderable: false,
+                    render: function(value, type) {
+                        if (type !== 'display') return value || '';
+                        var safe = escapeHtml(value || '');
+                        return safe ? safe.replace(/\n/g, '<br>') : '<span class="text-muted">-</span>';
+                    }
+                },
                 { data: 'createdDate', render: function(value, type) {
                     if (type !== 'display') return value || '';
                     return formatDateYMD(value);
@@ -229,12 +225,16 @@
                     data: null,
                     orderable: false,
                     render: function(data, type, row) {
-                        let actions = '';
+                        if (type !== 'display') return '';
+                        var btnStyle = 'font-size:0.75rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;';
+                        var actions = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;">';
+                        actions += '<button class="btn btn-sm btn-primary save-status-btn" data-id="' + row.followupId + '" style="' + btnStyle + '"><i class="fas fa-save"></i><br>保存<br>Save</button>';
                         if (row.pdfUrl) {
-                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '">';
-                            actions += '<i class="fas fa-file-pdf"></i> 查看PDF / View PDF';
+                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '">';
+                            actions += '<i class="fas fa-file-pdf"></i><br>查看PDF<br>View PDF';
                             actions += '</button>';
                         }
+                        actions += '</div>';
                         return actions;
                     }
                 }
@@ -255,11 +255,7 @@
             },
             order: [[8, 'desc']],
             pageLength: 25,
-            responsive: true,
-            drawCallback: function() {
-                $('#followupTable tbody tr.odd td').css('background-color', '#f5f5f5');
-                $('#followupTable tbody tr.even td').css('background-color', '#ffffff');
-            }
+            responsive: true
         });
 
         console.log('表格初始化完成');
@@ -271,9 +267,11 @@
 
         // 根据状态值设置颜色类
         let statusColorClass = '';
-        if (normalizedValue === '已完成 / Completed') {
+        if (normalizedValue === '已通过 / Passed') {
             statusColorClass = 'status-completed';
-        } else if (normalizedValue === '进行中 / Ongoing') {
+        } else if (normalizedValue === '未通过 / Not Passed') {
+            statusColorClass = 'status-failed';
+        } else if (normalizedValue === '未验证 / Not Verified') {
             statusColorClass = 'status-ongoing';
         }
 
@@ -293,26 +291,6 @@
         }
 
         return '<select class="form-select form-select-sm followup-select followup-select-status ' + statusColorClass + '" data-field="status" data-id="' + safeId + '">' + optionsHtml + '</select>';
-    }
-
-    function buildVerifySelectHtml(followupId, currentValue) {
-        const safeId = escapeHtml(followupId);
-        const normalizedValue = String(currentValue || '').trim();
-
-        let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
-        let hasCurrent = normalizedValue === '';
-
-        VERIFY_OPTIONS.forEach(function(option) {
-            const selected = option === normalizedValue ? ' selected' : '';
-            if (selected) { hasCurrent = true; }
-            optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
-        });
-
-        if (!hasCurrent && normalizedValue) {
-            optionsHtml += '<option value="' + escapeHtml(normalizedValue) + '" selected>' + escapeHtml(normalizedValue) + '</option>';
-        }
-
-        return '<select class="form-select form-select-sm followup-select followup-select-verify" data-field="verification" data-id="' + safeId + '">' + optionsHtml + '</select>';
     }
 
     function formatDateYMD(val) {
@@ -372,6 +350,67 @@
             .updateFollowupFieldValue(followupId, fieldKey, value);
     }
 
+    // 保存状态按钮点击事件
+    $(document).on('click', '.save-status-btn', function() {
+        if (!followupTable) return;
+        var followupId = $(this).data('id');
+        var $btn = $(this);
+        var $row = $btn.closest('tr');
+        var $select = $row.find('select.followup-select-status');
+        var newValue = String($select.val() || '').trim();
+
+        if (!newValue) {
+            showToast('请先选择状态 / Please select status first', 'warning');
+            return;
+        }
+
+        var rowApi = followupTable.row($row);
+        var rowData = rowApi.data();
+        if (!rowData) return;
+
+        if (newValue === String(rowData.status || '').trim()) {
+            showToast('状态未变更 / Status unchanged', 'info');
+            return;
+        }
+
+        $btn.prop('disabled', true);
+
+        var toastInstance = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 0,
+            timerProgressBar: false,
+            didOpen: function(toast) {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+        toastInstance.fire({ icon: 'info', title: '保存中 / Saving...' });
+
+        updateFollowupField('status', followupId, newValue, function(response) {
+            Swal.close();
+            $btn.prop('disabled', false);
+            var updatedRow = Object.assign({}, rowData, { status: newValue });
+            if (response && response.updatedDate) {
+                updatedRow.updatedDate = response.updatedDate;
+            }
+            rowApi.data(updatedRow).draw(false);
+            // 闪绿色
+            var $savedTr = $(rowApi.node());
+            $savedTr.addClass('row-saved-flash');
+            setTimeout(function() { $savedTr.removeClass('row-saved-flash'); }, 2000);
+            // sync followupData
+            var index = followupData.findIndex(function(r) { return r.followupId === followupId; });
+            if (index !== -1) { followupData[index] = updatedRow; }
+            showToast('状态已保存 / Status saved', 'success');
+        }, function(message) {
+            Swal.close();
+            $btn.prop('disabled', false);
+            showToast(message || '保存失败 / Save failed', 'error');
+        });
+    });
+
     // 查看PDF按钮点击事件
     $(document).on('click', '.view-pdf-btn', function() {
         const pdfUrl = $(this).data('pdf');
@@ -391,7 +430,7 @@
     });
 
     // 预防性措施双击编辑 - 单元格内直接编辑（只读）
-    $('#followupTable tbody').on('dblclick', 'td.pa-action-cell', function(e) {
+    $('#followupTable tbody').on('dblclick', 'td.pa-readonly-cell', function(e) {
         if (!followupTable) return;
         const $cell = $(this);
         if ($cell.find('textarea').length > 0) return;
@@ -429,6 +468,9 @@
         const rowApi = followupTable.row($select.closest('tr'));
         const rowData = rowApi.data();
         if (!fieldKey || !followupId || !rowData) return;
+
+        // 状态通过保存按钮提交，不自动保存
+        if (fieldKey === 'status') return;
 
         const newValue = String($select.val() || '').trim();
         const previousValue = String(rowData[fieldKey] || '').trim();
@@ -490,11 +532,11 @@
     $('#btnEmailResponsible').click(function() {
         // 筛选出验证状态不等于"已验证"的记录
         const unverifiedRecords = followupData.filter(function(record) {
-            return record.verification !== '已验证 / Verified';
+            return record.status !== '已通过 / Passed';
         });
 
         if (unverifiedRecords.length === 0) {
-            showToast('没有未验证的记录需要提醒 / No unverified records to remind', 'warning');
+            showToast('没有未通过的记录需要提醒 / No unpassed records to remind', 'warning');
             return;
         }
 
@@ -525,8 +567,7 @@
                 paPlan: record.paPlan,
                 paWho: record.paWho,
                 paWhen: record.paWhen,
-                status: record.status,
-                verification: record.verification
+                status: record.status
             };
         });
 
