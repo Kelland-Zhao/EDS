@@ -65,10 +65,16 @@ $(document).ready(function() {
     google.script.run
         .withSuccessHandler(function(hasPermission) {
             window._userCanEdit = hasPermission;
+            if (hasPermission) {
+                $('#userLevelBadge').removeClass('bg-secondary').addClass('bg-success').text('管理员 / Admin');
+            } else {
+                $('#userLevelBadge').removeClass('bg-secondary').addClass('bg-warning text-dark').text('普通用户 / User');
+            }
             loadFailureReportProgressData();
         })
         .withFailureHandler(function(e) {
             window._userCanEdit = false;
+            $('#userLevelBadge').removeClass('bg-secondary').addClass('bg-warning text-dark').text('普通用户 / User');
             loadFailureReportProgressData();
         })
         .checkFailureReportFillPermission(
@@ -105,9 +111,9 @@ function initializeTables() {
                 title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
                     } else {
-                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                        return `<span class="badge bg-warning">未上传<br>Not Uploaded</span>`;
                     }
                 }
             },
@@ -116,8 +122,8 @@ function initializeTables() {
                 title: buildBilingualTitle('操作', 'Actions'),
                 orderable: false,
                 render: function(data, type, row) {
-                    if (row.hasFormData && window._userCanEdit) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑 / Edit</button>';
+                    if (row.hasFormData) {
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑<br>Edit</button>';
                     }
                     return '';
                 }
@@ -153,9 +159,9 @@ function initializeTables() {
                 title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
                     } else {
-                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                        return `<span class="badge bg-warning">未上传<br>Not Uploaded</span>`;
                     }
                 }
             },
@@ -164,8 +170,8 @@ function initializeTables() {
                 title: buildBilingualTitle('操作', 'Actions'),
                 orderable: false,
                 render: function(data, type, row) {
-                    if (row.hasFormData && window._userCanEdit) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑 / Edit</button>';
+                    if (row.hasFormData) {
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑<br>Edit</button>';
                     }
                     return '';
                 }
@@ -201,9 +207,9 @@ function initializeTables() {
                 title: buildBilingualTitle('附件', 'Attachments'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传 / Uploaded</span>`;
+                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
                     } else {
-                        return `<span class="badge bg-warning">未上传 / Not Uploaded</span>`;
+                        return `<span class="badge bg-warning">未上传<br>Not Uploaded</span>`;
                     }
                 }
             },
@@ -212,8 +218,8 @@ function initializeTables() {
                 title: buildBilingualTitle('操作', 'Actions'),
                 orderable: false,
                 render: function(data, type, row) {
-                    if (row.hasFormData && window._userCanEdit) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑 / Edit</button>';
+                    if (row.hasFormData) {
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑<br>Edit</button>';
                     }
                     return '';
                 }

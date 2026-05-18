@@ -31,6 +31,22 @@
             background-color: #E60012 !important;
             color: white !important;
         }
+        
+        .bilingual-table tbody td {
+            vertical-align: middle;
+        }
+
+        #imTable tbody tr:nth-child(odd),
+        #tfTable tbody tr:nth-child(odd),
+        #pkTable tbody tr:nth-child(odd) {
+            background-color: #f9f9f9;
+        }
+
+        #imTable tbody tr:nth-child(even),
+        #tfTable tbody tr:nth-child(even),
+        #pkTable tbody tr:nth-child(even) {
+            background-color: #ffffff;
+        }
     </style>
 
 <body>
@@ -42,6 +58,7 @@
                 font-size: xx-large;
                 font-weight: bold;
               ">故障报告进度 / Failure Report Progress</a>
+            <span id="userLevelBadge" class="badge ms-auto bg-secondary" style="font-size: 0.9rem; vertical-align: middle;">加载中... / Loading...</span>
         </div>
     </nav>
 
@@ -98,7 +115,7 @@
                                     <!-- 注塑工序(IM) -->
                                     <div class="tab-pane fade show active" id="im-content" role="tabpanel" aria-labelledby="im-tab">
                                         <div class="table-responsive">
-                                            <table id="imTable" class="table table-striped table-bordered" style="width:100%">
+                                            <table id="imTable" class="table table-striped table-bordered table-hover bilingual-table" style="width:100%">
                                                 <thead>
                                                     <tr>
                                                         <th><span class="label-cn">故障报告编号</span><span class="label-en">Failure Report No.</span></th>
@@ -124,7 +141,7 @@
                                     <!-- 植磨毛工序(TF) -->
                                     <div class="tab-pane fade" id="tf-content" role="tabpanel" aria-labelledby="tf-tab">
                                         <div class="table-responsive">
-                                            <table id="tfTable" class="table table-striped table-bordered" style="width:100%">
+                                            <table id="tfTable" class="table table-striped table-bordered table-hover bilingual-table" style="width:100%">
                                                 <thead>
                                                     <tr>
                                                         <th><span class="label-cn">故障报告编号</span><span class="label-en">Failure Report No.</span></th>
@@ -150,7 +167,7 @@
                                     <!-- 包装工序(PK) -->
                                     <div class="tab-pane fade" id="pk-content" role="tabpanel" aria-labelledby="pk-tab">
                                         <div class="table-responsive">
-                                            <table id="pkTable" class="table table-striped table-bordered" style="width:100%">
+                                            <table id="pkTable" class="table table-striped table-bordered table-hover bilingual-table" style="width:100%">
                                                 <thead>
                                                     <tr>
                                                         <th><span class="label-cn">故障报告编号</span><span class="label-en">Failure Report No.</span></th>
