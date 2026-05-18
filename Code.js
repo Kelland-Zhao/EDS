@@ -7273,7 +7273,8 @@ function getFollowupRecords() {
         String(row[8] || ''),
         formatDate(row[9]),
         formatDate(row[10]),
-        String(row[11] || '')
+        String(row[11] || ''),
+        String(row[12] || '')
       ];
 
       if (!formattedRow[0]) {

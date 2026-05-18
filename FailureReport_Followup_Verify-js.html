@@ -4,6 +4,8 @@
     let followupTable = null;
     let followupData = [];
     let currentUserName = '';
+    let currentUserEmail = '';
+    let userIsAdmin = false;
 
     const STATUS_OPTIONS = ['进行中 / Ongoing', '已完成 / Completed'];
     const VERIFY_OPTIONS = ['已完成 / Completed', '未完成 / Not Completed'];
@@ -33,12 +35,8 @@
         console.log('页面DOM加载完成，开始初始化...');
 
         currentUserName = getCurrentUser();
+        currentUserEmail = sessionStorage.getItem('Email') || '';
         console.log('当前用户:', currentUserName);
-        if (currentUserName) {
-            $('#userLevelBadge').text(currentUserName).removeClass('bg-secondary').addClass('bg-info');
-        } else {
-            $('#userLevelBadge').text('未知用户 / Unknown').removeClass('bg-secondary').addClass('bg-warning');
-        }
 
         // 立即显示加载弹窗
         Swal.fire({
@@ -49,7 +47,7 @@
         });
 
         populateVerifyStatusOptions();
-        fetchFollowupRecords();
+        checkUserPermission();
     });
 
     function escapeHtml(text) {
@@ -73,6 +71,25 @@
         if (STATUS_OPTIONS.indexOf(currentValue) !== -1) {
             $select.val(currentValue);
         }
+    }
+
+    function checkUserPermission() {
+        google.script.run
+            .withSuccessHandler(function(isAdmin) {
+                userIsAdmin = isAdmin === true;
+                if (userIsAdmin) {
+                    $('#userLevelBadge').text('管理员 / Admin').removeClass('bg-secondary bg-info bg-warning').addClass('bg-success');
+                } else {
+                    $('#userLevelBadge').text(currentUserName || '用户').removeClass('bg-secondary bg-warning').addClass('bg-info');
+                }
+                fetchFollowupRecords();
+            })
+            .withFailureHandler(function() {
+                userIsAdmin = false;
+                $('#userLevelBadge').text(currentUserName || '用户').removeClass('bg-secondary').addClass('bg-info');
+                fetchFollowupRecords();
+            })
+            .checkFailureReportManagePermission(currentUserEmail, currentUserName);
     }
 
     function fetchFollowupRecords() {
@@ -117,7 +134,7 @@
                     confirmButtonText: '确定 / OK'
                 });
             })
-            .getFollowupRecordsForVerifier(currentUserName);
+            [userIsAdmin ? 'getFollowupRecords' : 'getFollowupRecordsForVerifier'](... (userIsAdmin ? [] : [currentUserName]));
     }
 
     function mapRowsToObjects(rows) {
@@ -462,7 +479,7 @@
                 console.error('验证记录刷新失败:', error);
                 showToast('刷新数据失败 / Failed to refresh data: ' + (error.message || ''), 'error');
             })
-            .getFollowupRecordsForVerifier(currentUserName);
+            [userIsAdmin ? 'getFollowupRecords' : 'getFollowupRecordsForVerifier'](... (userIsAdmin ? [] : [currentUserName]));
     }
 
     // 邮件提醒责任人按钮点击事件
