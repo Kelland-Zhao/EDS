@@ -318,6 +318,7 @@ function submitFailureReport(dataStr) {
       }
     }
     if (rowIndex === -1) throw new Error('未找到故障报告编号 / Report ID not found: ' + data.case_code);
+    const machineNo = String(values[rowIndex - 1][1] || '').trim();
     const dataForSheet = Object.assign({}, data);
     delete dataForSheet.photo;
     delete dataForSheet.fault_category_text;
@@ -376,6 +377,8 @@ function submitFailureReport(dataStr) {
       throw new Error('请至少完整填写1条预防对策后再提交 / Please complete at least one PA row');
     }
 
+    const followupRowsForEmail = [];
+
     if (isEditMode) {
       // 编辑模式：按 paIndex 精确匹配，同步更新已有跟进记录
       const followData = wsFollow.getDataRange().getValues();
@@ -432,6 +435,7 @@ function submitFailureReport(dataStr) {
         } else {
           wsFollow.getRange(wsFollow.getLastRow() + 1, 1, 1, newRow.length).setValues([newRow]);
         }
+        followupRowsForEmail.push(newRow);
       });
 
       const existingIndices = Object.keys(existingMap).map(Number);
@@ -448,7 +452,7 @@ function submitFailureReport(dataStr) {
         const missing = requiredPa.filter(function(fid) { return !String((row && row[fid]) || '').trim(); });
         if (missing.length === requiredPa.length) return;
         const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
-        followRows.push([
+        const newRow = [
           followId,
           String(data.case_code || '').trim(),
           String((row && row.type) || '').trim(),
@@ -463,9 +467,19 @@ function submitFailureReport(dataStr) {
           fileUrl,
           '未验证 / Not Verified',
           paIdx
-        ]);
+        ];
+        followRows.push(newRow);
+        followupRowsForEmail.push(newRow);
       });
       wsFollow.getRange(wsFollow.getLastRow() + 1, 1, followRows.length, followRows[0].length).setValues(followRows);
+    }
+
+    if (followupRowsForEmail.length > 0) {
+      try {
+        sendFollowupCreationReminderEmails({ failureReportNo: reportNo, machineNo: machineNo }, followupRowsForEmail);
+      } catch (emailErr) {
+        console.error('提交后发送跟进提醒失败 / Failed to send follow-up reminder after submission:', emailErr);
+      }
     }
 
     return JSON.stringify({ success: true, fileUrl: fileUrl, fileName: fileName });
@@ -7840,6 +7854,97 @@ function sendReminderToResponsiblePersons(records) {
       success: false,
       message: '发送邮件失败 / Failed to send emails: ' + error.toString()
     };
+  }
+}
+
+/**
+ * 故障报告提交后发送跟进创建提醒邮件
+ * 按责任人分组发送，验证人作为抄送
+ * @param {{failureReportNo: string, machineNo: string}} reportInfo
+ * @param {Array} followupRows - 新写入的跟进行（与 Failure_Report_followup 列顺序一致）
+ */
+function sendFollowupCreationReminderEmails(reportInfo, followupRows) {
+  if (!reportInfo || !followupRows || followupRows.length === 0) return;
+
+  const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+
+  const parseDisplay = function(display) {
+    const text = String(display || '').trim();
+    if (!text) return { name: '', email: '' };
+    const m = text.match(/【(.+)】/);
+    return { name: text.replace(/【.+】/, '').trim(), email: m ? m[1].trim() : '' };
+  };
+
+  const formatDateYmd = function(val) {
+    if (!val) return '';
+    if (val instanceof Date) return Utilities.formatDate(val, tz, 'yyyy-MM-dd');
+    const s = String(val).trim();
+    if (!s) return '';
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? s : Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+  };
+
+  const toSet = new Set();
+  const ccSet = new Set();
+  const records = [];
+
+  followupRows.forEach(function(row) {
+    const paWho = parseDisplay(row[4]);
+    if (!paWho.email) {
+      console.log('跳过无邮箱责任人 / Skip responsible without email:', row[4]);
+      return;
+    }
+    toSet.add(paWho.email);
+    const paVerifier = parseDisplay(row[6]);
+    if (paVerifier.email) ccSet.add(paVerifier.email);
+    records.push({
+      failureReportNo: String(row[1] || ''),
+      planDate: formatDateYmd(row[5]),
+      status: String(row[8] || ''),
+      responsibleDisplay: String(row[4] || '')
+    });
+  });
+
+  if (toSet.size === 0) return;
+
+  const reportNo = String(reportInfo.failureReportNo || '').trim();
+  const machineNo = String(reportInfo.machineNo || '').trim();
+  const subject = '故障报告跟进提醒 / Failure Report Follow-up Reminder - ' + reportNo;
+
+  let html = '<h2>故障报告跟进提醒 / Failure Report Follow-up Reminder</h2>';
+  html += '<p>EDS 系统已为故障报告创建新的跟进任务，请登录 EDS 更新进度。<br>';
+  html += 'New follow-up tasks have been created for the failure report. Please log in to the EDS system to update the progress.</p>';
+  html += '<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;">';
+  html += '<tr style="background-color:#E60012;color:#FFFFFF;text-align:left;">';
+  html += '<th>故障报告编号<br>Failure Report No.</th>';
+  html += '<th>设备/机台<br>Equipment</th>';
+  html += '<th>责任人<br>Responsible</th>';
+  html += '<th>期限<br>Due Date</th>';
+  html += '<th>状态<br>Status</th>';
+  html += '</tr>';
+  records.forEach(function(r) {
+    html += '<tr>';
+    html += '<td>' + escapeHtml(r.failureReportNo || reportNo) + '</td>';
+    html += '<td>' + escapeHtml(machineNo) + '</td>';
+    html += '<td>' + escapeHtml(r.responsibleDisplay) + '</td>';
+    html += '<td>' + escapeHtml(r.planDate || '-') + '</td>';
+    html += '<td>' + escapeHtml(r.status || '-') + '</td>';
+    html += '</tr>';
+  });
+  html += '</table>';
+  html += '<p style="margin-top:16px;">请尽快登录 EDS 系统更新进度。<br>';
+  html += 'Please log in to the EDS system to update the progress as soon as possible.</p>';
+  html += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
+
+  const toList = Array.from(toSet);
+  const ccList = Array.from(ccSet).filter(function(e) { return !toSet.has(e); });
+  try {
+    const options = { htmlBody: html };
+    if (ccList.length > 0) options.cc = ccList.join(',');
+    GmailApp.sendEmail(toList.join(','), subject, '', options);
+    console.log('跟进创建提醒已发送 / Follow-up creation reminder sent to:', toList, 'cc:', ccList);
+  } catch (err) {
+    console.error('发送跟进创建提醒失败 / Failed to send creation reminder:', err);
   }
 }
 
