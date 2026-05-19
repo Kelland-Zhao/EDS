@@ -7880,9 +7880,20 @@ function sendFollowupCreationReminderEmails(reportInfo, followupRows) {
     return isNaN(d.getTime()) ? s : Utilities.formatDate(d, tz, 'yyyy-MM-dd');
   };
 
-  const toSet = new Set();
-  const ccSet = new Set();
-  const records = [];
+  const calcDays = function(dueDate) {
+    try {
+      const due = new Date(dueDate);
+      if (isNaN(due.getTime())) return 999;
+      due.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return Math.round((due - today) / (1000 * 3600 * 24));
+    } catch(e) { return 999; }
+  };
+
+  // 按责任人邮箱分组
+  const ownerMap = {};
+  const ownerCcMap = {};
 
   followupRows.forEach(function(row) {
     const paWho = parseDisplay(row[4]);
@@ -7890,57 +7901,97 @@ function sendFollowupCreationReminderEmails(reportInfo, followupRows) {
       console.log('跳过无邮箱责任人 / Skip responsible without email:', row[4]);
       return;
     }
-    toSet.add(paWho.email);
+    if (!ownerMap[paWho.email]) {
+      ownerMap[paWho.email] = [];
+      ownerCcMap[paWho.email] = new Set();
+    }
     const paVerifier = parseDisplay(row[6]);
-    if (paVerifier.email) ccSet.add(paVerifier.email);
-    records.push({
-      failureReportNo: String(row[1] || ''),
-      planDate: formatDateYmd(row[5]),
-      status: String(row[8] || ''),
-      responsibleDisplay: String(row[4] || '')
+    if (paVerifier.email && paVerifier.email !== paWho.email) {
+      ownerCcMap[paWho.email].add(paVerifier.email);
+    }
+    ownerMap[paWho.email].push({
+      reportNo: String(row[1] || ''),
+      paPlan:   String(row[3] || ''),
+      owner:    String(row[4] || ''),
+      dueDate:  formatDateYmd(row[5]),
+      status:   String(row[8] || 'NA'),
+      days:     calcDays(row[5])
     });
   });
 
-  if (toSet.size === 0) return;
+  if (Object.keys(ownerMap).length === 0) return;
 
+  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   const reportNo = String(reportInfo.failureReportNo || '').trim();
-  const machineNo = String(reportInfo.machineNo || '').trim();
-  const subject = '故障报告跟进提醒 / Failure Report Follow-up Reminder - ' + reportNo;
 
-  let html = '<h2>故障报告跟进提醒 / Failure Report Follow-up Reminder</h2>';
-  html += '<p>EDS 系统已为故障报告创建新的跟进任务，请登录 EDS 更新进度。<br>';
-  html += 'New follow-up tasks have been created for the failure report. Please log in to the EDS system to update the progress.</p>';
-  html += '<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;">';
-  html += '<tr style="background-color:#E60012;color:#FFFFFF;text-align:left;">';
-  html += '<th>故障报告编号<br>Failure Report No.</th>';
-  html += '<th>设备/机台<br>Equipment</th>';
-  html += '<th>责任人<br>Responsible</th>';
-  html += '<th>期限<br>Due Date</th>';
-  html += '<th>状态<br>Status</th>';
-  html += '</tr>';
-  records.forEach(function(r) {
-    html += '<tr>';
-    html += '<td>' + escapeHtml(r.failureReportNo || reportNo) + '</td>';
-    html += '<td>' + escapeHtml(machineNo) + '</td>';
-    html += '<td>' + escapeHtml(r.responsibleDisplay) + '</td>';
-    html += '<td>' + escapeHtml(r.planDate || '-') + '</td>';
-    html += '<td>' + escapeHtml(r.status || '-') + '</td>';
-    html += '</tr>';
-  });
-  html += '</table>';
-  html += '<p style="margin-top:16px;">请尽快登录 EDS 系统更新进度。<br>';
-  html += 'Please log in to the EDS system to update the progress as soon as possible.</p>';
-  html += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
+  for (const email in ownerMap) {
+    const items = ownerMap[email];
+    const ownerName = parseDisplay(items[0].owner).name;
+    const accentColor = '#f39c12';
+    const darkColor   = '#e65100';
+    const bgColor     = '#fff8e1';
+    const headerGrad  = 'linear-gradient(135deg,#f39c12,#e67e22)';
 
-  const toList = Array.from(toSet);
-  const ccList = Array.from(ccSet).filter(function(e) { return !toSet.has(e); });
-  try {
-    const options = { htmlBody: html };
-    if (ccList.length > 0) options.cc = ccList.join(',');
-    GmailApp.sendEmail(toList.join(','), subject, '', options);
-    console.log('跟进创建提醒已发送 / Follow-up creation reminder sent to:', toList, 'cc:', ccList);
-  } catch (err) {
-    console.error('发送跟进创建提醒失败 / Failed to send creation reminder:', err);
+    let rows = '';
+    items.forEach(function(item, i) {
+      const days = item.days;
+      let badge;
+      if (days < 0) {
+        badge = '<div style="background:linear-gradient(135deg,#f44336,#d32f2f);color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;display:inline-block;min-width:80px;text-align:center;"><span style="display:block;">[逾期] ' + Math.abs(days) + '天</span><span style="display:block;font-size:10px;opacity:0.9;">Days Overdue</span></div>';
+      } else if (days === 999) {
+        badge = '<div style="background:linear-gradient(135deg,#f39c12,#e67e22);color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;display:inline-block;min-width:80px;text-align:center;"><span style="display:block;">新建</span><span style="display:block;font-size:10px;opacity:0.9;">New</span></div>';
+      } else {
+        badge = '<div style="background:linear-gradient(135deg,#f39c12,#e67e22);color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;display:inline-block;min-width:80px;text-align:center;"><span style="display:block;">还剩 ' + days + '天</span><span style="display:block;font-size:10px;opacity:0.9;">Days Left</span></div>';
+      }
+      rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fffbf0' : '#ffffff') + ';">'
+        + '<td style="padding:12px;border-bottom:1px solid #e9ecef;font-weight:500;color:#2c3e50;">' + escapeHtml(item.reportNo) + '</td>'
+        + '<td style="padding:12px;border-bottom:1px solid #e9ecef;color:#34495e;max-width:220px;word-wrap:break-word;">' + escapeHtml(item.paPlan) + '</td>'
+        + '<td style="padding:12px;border-bottom:1px solid #e9ecef;color:#34495e;">' + escapeHtml(parseDisplay(item.owner).name) + '</td>'
+        + '<td style="padding:12px;border-bottom:1px solid #e9ecef;color:#34495e;font-family:monospace;">' + escapeHtml(item.dueDate || '-') + '</td>'
+        + '<td style="padding:12px;border-bottom:1px solid #e9ecef;color:#34495e;">' + escapeHtml(item.status) + '</td>'
+        + '<td style="padding:12px;border-bottom:1px solid #e9ecef;text-align:center;">' + badge + '</td>'
+        + '</tr>';
+    });
+
+    const html = '<div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+      + '<div style="background:' + bgColor + ';border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid ' + accentColor + ';">'
+      + '<h2 style="color:' + darkColor + ';text-align:center;margin-bottom:20px;border-bottom:3px solid ' + accentColor + ';padding-bottom:10px;">'
+      + '[新建通知] 故障报告跟进项目已创建<br><span style="font-size:0.8em;">New Follow-up Items Created</span></h2>'
+      + '<p style="font-size:16px;line-height:1.6;color:' + darkColor + ';">'
+      + '您好' + (ownerName ? ' ' + ownerName : '') + '！（' + today + '）以下故障报告跟进项目已为您创建，请及时跟进：<br>'
+      + '<span style="font-size:0.9em;opacity:0.85;">Hello' + (ownerName ? ' ' + ownerName : '') + '! The following follow-up items have been created for you (' + today + '):</span>'
+      + '</p></div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
+      + '<h3 style="color:' + darkColor + ';border-bottom:2px solid ' + accentColor + ';padding-bottom:10px;margin-bottom:20px;">'
+      + '[新建] 跟进项目 Follow-up Items (' + items.length + '条)</h3>'
+      + '<div style="overflow-x:auto;">'
+      + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+      + '<thead><tr style="background:' + headerGrad + ';color:white;">'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">故障报告编号<br><span style="font-size:0.8em;opacity:0.9;">Report No.</span></th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">预防行动<br><span style="font-size:0.8em;opacity:0.9;">Action Plan</span></th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">责任人<br><span style="font-size:0.8em;opacity:0.9;">Owner</span></th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">期限<br><span style="font-size:0.8em;opacity:0.9;">Due Date</span></th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">状态<br><span style="font-size:0.8em;opacity:0.9;">Status</span></th>'
+      + '<th style="padding:12px;text-align:center;font-weight:600;">剩余天数<br><span style="font-size:0.8em;opacity:0.9;">Days Left</span></th>'
+      + '</tr></thead>'
+      + '<tbody>' + rows + '</tbody>'
+      + '</table></div></div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;">'
+      + '<div style="text-align:center;color:' + darkColor + ';font-size:14px;line-height:1.6;">'
+      + '<p style="margin-bottom:10px;font-weight:600;">请及时跟进以上项目！<br><span style="font-size:0.9em;opacity:0.85;">Please follow up on the above items promptly!</span></p>'
+      + '<p style="margin:0;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.8em;opacity:0.7;">This email is automatically sent by the system, please do not reply.</span></p>'
+      + '</div></div></div>';
+
+    const subject = '【新建通知】故障报告跟进项目已创建 / New Follow-up Items Created - ' + reportNo;
+    const ccList = Array.from(ownerCcMap[email]);
+    try {
+      const options = { htmlBody: html, name: '故障报告提醒系统' };
+      if (ccList.length > 0) options.cc = ccList.join(',');
+      GmailApp.sendEmail(email, subject, '请使用支持HTML的邮件客户端查看此邮件。', options);
+      console.log('跟进创建提醒已发送 / Follow-up creation reminder sent to:', email, 'cc:', ccList);
+    } catch (err) {
+      console.error('发送跟进创建提醒失败 / Failed to send creation reminder:', err);
+    }
   }
 }
 
