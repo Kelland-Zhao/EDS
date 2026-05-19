@@ -9976,19 +9976,30 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
       return JSON.stringify({ success: false, message: '项目未找到 / Project not found' });
     }
 
+    const currentRow = data[rowIndex - 1];
+    const changes = {};
+
     // Update leader
     if (updates.leader) {
+      const currentLeader = String(currentRow[1] || '').trim();
+      if (updates.leader !== currentLeader) changes.leader = { old: currentLeader, new: updates.leader };
       ws.getRange(rowIndex, 2).setValue(updates.leader);
     }
 
     // Update milestone actual dates
     if (updates.milestones && Array.isArray(updates.milestones)) {
+      const actualChanges = [];
       updates.milestones.forEach(function(ms) {
         if (ms.index >= 0 && ms.index < PROJECT_MILESTONE_COLS.length) {
           const actualCol = PROJECT_MILESTONE_COLS[ms.index].actual;
+          const currentActual = String(currentRow[actualCol] || '').trim();
+          if ((ms.actual || '') !== currentActual) {
+            actualChanges.push({ name: PROJECT_MILESTONE_COLS[ms.index].name, old: currentActual, new: ms.actual || '' });
+          }
           ws.getRange(rowIndex, actualCol + 1).setValue(ms.actual || '');
         }
       });
+      if (actualChanges.length > 0) changes.milestones = actualChanges;
     }
 
     // Update status and planned dates (only admin)
@@ -10001,17 +10012,29 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
       if (!isAdmin && PROJECT_STATUS_EDITORS.indexOf(editorName) === -1) {
         return JSON.stringify({ success: false, message: '仅管理员可修改状态 / Only admin can change status' });
       }
+      const currentStatus = String(currentRow[PROJECT_STATUS_COL] || '').trim();
+      if (updates.status !== currentStatus) changes.status = { old: currentStatus, new: updates.status };
       ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
     }
     // Update milestone planned dates (admin only)
     if (updates.plannedDates && isAdmin) {
+      const plannedChanges = [];
       updates.plannedDates.forEach(function(pd) {
         if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
           const plannedCol = PROJECT_MILESTONE_COLS[pd.index].planned;
+          const currentPlanned = String(currentRow[plannedCol] || '').trim();
+          const newPlanned = pd.planned || 'NA';
+          if (newPlanned !== currentPlanned) {
+            plannedChanges.push({ name: PROJECT_MILESTONE_COLS[pd.index].name, old: currentPlanned, new: newPlanned });
+          }
           ws.getRange(rowIndex, plannedCol + 1).setValue(pd.planned || 'NA');
         }
       });
-      sendPlannedDateChangeNotification(projectName, editorName, updates.plannedDates);
+      if (plannedChanges.length > 0) changes.plannedDates = plannedChanges;
+    }
+
+    if (Object.keys(changes).length > 0) {
+      sendProjectUpdateNotification(projectName, editorName, changes);
     }
 
     return JSON.stringify({ success: true, message: '更新成功 / Update successful' });
@@ -10071,6 +10094,67 @@ function sendPlannedDateChangeNotification(projectName, editorName, plannedDates
     });
   } catch (e) {
     console.error('sendPlannedDateChangeNotification error: ' + e);
+  }
+}
+
+/**
+ * 发送项目更新通知给所有管理员（含任何字段变更）
+ * Send project update notification to all admin users on any change
+ */
+function sendProjectUpdateNotification(projectName, editorName, changes) {
+  try {
+    const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!permWs) return;
+    const permVals = permWs.getDataRange().getValues();
+    const adminEmails = [];
+    for (let i = 2; i < permVals.length; i++) {
+      const perm = String(permVals[i][PROJECT_PERMISSION_COL] || '').trim();
+      if (perm === '管理员') {
+        const email = String(permVals[i][9] || '').trim();
+        if (email) adminEmails.push(email);
+      }
+    }
+    if (adminEmails.length === 0) return;
+    const webPage = getReleaseWebPage();
+    const subject = '【项目跟进】项目更新通知 / Project Update - ' + projectName;
+    var htmlBody = '<html><body>';
+    htmlBody += '<h2>项目跟进 - 更新通知 / Project Tracking - Update Notification</h2>';
+    htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
+    htmlBody += '<tr><td><b>项目 / Project</b></td><td>' + escapeHtml(projectName) + '</td></tr>';
+    htmlBody += '<tr><td><b>编辑人 / Editor</b></td><td>' + escapeHtml(editorName) + '</td></tr>';
+    htmlBody += '</table><br>';
+    if (changes.leader) {
+      htmlBody += '<b>负责人变更 / Leader Change:</b> ' + escapeHtml(changes.leader.old || '空/Empty') + ' → ' + escapeHtml(changes.leader.new) + '<br><br>';
+    }
+    if (changes.status) {
+      htmlBody += '<b>状态变更 / Status Change:</b> ' + escapeHtml(changes.status.old || '空/Empty') + ' → ' + escapeHtml(changes.status.new) + '<br><br>';
+    }
+    if (changes.milestones && changes.milestones.length > 0) {
+      htmlBody += '<b>里程碑实际完成日期更新 / Milestone Actual Date Update:</b>';
+      htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
+      htmlBody += '<tr><th>里程碑 / Milestone</th><th>原日期 / Old</th><th>新日期 / New</th></tr>';
+      changes.milestones.forEach(function(ms) {
+        htmlBody += '<tr><td>' + escapeHtml(ms.name) + '</td><td>' + escapeHtml(ms.old || '空/Empty') + '</td><td>' + escapeHtml(ms.new || '空/Empty') + '</td></tr>';
+      });
+      htmlBody += '</table><br>';
+    }
+    if (changes.plannedDates && changes.plannedDates.length > 0) {
+      htmlBody += '<b>里程碑计划日期变更 / Planned Date Change:</b>';
+      htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
+      htmlBody += '<tr><th>里程碑 / Milestone</th><th>原计划 / Old</th><th>新计划 / New</th></tr>';
+      changes.plannedDates.forEach(function(pd) {
+        htmlBody += '<tr><td>' + escapeHtml(pd.name) + '</td><td>' + escapeHtml(pd.old || 'NA') + '</td><td>' + escapeHtml(pd.new) + '</td></tr>';
+      });
+      htmlBody += '</table><br>';
+    }
+    htmlBody += '<p><a href="' + webPage + '?v=ProjectTracking">点击查看项目跟进 / View Project Tracking</a></p>';
+    htmlBody += '<p>此邮件由系统自动发送 / Auto-sent by system.</p>';
+    htmlBody += '</body></html>';
+    GmailApp.sendEmail(adminEmails.join(','), subject, '', { htmlBody: htmlBody });
+    console.log('项目更新通知已发送 / Project update notification sent to: ' + adminEmails.join(','));
+  } catch (e) {
+    console.error('sendProjectUpdateNotification error: ' + e);
   }
 }
 
