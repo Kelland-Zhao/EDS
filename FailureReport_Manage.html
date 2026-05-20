@@ -17,19 +17,25 @@
 <?!=include("Kez_sweetalert2_js");?>
     
     <style>
-        /* 确保表头背景色与TaskManagement.html一致 */
-        .dataTables_wrapper .dataTables_scroll .dataTables_scrollHead .dataTables_scrollHeadInner table thead th,
-        table.dataTable thead th {
-            background-color: #E60012 !important;
-            color: white !important;
-        }
-        
-        /* 确保所有表头都使用相同的背景色 */
         #imTable thead th,
         #tfTable thead th,
         #pkTable thead th {
             background-color: #E60012 !important;
             color: white !important;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        #imTable th,
+        #imTable td,
+        #tfTable th,
+        #tfTable td,
+        #pkTable th,
+        #pkTable td {
+            padding: 5px 6px;
+            font-size: 12px;
+            vertical-align: middle;
         }
 
         .bilingual-table tbody td {
@@ -46,15 +52,6 @@
             background-color: #ffffff;
         }
 
-        .bilingual-table thead th .label-cn {
-            display: block;
-            font-weight: 600;
-        }
-
-        .bilingual-table thead th .label-en {
-            display: block;
-            font-size: 0.9em;
-        }
 
         .bilingual-table tbody td {
             vertical-align: middle;
@@ -194,17 +191,17 @@
                                                 <table id="imTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
                                                     <thead>
                                                         <tr>
-                                                            <th><span class="label-cn">编号</span><span class="label-en">Report No.</span></th>
-                                                            <th><span class="label-cn">机台号</span><span class="label-en">Machine No.</span></th>
-                                                            <th><span class="label-cn">问题描述</span><span class="label-en">Problem Description</span></th>
-                                                            <th><span class="label-cn">状态</span><span class="label-en">Status</span></th>
-                                                            <th><span class="label-cn">维修时间</span><span class="label-en">Repair Time</span></th>
-                                                            <th><span class="label-cn">提交日期</span><span class="label-en">Submit Date</span></th>
-                                                            <th><span class="label-cn">车间</span><span class="label-en">Workshop</span></th>
-                                                            <th><span class="label-cn">工序</span><span class="label-en">Process</span></th>
-                                                            <th><span class="label-cn">责任人</span><span class="label-en">Responsible</span></th>
-                                                            <th><span class="label-cn">故障报告确认</span><span class="label-en">Failure Report Confirmation</span></th>
-                                                            <th><span class="label-cn">是否需要故障报告</span><span class="label-en">Need Failure Report</span></th>
+                                                            <th>编号<br>Report No.</th>
+                                                            <th>机台号<br>Machine No.</th>
+                                                            <th>问题描述<br>Problem Description</th>
+                                                            <th>状态<br>Status</th>
+                                                            <th>维修时间<br>Repair Time</th>
+                                                            <th>提交日期<br>Submit Date</th>
+                                                            <th>车间<br>Workshop</th>
+                                                            <th>工序<br>Process</th>
+                                                            <th>责任人<br>Responsible</th>
+                                                            <th>故障报告确认<br>Failure Report Confirmation</th>
+                                                            <th>是否需要故障报告<br>Need Failure Report</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -222,17 +219,17 @@
                                                 <table id="tfTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
                                                     <thead>
                                                         <tr>
-                                                            <th><span class="label-cn">编号</span><span class="label-en">Report No.</span></th>
-                                                            <th><span class="label-cn">机台号</span><span class="label-en">Machine No.</span></th>
-                                                            <th><span class="label-cn">问题描述</span><span class="label-en">Problem Description</span></th>
-                                                            <th><span class="label-cn">状态</span><span class="label-en">Status</span></th>
-                                                            <th><span class="label-cn">维修时间</span><span class="label-en">Repair Time</span></th>
-                                                            <th><span class="label-cn">提交日期</span><span class="label-en">Submit Date</span></th>
-                                                            <th><span class="label-cn">车间</span><span class="label-en">Workshop</span></th>
-                                                            <th><span class="label-cn">工序</span><span class="label-en">Process</span></th>
-                                                            <th><span class="label-cn">责任人</span><span class="label-en">Responsible</span></th>
-                                                            <th><span class="label-cn">故障报告确认</span><span class="label-en">Failure Report Confirmation</span></th>
-                                                            <th><span class="label-cn">是否需要故障报告</span><span class="label-en">Need Failure Report</span></th>
+                                                            <th>编号<br>Report No.</th>
+                                                            <th>机台号<br>Machine No.</th>
+                                                            <th>问题描述<br>Problem Description</th>
+                                                            <th>状态<br>Status</th>
+                                                            <th>维修时间<br>Repair Time</th>
+                                                            <th>提交日期<br>Submit Date</th>
+                                                            <th>车间<br>Workshop</th>
+                                                            <th>工序<br>Process</th>
+                                                            <th>责任人<br>Responsible</th>
+                                                            <th>故障报告确认<br>Failure Report Confirmation</th>
+                                                            <th>是否需要故障报告<br>Need Failure Report</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -250,17 +247,17 @@
                                                 <table id="pkTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
                                                     <thead>
                                                         <tr>
-                                                            <th><span class="label-cn">编号</span><span class="label-en">Report No.</span></th>
-                                                            <th><span class="label-cn">机台号</span><span class="label-en">Machine No.</span></th>
-                                                            <th><span class="label-cn">问题描述</span><span class="label-en">Problem Description</span></th>
-                                                            <th><span class="label-cn">状态</span><span class="label-en">Status</span></th>
-                                                            <th><span class="label-cn">维修时间</span><span class="label-en">Repair Time</span></th>
-                                                            <th><span class="label-cn">提交日期</span><span class="label-en">Submit Date</span></th>
-                                                            <th><span class="label-cn">车间</span><span class="label-en">Workshop</span></th>
-                                                            <th><span class="label-cn">工序</span><span class="label-en">Process</span></th>
-                                                            <th><span class="label-cn">责任人</span><span class="label-en">Responsible</span></th>
-                                                            <th><span class="label-cn">故障报告确认</span><span class="label-en">Failure Report Confirmation</span></th>
-                                                            <th><span class="label-cn">是否需要故障报告</span><span class="label-en">Need Failure Report</span></th>
+                                                            <th>编号<br>Report No.</th>
+                                                            <th>机台号<br>Machine No.</th>
+                                                            <th>问题描述<br>Problem Description</th>
+                                                            <th>状态<br>Status</th>
+                                                            <th>维修时间<br>Repair Time</th>
+                                                            <th>提交日期<br>Submit Date</th>
+                                                            <th>车间<br>Workshop</th>
+                                                            <th>工序<br>Process</th>
+                                                            <th>责任人<br>Responsible</th>
+                                                            <th>故障报告确认<br>Failure Report Confirmation</th>
+                                                            <th>是否需要故障报告<br>Need Failure Report</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
