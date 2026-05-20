@@ -1209,9 +1209,30 @@
       "Skill Level", "Estimated Time", "Task Description", "执行人员", "Task Status",
       "数值记录&备注", "操作"
     ];
+    const titleMap = {
+      "MachineType":      "机型<br>Machine Type",
+      "Task No":          "编号<br>Task No",
+      "Task Type":        "任务类型<br>Task Type",
+      "Line Status":      "线体状态<br>Line Status",
+      "Tools & Equip":    "工具<br>Tools & Equip",
+      "Resource":         "资源<br>Resource",
+      "Frecuency":        "频率<br>Frequency",
+      "Section":          "单元<br>Section",
+      "Function":         "模块<br>Function",
+      "Failure Mode":     "失效模式<br>Failure Mode",
+      "Strategy":         "任务属性<br>Strategy",
+      "No Resources":     "资源数<br>No Resources",
+      "Skill Level":      "技能等级<br>Skill Level",
+      "Estimated Time":   "预计时间<br>Estimated Time",
+      "Task Description": "任务描述<br>Task Description",
+      "执行人员":          "执行人员<br>Operator",
+      "Task Status":      "完成状态<br>Task Status",
+      "数值记录&备注":     "数值&备注<br>Value & Notes",
+      "操作":             "操作<br>Operation"
+    };
 
     desiredOrder.forEach((title) => {
-      let colDef = { title: title, data: title, defaultContent: "" };
+      let colDef = { title: titleMap[title] || title, data: title, defaultContent: "" };
 
       if (title === '执行人员') {
         colDef.render = function (data, type, row) {
