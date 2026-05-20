@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   let globalWorkcenter = [];
   let globalName = [];
   let globalErrorCode = [];
@@ -374,9 +374,9 @@
     obj['机型'] = '';
     obj['是否已安排PM跟进'] = '';
     // 判断是否需要填写故障报告（按工序阈值）：
-    // IM 维修时间 < 240min → 填“否”
-    // TF 维修时间 < 120min → 填“否”
-    // PK 维修时间 < 60min  → 填“否”
+    // IM 维修时间 < 240min → 填"否"
+    // TF 维修时间 < 120min → 填"否"
+    // PK 维修时间 < 60min  → 填"否"
     // 其他情况 → 填空值
     let maintenanceTime = parseFloat(obj['维修时间']);
     let processForJudge = (obj['工序'] || '').toString().trim();
@@ -639,7 +639,7 @@
   }
 
   /**
-   * 按“编号”中“-”前前缀分组，合并为一行显示；状态取“-”后数字最大条目的状态。
+   * 按"编号"中"-"前前缀分组，合并为一行显示；状态取"-"后数字最大条目的状态。
    */
   function mergeFailureHistoryRows(content, head) {
     const groups = {};
@@ -709,14 +709,42 @@
     globalFailureHistoryHeadSignature = headSignature;
 
     // 统一处理：预处理 content 并生成合并后的数据源
+    let headerBilingual = {
+      '编号': '编号<br>Code',
+      '班次': '班次<br>Shift',
+      '机台号': '机台号<br>Workcenter',
+      '问题描述': '故障信息<br>Failure Info',
+      '直接原因': '直接原因<br>Direct Cause',
+      '建议措施': '建议措施<br>Suggested Action',
+      '处理过程': '处理过程<br>Process',
+      '状态': '状态<br>Status',
+      '维修人': '维修人<br>Owner',
+      '维修时间': '维修时间<br>Maint. Time',
+      '故障代码': '故障代码<br>Failure Code',
+      '工单号': '工单号<br>Work Order',
+      '车间': '车间<br>Workshop',
+      '工序': '工序<br>Process',
+      '提交日期': '提交日期<br>Submit Date',
+      '交接人': '交接人<br>Handover By',
+      '是否转保养': '是否转保养<br>To PM',
+      '填写人': '填写人<br>Filled By',
+      '参与人数': '参与人数<br>Participants',
+      '机型': '机型<br>Model',
+      '是否已安排PM跟进': '是否已安排PM跟进<br>PM Follow-up',
+      '判断是否最后': '判断是否最后<br>Is Last',
+      '是否需要填写故障报告': '是否需要填写故障报告<br>Failure Report',
+      '是否跟随': '是否跟随<br>Follow',
+      '后续措施 - 保养': '后续措施 - 保养<br>PM Action',
+      '后续措施 - 保养（反馈）': '后续措施 - 保养（反馈）<br>PM Feedback',
+    };
     let TableHtml = '<thead><tr>';
     for (let i = 0; i < head.length; i++) {
-      // 将“问题描述”列在UI上显示为“故障信息”
-      let displayHead = head[i] === '问题描述' ? '故障信息' : head[i];
-      TableHtml += "<th  style='background-color:#E60012; color:white'>" + displayHead + "</th>";
+      let rawKey = (head[i] || '').toString().trim();
+      let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
+      TableHtml += "<th style='background-color:#E60012; color:white; position:sticky; top:0; z-index:10'>" + displayHead + "</th>";
     };
-    TableHtml += "<th  style='background-color:#E60012; color:white'>" + '跟进项' + "</th>";
-    TableHtml += "<th  style='background-color:#E60012; color:white'>" + '后续措施' + "</th>";
+    TableHtml += "<th style='background-color:#E60012; color:white; position:sticky; top:0; z-index:10'>跟进项<br>Follow-up</th>";
+    TableHtml += "<th style='background-color:#E60012; color:white; position:sticky; top:0; z-index:10'>后续措施<br>Action</th>";
     TableHtml += "</tr></thead>";
     if (needRebuildTable) {
       if ($.fn.DataTable.isDataTable('#Failure_History_Table')) {
@@ -780,31 +808,40 @@
       // 应用筛选
       let workshopValue = $("#Workshop").val();
       let processValue = $("#Process").val();
-      // 复用 DataTable 时必须先清空旧的 search，否则会残留过滤条件导致“表格全空”
+      // 复用 DataTable 时必须先清空旧的 search，否则会残留过滤条件导致"表格全空"
       table.column(14).search('');
       table.column(15).search('');
       if (workshopValue && workshopValue !== 'ALL') table.column(14).search(workshopValue);
       if (processValue && processValue !== 'ALL') table.column(15).search(processValue);
       table.draw(false);
 
+      // 初始化后强制应用表头样式与双语内容
+      $('#Failure_History_Table thead th').each(function(i) {
+        $(this).css({
+          'background-color': '#E60012',
+          'color': 'white'
+        });
+        if (i < head.length) {
+          let rawKey = (head[i] || '').toString().trim();
+          let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
+          $(this).html(displayHead);
+        }
+      });
+
       return;
     }
 
     let table_array = [];
     for (let i = 0; i < head.length; i++) {
+      let rawKey = (head[i] || '').toString().trim();
+      let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
       let obj = {};
+      obj.title = displayHead;
       obj.data = head[i];
       obj.defaultContent = ''; // 为所有列添加默认值，避免访问不存在的列时报错
       table_array.push(obj);
     }
-    console.log('table_array', table_array)
-    console.log('head数组:', head);
-    console.log('判断是否最后列索引:', head.indexOf('判断是否最后'));
-    console.log('直接原因列索引:', head.indexOf('直接原因'));
-    console.log('建议措施列索引:', head.indexOf('建议措施'));
-    console.log('后续措施 - 保养列索引:', head.indexOf('后续措施 - 保养'));
-    console.log('后续措施 - 保养（反馈）列索引:', head.indexOf('后续措施 - 保养（反馈）'));
-    
+
     let table = $("#Failure_History_Table").DataTable({
       columns: table_array,
       columnDefs: [
@@ -821,21 +858,18 @@
             let suggestionIndex = head.indexOf('建议措施');
             let pmFollowUpIndex = head.indexOf('后续措施 - 保养');
             
-            console.log('要隐藏的列索引:', {judgeLastIndex, directCauseIndex, suggestionIndex, pmFollowUpIndex});
-            
             if (judgeLastIndex >= 0) targets.push(judgeLastIndex);
             if (directCauseIndex >= 0) targets.push(directCauseIndex);
             if (suggestionIndex >= 0) targets.push(suggestionIndex);
             if (pmFollowUpIndex >= 0) targets.push(pmFollowUpIndex);
             // 后续措施 - 保养（反馈）列不隐藏，需要显示
             
-            console.log('最终隐藏列targets:', targets);
             return targets;
           }(),
           visible: false,
         },
         { "width": "300px", "targets": [3, 4] },
-        // “处理过程”列：有 _merged处理过程 时用合并内容（乐观更新后重绘时保留）
+        // "处理过程"列：有 _merged处理过程 时用合并内容（乐观更新后重绘时保留）
         {
           targets: head.indexOf('处理过程'),
           render: function (data, type, row) {
@@ -848,9 +882,9 @@
             return data;
           }
         },
-        // “故障信息”列：合并行用 _merged故障信息（多段上大下小）；否则单行三段
+        // "故障信息"列：合并行用 _merged故障信息（多段上大下小）；否则单行三段
         {
-          targets: 3, // 原“问题描述”列索引为3
+          targets: 3, // 原"问题描述"列索引为3
           render: function (data, type, row) {
             if (type === 'display' || type === 'filter') {
               if (row._merged故障信息) return row._merged故障信息;
@@ -1015,6 +1049,20 @@
         } else if (status.includes('未解决')) {
           $statusCell.css('font-weight', 'bold').addClass('text-danger');
         }
+      }
+    });
+
+    // 初始化后强制应用表头样式与双语内容
+    $('#Failure_History_Table thead th').each(function(i) {
+      $(this).css({
+        'background-color': '#E60012',
+        'color': 'white'
+      });
+      // 前 head.length 列按映射改写，超出的是跟进项/后续措施（已在HTML中写好）
+      if (i < head.length) {
+        let rawKey = (head[i] || '').toString().trim();
+        let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
+        $(this).html(displayHead);
       }
     });
 
@@ -1265,13 +1313,13 @@
         }
       });
     }
-    // 检查是否至少有一个“是”选项被选中
+    // 检查是否至少有一个"是"选项被选中
     const atLeastOneYes = Object.keys(yesOptionsWithDescriptions).some(selector => $(selector).is(':checked'));
 
     // console.log('atLeastOneYes', atLeastOneYes)
-    // 检查所有被选中的“是”选项后面的描述输入框是否不为空
+    // 检查所有被选中的"是"选项后面的描述输入框是否不为空
     const allDescriptionsFilled = Object.entries(yesOptionsWithDescriptions).every(([yesSelector, descSelector]) => {
-      // 如果“是”选项被选中，检查对应的描述输入框是否不为空
+      // 如果"是"选项被选中，检查对应的描述输入框是否不为空
       if ($(yesSelector).is(':checked')) {
         // 对于热流道跟从的特殊处理，需要检查两个输入框
         if (yesSelector === `#Follow_Y${suffix}` || yesSelector === '#Follow_Y') {
@@ -1280,7 +1328,7 @@
         // 对于其他描述输入框，只需要检查对应的一个输入框
         return $(descSelector).val().trim() !== '';
       }
-      return true; // 如果“是”选项未被选中，则不需要检查描述输入框，返回 true
+      return true; // 如果"是"选项未被选中，则不需要检查描述输入框，返回 true
     });
     // console.log('allDescriptionsFilled', allDescriptionsFilled)
 
