@@ -178,13 +178,13 @@
       tables[tableId] = $('#' + tableId).DataTable({
         data: tableData,
         columns: [
-          { data: '工序', title: '工序 / Process', visible: false },
-          { data: '编号', title: '编号 / Number' },
-          { data: '机台号', title: '机台号 / Workcenter' },
-          { data: '问题描述', title: '问题描述 / Problem Description' },
+          { data: '工序', title: '工序<br>Process', visible: false },
+          { data: '编号', title: '编号<br>Number' },
+          { data: '机台号', title: '机台号<br>Workcenter' },
+          { data: '问题描述', title: '问题描述<br>Problem Description' },
           { 
             data: '处理过程', 
-            title: '处理过程 / Process',
+            title: '处理过程<br>Process',
             render: function(data, type, row) {
               if (type === 'display' && data) {
                 // 将换行符转换为HTML的<br>标签
@@ -193,11 +193,11 @@
               return data;
             }
           },
-          { data: '直接原因', title: '直接原因 / Direct Cause' },
-          { data: '建议措施', title: '建议措施 / Suggested Action' },
+          { data: '直接原因', title: '直接原因<br>Direct Cause' },
+          { data: '建议措施', title: '建议措施<br>Suggested Action' },
           { 
             data: '后续措施 - 保养', 
-            title: '后续措施 - 保养 / Follow-up Action - PM',
+            title: '后续措施 - 保养<br>Follow-up Action - PM',
             render: function(data, type, row) {
               if (type === 'display' && data) {
                 return renderFollowUpAction(data);
@@ -207,12 +207,12 @@
           },
           { 
             data: '后续措施 - 保养（反馈）', 
-            title: '后续措施 - 保养（反馈） / Follow-up Action - PM (Feedback)',
+            title: '后续措施 - 保养（反馈）<br>Follow-up Action - PM (Feedback)',
             className: 'editable-cell'
           },
           { 
             data: '状态', 
-            title: '状态 / Status',
+            title: '状态<br>Status',
             className: 'editable-cell',
             render: function(data, type, row) {
               if (type === 'display') {
@@ -235,6 +235,10 @@
             previous: "上一页 / Previous"
           },
           emptyTable: "暂无数据 / No data available"
+        },
+        initComplete: function() {
+          let tid = currentProcess === 'IM' ? 'pmFollowUpTable' : currentProcess.toLowerCase() + 'Table';
+          $('#' + tid + ' thead th').css({ 'background-color': '#E60012', 'color': 'white' });
         }
       });
 

@@ -13,17 +13,25 @@
   <?!=include("Kez_Select2-bootstrap_css") ?>
   <?!=include("CSS") ?>
   <style>
-    /* 确保表头背景色与FailureReport_Manage.html一致 */
-    .dataTables_wrapper .dataTables_scroll .dataTables_scrollHead .dataTables_scrollHeadInner table thead th,
-    table.dataTable thead th {
-        background-color: #E60012 !important;
-        color: white !important;
+    #pmFollowUpTable thead th,
+    #tfTable thead th,
+    #pkTable thead th {
+      background-color: #E60012 !important;
+      color: white !important;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
-    
-    /* 确保所有表头都使用相同的背景色 */
-    #pmFollowUpTable thead th {
-        background-color: #E60012 !important;
-        color: white !important;
+
+    #pmFollowUpTable th,
+    #pmFollowUpTable td,
+    #tfTable th,
+    #tfTable td,
+    #pkTable th,
+    #pkTable td {
+      padding: 5px 6px;
+      font-size: 12px;
+      vertical-align: middle;
     }
     
     .editable-cell {
