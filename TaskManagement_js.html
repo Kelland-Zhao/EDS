@@ -118,17 +118,17 @@ $(document).ready(() => {
       const table = $('#taskManagementTable').DataTable({
         data: filteredContent, // 使用筛选后的数据
         columns: [
-            { title: "车间", data: "车间" },
-            { title: "工序", data: "工序" },
-            { title: "开始日期", data: "开始日期" },
+            { title: "车间<br>Workshop", data: "车间" },
+            { title: "工序<br>Process", data: "工序" },
+            { title: "开始日期<br>Start Date", data: "开始日期" },
             { title: "AEM#", data: "AEM#" },
-            { title: "保养类型", data: "保养类型" },
-            { title: "机型", data: "机型" },
-            { title: "设备类型1", data: "设备类型1" },
-            { title: "设备类型2", data: "设备类型2" },
-            { title: "自动化类型", data: "自动化类型" },
+            { title: "保养类型<br>PM Type", data: "保养类型" },
+            { title: "机型<br>Machine Type", data: "机型" },
+            { title: "设备类型1<br>Equipment 1", data: "设备类型1" },
+            { title: "设备类型2<br>Equipment 2", data: "设备类型2" },
+            { title: "自动化类型<br>Automation", data: "自动化类型" },
             { 
-              title: "任务状态 / Task Status",
+              title: "任务状态<br>Task Status",
               data: "taskStatus",
               render: function(data, type, row) {
                 let badges = [];
@@ -148,7 +148,7 @@ $(document).ready(() => {
               }
             },
             { 
-              title: "操作",
+              title: "操作<br>Operation",
               data: null, // 此列不直接绑定数据
               defaultContent: '<button class="btn btn-success btn-sm me-1 assign-btn">人员分配</button><button class="btn btn-warning btn-sm edit-btn">任务编辑</button>',
               orderable: false // 此列不可排序
@@ -244,10 +244,10 @@ $(document).ready(() => {
       didOpen: () => {
         const peopleTable = $("#pmPeopleTable").DataTable({
           columns: [
-            { title: "工号 / Working Code", data: "WorkingCode" },
-            { title: "姓名 / Name", data: "Name" },
+            { title: "工号<br>Working Code", data: "WorkingCode" },
+            { title: "姓名<br>Name", data: "Name" },
             { 
-              title: "操作 / Operation", 
+              title: "操作<br>Operation", 
               data: null,
               defaultContent: '<button class="btn btn-danger btn-sm delete-btn">删除</button>',
               orderable: false
