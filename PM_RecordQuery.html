@@ -35,17 +35,23 @@
     border-collapse: collapse;
   }
 
+  #recordTable thead th,
+  #detailTable thead th {
+    background-color: #E60012 !important;
+    color: white !important;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
   #recordTable th,
   #recordTable td,
   #detailTable th,
   #detailTable td {
     border: 1px solid #dee2e6;
-    padding: 8px;
-  }
-
-  #recordTable thead th,
-  #detailTable thead th {
-    border-bottom: 2px solid #dee2e6;
+    padding: 5px 6px;
+    font-size: 12px;
+    vertical-align: middle;
   }
 
   #recordTable tbody tr,
