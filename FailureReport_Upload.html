@@ -49,10 +49,10 @@
             vertical-align: middle;
         }
         /* 附件列：badge 水平+垂直居中，等宽 */
-        #imTable td:nth-child(9), #tfTable td:nth-child(9), #pkTable td:nth-child(9) {
+        #imTable td:nth-child(10), #tfTable td:nth-child(10), #pkTable td:nth-child(10) {
             text-align: center;
         }
-        #imTable td:nth-child(9) .badge, #tfTable td:nth-child(9) .badge, #pkTable td:nth-child(9) .badge {
+        #imTable td:nth-child(10) .badge, #tfTable td:nth-child(10) .badge, #pkTable td:nth-child(10) .badge {
             min-width: 80px;
             display: inline-block;
             line-height: 1.4;
@@ -142,6 +142,7 @@
                                                         <th>问题描述<br>Problem Description</th>
                                                         <th>分配日期<br>Assignment Date</th>
                                                         <th>上传日期<br>Upload Date</th>
+                                                        <th>责任人<br>Responsible</th>
                                                         <th>附件<br>Attachments</th>
                                                         <th>操作<br>Actions</th>
                                                     </tr>
@@ -167,6 +168,7 @@
                                                         <th>问题描述<br>Problem Description</th>
                                                         <th>分配日期<br>Assignment Date</th>
                                                         <th>上传日期<br>Upload Date</th>
+                                                        <th>责任人<br>Responsible</th>
                                                         <th>附件<br>Attachments</th>
                                                         <th>操作<br>Actions</th>
                                                     </tr>
@@ -192,6 +194,7 @@
                                                         <th>问题描述<br>Problem Description</th>
                                                         <th>分配日期<br>Assignment Date</th>
                                                         <th>上传日期<br>Upload Date</th>
+                                                        <th>责任人<br>Responsible</th>
                                                         <th>附件<br>Attachments</th>
                                                         <th>操作<br>Actions</th>
                                                     </tr>
@@ -221,6 +224,7 @@
 </body>
 
 <?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_select2@4.0.13_js") ?>
 <?!=include("Kez_datatables@1.13.6_js") ?>
 <?!=include("Kez_bootstrap@5.3.1_js") ?>
 <?!=include("FailureReport_Upload-js") ?>

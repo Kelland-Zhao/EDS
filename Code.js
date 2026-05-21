@@ -6007,6 +6007,24 @@ function updateFailureReportConfirmation(
   }
 }
 
+function updateFailureReportResponsible(failureReportNumber, process, responsiblePerson) {
+  try {
+    const spreadsheetId = "1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU";
+    const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName("Failure_Database");
+    if (!sheet) throw new Error("Failure_Database sheet not found");
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][6]).trim() === String(failureReportNumber).trim()) {
+        sheet.getRange(i + 1, 12).setValue(String(responsiblePerson || '').trim());
+        return { success: true };
+      }
+    }
+    throw new Error("Record not found: " + failureReportNumber);
+  } catch (e) {
+    throw new Error("updateFailureReportResponsible failed: " + e.message);
+  }
+}
+
 function sendFailureReportNotification(rowData, process, responsiblePerson) {
   try {
     console.log(
@@ -6802,6 +6820,7 @@ function getFailureReportProgressData(userEmail, userName) {
           completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
+          responsiblePerson: responsiblePerson,
           hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
         });
       } else if (process === "TF") {
@@ -6816,6 +6835,7 @@ function getFailureReportProgressData(userEmail, userName) {
           completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
+          responsiblePerson: responsiblePerson,
           hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
         });
       } else if (process === "PK") {
@@ -6830,6 +6850,7 @@ function getFailureReportProgressData(userEmail, userName) {
           completionDays: completionDays,
           uploadDate: uploadDate,
           attachments: attachments,
+          responsiblePerson: responsiblePerson,
           hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
         });
       }

@@ -1,8 +1,132 @@
 <script>
 // 全局变量
 let imTable, tfTable, pkTable;
+let responsibleOptions = [];
+let responsibleOptionsLoaded = false;
 
 const buildBilingualTitle = (cn, en) => `<span class="label-cn">${cn}</span><span class="label-en">${en}</span>`;
+
+const escapeHtml = (value) => {
+    if (value == null) return '';
+    return String(value).replace(/[&<>"]+/g, function(match) {
+        const escape = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+        return escape[match] || match;
+    });
+};
+
+const normalizeResponsibleDisplay = (user) => {
+    if (!user) return '';
+    if (typeof user === 'string') return user.trim();
+    return String(user.display || '').trim();
+};
+
+const parseResponsibleDisplay = (display) => {
+    if (!display) return { name: '', email: '' };
+    const match = display.match(/^(.+?)【(.+?)】$/);
+    if (match) return { name: match[1].trim(), email: match[2].trim() };
+    return { name: display.trim(), email: '' };
+};
+
+const findResponsibleOptionByName = (input) => {
+    if (!input) return null;
+    const target = String(input).toLowerCase();
+    for (let i = 0; i < responsibleOptions.length; i++) {
+        const option = responsibleOptions[i];
+        if (!option) continue;
+        if (String(option).toLowerCase() === target) return option;
+        const parsed = parseResponsibleDisplay(option);
+        if (parsed.name && parsed.name.toLowerCase() === target) return option;
+    }
+    return null;
+};
+
+const renderResponsibleSelect = (processKey) => {
+    return function(data, type, row) {
+        if (type !== 'display') return data || '';
+        const current = data || '';
+        const options = ['<option value="">\u8bf7\u9009\u62e9 / Select</option>'];
+        const identifier = (row && row.failureReportNumber) || '';
+        const proc = (row && row.process) || processKey || '';
+        (responsibleOptions || []).forEach(function(option) {
+            if (!option) return;
+            const selected = option === current ? ' selected' : '';
+            options.push(`<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`);
+        });
+        return `<select class="form-select form-select-sm responsible-select" data-id="${identifier}" data-process="${proc}">${options.join('')}</select>`;
+    };
+};
+
+const enhanceResponsibleSelects = (scope) => {
+    if (!$.fn.select2) return;
+    const $targets = scope ? $(scope).find('.responsible-select') : $('.responsible-select');
+    $targets.each(function() {
+        const $el = $(this);
+        const currentValue = $el.val();
+        if ($el.hasClass('select2-hidden-accessible')) {
+            $el.select2('destroy');
+            $el.val(currentValue);
+        }
+        $el.select2({
+            width: '130px',
+            theme: 'bootstrap',
+            dropdownParent: $('body'),
+            placeholder: '\u8bf7\u8f93\u5165\u6216\u9009\u62e9\u8d23\u4efb\u4eba / Type or Select',
+            tags: true,
+            allowClear: false,
+            templateSelection: function(data) {
+                const parsed = parseResponsibleDisplay(data.text);
+                return parsed.name || data.text;
+            },
+            templateResult: function(data) {
+                if (data.loading) return data.text;
+                const parsed = parseResponsibleDisplay(data.text);
+                if (parsed.email) return $('<span>' + parsed.name + '<br/><small style="color:#666">' + parsed.email + '</small></span>');
+                return data.text;
+            },
+            matcher: function(params, data) {
+                if ($.trim(params.term) === '') return data;
+                if (typeof data.text === 'undefined') return null;
+                return data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1 ? data : null;
+            },
+            createTag: function(params) {
+                const term = $.trim(params.term);
+                if (!term) return null;
+                if (findResponsibleOptionByName(term)) return null;
+                if (!responsibleOptions.includes(term)) {
+                    responsibleOptions.push(term);
+                    responsibleOptions.sort();
+                }
+                return { id: term, text: term, newTag: true };
+            }
+        });
+    });
+};
+
+const refreshResponsibleColumnRenders = () => {
+    [imTable, tfTable, pkTable].forEach(function(table) {
+        if (table) table.rows().invalidate().draw(false);
+    });
+    enhanceResponsibleSelects();
+};
+
+const loadResponsibleOptions = () => {
+    if (typeof google === 'undefined' || typeof google.script === 'undefined' || typeof google.script.run === 'undefined') return;
+    google.script.run
+        .withSuccessHandler(function(result) {
+            try {
+                const parsed = typeof result === 'string' ? JSON.parse(result) : (result || []);
+                responsibleOptions = (parsed || []).map(normalizeResponsibleDisplay).filter(Boolean);
+                responsibleOptionsLoaded = true;
+                refreshResponsibleColumnRenders();
+            } catch (err) {
+                console.error('\u89e3\u6790\u8d23\u4efb\u4eba\u5217\u8868\u5931\u8d25:', err);
+            }
+        })
+        .withFailureHandler(function(error) {
+            console.error('\u83b7\u53d6\u8d23\u4efb\u4eba\u5217\u8868\u5931\u8d25:', error);
+        })
+        .getEDSUserNames();
+};
 
 // 页面加载完成后初始化
 $(document).ready(function() {
@@ -81,6 +205,7 @@ $(document).ready(function() {
             .checkFailureReportFillPermission(userEmail, userName);
     })();
 
+    loadResponsibleOptions();
     initializeTables();
     loadFailureReportData();
 });
@@ -107,6 +232,12 @@ function initializeTables() {
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+            {
+                data: 'responsiblePerson',
+                title: buildBilingualTitle('责任人', 'Responsible'),
+                orderable: false,
+                render: renderResponsibleSelect('IM')
+            },
             { 
                 data: 'attachments', 
                 title: buildBilingualTitle('附件', 'Attachments'),
@@ -142,6 +273,7 @@ function initializeTables() {
             console.log('IM表格初始化完成');
         }
     });
+    imTable.on('draw', function() { enhanceResponsibleSelects($('#imTable')); });
 
     // 植磨毛工序(TF)表格
     tfTable = $('#tfTable').DataTable({
@@ -161,6 +293,12 @@ function initializeTables() {
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+            {
+                data: 'responsiblePerson',
+                title: buildBilingualTitle('责任人', 'Responsible'),
+                orderable: false,
+                render: renderResponsibleSelect('TF')
+            },
             { 
                 data: 'attachments', 
                 title: buildBilingualTitle('附件', 'Attachments'),
@@ -196,6 +334,7 @@ function initializeTables() {
             console.log('TF表格初始化完成');
         }
     });
+    tfTable.on('draw', function() { enhanceResponsibleSelects($('#tfTable')); });
 
     // 包装工序(PK)表格
     pkTable = $('#pkTable').DataTable({
@@ -215,6 +354,12 @@ function initializeTables() {
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
+            {
+                data: 'responsiblePerson',
+                title: buildBilingualTitle('责任人', 'Responsible'),
+                orderable: false,
+                render: renderResponsibleSelect('PK')
+            },
             { 
                 data: 'attachments', 
                 title: buildBilingualTitle('附件', 'Attachments'),
@@ -250,6 +395,7 @@ function initializeTables() {
             console.log('PK表格初始化完成');
         }
     });
+    pkTable.on('draw', function() { enhanceResponsibleSelects($('#pkTable')); });
 
     console.log('所有DataTables初始化完成');
 }
@@ -336,6 +482,7 @@ function processFailureReportData(data) {
                 problemDescription: item.problemDescription || '',
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
+                responsiblePerson: item.responsiblePerson || '',
                 attachments: item.attachments || ''
             }));
             console.log('IM数据映射后示例:', imData[0]); // 调试：查看映射结果
@@ -355,6 +502,7 @@ function processFailureReportData(data) {
                 problemDescription: item.problemDescription || '',
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
+                responsiblePerson: item.responsiblePerson || '',
                 attachments: item.attachments || ''
             }));
             console.log('TF数据映射后示例:', tfData[0]); // 调试：查看映射结果
@@ -374,6 +522,7 @@ function processFailureReportData(data) {
                 problemDescription: item.problemDescription || '',
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
+                responsiblePerson: item.responsiblePerson || '',
                 attachments: item.attachments || ''
             }));
             console.log('PK数据映射后示例:', pkData[0]); // 调试：查看映射结果
@@ -437,6 +586,25 @@ $(document).on('click', '.view-btn', function() {
     
     // 显示附件查看对话框
     showAttachmentViewDialog(reportId, process);
+});
+
+$(document).on('change', '.responsible-select', function() {
+    const reportId = $(this).data('id');
+    const process = $(this).data('process');
+    const value = $(this).val();
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+            .withSuccessHandler(function() {})
+            .withFailureHandler(function(err) {
+                Swal.fire({
+                    icon: 'error',
+                    title: '保存失败 / Save Failed',
+                    text: '责任人更新失败 / Responsible update failed: ' + (err.message || err),
+                    confirmButtonText: '确定 / OK'
+                });
+            })
+            .updateFailureReportResponsible(reportId, process, value);
+    }
 });
 
 // 显示附件查看对话框
