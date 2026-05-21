@@ -17,7 +17,9 @@
 
 #### 后端 Google Sheet
 - Sheet：`Failure_Report_followup`（SS ID：`1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU`）
+- 当前列结构：A=followupId B=failureReportNo C=paType D=paPlan E=paWho F=paWhen G=paVerifier H=paVerifierWhen I=status J=createdDate K=updatedDate L=pdfUrl M=paIndex N=跟进内容
 - 新增第15列（O列）表头：`验证回复 / Verification Reply`
+- M 列（paIndex）已在前端被跳过，新增 O 列后跳过列变为 M 列 + O 列仅在后端读取时跳过（verifyReply 通过 formattedRow 传递到前端）
 
 #### 后端 `Code.js`
 - `getFollowupRecords()`：formattedRow 末尾追加 `row[14]`（O列，验证回复）
@@ -62,9 +64,18 @@
 **改动三：新增"验证进度"列**
 - 位置：`完成天数` 与 `状态` 之间
 - 显示格式：`AA / BB`（如 `2 / 3`），AA = 已通过跟进项数，BB = 总跟进项数
-- BB = 0 时显示 `-`
+- BB = 0 时显示 `-`，此时 AA==BB==0 不判定为绿色完成态（显式处理边界，虽然前端有 CAPA 条目校验、实务上 BB 不可能为 0）
 - 数据来源：**动态计算**，不存物理列
-- 外观建议：已完成用绿色（AA==BB）、进行中用蓝色、未开始用灰色
+- 外观建议：已完成用绿色（AA==BB && BB > 0）、进行中用蓝色、未开始用灰色（BB == 0）
+
+**补充：状态 TTL 行的边界条件**
+
+| 条件 | 状态 |
+|---|---|
+| 无附件 | 未上传 / Not Uploaded |
+| 有附件 + 跟进项未全部通过（AA < BB）| 已上传 / Uploaded |
+| 有附件 + 全部通过（AA == BB, BB > 0）| 已完成 / Completed |
+| 有附件 + 无跟进项（BB == 0）| 已完成 / Completed |
 
 #### 后端 `Code.js`
 - `getFailureReportProgressData()`：关联查询 `Failure_Report_followup` Sheet
@@ -121,15 +132,23 @@
 - 初始状态：管理系统 × 1列，技术系统 × 1列
 - 每列表头带 `＋` / `－` 按钮：点 `－` 删除该列，点 `＋` 在同类型末尾新增一列
 - 最小限制：每种类型可减到 0 列，但管理系统 + 技术系统合计至少保留 1 列
+- 行数：固定 5 行（Why1~Why5），不支持用户增删
 - 列顺序：管理系统列在左，技术系统列在右（各自成组）
+- 减号按钮 disabled 判断条件：合计列数 == 1（而非本类型列数 == 1）
+- 根本原因类别选项（前端硬编码）：`人 / Man`｜`机 / Machine`｜`料 / Material`｜`法 / Method`｜`环 / Environment`
 
 **改动三：根本原因类别标签（按列）**
 - RCA 表格底部固定新增一行"根本原因 / Root Cause"
-- 每列独立显示一个下拉框，选项为：人 / Man｜机 / Machine｜料 / Material｜法 / Method｜环 / Environment
+- 每列独立显示一个下拉框，选项（前端硬编码）：`人 / Man`｜`机 / Machine`｜`料 / Material`｜`法 / Method`｜`环 / Environment`
 - 动态列增减时，该行对应单元格同步增减
 - `rootCause` 存入 `rca_json` 各列对象中（见下）
 
-**改动四：数据存储方案（JSON 化）**
+**改动四：旧数据兼容**
+- 编辑旧报告时，旧 `rca_desc / rca_cause / rca_action` 三字段 → 映射为 3 列，均标记为"管理系统"，按原顺序（desc→列1, cause→列2, action→列3）填入动态 UI
+- `getFailureReportFormData()` 和 `generateFailureReportPDF_()` 需同时兼容新旧格式
+- 旧字段保留不删除，新报告写 `rca_json`
+
+**改动五：数据存储方案（JSON 化）**
 - RCA 区块整体序列化为一个 JSON 字段 `rca_json` 存入后端 Sheet
 - 完整结构：
   ```json
@@ -182,17 +201,19 @@
 - 内容为动态下拉框，选项从 RCA 表格的"根本原因"行动态生成
 - 选项格式示例：`管理系统① - 人 / Man`、`技术系统① - 机 / Machine`
 - RCA 列增减或根因标签变更时，此下拉选项实时同步
+- **RCA 列被删除时**：CAPA 所有行中已选该列的"问题根因"值自动清空（方案B）
 - 数据存入 `pa` 数组各行的 `problem_root_cause` 字段
 
 **改动四：CAPA 日期约束**
-- `pa_when`（时间）：`min` 属性设为今日（`new Date()` 格式化为 `yyyy-MM-dd`），不可选过去日期
+- `pa_when`（时间）：**新建模式** `min` 设为今日（`new Date()` 格式化为 `yyyy-MM-dd`），**编辑模式**不设 min 限制
 - `pa_verifier_when`（验证时间）：`min` 属性动态绑定同行 `pa_when` 的值，`pa_when` 变更时实时更新 `pa_verifier_when` 的 `min`
 
 #### 前端 `FailureReport_Template-js.html`
 - `buildPaRow()`：
   - 新增 `problem_root_cause` 列，渲染为动态 `<select>`
-  - `pa_when` input 设置 `min=today`
-  - `pa_verifier_when` input 初始 `min=today`
+  - `pa_when` input：新建模式设置 `min=today`，编辑模式不设 min
+  - `pa_verifier_when` input：新建模式初始 `min=today`
+  - RCA 列删除事件：遍历 CAPA 所有行，清空匹配已删除列的 `problem_root_cause` 选中值
 - 事件绑定：`pa_when` 变更时，同行 `pa_verifier_when` 的 `min` 同步更新为 `pa_when` 的值
 - `collectFormData()`：采集 `problem_root_cause` 值
 - `restoreFormData()`：回填 `problem_root_cause`，并重新设置日期 `min` 约束
@@ -224,10 +245,13 @@
 - `fld_analyst`（分析人员）：预选责任人（`val([responsible]).trigger('change')`）
 - `fld_pdesc_who`（Who 人员）：
   - 初始化 Select2，数据源与分析人员一致（`userNames`）
+  - Select2 option value 使用纯人名（去掉 `【邮箱】` 部分），与分析人员格式一致，兼容旧数据
   - 预选责任人
   - 可多选、模糊搜索
 - `collectFormData()`：`pdesc_who` 改为采集多选值，逗号分隔存储
 - `restoreFormData()`：`pdesc_who` 改为数组回填
+
+> **范围限定：** 以上改动仅涉及 Template 页面。Upload 和 Progress 页面只新增传递 `responsible` URL 参数，不改动责任人列的逻辑和显示。
 
 ---
 
@@ -240,12 +264,15 @@
 - 拼入跳转 URL：`&mdt=encodeURIComponent(rowData.repairTime)`
 
 **编辑模式（`FailureReport_Progress-js.html`）**
-- `getFailureReportFormData()` 已包含 `time_used`，随表单数据加载，无需额外传参
+- `getFailureReportFormData()` 已包含 `time_used`，随表单数据加载，无需额外传 `mdt` 参数
+- 编辑模式无需改 Progress 页面跳转 URL
 
 **`FailureReport_Template-js.html`**
 - URL 参数处理：读取 `p.mdt`，填入 `#fld_time_used`，同时设为 readonly
 - 编辑模式：`restoreFormData()` 回填 `time_used` 后，设为 readonly
 - `fld_time_used` 全程不可手动修改（readonly + 灰色样式，与 `fld_aem_no` / `fld_case_code` 一致）
+
+> **与需求7 协同：** Upload 页面跳转 URL 需同时新增 `responsible` 和 `mdt` 两个参数，一起修改避免冲突。
 
 ---
 
