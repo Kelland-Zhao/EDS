@@ -18,8 +18,8 @@
 #### 后端 Google Sheet
 - Sheet：`Failure_Report_followup`（SS ID：`1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU`）
 - 当前列结构：A=followupId B=failureReportNo C=paType D=paPlan E=paWho F=paWhen G=paVerifier H=paVerifierWhen I=status J=createdDate K=updatedDate L=pdfUrl M=paIndex N=跟进内容
-- 新增第15列（O列）表头：`验证回复 / Verification Reply`
-- M 列（paIndex）已在前端被跳过，新增 O 列后跳过列变为 M 列 + O 列仅在后端读取时跳过（verifyReply 通过 formattedRow 传递到前端）
+- 新增第15列（O列）表头：`验证回复<br>Verification Reply`
+- 后端读取时仍跳过 M 列（paIndex，前端无用），verifyReply（O 列）正常读入并通过 formattedRow 第 14 位（索引13）传至前端
 
 #### 后端 `Code.js`
 - `getFollowupRecords()`：formattedRow 末尾追加 `row[14]`（O列，验证回复）
@@ -28,9 +28,11 @@
 - 保存逻辑：保存状态时同步保存验证回复内容
 - 新增 `sendVerifyReplyNotification(followupId, newStatus, verifyReply, verifierName)`：
   - 保存成功后触发，发送邮件通知责任人
+  - **触发条件**：无论 reply 是否变更、无论 status 是否变更，只要 `save-status-btn` 被点击且保存成功即发送邮件（消除"只改状态没动回复是否发"的歧义）
+  - **覆盖状态**：已通过 / 未通过 / 未验证 三态均发送（已通过=正向确认、未通过=要求整改、未验证=重置提醒）
   - 收件人：paWho 字段提取邮箱
   - 抄送：paVerifier 字段提取邮箱（验证人自己）
-  - 验证回复为空时仍发送邮件
+  - 验证回复为空时仍发送邮件（邮件内对应区块显示"（无）"占位）
   - 邮件样式参考 `sendProjectUpdateNotification`（白底卡片 + 红色渐变表头 + CTA 按钮）
   - 邮件内容包含：故障报告编号、跟进ID、PA类型、预防性措施、验证状态（颜色标注：已通过=绿/#28a745、未通过=红/#dc3545、未验证=灰/#6c757d）、验证回复、验证人、更新日期
 
@@ -51,15 +53,15 @@
 **页面：** `FailureReport_Progress`
 
 **改动一：列名重命名**
-- `附件 / Attachments` 列改名为 `状态 / Status`
+- `附件<br>Attachments` 列改名为 `状态<br>Status`
 
 **改动二：状态流转重构**
 
 | 状态值 | 判定条件 |
 |---|---|
-| 未上传 / Not Uploaded | 无附件（attachments 为空）|
-| 已上传 / Uploaded | 有附件，但跟进项未全部通过 |
-| 已完成 / Completed | 有附件 **且** 所有跟进项已通过（AA == BB，且 BB > 0）|
+| 未上传<br>Not Uploaded | 无附件（attachments 为空）|
+| 已上传<br>Uploaded | 有附件，但跟进项未全部通过 |
+| 已完成<br>Completed | 有附件 **且** 所有跟进项已通过（AA == BB，且 BB > 0）|
 
 **改动三：新增"验证进度"列**
 - 位置：`完成天数` 与 `状态` 之间
@@ -72,16 +74,21 @@
 
 | 条件 | 状态 |
 |---|---|
-| 无附件 | 未上传 / Not Uploaded |
-| 有附件 + 跟进项未全部通过（AA < BB）| 已上传 / Uploaded |
-| 有附件 + 全部通过（AA == BB, BB > 0）| 已完成 / Completed |
-| 有附件 + 无跟进项（BB == 0）| 已完成 / Completed |
+| 无附件 | 未上传<br>Not Uploaded |
+| 有附件 + 跟进项未全部通过（AA < BB）| 已上传<br>Uploaded |
+| 有附件 + 全部通过（AA == BB, BB > 0）| 已完成<br>Completed |
+| 有附件 + 无跟进项（BB == 0）| 已完成<br>Completed |
 
 #### 后端 `Code.js`
 - `getFailureReportProgressData()`：关联查询 `Failure_Report_followup` Sheet
-  - 按故障报告编号统计：总跟进项数（BB）= 该编号下所有行数；已通过数（AA）= status == `已通过 / Passed` 的行数
-  - 返回数据中新增字段：`verifyTotal`（BB）、`verifyPassed`（AA）
-  - `status` 字段逻辑改为三态判断（见上表）
+  - **性能要求（重要）**：避免对每个故障报告独立查询 followup 表造成 N×M 全表扫描
+    - 步骤1：函数开始时一次性 `wsFollow.getDataRange().getValues()` 拉取 followup 全表
+    - 步骤2：遍历一次构建聚合 Map：`const verifyMap = new Map()`，key = `failureReportNo`（followup B 列），value = `{ pass: number, total: number }`
+      - 每行 total++；若 status === `已通过 / Passed` 则 pass++
+    - 步骤3：主循环遍历 Failure_Database 时，按 `failureReportNumber` 直接从 Map 取值：`const v = verifyMap.get(reportNo) || { pass: 0, total: 0 }`
+    - 整体复杂度：从 O(N×M) 降为 O(N+M)
+  - 返回数据中新增字段：`verifyTotal`（BB = v.total）、`verifyPassed`（AA = v.pass）
+  - `status` 字段逻辑改为三态判断（见上表），判定时直接用 v.pass / v.total 做比较
 
 #### 前端 `FailureReport_Progress-js.html`
 - 三个 Tab 的 DataTable columns 均新增 `验证进度` 列（`verifyTotal`/`verifyPassed`）
@@ -126,7 +133,7 @@
 
 **改动一：表头重构**
 - 原列：层/Level | 描述(Description) | 原因分析(Cause) | 行动(Action)
-- 新列：层/Level | 管理系统（动态，可增减）| 技术系统（动态，可增减）
+- 新列：`层<br>Level` | `管理系统<br>Management System`（动态，可增减）| `技术系统<br>Technical System`（动态，可增减）
 
 **改动二：动态列规则**
 - 初始状态：管理系统 × 1列，技术系统 × 1列
@@ -138,7 +145,7 @@
 - 根本原因类别选项（前端硬编码）：`人 / Man`｜`机 / Machine`｜`料 / Material`｜`法 / Method`｜`环 / Environment`
 
 **改动三：根本原因类别标签（按列）**
-- RCA 表格底部固定新增一行"根本原因 / Root Cause"
+- RCA 表格底部固定新增一行 `根本原因<br>Root Cause`
 - 每列独立显示一个下拉框，选项（前端硬编码）：`人 / Man`｜`机 / Machine`｜`料 / Material`｜`法 / Method`｜`环 / Environment`
 - 动态列增减时，该行对应单元格同步增减
 - `rootCause` 存入 `rca_json` 各列对象中（见下）
@@ -150,12 +157,16 @@
 
 **改动五：数据存储方案（JSON 化）**
 - RCA 区块整体序列化为一个 JSON 字段 `rca_json` 存入后端 Sheet
+- **列稳定 ID 机制（重要）**：每个列对象生成不复用的唯一 `id`（如 `col_` + 时间戳/随机后缀），列删除/新增时 ID 永不重排，仅 columns 数组的位置变化
+  - 显示序号（管理系统①②③）根据 columns 数组中"同类型"的索引位置动态计算，仅用于 UI 展示
+  - CAPA 表格 `problem_root_cause` 字段存储该 ID（而非显示文本），下拉选项标签每次渲染时根据 columns 当前状态动态拼接（如 `管理系统② - 人 / Man`）
+  - 当 RCA 列被删除时，CAPA 行中 `problem_root_cause === 被删列 id` 的单元格清空（方案B）
 - 完整结构：
   ```json
   {
     "columns": [
-      {"type": "管理系统", "rootCause": "人 / Man"},
-      {"type": "技术系统", "rootCause": "机 / Machine"}
+      {"id": "col_a1b2", "type": "管理系统", "rootCause": "人 / Man"},
+      {"id": "col_c3d4", "type": "技术系统", "rootCause": "机 / Machine"}
     ],
     "rows": [
       ["Why1_mgmt内容", "Why1_tech内容"],
@@ -197,23 +208,34 @@
 
 **改动三：新增"问题根因"列**
 - CAPA 表格在"类型 / Type"列之后、"预防行动 / Action Plan"列之前新增一列：
-  - 列名：`问题根因 / Problem Root Cause`
+  - 列名：`问题根因<br>Problem Root Cause`
 - 内容为动态下拉框，选项从 RCA 表格的"根本原因"行动态生成
-- 选项格式示例：`管理系统① - 人 / Man`、`技术系统① - 机 / Machine`
-- RCA 列增减或根因标签变更时，此下拉选项实时同步
-- **RCA 列被删除时**：CAPA 所有行中已选该列的"问题根因"值自动清空（方案B）
-- 数据存入 `pa` 数组各行的 `problem_root_cause` 字段
+- 选项 value 为 RCA 列的 `id`（稳定标识，见需求5 改动五）；显示标签格式示例：`管理系统① - 人 / Man`、`技术系统① - 机 / Machine`
+- RCA 列顺序变化、根因标签变更时，下拉选项标签实时重新拼接，已选 ID 不变
+- **RCA 列被删除时**：CAPA 所有行中 `problem_root_cause === 被删列 id` 的单元格自动清空（方案B）
+- 数据存入 `pa` 数组各行的 `problem_root_cause` 字段（存 ID 而非文本）
 
 **改动四：CAPA 日期约束**
-- `pa_when`（时间）：**新建模式** `min` 设为今日（`new Date()` 格式化为 `yyyy-MM-dd`），**编辑模式**不设 min 限制
+- `pa_when`（时间）：
+  - **新建模式**：所有行 `min` 设为今日（`new Date()` 格式化为 `yyyy-MM-dd`）
+  - **编辑模式**：
+    - 已存在的行（从 `restoreFormData()` 回填的历史数据）不设 `min`，保留原值
+    - 编辑模式下新增的行仍设 `min=today`，防止填出昨天日期
+    - 判定方法：buildPaRow 接收 `isExistingRow` 参数，由调用方传入
 - `pa_verifier_when`（验证时间）：`min` 属性动态绑定同行 `pa_when` 的值，`pa_when` 变更时实时更新 `pa_verifier_when` 的 `min`
+  - `pa_when` 被清空时，`pa_verifier_when` 的 `min` 回退为 today（保持不能填过去日期的约束）
 
 #### 前端 `FailureReport_Template-js.html`
-- `buildPaRow()`：
+- `buildPaRow(rowData, isExistingRow)`：
   - 新增 `problem_root_cause` 列，渲染为动态 `<select>`
-  - `pa_when` input：新建模式设置 `min=today`，编辑模式不设 min
-  - `pa_verifier_when` input：新建模式初始 `min=today`
-  - RCA 列删除事件：遍历 CAPA 所有行，清空匹配已删除列的 `problem_root_cause` 选中值
+  - `pa_when` input：
+    - 新建模式：所有行 `min=today`
+    - 编辑模式：`isExistingRow === true` 不设 min；`isExistingRow === false`（用户新增行）设 `min=today`
+  - `pa_verifier_when` input：初始 `min` 同步 `pa_when`；新建模式下默认 today
+  - RCA 列删除事件：遍历 CAPA 所有行，按 ID 匹配清空 `problem_root_cause` 选中值
+- 调用约定：
+  - `restoreFormData()` 回填历史行时传 `isExistingRow=true`
+  - 用户点击 + 新增行时传 `isExistingRow=false`
 - 事件绑定：`pa_when` 变更时，同行 `pa_verifier_when` 的 `min` 同步更新为 `pa_when` 的值
 - `collectFormData()`：采集 `problem_root_cause` 值
 - `restoreFormData()`：回填 `problem_root_cause`，并重新设置日期 `min` 约束
