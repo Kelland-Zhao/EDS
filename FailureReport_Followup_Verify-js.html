@@ -146,6 +146,7 @@
                 paVerifier: String(row[6] || ''),
                 status: String(row[8] || ''),
                 followupContent: String(row[12] || ''),
+                verifyReply: String(row[13] || ''),
                 createdDate: String(row[9] || ''),
                 updatedDate: String(row[10] || ''),
                 pdfUrl: String(row[11] || '')
@@ -214,6 +215,17 @@
                         if (type !== 'display') return value || '';
                         var safe = escapeHtml(value || '');
                         return safe ? safe.replace(/\n/g, '<br>') : '<span class="text-muted">-</span>';
+                    }
+                },
+                {
+                    data: 'verifyReply',
+                    className: 'pa-reply-cell',
+                    orderable: false,
+                    render: function(value, type, row) {
+                        if (type !== 'display') return value || '';
+                        var safeId = escapeHtml(row.followupId);
+                        var safeVal = escapeHtml(value || '');
+                        return '<textarea class="form-control form-control-sm verify-reply-input" data-id="' + safeId + '" rows="2" placeholder="请输入验证回复 / Enter verification reply" style="min-width:160px;">' + safeVal + '</textarea>';
                     }
                 },
                 { data: 'createdDate', render: function(value, type) {
@@ -350,14 +362,16 @@
             .updateFollowupFieldValue(followupId, fieldKey, value);
     }
 
-    // 保存状态按钮点击事件
+    // 保存状态按钮点击事件 - 同步保存验证状态 + 验证回复，触发邮件通知
     $(document).on('click', '.save-status-btn', function() {
         if (!followupTable) return;
         var followupId = $(this).data('id');
         var $btn = $(this);
         var $row = $btn.closest('tr');
         var $select = $row.find('select.followup-select-status');
+        var $reply = $row.find('textarea.verify-reply-input');
         var newValue = String($select.val() || '').trim();
+        var replyValue = String($reply.val() || '');
 
         if (!newValue) {
             showToast('请先选择状态 / Please select status first', 'warning');
@@ -368,47 +382,43 @@
         var rowData = rowApi.data();
         if (!rowData) return;
 
-        if (newValue === String(rowData.status || '').trim()) {
-            showToast('状态未变更 / Status unchanged', 'info');
-            return;
-        }
-
         $btn.prop('disabled', true);
 
-        var toastInstance = Swal.mixin({
+        Swal.mixin({
             toast: true,
             position: 'top-end',
             showConfirmButton: false,
             timer: 0,
-            timerProgressBar: false,
-            didOpen: function(toast) {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
-            }
-        });
-        toastInstance.fire({ icon: 'info', title: '保存中 / Saving...' });
+            timerProgressBar: false
+        }).fire({ icon: 'info', title: '保存中 / Saving...' });
 
-        updateFollowupField('status', followupId, newValue, function(response) {
-            Swal.close();
-            $btn.prop('disabled', false);
-            var updatedRow = Object.assign({}, rowData, { status: newValue });
-            if (response && response.updatedDate) {
-                updatedRow.updatedDate = response.updatedDate;
-            }
-            rowApi.data(updatedRow).draw(false);
-            // 闪绿色
-            var $savedTr = $(rowApi.node());
-            $savedTr.addClass('row-saved-flash');
-            setTimeout(function() { $savedTr.removeClass('row-saved-flash'); }, 2000);
-            // sync followupData
-            var index = followupData.findIndex(function(r) { return r.followupId === followupId; });
-            if (index !== -1) { followupData[index] = updatedRow; }
-            showToast('状态已保存 / Status saved', 'success');
-        }, function(message) {
-            Swal.close();
-            $btn.prop('disabled', false);
-            showToast(message || '保存失败 / Save failed', 'error');
-        });
+        loadingSpinner.show();
+        google.script.run
+            .withSuccessHandler(function(response) {
+                loadingSpinner.hide();
+                Swal.close();
+                $btn.prop('disabled', false);
+                if (response && response.success) {
+                    var updatedRow = Object.assign({}, rowData, { status: newValue, verifyReply: replyValue });
+                    if (response.updatedDate) updatedRow.updatedDate = response.updatedDate;
+                    rowApi.data(updatedRow).draw(false);
+                    var $savedTr = $(rowApi.node());
+                    $savedTr.addClass('row-saved-flash');
+                    setTimeout(function() { $savedTr.removeClass('row-saved-flash'); }, 2000);
+                    var index = followupData.findIndex(function(r) { return r.followupId === followupId; });
+                    if (index !== -1) { followupData[index] = updatedRow; }
+                    showToast('已保存并已发送通知 / Saved & notified', 'success');
+                } else {
+                    showToast((response && response.message) || '保存失败 / Save failed', 'error');
+                }
+            })
+            .withFailureHandler(function(error) {
+                loadingSpinner.hide();
+                Swal.close();
+                $btn.prop('disabled', false);
+                showToast('保存失败 / Save failed: ' + (error.message || ''), 'error');
+            })
+            .saveVerifyStatusAndReply(followupId, newValue, replyValue, currentUserName);
     });
 
     // 查看PDF按钮点击事件

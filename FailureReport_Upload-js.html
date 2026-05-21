@@ -483,6 +483,7 @@ function processFailureReportData(data) {
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
                 responsiblePerson: item.responsiblePerson || '',
+                repairTime: item.repairTime || '',
                 attachments: item.attachments || ''
             }));
             console.log('IM数据映射后示例:', imData[0]); // 调试：查看映射结果
@@ -503,6 +504,7 @@ function processFailureReportData(data) {
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
                 responsiblePerson: item.responsiblePerson || '',
+                repairTime: item.repairTime || '',
                 attachments: item.attachments || ''
             }));
             console.log('TF数据映射后示例:', tfData[0]); // 调试：查看映射结果
@@ -523,6 +525,7 @@ function processFailureReportData(data) {
                 assignmentDate: formatDate(item.assignmentDate) || '',
                 uploadDate: formatDate(item.uploadDate) || '',
                 responsiblePerson: item.responsiblePerson || '',
+                repairTime: item.repairTime || '',
                 attachments: item.attachments || ''
             }));
             console.log('PK数据映射后示例:', pkData[0]); // 调试：查看映射结果
@@ -571,11 +574,15 @@ $(document).on('click', '.fill-template-btn', function() {
     const rowData = table.row(row).data();
     const machineNo = rowData ? (rowData.machineNo || '') : '';
     const desc = rowData ? (rowData.problemDescription || '') : '';
+    const responsible = rowData ? (rowData.responsiblePerson || '') : '';
+    const mdt = rowData ? (rowData.repairTime || '') : '';
     const base = sessionStorage.getItem('siWebPage') || '';
-    const url = base + '?v=FailureReport_Template'
+    let url = base + '?v=FailureReport_Template'
         + '&reportId=' + encodeURIComponent(reportId)
         + '&machineNo=' + encodeURIComponent(machineNo)
         + '&desc=' + encodeURIComponent(desc);
+    if (responsible) url += '&responsible=' + encodeURIComponent(responsible);
+    if (mdt) url += '&mdt=' + encodeURIComponent(mdt);
     window.open(url);
 });
 

@@ -71,7 +71,7 @@
             <div class="mb-1"><label class="field-label" id="lbl_what"></label><input type="text" id="fld_what" class="form-control form-control-sm"></div>
             <div class="mb-1"><label class="field-label" id="lbl_when"></label><input type="text" id="fld_when" class="form-control form-control-sm"></div>
             <div class="mb-1"><label class="field-label" id="lbl_where"></label><input type="text" id="fld_where" class="form-control form-control-sm"></div>
-            <div class="mb-1"><label class="field-label" id="lbl_pdesc_who"></label><input type="text" id="fld_pdesc_who" class="form-control form-control-sm"></div>
+            <div class="mb-1"><label class="field-label" id="lbl_pdesc_who"></label><select id="fld_pdesc_who" class="form-select form-select-sm sel2-user" multiple="multiple"></select></div>
             <div class="mb-1"><label class="field-label" id="lbl_trouble_desc"></label><textarea id="fld_trouble_desc" class="form-control form-control-sm" rows="3"></textarea></div>
           </div>
         </div>
@@ -91,27 +91,17 @@
           </thead>
           <tbody id="actionTableBody"></tbody>
         </table>
-        <div class="mb-3">
-          <label class="field-label" id="lbl_fault_category"></label>
-          <div id="fault_category_group" class="checkbox-group mt-1"></div>
-        </div>
 
-        <!-- RCA -->
+        <!-- RCA (动态列：管理系统 / 技术系统) -->
         <div class="section-header">根本原因分析 / RCA Analysis</div>
-        <table class="table table-bordered table-sm tbl-report mb-2">
-          <thead>
-            <tr>
-              <th style="width:60px">层<br>Level</th>
-              <th id="th_rca_desc">描述 (Description)</th>
-              <th id="th_rca_cause">原因分析 (Cause)</th>
-              <th id="th_rca_action">行动 (Action)</th>
-            </tr>
-          </thead>
+        <table class="table table-bordered table-sm tbl-report mb-2" id="rcaTable">
+          <thead id="rcaTableHead"></thead>
           <tbody id="rcaTableBody"></tbody>
+          <tfoot id="rcaTableFoot"></tfoot>
         </table>
 
         <!-- Preventive Action -->
-        <div class="section-header">预防对策 / Preventive Action</div>
+        <div class="section-header">纠正预防措施 / Corrective &amp; Preventive Action</div>
         <div class="d-flex justify-content-end mb-2">
           <button type="button" class="btn btn-outline-primary btn-sm" id="btnPaAddRow">+ 新增 / Add</button>
         </div>

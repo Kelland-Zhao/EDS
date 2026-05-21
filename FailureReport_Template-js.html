@@ -8,6 +8,196 @@ $(document).ready(function () {
   let userNames = [];
   let paTypes = [];
 
+  // === 需求5：RCA 动态列状态 ===
+  // columns: [{ id, type:'管理系统'|'技术系统', rootCause }]
+  // rows: 固定5行，每行是 columns 长度的字符串数组
+  const RCA_ROW_COUNT = 5;
+  const RCA_ROOT_CAUSE_OPTIONS = ['人 / Man', '机 / Machine', '料 / Material', '法 / Method', '环 / Environment'];
+  let rcaState = { columns: [], rows: [] };
+
+  function genColId() {
+    return 'col_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  }
+
+  function emptyRcaRows(colCount) {
+    const rows = [];
+    for (let i = 0; i < RCA_ROW_COUNT; i++) {
+      const r = [];
+      for (let j = 0; j < colCount; j++) r.push('');
+      rows.push(r);
+    }
+    return rows;
+  }
+
+  function initDefaultRca() {
+    rcaState.columns = [
+      { id: genColId(), type: '管理系统', rootCause: '' },
+      { id: genColId(), type: '技术系统', rootCause: '' }
+    ];
+    rcaState.rows = emptyRcaRows(rcaState.columns.length);
+  }
+
+  // 同类型下显示序号（① ② ③）
+  function getDisplayIndex(colIdx) {
+    const col = rcaState.columns[colIdx];
+    if (!col) return 0;
+    let n = 0;
+    for (let i = 0; i <= colIdx; i++) {
+      if (rcaState.columns[i].type === col.type) n++;
+    }
+    return n;
+  }
+
+  function getCircled(n) {
+    const arr = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+    return arr[n - 1] || ('(' + n + ')');
+  }
+
+  // RCA 列删除时清空 CAPA 引用
+  function purgeProblemRootCauseRefs(colId) {
+    $('#paTableBody select.pa-problem-root-cause').each(function() {
+      if ($(this).val() === colId) {
+        $(this).val('').trigger('change');
+      }
+    });
+  }
+
+  function rebuildProblemRootCauseOptions() {
+    const opts = ['<option value=""></option>'];
+    rcaState.columns.forEach(function(col, idx) {
+      const label = col.type + getCircled(getDisplayIndex(idx)) + (col.rootCause ? ' - ' + col.rootCause : '');
+      opts.push('<option value="' + col.id + '">' + label + '</option>');
+    });
+    const html = opts.join('');
+    $('#paTableBody select.pa-problem-root-cause').each(function() {
+      const cur = $(this).val();
+      $(this).html(html);
+      if (cur && rcaState.columns.some(function(c) { return c.id === cur; })) {
+        $(this).val(cur);
+      } else {
+        $(this).val('');
+      }
+    });
+  }
+
+  function renderRcaTable() {
+    const totalCols = rcaState.columns.length;
+    // Header
+    let head = '<tr><th rowspan="2" style="width:60px">层<br>Level</th>';
+    rcaState.columns.forEach(function(col, idx) {
+      const dispIdx = getDisplayIndex(idx);
+      const canDelete = totalCols > 1;
+      head += '<th style="text-align:center;vertical-align:middle;">'
+        + col.type + getCircled(dispIdx)
+        + ' <button type="button" class="btn btn-outline-light btn-sm py-0 px-1 rca-add" data-type="' + col.type + '" data-idx="' + idx + '" title="新增 / Add">+</button>'
+        + (canDelete ? ' <button type="button" class="btn btn-outline-light btn-sm py-0 px-1 rca-del" data-idx="' + idx + '" title="删除 / Delete">-</button>' : '')
+        + '<div style="font-size:0.7rem;font-weight:normal;">' + (col.type === '管理系统' ? 'Management System' : 'Technical System') + '</div>'
+        + '</th>';
+    });
+    head += '</tr>';
+    $('#rcaTableHead').html(head);
+
+    // Body: 5 rows × columns
+    let body = '';
+    for (let r = 0; r < RCA_ROW_COUNT; r++) {
+      body += '<tr><td class="text-center fw-bold">Why' + (r + 1) + '</td>';
+      for (let c = 0; c < totalCols; c++) {
+        const val = (rcaState.rows[r] && rcaState.rows[r][c]) || '';
+        body += '<td><textarea name="rca_cell_' + r + '_' + c + '" rows="2" data-row="' + r + '" data-col="' + c + '">' + escapeText(val) + '</textarea></td>';
+      }
+      body += '</tr>';
+    }
+    $('#rcaTableBody').html(body);
+
+    // Foot: 根本原因 dropdown per column
+    let foot = '<tr><th style="text-align:center;vertical-align:middle;">根本原因<br>Root Cause</th>';
+    rcaState.columns.forEach(function(col, idx) {
+      let opts = '<option value=""></option>';
+      RCA_ROOT_CAUSE_OPTIONS.forEach(function(o) {
+        const sel = o === col.rootCause ? ' selected' : '';
+        opts += '<option value="' + o + '"' + sel + '>' + o + '</option>';
+      });
+      foot += '<td><select class="rca-root-cause" data-idx="' + idx + '">' + opts + '</select></td>';
+    });
+    foot += '</tr>';
+    $('#rcaTableFoot').html(foot);
+
+    rebuildProblemRootCauseOptions();
+  }
+
+  function escapeText(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function syncRcaRowsFromDom() {
+    $('#rcaTableBody textarea[name^=rca_cell_]').each(function() {
+      const r = parseInt($(this).data('row'));
+      const c = parseInt($(this).data('col'));
+      if (!rcaState.rows[r]) rcaState.rows[r] = [];
+      rcaState.rows[r][c] = $(this).val() || '';
+    });
+  }
+
+  function addRcaColumn(type) {
+    syncRcaRowsFromDom();
+    // 插入到同类型最后一个之后；如果不存在则按类型分组顺序插入
+    let insertAt = rcaState.columns.length;
+    for (let i = rcaState.columns.length - 1; i >= 0; i--) {
+      if (rcaState.columns[i].type === type) { insertAt = i + 1; break; }
+    }
+    if (insertAt === rcaState.columns.length && type === '管理系统') {
+      // 管理系统在前
+      for (let i = 0; i < rcaState.columns.length; i++) {
+        if (rcaState.columns[i].type === '技术系统') { insertAt = i; break; }
+      }
+    }
+    const newCol = { id: genColId(), type: type, rootCause: '' };
+    rcaState.columns.splice(insertAt, 0, newCol);
+    rcaState.rows.forEach(function(r) { r.splice(insertAt, 0, ''); });
+    if (rcaState.rows.length === 0) rcaState.rows = emptyRcaRows(rcaState.columns.length);
+    renderRcaTable();
+  }
+
+  function removeRcaColumn(idx) {
+    if (rcaState.columns.length <= 1) return;
+    syncRcaRowsFromDom();
+    const removed = rcaState.columns[idx];
+    rcaState.columns.splice(idx, 1);
+    rcaState.rows.forEach(function(r) { r.splice(idx, 1); });
+    renderRcaTable();
+    purgeProblemRootCauseRefs(removed.id);
+  }
+
+  $(document).on('click', '.rca-add', function() {
+    const type = $(this).data('type');
+    addRcaColumn(type);
+  });
+  $(document).on('click', '.rca-del', function() {
+    removeRcaColumn(parseInt($(this).data('idx')));
+  });
+  $(document).on('change', '#rcaTableFoot select.rca-root-cause', function() {
+    const idx = parseInt($(this).data('idx'));
+    if (rcaState.columns[idx]) {
+      rcaState.columns[idx].rootCause = $(this).val() || '';
+      rebuildProblemRootCauseOptions();
+    }
+  });
+  $(document).on('input change', '#rcaTableBody textarea[name^=rca_cell_]', function() {
+    const r = parseInt($(this).data('row'));
+    const c = parseInt($(this).data('col'));
+    if (!rcaState.rows[r]) rcaState.rows[r] = [];
+    rcaState.rows[r][c] = $(this).val() || '';
+  });
+
+  // === 工具函数 ===
+  function todayStr() {
+    const d = new Date();
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return yy + '-' + mm + '-' + dd;
+  }
+
   function normalizeUsers(rawUsers) {
     return (rawUsers || []).map(function(u) {
       if (typeof u === 'string') {
@@ -24,16 +214,18 @@ $(document).ready(function () {
   }
 
   function collectFormData() {
+    syncRcaRowsFromDom();
+
     const d = {};
     d.aem_no         = $('#fld_aem_no').val() || '';
     d.present_status = $('#fld_present_status').val() || '';
     d.case_code      = $('#fld_case_code').val() || '';
-    d.analyst        = ($('#fld_analyst').val() || []).join(','); // 多选值用逗号连接
+    d.analyst        = ($('#fld_analyst').val() || []).join(',');
     d.time_used      = $('#fld_time_used').val() || '';
     d.what           = $('#fld_what').val() || '';
     d.when           = $('#fld_when').val() || '';
     d.where          = $('#fld_where').val() || '';
-    d.pdesc_who      = $('#fld_pdesc_who').val() || '';
+    d.pdesc_who      = ($('#fld_pdesc_who').val() || []).join(',');
     d.trouble_desc   = $('#fld_trouble_desc').val() || '';
     d.actions = [];
     for (let i = 1; i <= 6; i++) {
@@ -45,22 +237,17 @@ $(document).ready(function () {
         result: $('[name=a_result_' + i + ']').val() || ''
       });
     }
-    d.fault_category = $('[name=fault_cat]:checked').map(function() { return this.value; }).get().join(',');
-    d.fault_category_text = $('[name=fault_cat]:checked').map(function() { return $(this).parent().text().trim(); }).get().join(' / ');
     d.photo = $('#photo_preview').is(':visible') ? ($('#photo_preview').attr('src') || '') : '';
-    d.rca = [];
-    for (let i = 1; i <= 5; i++) {
-      d.rca.push({
-        desc:   $('[name=r_desc_' + i + ']').val() || '',
-        cause:  $('[name=r_cause_' + i + ']').val() || '',
-        action: $('[name=r_action_' + i + ']').val() || ''
-      });
-    }
+
+    // RCA JSON
+    d.rca_json = JSON.stringify({ columns: rcaState.columns, rows: rcaState.rows });
+
     d.pa_fields = paFieldDefs.map(function(f) { return { id: f.Field_ID, cn: f.Label_CN, en: f.Label_EN }; });
     d.pa = [];
     $('#paTableBody tr').each(function(i) {
       const row = { type: $('[name=pa_type_' + i + ']').val() || '' };
       paFieldDefs.forEach(function(f) { row[f.Field_ID] = $('[name=' + f.Field_ID + '_' + i + ']').val() || ''; });
+      row.problem_root_cause = $('[name=pa_problem_root_cause_' + i + ']').val() || '';
       d.pa.push(row);
     });
     return d;
@@ -69,7 +256,6 @@ $(document).ready(function () {
   function restoreFormData(d) {
     if (d.present_status) $('#fld_present_status').val(d.present_status);
     if (d.analyst) {
-      // 分析人员可能是逗号分隔的字符串或数组，转换为数组设置 Select2 值
       const analystArray = Array.isArray(d.analyst) ? d.analyst : d.analyst.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
       $('#fld_analyst').val(analystArray).trigger('change');
     }
@@ -77,7 +263,16 @@ $(document).ready(function () {
     if (d.what)           $('#fld_what').val(d.what);
     if (d.when)           $('#fld_when').val(d.when);
     if (d.where)          $('#fld_where').val(d.where);
-    if (d.pdesc_who)      $('#fld_pdesc_who').val(d.pdesc_who);
+    if (d.pdesc_who) {
+      const whoArray = Array.isArray(d.pdesc_who) ? d.pdesc_who : d.pdesc_who.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+      // 对于旧数据可能不在选项里，先动态补齐
+      whoArray.forEach(function(v) {
+        if ($('#fld_pdesc_who option[value="' + v.replace(/"/g, '\\"') + '"]').length === 0) {
+          $('#fld_pdesc_who').append('<option value="' + v + '">' + v + '</option>');
+        }
+      });
+      $('#fld_pdesc_who').val(whoArray).trigger('change');
+    }
     if (d.trouble_desc)   $('#fld_trouble_desc').val(d.trouble_desc);
     if (d.actions) {
       d.actions.forEach(function(a, i) {
@@ -91,24 +286,58 @@ $(document).ready(function () {
         $('[name=a_result_' + n + ']').val(a.result);
       });
     }
-    if (d.fault_category) {
-      $('[name=fault_cat]').prop('checked', false);
-      d.fault_category.split(',').forEach(function(v) {
-        $('[name=fault_cat][value="' + v + '"]').prop('checked', true);
-      });
-    }
     if (d.photo) { $('#photo_preview').attr('src', d.photo).show(); }
-    if (d.rca) {
-      d.rca.forEach(function(r, i) {
-        const n = i + 1;
-        $('[name=r_desc_' + n + ']').val(r.desc);
-        $('[name=r_cause_' + n + ']').val(r.cause);
-        $('[name=r_action_' + n + ']').val(r.action);
-      });
+
+    // ===== RCA 还原 =====
+    let restoredRca = false;
+    if (d.rca_json) {
+      try {
+        const obj = (typeof d.rca_json === 'string') ? JSON.parse(d.rca_json) : d.rca_json;
+        if (obj && Array.isArray(obj.columns) && obj.columns.length > 0) {
+          rcaState.columns = obj.columns.map(function(c) {
+            return { id: c.id || genColId(), type: c.type || '管理系统', rootCause: c.rootCause || '' };
+          });
+          const rowCount = Math.max(RCA_ROW_COUNT, (obj.rows || []).length);
+          rcaState.rows = [];
+          for (let r = 0; r < RCA_ROW_COUNT; r++) {
+            const src = (obj.rows && obj.rows[r]) || [];
+            const row = [];
+            for (let c = 0; c < rcaState.columns.length; c++) row.push(src[c] || '');
+            rcaState.rows.push(row);
+          }
+          renderRcaTable();
+          restoredRca = true;
+        }
+      } catch (e) { console.warn('rca_json 解析失败', e); }
     }
+    if (!restoredRca && d.rca && Array.isArray(d.rca) && d.rca.length > 0) {
+      // 旧数据兼容：3 列均映射为"管理系统"
+      const oldCols = [
+        { id: genColId(), type: '管理系统', rootCause: '' },  // desc
+        { id: genColId(), type: '管理系统', rootCause: '' },  // cause
+        { id: genColId(), type: '管理系统', rootCause: '' }   // action
+      ];
+      rcaState.columns = oldCols;
+      rcaState.rows = [];
+      for (let r = 0; r < RCA_ROW_COUNT; r++) {
+        const old = d.rca[r] || {};
+        rcaState.rows.push([old.desc || '', old.cause || '', old.action || '']);
+      }
+      renderRcaTable();
+      restoredRca = true;
+    }
+    if (!restoredRca) {
+      // 默认 1 管理 + 1 技术
+      initDefaultRca();
+      renderRcaTable();
+    }
+
+    // ===== CAPA 还原 =====
     if (d.pa) {
+      const existingLen = $('#paTableBody tr').length;
       while ($('#paTableBody tr').length < d.pa.length) {
-        $('#btnPaAddRow').trigger('click');
+        if (typeof window.addPaRow === 'function') window.addPaRow(true);
+        else break;
       }
       const fids = d.pa_fields ? d.pa_fields.map(function(f){return f.id;}) : paFieldDefs.map(function(f){return f.Field_ID;});
       d.pa.forEach(function(p, i) {
@@ -118,6 +347,16 @@ $(document).ready(function () {
           el.val(p[fid] || '');
           if (el.hasClass('sel2-user') && $.fn.select2) el.trigger('change');
         });
+        const $prc = $('[name=pa_problem_root_cause_' + i + ']');
+        if ($prc.length && p.problem_root_cause) {
+          $prc.val(p.problem_root_cause);
+        }
+        // 同步 pa_verifier_when 的 min 约束
+        const $when = $('[name=pa_when_' + i + ']');
+        const $vwhen = $('[name=pa_verifier_when_' + i + ']');
+        if ($when.length && $vwhen.length) {
+          $vwhen.attr('min', $when.val() || todayStr());
+        }
       });
     }
   }
@@ -170,35 +409,34 @@ $(document).ready(function () {
       }
       lbl('case_code', fm['case_code']);
       lbl('analyst', fm['analyst']);
-      // 填充分析人员选项（多选下拉框，只需要名字）
+
+      // 名字列表（去掉邮箱部分）
+      const nameOnlyList = userNames.map(function(u) { return String(u.display || '').replace(/【.+】/, '').trim(); });
       if (userNames && userNames.length > 0) {
-        const analystOpts = userNames.map(function(u) {
-          // 从 display 中提取名字（去掉邮箱部分）
-          const name = String(u.display || '').replace(/【.+】/, '').trim();
+        const analystOpts = nameOnlyList.map(function(name) {
           return '<option value="' + name + '">' + name + '</option>';
         }).join('');
         $('#fld_analyst').html(analystOpts);
-        // 初始化 Select2，启用模糊搜索
         $('#fld_analyst').select2({
           placeholder: '请选择 / Select',
           width: '100%',
-          minimumResultsForSearch: 1, // 始终显示搜索框
+          minimumResultsForSearch: 1,
           matcher: function(params, data) {
-            // 自定义模糊匹配函数
-            if ($.trim(params.term) === '') {
-              return data;
-            }
-            if (typeof data.text === 'undefined') {
-              return null;
-            }
-            // 转换为小写进行不区分大小写的匹配
-            var term = params.term.toLowerCase();
-            var text = data.text.toLowerCase();
-            // 支持模糊匹配（包含任意部分）
-            if (text.indexOf(term) > -1) {
-              return data;
-            }
-            return null;
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+            return data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1 ? data : null;
+          }
+        });
+        // pdesc_who（Who 人员）— 多选，数据源与分析人员一致，纯人名
+        $('#fld_pdesc_who').html(analystOpts);
+        $('#fld_pdesc_who').select2({
+          placeholder: '请选择 / Select',
+          width: '100%',
+          minimumResultsForSearch: 1,
+          matcher: function(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+            return data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1 ? data : null;
           }
         });
       }
@@ -232,40 +470,26 @@ $(document).ready(function () {
       }
       $('#actionTableBody').html(aRows);
 
-      lbl('fault_category', fm['fault_category']);
-      if (fm['fault_category'] && fm['fault_category'].Options) {
-        const opts = splitOpts(fm['fault_category'].Options);
-        let cbHtml = '';
-        opts.forEach(function(o, i) {
-          cbHtml += '<label><input type="checkbox" name="fault_cat" value="' + (i + 1) + '"> ' + (i + 1) + ') ' + o.trim() + '</label>';
-        });
-        $('#fault_category_group').html(cbHtml);
-      }
+      // === 初始化 RCA ===
+      initDefaultRca();
+      renderRcaTable();
 
-      if (fm['rca_desc'])   $('#th_rca_desc').text(fm['rca_desc'].Label_CN + ' (' + fm['rca_desc'].Label_EN + ')');
-      if (fm['rca_cause'])  $('#th_rca_cause').text(fm['rca_cause'].Label_CN + ' (' + fm['rca_cause'].Label_EN + ')');
-      if (fm['rca_action']) $('#th_rca_action').text(fm['rca_action'].Label_CN + ' (' + fm['rca_action'].Label_EN + ')');
-
-      let rRows = '';
-      for (let i = 1; i <= 5; i++) {
-        rRows += '<tr><td class="text-center fw-bold">Why' + i + '</td>' +
-          '<td><textarea name="r_desc_' + i + '" rows="2"></textarea></td>' +
-          '<td><textarea name="r_cause_' + i + '" rows="2"></textarea></td>' +
-          '<td><textarea name="r_action_' + i + '" rows="2"></textarea></td></tr>';
-      }
-      $('#rcaTableBody').html(rRows);
-
+      // === CAPA ===
       paFieldDefs = template.filter(function(f) {
         return f.Section === 'PreventiveAction' && f.Field_ID !== 'pa_type';
       });
-      let paHdr = '<tr><th style="width:110px">序号<br>No.</th>';
+
+      // 表头：类型 + 问题根因 + 其他 paFieldDefs
+      let paHdr = '<tr><th style="width:140px">类型<br>Type</th>'
+        + '<th style="width:170px">问题根因<br>Problem Root Cause</th>';
       paFieldDefs.forEach(function(f) { paHdr += '<th>' + f.Label_CN + '<br>' + f.Label_EN + '</th>'; });
       $('#paTableHead').html(paHdr + '</tr>');
 
       paTypes = fm['pa_type'] && fm['pa_type'].Options
         ? splitOpts(fm['pa_type'].Options)
-        : ['OPL一点课', 'SOP指导书', 'AM基准书', 'PM基准书', 'Kaizen改善', '其他同类设备'];
-      function paInputHtml(f, i) {
+        : ['SWI', 'SOP', 'AM', 'PM', 'Kaizen', '纠正措施'];
+
+      function paInputHtml(f, i, isExistingRow) {
         if (f.Type === 'select') {
           const isUsers = f.Options === '$users';
           const opts = isUsers
@@ -275,12 +499,22 @@ $(document).ready(function () {
             opts.map(function(o){return '<option value="'+o.trim()+'">'+o.trim()+'</option>';}).join('') + '</select>';
         }
         if (f.Type === 'date') {
-          return '<input type="date" name="' + f.Field_ID + '_' + i + '">';
+          // pa_when / pa_verifier_when：新建模式 min=today，编辑模式 isExistingRow=true 不设 min
+          const isEdit = !!window._isEditMode;
+          let minAttr = '';
+          if (!isEdit) {
+            // 新建模式：所有行 min=today
+            minAttr = ' min="' + todayStr() + '"';
+          } else if (!isExistingRow) {
+            // 编辑模式但用户新增行
+            minAttr = ' min="' + todayStr() + '"';
+          }
+          return '<input type="date" name="' + f.Field_ID + '_' + i + '"' + minAttr + '>';
         }
         return '<input type="text" name="' + f.Field_ID + '_' + i + '">';
       }
 
-      function buildPaRow(typeVal, i, canDelete) {
+      function buildPaRow(typeVal, i, canDelete, isExistingRow) {
         let cells = '<td>' +
           '<div class="d-flex align-items-center gap-1">' +
           '<select name="pa_type_' + i + '"><option value=""></option>' +
@@ -293,15 +527,36 @@ $(document).ready(function () {
           (canDelete ? '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 pa-del" title="删除 / Delete">-</button>' : '') +
           '</div>' +
           '</td>';
+        // 问题根因 - 动态下拉，选项从 RCA 列生成
+        cells += '<td><select name="pa_problem_root_cause_' + i + '" class="pa-problem-root-cause"><option value=""></option></select></td>';
         paFieldDefs.forEach(function(f) {
-          cells += '<td>' + paInputHtml(f, i) + '</td>';
+          cells += '<td>' + paInputHtml(f, i, isExistingRow) + '</td>';
         });
         return '<tr>' + cells + '</tr>';
       }
 
+      function addPaRow(isExistingRow) {
+        const idx = $('#paTableBody tr').length;
+        const rowHtml = buildPaRow('', idx, true, !!isExistingRow);
+        const $row = $(rowHtml);
+        $('#paTableBody').append($row);
+        initUserSelect2($row);
+        rebuildProblemRootCauseOptions();
+        // 绑定 pa_when 变更 → pa_verifier_when min 同步
+        $row.find('[name^=pa_when_]').on('change', function() {
+          const idxRow = this.name.split('_').pop();
+          const v = $(this).val();
+          const $vw = $('[name=pa_verifier_when_' + idxRow + ']');
+          if ($vw.length) {
+            $vw.attr('min', v || todayStr());
+          }
+        });
+      }
+      window.addPaRow = addPaRow;
+
       let pRows = '';
       paTypes.forEach(function(t, i) {
-        pRows += buildPaRow(t.trim(), i, true);
+        pRows += buildPaRow(t.trim(), i, true, false);
       });
       $('#paTableBody').html(pRows);
 
@@ -313,6 +568,8 @@ $(document).ready(function () {
           if ($el.hasClass('select2-hidden-accessible')) {
             $el.select2('destroy');
           }
+          // pdesc_who 是 multiple, analyst 也 multiple；其它 sel2-user 单选
+          const isMultiple = $el.prop('multiple');
           $el.select2({
             width: '100%',
             theme: 'bootstrap',
@@ -331,14 +588,23 @@ $(document).ready(function () {
               const match = data.text.match(/^([^【]+)/);
               return match ? match[1].trim() : data.text;
             },
-            escapeMarkup: function(markup) {
-              return markup;
-            }
+            escapeMarkup: function(markup) { return markup; }
           });
         });
       }
 
       initUserSelect2();
+      rebuildProblemRootCauseOptions();
+
+      // 初始绑定 pa_when → pa_verifier_when min
+      $('#paTableBody [name^=pa_when_]').on('change', function() {
+        const idxRow = this.name.split('_').pop();
+        const v = $(this).val();
+        const $vw = $('[name=pa_verifier_when_' + idxRow + ']');
+        if ($vw.length) {
+          $vw.attr('min', v || todayStr());
+        }
+      });
 
       function reindexPaRows() {
         $('#paTableBody tr').each(function(i) {
@@ -350,11 +616,7 @@ $(document).ready(function () {
       }
 
       $('#btnPaAddRow').on('click', function() {
-        const idx = $('#paTableBody tr').length;
-        const rowHtml = buildPaRow('', idx, true);
-        const $row = $(rowHtml);
-        $('#paTableBody').append($row);
-        initUserSelect2($row);
+        addPaRow(false);   // 用户新增
       });
 
       $('#paTableBody').on('click', '.pa-del', function() {
@@ -383,7 +645,6 @@ $(document).ready(function () {
           verifierEl.val('').trigger('change');
           return;
         }
-
         const target = emailToDisplay[selectedUser.defaultVerifierEmail.toLowerCase()] || '';
         if (!target) {
           if (!verifierEl.find('option[value="' + unmatchedText + '"]').length) {
@@ -392,7 +653,6 @@ $(document).ready(function () {
           verifierEl.val(unmatchedText).trigger('change');
           return;
         }
-
         verifierEl.find('option[value="' + unmatchedText + '"]').remove();
         verifierEl.val(target).trigger('change');
       });
@@ -406,6 +666,7 @@ $(document).ready(function () {
       google.script.url.getLocation(function(loc) {
         const p = loc.parameter || {};
         const isEditMode = p.editMode === '1';
+        window._isEditMode = isEditMode;
 
         if (p.reportId) {
           draftKey = isEditMode ? 'fr_draft_edit_' + p.reportId : 'fr_draft_' + p.reportId;
@@ -416,9 +677,38 @@ $(document).ready(function () {
         }
         if (p.desc) $('#fld_trouble_desc').val(p.desc);
 
+        // === 需求8：MDT 自动带入且不可编辑 ===
+        if (p.mdt && !isEditMode) {
+          $('#fld_time_used').val(p.mdt);
+        }
+        if (!isEditMode) {
+          $('#fld_time_used').prop('readonly', true).addClass('bg-secondary bg-opacity-10 text-muted');
+        }
+
+        // === 需求7：责任人预填 ===
+        function applyResponsiblePrefill(responsibleRaw) {
+          if (!responsibleRaw) return;
+          const name = String(responsibleRaw || '').replace(/【.+】/, '').trim();
+          if (!name) return;
+          // 确保选项存在
+          if ($('#fld_analyst option[value="' + name.replace(/"/g, '\\"') + '"]').length === 0) {
+            $('#fld_analyst').append('<option value="' + name + '">' + name + '</option>');
+          }
+          const analystCurrent = $('#fld_analyst').val() || [];
+          if (analystCurrent.indexOf(name) === -1) {
+            $('#fld_analyst').val(analystCurrent.concat([name])).trigger('change');
+          }
+          if ($('#fld_pdesc_who option[value="' + name.replace(/"/g, '\\"') + '"]').length === 0) {
+            $('#fld_pdesc_who').append('<option value="' + name + '">' + name + '</option>');
+          }
+          const whoCurrent = $('#fld_pdesc_who').val() || [];
+          if (whoCurrent.indexOf(name) === -1) {
+            $('#fld_pdesc_who').val(whoCurrent.concat([name])).trigger('change');
+          }
+        }
+
         // 编辑模式：从服务器加载已有数据
         if (isEditMode && p.reportId) {
-          window._isEditMode = true;
           $('#btnSubmit').text('更新 / Update');
           $('.navbar-brand').text('编辑故障报告 / Edit Breakdown Analysis');
 
@@ -436,6 +726,15 @@ $(document).ready(function () {
               if (result.success && result.formData) {
                 restoreFormData(result.formData);
                 if (result.formData.photo) $('#photo_preview').attr('src', result.formData.photo).show();
+                // 编辑模式：time_used 回填后设 readonly
+                if (result.formData.time_used) {
+                  $('#fld_time_used').val(result.formData.time_used);
+                }
+                $('#fld_time_used').prop('readonly', true).addClass('bg-secondary bg-opacity-10 text-muted');
+                // 编辑模式中如果 URL 有 responsible 仍可预填（如果回填后字段为空）
+                if (p.responsible) {
+                  applyResponsiblePrefill(decodeURIComponent(p.responsible));
+                }
                 Swal.fire({ title: '数据已加载 / Data Loaded', icon: 'info', timer: 1200, showConfirmButton: false });
               } else {
                 Swal.fire({ title: '加载失败 / Load Failed', text: result.message || '无法获取已有报告数据', icon: 'error', confirmButtonText: '确定 / OK' });
@@ -447,11 +746,13 @@ $(document).ready(function () {
             })
             .getFailureReportFormData(p.reportId);
 
-          // 编辑模式下：加载完服务器数据后再检查草稿
           return;
         }
 
-        // 新建模式：检查本地草稿
+        // 新建模式：检查本地草稿 + 预填责任人
+        if (p.responsible) {
+          applyResponsiblePrefill(decodeURIComponent(p.responsible));
+        }
         const saved = localStorage.getItem(draftKey);
         if (saved) {
           Swal.fire({
@@ -514,7 +815,9 @@ $(document).ready(function () {
       if (!result.isConfirmed) return;
       localStorage.removeItem(draftKey);
       $('#formBody input:not([readonly]), #formBody select, #formBody textarea').val('');
-      $('[name=fault_cat]').prop('checked', false);
+      // 重置 RCA
+      initDefaultRca();
+      renderRcaTable();
       Swal.fire({ title: '已清除 / Cleared', icon: 'success', timer: 1000, showConfirmButton: false });
     });
   });
@@ -535,16 +838,14 @@ $(document).ready(function () {
     };
     const tableFieldMap = {
       'action_proc': 'a_proc_', 'action_who': 'a_who_',
-      'action_date': 'a_date_', 'action_time': 'a_time_', 'action_result': 'a_result_',
-      'rca_desc': 'r_desc_', 'rca_cause': 'r_cause_', 'rca_action': 'r_action_',
-      // PA字段由paFieldDefs动态填充
+      'action_date': 'a_date_', 'action_time': 'a_time_', 'action_result': 'a_result_'
     };
     paFieldDefs.forEach(function(f) { tableFieldMap[f.Field_ID] = f.Field_ID + '_'; });
     requiredFields.forEach(function(f) {
+      // 跳过已废弃的 rca_desc/rca_cause/rca_action
+      if (f.id === 'rca_desc' || f.id === 'rca_cause' || f.id === 'rca_action') return;
       let isEmpty = false;
-      if (f.type === 'checkbox') {
-        isEmpty = $('[name=fault_cat]:checked').length === 0;
-      } else if (tableFieldMap[f.id]) {
+      if (tableFieldMap[f.id]) {
         isEmpty = $('[name^=' + tableFieldMap[f.id] + ']').toArray().every(function(el) {
           return !$(el).val() || $(el).val().trim() === '';
         });
@@ -556,6 +857,16 @@ $(document).ready(function () {
       }
       if (isEmpty) missing.push(f.label);
     });
+
+    // RCA 至少一行有内容
+    syncRcaRowsFromDom();
+    const rcaHasContent = rcaState.rows.some(function(r) {
+      return r.some(function(cell) { return String(cell || '').trim(); });
+    });
+    if (!rcaHasContent) {
+      missing.push('根本原因分析 / RCA Analysis');
+    }
+
     if (missing.length > 0) {
       Swal.fire({
         title: '必填项未完成 / Required Fields Missing',
@@ -582,7 +893,7 @@ $(document).ready(function () {
 
     if (followupRowErrors.length > 0) {
       Swal.fire({
-        title: '预防对策未填写完整 / PA Row Incomplete',
+        title: 'CAPA 未填写完整 / CAPA Row Incomplete',
         html: '<div style="text-align:left">以下行已开始填写但未完整：<br/>Rows started but incomplete:<ul style="margin-top:6px">' +
           followupRowErrors.map(function(m){ return '<li>' + m + '</li>'; }).join('') +
           '</ul></div>',
@@ -594,8 +905,8 @@ $(document).ready(function () {
 
     if (followupCompleteCount === 0) {
       Swal.fire({
-        title: '缺少预防对策 / Missing Follow-up',
-        text: '请至少完整填写1条预防对策（PA）后再提交 / Please complete at least one PA row before submit.',
+        title: '缺少 CAPA / Missing Follow-up',
+        text: '请至少完整填写1条 CAPA 后再提交 / Please complete at least one CAPA row before submit.',
         icon: 'warning',
         confirmButtonText: '确定 / OK'
       });

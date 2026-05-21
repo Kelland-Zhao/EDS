@@ -326,8 +326,11 @@ function submitFailureReport(dataStr) {
     const machineNo = String(values[rowIndex - 1][1] || '').trim();
     const dataForSheet = Object.assign({}, data);
     delete dataForSheet.photo;
+    delete dataForSheet.fault_category;
     delete dataForSheet.fault_category_text;
     delete dataForSheet._editMode;
+    // 移除旧 rca 数组（新报告改用 rca_json）
+    if (dataForSheet.rca_json) delete dataForSheet.rca;
     ws.getRange(rowIndex, 11).setValue(JSON.stringify(dataForSheet));
 
     // 编辑模式：删除旧 PDF + 版本化文件名
@@ -571,24 +574,82 @@ function buildReportHtml_(data) {
       '</tr>';
   });
 
-  let rcaRows = '';
-  (data.rca || []).forEach(function(r, i) {
-    rcaRows += '<tr>' +
-      '<td style="' + td + 'text-align:center;font-weight:bold">Why' + (i+1) + '</td>' +
-      '<td style="' + td + '">' + e(r.desc) + '&nbsp;</td>' +
-      '<td style="' + td + '">' + e(r.cause) + '&nbsp;</td>' +
-      '<td style="' + td + '">' + e(r.action) + '&nbsp;</td>' +
-      '</tr>';
-  });
+  // RCA：优先使用 rca_json (新格式动态列)，回退到旧 rca 数组
+  let rcaHeaderRow = '';
+  let rcaBodyRows = '';
+  let rcaFooterRow = '';
+  let rcaColCount = 0;
+  let parsedRca = null;
+  if (data.rca_json) {
+    try { parsedRca = typeof data.rca_json === 'string' ? JSON.parse(data.rca_json) : data.rca_json; } catch (err) {}
+  }
+  if (parsedRca && Array.isArray(parsedRca.columns) && parsedRca.columns.length > 0) {
+    const cols = parsedRca.columns;
+    rcaColCount = cols.length;
+    // 计算同类型显示序号
+    const circled = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+    const seen = {};
+    rcaHeaderRow = '<th style="' + th + 'width:55px">层<br>Level</th>';
+    cols.forEach(function(col) {
+      seen[col.type] = (seen[col.type] || 0) + 1;
+      const idx = seen[col.type];
+      const enLabel = col.type === '管理系统' ? 'Management System' : 'Technical System';
+      rcaHeaderRow += '<th style="' + th + '">' + e(col.type) + (circled[idx - 1] || '(' + idx + ')') + '<br>' + enLabel + '</th>';
+    });
+    const rows = parsedRca.rows || [];
+    for (let r = 0; r < 5; r++) {
+      rcaBodyRows += '<tr><td style="' + td + 'text-align:center;font-weight:bold">Why' + (r+1) + '</td>';
+      for (let c = 0; c < cols.length; c++) {
+        const val = (rows[r] && rows[r][c]) || '';
+        rcaBodyRows += '<td style="' + td + '">' + e(val) + '&nbsp;</td>';
+      }
+      rcaBodyRows += '</tr>';
+    }
+    rcaFooterRow = '<tr><td style="' + td + 'text-align:center;font-weight:bold">根本原因<br>Root Cause</td>';
+    cols.forEach(function(col) {
+      rcaFooterRow += '<td style="' + td + 'text-align:center">' + e(col.rootCause || '') + '&nbsp;</td>';
+    });
+    rcaFooterRow += '</tr>';
+  } else {
+    // 旧格式回退
+    rcaHeaderRow = '<th style="' + th + 'width:55px">层<br>Level</th>'
+      + '<th style="' + th + '">描述 (Description)</th>'
+      + '<th style="' + th + '">原因分析 (Cause)</th>'
+      + '<th style="' + th + '">行动 (Action)</th>';
+    rcaColCount = 3;
+    (data.rca || []).forEach(function(r, i) {
+      rcaBodyRows += '<tr>' +
+        '<td style="' + td + 'text-align:center;font-weight:bold">Why' + (i+1) + '</td>' +
+        '<td style="' + td + '">' + e(r.desc) + '&nbsp;</td>' +
+        '<td style="' + td + '">' + e(r.cause) + '&nbsp;</td>' +
+        '<td style="' + td + '">' + e(r.action) + '&nbsp;</td>' +
+        '</tr>';
+    });
+  }
 
-  let paHeader = '<tr><th style="' + th + 'width:90px">\u5e8f\u53f7<br>No.</th>';
+  // \u6784\u5efa RCA \u5217 ID \u2192 \u663e\u793a\u6807\u7b7e \u6620\u5c04\uff08\u7528\u4e8e CAPA \u95ee\u9898\u6839\u56e0\u5217\uff09
+  const rcaIdToLabel = {};
+  if (parsedRca && Array.isArray(parsedRca.columns)) {
+    const circled2 = ['\u2460','\u2461','\u2462','\u2463','\u2464','\u2465','\u2466','\u2467','\u2468','\u2469'];
+    const seen2 = {};
+    parsedRca.columns.forEach(function(col) {
+      seen2[col.type] = (seen2[col.type] || 0) + 1;
+      const lbl = col.type + (circled2[seen2[col.type] - 1] || '(' + seen2[col.type] + ')') + (col.rootCause ? ' - ' + col.rootCause : '');
+      rcaIdToLabel[col.id] = lbl;
+    });
+  }
+
+  let paHeader = '<tr><th style="' + th + 'width:110px">\u7c7b\u578b<br>Type</th>'
+    + '<th style="' + th + 'width:140px">\u95ee\u9898\u6839\u56e0<br>Problem Root Cause</th>';
   (data.pa_fields || []).forEach(function(f) {
     paHeader += '<th style="' + th + '">' + e(f.cn) + '<br>' + e(f.en) + '</th>';
   });
   paHeader += '</tr>';
   let paRows = '';
   (data.pa || []).forEach(function(p) {
-    let cells = '<td style="' + td + 'font-weight:bold">' + e(p.type) + '</td>';
+    const rootCauseLabel = p.problem_root_cause ? (rcaIdToLabel[p.problem_root_cause] || p.problem_root_cause) : '';
+    let cells = '<td style="' + td + 'font-weight:bold">' + e(p.type) + '</td>'
+      + '<td style="' + td + '">' + e(rootCauseLabel) + '&nbsp;</td>';
     (data.pa_fields || []).forEach(function(f) {
       let v = p[f.id];
       if (/who|verifier/i.test(String(f.id || ''))) v = displayNameOnly(v);
@@ -597,8 +658,6 @@ function buildReportHtml_(data) {
     });
     paRows += '<tr>' + cells + '</tr>';
   });
-
-  const cats = data.fault_category_text || (data.fault_category || '').split(',').filter(function(v){return v;}).join(' / ');
 
   const photoContent = data.photo
     ? '<img src="' + data.photo + '" width="160" height="120" style="display:block;width:160px;height:120px;object-fit:contain;">'
@@ -639,15 +698,15 @@ function buildReportHtml_(data) {
     '<th style="' + th + 'width:70px">责任人<br>Who</th><th style="' + th + 'width:85px">日期<br>Date</th>' +
     '<th style="' + th + 'width:55px">时间<br>(min)</th><th style="' + th + 'width:45px">结果<br>Y/N</th></tr>' +
     actionRows + '</table>' +
-    '<div style="font-size:9pt;margin-bottom:10px"><b>故障分类 Fault Category: </b>' + (e(cats) || '&nbsp;') + '</div>' +
 
     '<div style="' + sec + '">根本原因分析 / RCA Analysis</div>' +
     '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">' +
-    '<tr><th style="' + th + 'width:55px">层<br>Level</th><th style="' + th + '">描述 (Description)</th>' +
-    '<th style="' + th + '">原因分析 (Cause)</th><th style="' + th + '">行动 (Action)</th></tr>' +
-    rcaRows + '</table>' +
+    '<tr>' + rcaHeaderRow + '</tr>' +
+    rcaBodyRows +
+    rcaFooterRow +
+    '</table>' +
 
-    '<div style="' + sec + '">预防对策 / Preventive Action</div>' +
+    '<div style="' + sec + '">纠正预防措施 / Corrective &amp; Preventive Action</div>' +
     '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">' +
     paHeader + paRows + '</table>' +
     '</body></html>';
@@ -6663,11 +6722,27 @@ function getFailureReportProgressData(userEmail, userName) {
       "1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU";
     const spreadsheet = SpreadsheetApp.openById(failureDatabaseSpreadsheetId);
     const failureDatabaseSheet = spreadsheet.getSheetByName("Failure_Database");
+    const followupSheet = spreadsheet.getSheetByName("Failure_Report_followup");
 
     if (!failureDatabaseSheet) {
       throw new Error(
         "Failure_Database sheet未找到 / Failure_Database sheet not found"
       );
+    }
+
+    // 一次性拉取 followup 全表并聚合为 Map（避免 N×M 全表扫描）
+    const verifyMap = new Map();
+    if (followupSheet) {
+      const followData = followupSheet.getDataRange().getValues();
+      for (let i = 1; i < followData.length; i++) {
+        const reportNo = String(followData[i][1] || '').trim();
+        if (!reportNo) continue;
+        const status = String(followData[i][8] || '').trim();
+        if (!verifyMap.has(reportNo)) verifyMap.set(reportNo, { pass: 0, total: 0 });
+        const agg = verifyMap.get(reportNo);
+        agg.total++;
+        if (status === '已通过 / Passed') agg.pass++;
+      }
     }
 
     // 获取所有数据
@@ -6766,6 +6841,21 @@ function getFailureReportProgressData(userEmail, userName) {
       const attachments = row[9] || ""; // 附件
       const responsiblePerson = String(row[11] || '').trim(); // 责任人（第12列，索引11）
       const existingCompletionDays = String(row[12] || '').trim(); // 已有的完成天数（列13）
+      const repairTime = String(row[13] || '').trim(); // 维修时间 / MDT（列14）
+
+      // 验证进度（从 followup Map 聚合）+ 状态三态
+      const verifyAgg = verifyMap.get(String(failureReportNumber).trim()) || { pass: 0, total: 0 };
+      const verifyPassed = verifyAgg.pass;
+      const verifyTotal = verifyAgg.total;
+      const hasAttachment = !!(attachments && String(attachments).trim() !== '');
+      let progressStatus = '未上传 / Not Uploaded';
+      if (hasAttachment) {
+        if (verifyTotal === 0 || verifyPassed >= verifyTotal) {
+          progressStatus = '已完成 / Completed';
+        } else {
+          progressStatus = '已上传 / Uploaded';
+        }
+      }
 
       // 计算完成天数
       // 已上传且有已有值：复用，不重新计算；未上传或无值：动态计算
@@ -6813,51 +6903,29 @@ function getFailureReportProgressData(userEmail, userName) {
       }
 
       // 根据工序分类数据
+      const baseItem = {
+        failureReportNumber: failureReportNumber,
+        workshop: workshop,
+        machineNo: machineNo,
+        submitDate: submitDate,
+        problemDescription: problemDescription,
+        assignmentDate: assignmentDate,
+        completionDays: completionDays,
+        uploadDate: uploadDate,
+        attachments: attachments,
+        responsiblePerson: responsiblePerson,
+        repairTime: repairTime,
+        verifyTotal: verifyTotal,
+        verifyPassed: verifyPassed,
+        progressStatus: progressStatus,
+        hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
+      };
       if (process === "IM" || process === "INJ") {
-        result.IM.push({
-          failureReportNumber: failureReportNumber,
-          workshop: workshop,
-          process: "IM",
-          machineNo: machineNo,
-          submitDate: submitDate,
-          problemDescription: problemDescription,
-          assignmentDate: assignmentDate,
-          completionDays: completionDays,
-          uploadDate: uploadDate,
-          attachments: attachments,
-          responsiblePerson: responsiblePerson,
-          hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
-        });
+        result.IM.push(Object.assign({ process: "IM" }, baseItem));
       } else if (process === "TF") {
-        result.TF.push({
-          failureReportNumber: failureReportNumber,
-          workshop: workshop,
-          process: "TF",
-          machineNo: machineNo,
-          submitDate: submitDate,
-          problemDescription: problemDescription,
-          assignmentDate: assignmentDate,
-          completionDays: completionDays,
-          uploadDate: uploadDate,
-          attachments: attachments,
-          responsiblePerson: responsiblePerson,
-          hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
-        });
+        result.TF.push(Object.assign({ process: "TF" }, baseItem));
       } else if (process === "PK") {
-        result.PK.push({
-          failureReportNumber: failureReportNumber,
-          workshop: workshop,
-          process: "PK",
-          machineNo: machineNo,
-          submitDate: submitDate,
-          problemDescription: problemDescription,
-          assignmentDate: assignmentDate,
-          completionDays: completionDays,
-          uploadDate: uploadDate,
-          attachments: attachments,
-          responsiblePerson: responsiblePerson,
-          hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
-        });
+        result.PK.push(Object.assign({ process: "PK" }, baseItem));
       }
     }
 
@@ -6947,11 +7015,13 @@ function writeToFailureDatabase(rowData, process, responsiblePerson) {
     let submitDateValue = "";
     let workshop = "";
     let processName = process;
+    let repairTime = "";
 
     if (Array.isArray(rowData)) {
       reportNo = rowData[0] || "";
       machineNo = rowData[2] || "";
       problemDescription = rowData[3] || "";
+      repairTime = rowData[7] != null ? String(rowData[7]) : "";
       submitDateValue = rowData[11] || "";
       workshop = rowData[14] || "";
       processName = rowData[15] || process;
@@ -6959,6 +7029,7 @@ function writeToFailureDatabase(rowData, process, responsiblePerson) {
       reportNo = rowData.reportNo || rowData.failureReportNumber || "";
       machineNo = rowData.machineNo || "";
       problemDescription = rowData.problemDescription || "";
+      repairTime = rowData.repairTime != null ? String(rowData.repairTime) : "";
       submitDateValue = rowData.submitDate || "";
       workshop = rowData.workshop || "";
       processName = rowData.process || process;
@@ -7042,6 +7113,14 @@ function writeToFailureDatabase(rowData, process, responsiblePerson) {
       completionDaysHeader.setValue("完成天数");
     }
     failureDatabaseSheet.getRange(nextRow, COMPLETION_DAYS_COL).setValue(0);
+
+    // 维修时间 / MDT (列14)：用于 Template 页面回填，不可编辑
+    const REPAIR_TIME_COL = 14;
+    const repairTimeHeader = failureDatabaseSheet.getRange(1, REPAIR_TIME_COL);
+    if (!repairTimeHeader.getValue()) {
+      repairTimeHeader.setValue("维修时间 / Repair Time");
+    }
+    failureDatabaseSheet.getRange(nextRow, REPAIR_TIME_COL).setValue(repairTime);
 
     console.log(
       "成功写入Failure_Database sheet / Successfully wrote to Failure_Database sheet"
@@ -7313,7 +7392,8 @@ function getFollowupRecords() {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[13] || '')  // Column N - 跟进内容
+        String(row[13] || ''),  // Column N - 跟进内容
+        String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
 
       if (!formattedRow[0]) {
@@ -7423,7 +7503,8 @@ function updateFollowupFieldValue(followupId, fieldKey, value) {
       paWho: 5,
       paVerifier: 7,
       status: 9,
-      followupContent: 14
+      followupContent: 14,
+      verifyReply: 15
     };
 
     if (!fieldMap.hasOwnProperty(fieldKey)) {
@@ -7499,6 +7580,143 @@ function updateFollowupFieldValue(followupId, fieldKey, value) {
       success: false,
       message: '更新跟进字段失败 / Failed to update follow-up field: ' + error.toString()
     };
+  }
+}
+
+/**
+ * 验证页面"保存"按钮入口：同步保存验证状态 + 验证回复，并触发邮件通知
+ * Save verification status + reply in one call, then trigger notification email.
+ * @param {string} followupId
+ * @param {string} status
+ * @param {string} verifyReply
+ * @param {string} verifierName
+ */
+function saveVerifyStatusAndReply(followupId, status, verifyReply, verifierName) {
+  try {
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+    if (!wsFollow) throw new Error('Failure_Report_followup sheet未找到');
+
+    const data = wsFollow.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(followupId).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('未找到跟进ID: ' + followupId);
+
+    const allowedStatus = ['进行中 / Ongoing', '已完成 / Completed', '未验证 / Not Verified', '未通过 / Not Passed', '已通过 / Passed'];
+    const normalizedStatus = String(status || '').trim();
+    if (!allowedStatus.includes(normalizedStatus)) {
+      throw new Error('状态值无效: ' + normalizedStatus);
+    }
+    const normalizedReply = String(verifyReply == null ? '' : verifyReply);
+
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const nowYmd = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+    wsFollow.getRange(rowIndex, 9).setValue(normalizedStatus);   // I列 status
+    wsFollow.getRange(rowIndex, 15).setValue(normalizedReply);   // O列 verify_reply
+    wsFollow.getRange(rowIndex, 11).setValue(nowYmd);            // K列 updated_date
+
+    // 触发邮件通知
+    try {
+      sendVerifyReplyNotification(followupId, normalizedStatus, normalizedReply, verifierName || '');
+    } catch (mailErr) {
+      console.error('sendVerifyReplyNotification 发送失败:', mailErr);
+    }
+
+    return { success: true, updatedDate: nowYmd };
+  } catch (error) {
+    console.error('saveVerifyStatusAndReply 失败:', error);
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+ * 验证操作邮件通知
+ * 状态 = 已通过 / 未通过 / 未验证 三态均发送
+ * 收件人：paWho（责任人），抄送：paVerifier（验证人自己）
+ */
+function sendVerifyReplyNotification(followupId, newStatus, verifyReply, verifierName) {
+  try {
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+    if (!wsFollow) return;
+    const data = wsFollow.getDataRange().getValues();
+    let target = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(followupId).trim()) {
+        target = data[i];
+        break;
+      }
+    }
+    if (!target) return;
+
+    const failureReportNo = String(target[1] || '');
+    const paType         = String(target[2] || '');
+    const paPlan         = String(target[3] || '');
+    const paWho          = String(target[4] || '');
+    const paVerifier     = String(target[6] || '');
+
+    const extractEmail = function(s) {
+      const m = String(s || '').match(/【([^】]+)】/);
+      return m ? m[1].trim() : '';
+    };
+    const extractName = function(s) {
+      return String(s || '').replace(/\s*【[^】]*】\s*$/, '').trim();
+    };
+
+    const toEmail = extractEmail(paWho);
+    const ccEmail = extractEmail(paVerifier);
+    if (!toEmail) {
+      console.log('paWho 无邮箱，跳过通知 / paWho missing email, skip notification');
+      return;
+    }
+
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+    let statusColor = '#6c757d';
+    if (newStatus === '已通过 / Passed') statusColor = '#28a745';
+    else if (newStatus === '未通过 / Not Passed') statusColor = '#dc3545';
+
+    const subject = '【故障报告验证】' + failureReportNo + ' - ' + newStatus;
+    const webPage = getReleaseWebPage();
+    const replyText = (verifyReply && String(verifyReply).trim()) ? String(verifyReply) : '（无 / None）';
+
+    const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+      + '<div style="background:#fff0f0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid #E60012;">'
+      + '<h2 style="color:#E60012;text-align:center;margin-bottom:20px;border-bottom:3px solid #E60012;padding-bottom:10px;">'
+      + '【故障报告验证通知】<br><span style="font-size:0.8em;">Failure Report Verification Notification</span></h2>'
+      + '<p style="font-size:15px;line-height:1.6;color:#c0392b;">（' + today + '）您的故障报告跟进项已被验证：<br>'
+      + '<span style="font-size:0.9em;opacity:0.85;">Your failure report follow-up has been verified:</span></p>'
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
+      + '<table style="width:100%;border-collapse:collapse;margin-bottom:8px;">'
+      + '<tr><td style="padding:8px 12px;width:160px;font-weight:600;color:#555;">故障报告编号 / Report No.</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(failureReportNo) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">跟进ID / Follow-up ID</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(followupId) + '</td></tr>'
+      + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">PA类型 / PA Type</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(paType) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;vertical-align:top;">预防性措施 / PA Action</td><td style="padding:8px 12px;color:#2c3e50;white-space:pre-wrap;">' + escapeHtml(paPlan) + '</td></tr>'
+      + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">验证状态 / Status</td><td style="padding:8px 12px;"><span style="display:inline-block;padding:4px 12px;border-radius:14px;color:#fff;font-weight:600;background:' + statusColor + ';">' + escapeHtml(newStatus) + '</span></td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;vertical-align:top;">验证回复 / Verification Reply</td><td style="padding:8px 12px;color:#2c3e50;white-space:pre-wrap;">' + escapeHtml(replyText) + '</td></tr>'
+      + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">验证人 / Verifier</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(verifierName || extractName(paVerifier)) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">更新日期 / Updated</td><td style="padding:8px 12px;color:#2c3e50;font-family:monospace;">' + escapeHtml(today) + '</td></tr>'
+      + '</table>'
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:20px;text-align:center;">'
+      + '<p style="margin-bottom:12px;"><a href="' + webPage + '?v=FailureReport_Followup_Manage" style="background:#E60012;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">点击查看跟进 / View Follow-up</a></p>'
+      + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
+      + '</div></div>';
+
+    const options = { htmlBody: htmlBody };
+    if (ccEmail && ccEmail.toLowerCase() !== toEmail.toLowerCase()) options.cc = ccEmail;
+    GmailApp.sendEmail(toEmail, subject, '', options);
+    console.log('验证通知已发送 / Verify reply notification sent to:', toEmail, 'cc:', ccEmail);
+  } catch (e) {
+    console.error('sendVerifyReplyNotification error:', e);
   }
 }
 
@@ -8091,7 +8309,8 @@ function getFollowupRecordsForResponsiblePerson(userName) {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[13] || '')  // Column N - 跟进内容
+        String(row[13] || ''),  // Column N - 跟进内容
+        String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
 
       if (!formattedRow[0]) {
@@ -8175,7 +8394,8 @@ function getFollowupRecordsForVerifier(userName) {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[13] || '')  // Column N - 跟进内容
+        String(row[13] || ''),  // Column N - 跟进内容
+        String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
 
       if (!formattedRow[0]) {

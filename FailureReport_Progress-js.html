@@ -107,23 +107,43 @@ function initializeTables() {
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
-                data: 'attachments',
-                title: buildBilingualTitle('附件', 'Attachments'),
-                render: function(data, type, row) {
-                    if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
-                    } else {
-                        return `<span class="badge bg-warning">未上传<br>Not Uploaded</span>`;
+                data: null,
+                title: buildBilingualTitle('验证进度', 'Verify Progress'),
+                className: 'text-center align-middle',
+                orderable: false,
+                render: function(_d, type, row) {
+                    var total = parseInt(row.verifyTotal) || 0;
+                    var passed = parseInt(row.verifyPassed) || 0;
+                    if (total === 0) {
+                        return '<span class="badge" style="background:#6c757d;color:#fff;">-</span>';
                     }
+                    var color = (passed === total && total > 0) ? '#28a745' : '#0d6efd';
+                    return '<span class="badge" style="background:' + color + ';color:#fff;font-size:0.78rem;">' + passed + ' / ' + total + '</span>';
+                }
+            },
+            {
+                data: 'progressStatus',
+                title: buildBilingualTitle('状态', 'Status'),
+                className: 'text-center align-middle',
+                render: function(data, type, row) {
+                    var s = String(data || '');
+                    if (s.indexOf('已完成') > -1) {
+                        return '<span class="badge bg-success">已完成<br>Completed</span>';
+                    }
+                    if (s.indexOf('已上传') > -1) {
+                        return '<span class="badge bg-warning text-dark">已上传<br>Uploaded</span>';
+                    }
+                    return '<span class="badge bg-danger">未上传<br>Not Uploaded</span>';
                 }
             },
             {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
+                className: 'text-center align-middle',
                 orderable: false,
                 render: function(data, type, row) {
                     if (row.hasFormData) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑<br>Edit</button>';
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
                     }
                     return '';
                 }
@@ -155,23 +175,43 @@ function initializeTables() {
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
-                data: 'attachments',
-                title: buildBilingualTitle('附件', 'Attachments'),
-                render: function(data, type, row) {
-                    if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
-                    } else {
-                        return `<span class="badge bg-warning">未上传<br>Not Uploaded</span>`;
+                data: null,
+                title: buildBilingualTitle('验证进度', 'Verify Progress'),
+                className: 'text-center align-middle',
+                orderable: false,
+                render: function(_d, type, row) {
+                    var total = parseInt(row.verifyTotal) || 0;
+                    var passed = parseInt(row.verifyPassed) || 0;
+                    if (total === 0) {
+                        return '<span class="badge" style="background:#6c757d;color:#fff;">-</span>';
                     }
+                    var color = (passed === total && total > 0) ? '#28a745' : '#0d6efd';
+                    return '<span class="badge" style="background:' + color + ';color:#fff;font-size:0.78rem;">' + passed + ' / ' + total + '</span>';
+                }
+            },
+            {
+                data: 'progressStatus',
+                title: buildBilingualTitle('状态', 'Status'),
+                className: 'text-center align-middle',
+                render: function(data, type, row) {
+                    var s = String(data || '');
+                    if (s.indexOf('已完成') > -1) {
+                        return '<span class="badge bg-success">已完成<br>Completed</span>';
+                    }
+                    if (s.indexOf('已上传') > -1) {
+                        return '<span class="badge bg-warning text-dark">已上传<br>Uploaded</span>';
+                    }
+                    return '<span class="badge bg-danger">未上传<br>Not Uploaded</span>';
                 }
             },
             {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
+                className: 'text-center align-middle',
                 orderable: false,
                 render: function(data, type, row) {
                     if (row.hasFormData) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑<br>Edit</button>';
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
                     }
                     return '';
                 }
@@ -203,23 +243,43 @@ function initializeTables() {
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
-                data: 'attachments',
-                title: buildBilingualTitle('附件', 'Attachments'),
-                render: function(data, type, row) {
-                    if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
-                    } else {
-                        return `<span class="badge bg-warning">未上传<br>Not Uploaded</span>`;
+                data: null,
+                title: buildBilingualTitle('验证进度', 'Verify Progress'),
+                className: 'text-center align-middle',
+                orderable: false,
+                render: function(_d, type, row) {
+                    var total = parseInt(row.verifyTotal) || 0;
+                    var passed = parseInt(row.verifyPassed) || 0;
+                    if (total === 0) {
+                        return '<span class="badge" style="background:#6c757d;color:#fff;">-</span>';
                     }
+                    var color = (passed === total && total > 0) ? '#28a745' : '#0d6efd';
+                    return '<span class="badge" style="background:' + color + ';color:#fff;font-size:0.78rem;">' + passed + ' / ' + total + '</span>';
+                }
+            },
+            {
+                data: 'progressStatus',
+                title: buildBilingualTitle('状态', 'Status'),
+                className: 'text-center align-middle',
+                render: function(data, type, row) {
+                    var s = String(data || '');
+                    if (s.indexOf('已完成') > -1) {
+                        return '<span class="badge bg-success">已完成<br>Completed</span>';
+                    }
+                    if (s.indexOf('已上传') > -1) {
+                        return '<span class="badge bg-warning text-dark">已上传<br>Uploaded</span>';
+                    }
+                    return '<span class="badge bg-danger">未上传<br>Not Uploaded</span>';
                 }
             },
             {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
+                className: 'text-center align-middle',
                 orderable: false,
                 render: function(data, type, row) {
                     if (row.hasFormData) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '">编辑<br>Edit</button>';
+                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
                     }
                     return '';
                 }
@@ -300,6 +360,10 @@ function processFailureReportProgressData(data) {
                 uploadDate: formatDate(item.uploadDate) || '',
                 completionDays: item.completionDays || '',
                 attachments: item.attachments || '',
+                verifyTotal: typeof item.verifyTotal === 'number' ? item.verifyTotal : 0,
+                verifyPassed: typeof item.verifyPassed === 'number' ? item.verifyPassed : 0,
+                progressStatus: item.progressStatus || '',
+                responsiblePerson: item.responsiblePerson || '',
                 hasFormData: item.hasFormData || false
             }));
             imTable.rows.add(imData).draw();
@@ -319,6 +383,10 @@ function processFailureReportProgressData(data) {
                 uploadDate: formatDate(item.uploadDate) || '',
                 completionDays: item.completionDays || '',
                 attachments: item.attachments || '',
+                verifyTotal: typeof item.verifyTotal === 'number' ? item.verifyTotal : 0,
+                verifyPassed: typeof item.verifyPassed === 'number' ? item.verifyPassed : 0,
+                progressStatus: item.progressStatus || '',
+                responsiblePerson: item.responsiblePerson || '',
                 hasFormData: item.hasFormData || false
             }));
             tfTable.rows.add(tfData).draw();
@@ -338,6 +406,10 @@ function processFailureReportProgressData(data) {
                 uploadDate: formatDate(item.uploadDate) || '',
                 completionDays: item.completionDays || '',
                 attachments: item.attachments || '',
+                verifyTotal: typeof item.verifyTotal === 'number' ? item.verifyTotal : 0,
+                verifyPassed: typeof item.verifyPassed === 'number' ? item.verifyPassed : 0,
+                progressStatus: item.progressStatus || '',
+                responsiblePerson: item.responsiblePerson || '',
                 hasFormData: item.hasFormData || false
             }));
             pkTable.rows.add(pkData).draw();
@@ -374,11 +446,14 @@ $(document).on('click', '.edit-progress-btn', function() {
     const reportId = $(this).data('id');
     const machineNo = $(this).data('machine');
     const desc = $(this).data('desc');
+    const responsibleEncoded = String($(this).data('responsible') || '');
+    const responsible = responsibleEncoded ? decodeURIComponent(responsibleEncoded) : '';
     const base = sessionStorage.getItem('siWebPage') || '';
-    const url = base + '?v=FailureReport_Template&editMode=1'
+    let url = base + '?v=FailureReport_Template&editMode=1'
         + '&reportId=' + encodeURIComponent(reportId)
         + '&machineNo=' + encodeURIComponent(machineNo)
         + '&desc=' + encodeURIComponent(desc);
+    if (responsible) url += '&responsible=' + encodeURIComponent(responsible);
     window.open(url);
 });
 
