@@ -13,6 +13,11 @@ Route.path = function (route, callback) {
 };
 
 function doGet(e) {
+  // Handle project tracking approval/rejection actions via email links
+  if (e.parameters.action === 'approve' || e.parameters.action === 'reject') {
+    return handleApprovalAction(e.parameters.action, e.parameters.token);
+  }
+
   Route.path("PM_Plan", loadPM_Plan);
   Route.path("PMtask", loadPM_Task);
   Route.path("Shift", loadShift);
@@ -9906,6 +9911,8 @@ const PROJECT_MILESTONE_COLS = [
 const PROJECT_STATUS_COL = 17;
 const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
 const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理
+const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
+const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10051,7 +10058,18 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
           ws.getRange(rowIndex, plannedCol + 1).setValue(pd.planned || 'NA');
         }
       });
-      if (plannedChanges.length > 0) changes.plannedDates = plannedChanges;
+      if (plannedChanges.length > 0) {
+        changes.plannedDates = plannedChanges;
+        // Record planned date change history
+        const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+        if (historyWs) {
+          const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+          const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+          plannedChanges.forEach(function(pc) {
+            historyWs.appendRow([projectName, pc.name, pc.old, pc.new, editorName, now, '']);
+          });
+        }
+      }
     }
 
     if (Object.keys(changes).length > 0) {
@@ -10090,11 +10108,27 @@ function sendPlannedDateChangeNotification(projectName, editorName, plannedDates
     const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
     const subject = '【项目跟进】计划日期变更通知 / Planned Date Change - ' + projectName;
     let rows = '';
+    // Read tracking sheet to get old planned dates from history
+    const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const historyWs = trackSs.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
     plannedDates.forEach(function(pd, i) {
       if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
+        var oldDate = '';
+        if (historyWs) {
+          var hData = historyWs.getDataRange().getValues();
+          for (var h = hData.length - 1; h >= 0; h--) {
+            if (String(hData[h][0] || '').trim() === projectName
+              && String(hData[h][1] || '').trim() === PROJECT_MILESTONE_COLS[pd.index].name) {
+              var ov = hData[h][2];
+              oldDate = ov instanceof Date ? Utilities.formatDate(ov, tz, 'yyyy-MM-dd') : String(ov || '');
+              break;
+            }
+          }
+        }
         rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">'
           + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(PROJECT_MILESTONE_COLS[pd.index].name) + '</td>'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#34495e;font-family:monospace;">' + escapeHtml(pd.planned || 'NA') + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#777;font-family:monospace;">' + escapeHtml(oldDate || 'NA') + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#34495e;font-family:monospace;font-weight:600;">' + escapeHtml(pd.planned || 'NA') + '</td>'
           + '</tr>';
       }
     });
@@ -10115,7 +10149,8 @@ function sendPlannedDateChangeNotification(projectName, editorName, plannedDates
       + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
       + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
       + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">新计划日期 / New Planned Date</th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">原计划 / Old</th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">新计划 / New</th>'
       + '</tr></thead>'
       + '<tbody>' + rows + '</tbody>'
       + '</table></div></div>'
@@ -10184,10 +10219,16 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
     if (changes.milestones && changes.milestones.length > 0) {
       let rows = '';
       changes.milestones.forEach(function(ms, i) {
+        var isFutureDate = false;
+        var nd = ms.new;
+        if (nd && nd !== '空/Empty' && nd !== 'NA' && nd > today) isFutureDate = true;
         rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">'
           + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(ms.name) + '</td>'
           + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#777;font-family:monospace;">' + escapeHtml(fmtDate(ms.old) || '空/Empty') + '</td>'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-family:monospace;font-weight:600;">' + escapeHtml(fmtDate(ms.new) || '空/Empty') + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-family:monospace;font-weight:600;">'
+          + escapeHtml(fmtDate(ms.new) || '空/Empty')
+          + (isFutureDate ? ' &nbsp;<span style="background:#fff3cd;color:#856404;font-size:11px;padding:2px 6px;border-radius:3px;">⚠️ 计划时间推迟 / Planned Delayed</span>' : '')
+          + '</td>'
           + '</tr>';
       });
       sectionsHtml += '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">里程碑实际完成日期更新 / Milestone Actual Date Update</h3>'
@@ -10209,6 +10250,18 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
           + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-family:monospace;font-weight:600;">' + escapeHtml(pd.new) + '</td>'
           + '</tr>';
       });
+      // Check for future planned dates and add warning
+      var hasFuturePlanned = changes.plannedDates.some(function(pd) {
+        var nd = pd.new;
+        return nd && nd !== 'NA' && nd > today;
+      });
+      if (hasFuturePlanned) {
+        rows += '<tr><td colspan="3" style="padding:8px 12px;background:#fff3cd;color:#856404;font-size:12px;">'
+          + '⚠️ <strong>计划时间推迟 / Planned Delayed</strong> — '
+          + '部分里程碑的新计划日期晚于当前日期。<br>'
+          + '<span style="font-size:11px;opacity:0.8;">Some milestones have new planned dates later than today. Plan may be delayed.</span>'
+          + '</td></tr>';
+      }
       sectionsHtml += '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">里程碑计划日期变更 / Planned Date Change</h3>'
         + '<div style="overflow-x:auto;">'
         + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
@@ -10260,7 +10313,7 @@ function checkProjectPermission(userName) {
       const name = String(vals[i][1] || '').trim();
       if (name === userName) {
         const perm = String(vals[i][PROJECT_PERMISSION_COL] || '').trim();
-        if (perm === '超级用户' || perm === '管理员') {
+        if (perm === '管理员') {
           return JSON.stringify({ isAdmin: true, userLevel: '管理员 / Admin' });
         }
         break;
@@ -10269,6 +10322,67 @@ function checkProjectPermission(userName) {
     return JSON.stringify({ isAdmin: false, userLevel: '普通用户 / User' });
   } catch (e) {
     return JSON.stringify({ isAdmin: false, userLevel: '普通用户 / User' });
+  }
+}
+
+/**
+ * 获取指定项目的计划日期变更历史
+ * Get planned date change history for a project
+ * @param {string} projectName - 项目名称
+ * @returns {string} JSON array
+ */
+function getPlannedDateHistory(projectName) {
+  try {
+    const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const ws = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+    if (!ws) return JSON.stringify([]);
+    const data = ws.getDataRange().getValues();
+    if (data.length < 2) return JSON.stringify([]);
+    const rows = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (String(row[0] || '').trim() === projectName) {
+        rows.push({
+          projectName: row[0],
+          milestone: row[1],
+          oldDate: row[2] instanceof Date ? Utilities.formatDate(row[2], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(row[2] || ''),
+          newDate: row[3] instanceof Date ? Utilities.formatDate(row[3], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(row[3] || ''),
+          editor: row[4],
+          modifiedTime: row[5] instanceof Date ? Utilities.formatDate(row[5], Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss') : String(row[5] || ''),
+          note: row[6]
+        });
+      }
+    }
+    rows.reverse();
+    return JSON.stringify(rows);
+  } catch (e) {
+    return JSON.stringify({ error: e.toString() });
+  }
+}
+
+/**
+ * 获取所有项目的计划日期变更历史摘要（用于前端判断是否显示历史图标）
+ * Get summary map of which milestones have planned date change history
+ * @returns {string} JSON object keyed by "ProjectName::MilestoneName"
+ */
+function getPlannedDateHistorySummary() {
+  try {
+    const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const ws = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+    if (!ws) return JSON.stringify({});
+    const data = ws.getDataRange().getValues();
+    if (data.length < 2) return JSON.stringify({});
+    const historyMap = {};
+    for (let i = 1; i < data.length; i++) {
+      const pn = String(data[i][0] || '').trim();
+      const mn = String(data[i][1] || '').trim();
+      if (pn && mn) {
+        historyMap[pn + '::' + mn] = true;
+      }
+    }
+    return JSON.stringify(historyMap);
+  } catch (e) {
+    return JSON.stringify({});
   }
 }
 
@@ -10298,6 +10412,263 @@ function getUserList() {
   } catch(e) {
     return JSON.stringify({ error: e.toString() });
   }
+}
+
+/**
+ * 普通用户申请推迟计划日期
+ * Request planned date delay (non-admin users)
+ * @param {string} projectName - 项目名称
+ * @param {number} milestoneIndex - 里程碑索引
+ * @param {string} newDate - 目标推迟日期 (YYYY-MM-DD)
+ * @param {string} reason - 推迟原因
+ * @param {string} editorName - 申请人姓名
+ * @returns {string} JSON string
+ */
+function requestPlannedDateDelay(projectName, milestoneIndex, newDate, reason, editorName) {
+  try {
+    if (milestoneIndex < 0 || milestoneIndex >= PROJECT_MILESTONE_COLS.length) {
+      return JSON.stringify({ success: false, message: '无效的里程碑索引 / Invalid milestone index' });
+    }
+    const msName = PROJECT_MILESTONE_COLS[milestoneIndex].name;
+    const plannedCol = PROJECT_MILESTONE_COLS[milestoneIndex].planned;
+
+    // Get current planned date
+    const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const trackWs = trackSs.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!trackWs) return JSON.stringify({ success: false, message: '数据表未找到 / Sheet not found' });
+    const trackData = trackWs.getDataRange().getValues();
+    let rowIndex = -1;
+    let oldPlanned = '';
+    for (let i = 1; i < trackData.length; i++) {
+      if (String(trackData[i][0] || '').trim() === projectName) {
+        rowIndex = i + 1;
+        oldPlanned = String(trackData[i][plannedCol] || '').trim();
+        break;
+      }
+    }
+    if (rowIndex < 0) return JSON.stringify({ success: false, message: '项目未找到 / Project not found' });
+
+    // Get user info (email and supervisor email)
+    const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!permWs) return JSON.stringify({ success: false, message: '用户权限表未找到 / User permission sheet not found' });
+    const permVals = permWs.getDataRange().getValues();
+    let userEmail = '';
+    let supervisorEmail = '';
+    for (let i = 2; i < permVals.length; i++) {
+      if (String(permVals[i][1] || '').trim() === editorName) {
+        userEmail = String(permVals[i][9] || '').trim();
+        supervisorEmail = String(permVals[i][60] || '').trim(); // BI column
+        break;
+      }
+    }
+
+    if (!supervisorEmail) {
+      return JSON.stringify({ success: false, message: '未找到直线上级邮箱，请联系管理员设置 / Supervisor email not found' });
+    }
+
+    // Generate token and write to approvals sheet
+    const token = Utilities.getUuid();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+    const approvalsWs = trackSs.getSheetByName(PROJECT_TRACKING_APPROVALS_SHEET_NAME);
+    if (!approvalsWs) return JSON.stringify({ success: false, message: '审批表未找到 / Approvals sheet not found' });
+    approvalsWs.appendRow([token, projectName, msName, oldPlanned, newDate, editorName, userEmail, supervisorEmail, reason, '待审批', now, '']);
+
+    // Send approval email to supervisor
+    const webPage = getReleaseWebPage();
+    const approveUrl = webPage + '?action=approve&token=' + encodeURIComponent(token);
+    const rejectUrl = webPage + '?action=reject&token=' + encodeURIComponent(token);
+    const subject = '【审批申请】计划日期推迟 / Planned Date Delay Request - ' + projectName;
+
+    const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+      + '<div style="background:#fff0f0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid #E60012;">'
+      + '<h2 style="color:#E60012;text-align:center;margin-bottom:20px;border-bottom:3px solid #E60012;padding-bottom:10px;">'
+      + '【审批申请】计划日期推迟<br><span style="font-size:0.8em;">Planned Date Delay Request</span></h2>'
+      + '<p style="font-size:15px;line-height:1.6;color:#c0392b;">' + escapeHtml(editorName) + ' 申请推迟项目里程碑计划日期，请审批：</p>'
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
+      + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+      + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+      + '<th style="padding:10px 12px;text-align:left;">项目 / Project</th>'
+      + '<td style="padding:10px 12px;background:#fff5f5;">' + escapeHtml(projectName) + '</td></tr>'
+      + '<tr><th style="padding:10px 12px;text-align:left;background:linear-gradient(135deg,#E60012,#c0000f);color:white;">里程碑 / Milestone</th>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(msName) + '</td></tr>'
+      + '<tr><th style="padding:10px 12px;text-align:left;background:linear-gradient(135deg,#E60012,#c0000f);color:white;">申请人 / Requester</th>'
+      + '<td style="padding:10px 12px;background:#fff5f5;">' + escapeHtml(editorName) + (userEmail ? ' (' + escapeHtml(userEmail) + ')' : '') + '</td></tr>'
+      + '<tr><th style="padding:10px 12px;text-align:left;background:linear-gradient(135deg,#E60012,#c0000f);color:white;">原计划日期 / Original</th>'
+      + '<td style="padding:10px 12px;font-family:monospace;">' + escapeHtml(oldPlanned || 'NA') + '</td></tr>'
+      + '<tr><th style="padding:10px 12px;text-align:left;background:linear-gradient(135deg,#E60012,#c0000f);color:white;">申请推迟到 / Requested</th>'
+      + '<td style="padding:10px 12px;background:#fff5f5;font-family:monospace;font-weight:600;color:#E60012;">' + escapeHtml(newDate) + '</td></tr>'
+      + '<tr><th style="padding:10px 12px;text-align:left;background:linear-gradient(135deg,#E60012,#c0000f);color:white;">推迟原因 / Reason</th>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(reason) + '</td></tr>'
+      + '</table>'
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;text-align:center;">'
+      + '<p style="font-size:16px;font-weight:600;color:#333;margin-bottom:20px;">请选择操作 / Please choose an action:</p>'
+      + '<a href="' + approveUrl + '" style="display:inline-block;background:#28a745;color:white;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;margin:0 10px;">✅ 批准 / Approve</a>'
+      + '<a href="' + rejectUrl + '" style="display:inline-block;background:#dc3545;color:white;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;margin:0 10px;">❌ 拒绝 / Reject</a>'
+      + '<p style="margin-top:20px;font-size:12px;color:#999;font-style:italic;">此链接仅可点击一次，重复点击将显示"已处理"。<br>This link can only be used once.</p>'
+      + '</div></div>';
+
+    GmailApp.sendEmail(supervisorEmail, subject, '', { htmlBody: htmlBody });
+    console.log('审批邮件已发送至 / Approval email sent to: ' + supervisorEmail);
+
+    return JSON.stringify({ success: true, message: '申请已提交，请等待上级审批 / Request submitted, awaiting supervisor approval' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: '申请失败 / Request failed: ' + e.toString() });
+  }
+}
+
+/**
+ * 处理审批动作（来自邮件链接的 doGet 调用）
+ * Handle approve/reject action from email link
+ * @param {string} action - 'approve' or 'reject'
+ * @param {string} token - approval token
+ * @returns {HtmlOutput} result page
+ */
+function handleApprovalAction(action, token) {
+  try {
+    const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const approvalsWs = trackSs.getSheetByName(PROJECT_TRACKING_APPROVALS_SHEET_NAME);
+    if (!approvalsWs) return createResultPage('错误 / Error', '审批表未找到 / Approvals sheet not found', false);
+
+    const data = approvalsWs.getDataRange().getValues();
+    let rowIdx = -1;
+    let approvalRow = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === token) {
+        rowIdx = i + 1; // 1-based row index
+        approvalRow = data[i];
+        break;
+      }
+    }
+    if (!approvalRow) return createResultPage('无效链接 / Invalid Link', '未找到对应的审批申请，请联系管理员 / Approval request not found', false);
+
+    const status = String(approvalRow[9] || '').trim();
+    if (status !== '待审批') {
+      return createResultPage('已处理 / Already Processed',
+        '此审批申请已处理（状态：' + status + '），无需重复操作。<br>This request has already been processed.',
+        false);
+    }
+
+    const projectName = String(approvalRow[1] || '').trim();
+    const msName = String(approvalRow[2] || '').trim();
+    const oldPlanned = String(approvalRow[3] || '').trim();
+    const newDate = String(approvalRow[4] || '').trim();
+    const requesterName = String(approvalRow[5] || '').trim();
+    const requesterEmail = String(approvalRow[6] || '').trim();
+    const reason = String(approvalRow[8] || '').trim();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+
+    if (action === 'approve') {
+      // Update planned date in tracking sheet
+      const trackWs = trackSs.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+      if (trackWs) {
+        const trackData = trackWs.getDataRange().getValues();
+        for (let i = 1; i < trackData.length; i++) {
+          if (String(trackData[i][0] || '').trim() === projectName) {
+            // Find the milestone column
+            for (let j = 0; j < PROJECT_MILESTONE_COLS.length; j++) {
+              if (PROJECT_MILESTONE_COLS[j].name === msName) {
+                trackWs.getRange(i + 1, PROJECT_MILESTONE_COLS[j].planned + 1).setValue(newDate);
+                break;
+              }
+            }
+            break;
+          }
+        }
+      }
+
+      // Record in history
+      const historyWs = trackSs.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+      if (historyWs) {
+        historyWs.appendRow([projectName, msName, oldPlanned, newDate, requesterName + '(审批)', now, '批准 / Approved']);
+      }
+
+      // Update approval status
+      approvalsWs.getRange(rowIdx, 11).setValue(now); // 处理时间
+      approvalsWs.getRange(rowIdx, 10).setValue('已批准'); // 状态
+
+      // Notify requester
+      if (requesterEmail) {
+        const webPage = getReleaseWebPage();
+        const notifyBody = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8f9fa;padding:20px;">'
+          + '<div style="background:#f0fff4;border-radius:8px;padding:30px;margin-bottom:20px;border-left:5px solid #28a745;">'
+          + '<h2 style="color:#28a745;text-align:center;">✅ 申请已批准 / Approved</h2>'
+          + '<p>您的计划日期推迟申请已<strong style="color:#28a745;">批准</strong>。</p>'
+          + '<table style="width:100%;border-collapse:collapse;margin-top:12px;">'
+          + '<tr><td style="padding:6px 10px;font-weight:600;">项目 / Project</td><td>' + escapeHtml(projectName) + '</td></tr>'
+          + '<tr><td style="padding:6px 10px;font-weight:600;">里程碑 / Milestone</td><td>' + escapeHtml(msName) + '</td></tr>'
+          + '<tr><td style="padding:6px 10px;font-weight:600;">原计划 / Original</td><td>' + escapeHtml(oldPlanned || 'NA') + '</td></tr>'
+          + '<tr><td style="padding:6px 10px;font-weight:600;">新计划 / New</td><td style="font-weight:600;color:#28a745;">' + escapeHtml(newDate) + '</td></tr>'
+          + '</table>'
+          + '<p style="margin-top:16px;"><a href="' + webPage + '?v=ProjectTracking" style="background:#28a745;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">查看项目跟进 / View Project</a></p>'
+          + '</div></div>';
+        GmailApp.sendEmail(requesterEmail, '【已批准】计划日期推迟 / Delay Approved - ' + projectName, '', { htmlBody: notifyBody });
+      }
+
+      return createResultPage('✅ 批准成功 / Approved',
+        '<p>项目 <strong>' + escapeHtml(projectName) + '</strong> 的里程碑 <strong>' + escapeHtml(msName) + '</strong></p>'
+        + '<p>计划日期已从 <strong>' + escapeHtml(oldPlanned || 'NA') + '</strong> 更新为 <strong>' + escapeHtml(newDate) + '</strong></p>'
+        + '<p style="font-size:12px;color:#666;">申请人将收到邮件通知 / Requester will be notified</p>',
+        true);
+
+    } else {
+      // Reject
+      approvalsWs.getRange(rowIdx, 11).setValue(now); // 处理时间
+      approvalsWs.getRange(rowIdx, 10).setValue('已拒绝'); // 状态
+
+      if (requesterEmail) {
+        const webPage = getReleaseWebPage();
+        const notifyBody = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8f9fa;padding:20px;">'
+          + '<div style="background:#fff5f5;border-radius:8px;padding:30px;margin-bottom:20px;border-left:5px solid #dc3545;">'
+          + '<h2 style="color:#dc3545;text-align:center;">❌ 申请已拒绝 / Rejected</h2>'
+          + '<p>您的计划日期推迟申请已被<strong style="color:#dc3545;">拒绝</strong>。</p>'
+          + '<table style="width:100%;border-collapse:collapse;margin-top:12px;">'
+          + '<tr><td style="padding:6px 10px;font-weight:600;">项目 / Project</td><td>' + escapeHtml(projectName) + '</td></tr>'
+          + '<tr><td style="padding:6px 10px;font-weight:600;">里程碑 / Milestone</td><td>' + escapeHtml(msName) + '</td></tr>'
+          + '<tr><td style="padding:6px 10px;font-weight:600;">申请推迟到 / Requested</td><td>' + escapeHtml(newDate) + '</td></tr>'
+          + '</table>'
+          + '<p style="margin-top:16px;"><a href="' + webPage + '?v=ProjectTracking" style="background:#E60012;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">查看项目跟进 / View Project</a></p>'
+          + '</div></div>';
+        GmailApp.sendEmail(requesterEmail, '【已拒绝】计划日期推迟 / Delay Rejected - ' + projectName, '', { htmlBody: notifyBody });
+      }
+
+      return createResultPage('❌ 已拒绝 / Rejected',
+        '<p>项目 <strong>' + escapeHtml(projectName) + '</strong> 的里程碑 <strong>' + escapeHtml(msName) + '</strong></p>'
+        + '<p>计划日期推迟申请已被<strong style="color:#dc3545;">拒绝</strong></p>'
+        + '<p style="font-size:12px;color:#666;">申请人将收到邮件通知 / Requester will be notified</p>',
+        false);
+    }
+  } catch (e) {
+    return createResultPage('错误 / Error', '处理失败 / Processing failed: ' + e.toString(), false);
+  }
+}
+
+/**
+ * 生成审批结果页面
+ * Generate approval result HTML page
+ * @param {string} title - 页面标题
+ * @param {string} message - 提示信息 (HTML)
+ * @param {boolean} isSuccess - 是否成功
+ * @returns {HtmlOutput}
+ */
+function createResultPage(title, message, isSuccess) {
+  const color = isSuccess ? '#28a745' : '#dc3545';
+  const icon = isSuccess ? '&#10004;' : '&#10008;';
+  const webPage = getReleaseWebPage();
+  const html = '<!DOCTYPE html><html><head><base target="_top"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<meta charset="utf-8">'
+    + '</head><body style="font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f8f9fa;">'
+    + '<div style="max-width:480px;width:90%;padding:40px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);text-align:center;background:#fff;">'
+    + '<div style="font-size:64px;color:' + color + ';margin-bottom:16px;">' + icon + '</div>'
+    + '<h2 style="color:#333;margin-bottom:16px;">' + title + '</h2>'
+    + '<div style="font-size:14px;color:#666;line-height:1.8;margin-bottom:24px;">' + message + '</div>'
+    + '<a href="' + webPage + '?v=ProjectTracking" style="display:inline-block;padding:10px 24px;background:#E60012;color:white;text-decoration:none;border-radius:6px;font-weight:600;">返回项目跟进 / Back to Project Tracking</a>'
+    + '</div></body></html>';
+  return HtmlService.createHtmlOutput(html).setTitle(title);
 }
 
 /**

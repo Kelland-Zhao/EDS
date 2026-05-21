@@ -10,6 +10,7 @@
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var isAdmin = false;
+  var historyMap = {};
 
   $(document).ready(function() {
     loadData();
@@ -28,6 +29,57 @@
       $('#modalStatus').prop('disabled', false);
       $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
     }
+
+    // Request delay button handler (delegated, button is dynamically created in modal)
+    $('#modalMilestones').on('click', '.request-delay-btn', function() {
+      var $btn = $(this);
+      var msIdx = parseInt($btn.data('msIdx'));
+      var msName = $btn.data('msName');
+      var currentPlanned = $btn.data('msPlanned');
+      var projectName = $('#updateModal').data('projectName');
+
+      Swal.fire({
+        title: '申请推迟计划日期 / Request Planned Date Delay',
+        html: '<div style="text-align:left;">'
+          + '<p style="font-size:13px;"><strong>' + msName.split(' / ')[0] + '</strong></p>'
+          + '<p style="font-size:12px;color:#666;">当前计划 / Current: <strong>' + currentPlanned + '</strong></p>'
+          + '<div class="mb-2 mt-3"><label style="font-size:12px;font-weight:500;">新的计划日期 / New Planned Date <span style="color:red;">*</span></label>'
+          + '<input type="date" class="form-control form-control-sm" id="swalNewDate" min="' + formatDateYMD(today) + '"></div>'
+          + '<div class="mb-2"><label style="font-size:12px;font-weight:500;">推迟原因 / Reason <span style="color:red;">*</span></label>'
+          + '<textarea class="form-control form-control-sm" id="swalReason" rows="3" placeholder="请输入推迟原因 / Enter reason"></textarea></div>'
+          + '</div>',
+        showCancelButton: true,
+        confirmButtonText: '提交申请 / Submit',
+        cancelButtonText: '取消 / Cancel',
+        preConfirm: function() {
+          var nd = $('#swalNewDate').val();
+          var rs = $('#swalReason').val().trim();
+          if (!nd) { Swal.showValidationMessage('请输入新的计划日期 / Please enter new date'); return false; }
+          if (!rs) { Swal.showValidationMessage('请输入推迟原因 / Please enter reason'); return false; }
+          return { newDate: nd, reason: rs };
+        }
+      }).then(function(result) {
+        if (!result.isConfirmed) return;
+        Swal.fire({ title: '正在提交... / Submitting...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+        google.script.run
+          .withSuccessHandler(function(res) {
+            Swal.close();
+            try {
+              var r = typeof res === 'string' ? JSON.parse(res) : res;
+              if (r.success) {
+                Swal.fire('成功 / Success', r.message, 'success');
+              } else {
+                Swal.fire('失败 / Failed', r.message || '请求失败 / Request failed', 'error');
+              }
+            } catch(e) { Swal.fire('错误 / Error', e.message, 'error'); }
+          })
+          .withFailureHandler(function(err) {
+            Swal.close();
+            Swal.fire('错误 / Error', '请求失败 / Request failed: ' + err.message, 'error');
+          })
+          .requestPlannedDateDelay(projectName, msIdx, result.value.newDate, result.value.reason, globalName);
+      });
+    });
   });
 
   function checkAdminPermission() {
@@ -76,6 +128,7 @@
           if (data.error) { Swal.fire('错误 / Error', data.error, 'error'); return; }
           globalData = data;
           renderGantt();
+          loadHistorySummary();
         } catch(e) {
           Swal.fire('错误 / Error', '数据解析失败 / Data parse error: ' + e.message, 'error');
         }
@@ -85,6 +138,33 @@
         Swal.fire('错误 / Error', '加载失败 / Load failed: ' + err.message, 'error');
       })
       .getProjectTrackingData();
+  }
+
+  function loadHistorySummary() {
+    google.script.run.withSuccessHandler(function(result) {
+      try {
+        historyMap = typeof result === 'string' ? JSON.parse(result) : {};
+        updateHistoryIcons();
+      } catch(e) { /* degrade gracefully */ }
+    }).getPlannedDateHistorySummary();
+  }
+
+  function updateHistoryIcons() {
+    $('#ganttBody tr.gantt-row').each(function() {
+      var $row = $(this);
+      var projectName = $row.find('.gantt-info').text().trim();
+      if (!projectName) return;
+      $row.find('.ms-node').each(function() {
+        var title = $(this).data('ms-title') || '';
+        var msName = title.split('<br>')[0];
+        if (msName && historyMap[projectName + '::' + msName]) {
+          var $histIcon = $('<span class="hist-icon" style="display:inline-block;cursor:pointer;font-size:10px;margin-right:1px;color:#E60012;" title="查看变更历史 / View Change History">&#x1F504;</span>');
+          $histIcon.data('project', projectName);
+          $histIcon.data('milestone', msName);
+          $(this).before($histIcon);
+        }
+      });
+    });
   }
 
   function parseDate(val) {
@@ -183,7 +263,10 @@
 
   function getMilestoneColor(ms) {
     var actual = parseDate(ms.actual);
-    if (actual) return '#28a745'; // green - has actual date
+    if (actual) {
+      if (actual > today) return '#fd7e14'; // orange - planned delayed
+      return '#28a745'; // green - completed
+    }
     var planned = parseDate(ms.planned);
     if (!planned) return '#adb5bd'; // gray - no date
     if (planned < today) return '#dc3545'; // red - overdue
@@ -201,7 +284,12 @@
     }
     if (ms.actual) {
       lines.push('实际完成: ' + normalizeDate(ms.actual));
-      lines.push('状态: 已完成 / Completed');
+      var actualDate = parseDate(ms.actual);
+      if (actualDate && actualDate > today) {
+        lines.push('状态: 计划时间推迟 / Planned Delayed');
+      } else {
+        lines.push('状态: 已完成 / Completed');
+      }
     } else {
       var planned = parseDate(ms.planned);
       if (planned && planned < today) {
@@ -398,7 +486,7 @@
         for (var d = 0; d < days.length; d++) {
           if (inDay(planned, days[d])) {
             if (!msByDay[d]) msByDay[d] = [];
-            msByDay[d].push({ color: getMilestoneColor(ms), title: getMilestoneTitle(ms) });
+            msByDay[d].push({ color: getMilestoneColor(ms), title: getMilestoneTitle(ms), msName: ms.name, projName: proj.projectName });
             break;
           }
         }
@@ -452,6 +540,57 @@
 
     $('#ganttBody').on('click', '.gantt-update-btn', function() {
       openUpdateModal($(this).data('project'));
+    });
+
+    // History icon click handler
+    $('#ganttBody').on('click', '.hist-icon', function() {
+      var $icon = $(this);
+      var projectName = $icon.data('project');
+      var milestoneName = $icon.data('milestone');
+      google.script.run.withSuccessHandler(function(result) {
+        try {
+          var history = typeof result === 'string' ? JSON.parse(result) : [];
+          if (history.error || !Array.isArray(history)) {
+            Swal.fire('错误 / Error', '获取历史失败 / Failed to load history', 'error');
+            return;
+          }
+          var filtered = [];
+          for (var h = 0; h < history.length; h++) {
+            if (history[h].milestone === milestoneName) {
+              filtered.push(history[h]);
+            }
+          }
+          if (filtered.length === 0) {
+            Swal.fire('提示 / Info', '无历史记录 / No history', 'info');
+            return;
+          }
+          var html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+            + '<thead><tr style="background:#E60012;color:white;">'
+            + '<th style="padding:8px 6px;">原计划日期<br><small>Old</small></th>'
+            + '<th style="padding:8px 6px;">新计划日期<br><small>New</small></th>'
+            + '<th style="padding:8px 6px;">修改人<br><small>Editor</small></th>'
+            + '<th style="padding:8px 6px;">修改时间<br><small>Time</small></th>'
+            + '</tr></thead><tbody>';
+          for (var h = 0; h < filtered.length; h++) {
+            var f = filtered[h];
+            html += '<tr style="background:' + (h % 2 === 0 ? '#fff5f5' : '#fff') + ';">'
+              + '<td style="padding:6px;font-family:monospace;">' + (f.oldDate || 'NA') + '</td>'
+              + '<td style="padding:6px;font-family:monospace;font-weight:600;">' + (f.newDate || 'NA') + '</td>'
+              + '<td style="padding:6px;">' + (f.editor || '') + '</td>'
+              + '<td style="padding:6px;">' + (f.modifiedTime || '') + '</td>'
+              + '</tr>';
+          }
+          html += '</tbody></table>';
+          Swal.fire({
+            title: milestoneName + '<br><small style="font-weight:normal;">计划日期变更历史 / Planned Date Change History</small>',
+            html: html,
+            width: 650,
+            confirmButtonText: '关闭 / Close'
+          });
+        } catch(e) {
+          Swal.fire('错误 / Error', e.message, 'error');
+        }
+      }).getPlannedDateHistory(projectName);
     });
 
     var collapsedCount = displayCols.filter(function(c) { return c.type === 'collapse'; }).length;
@@ -513,7 +652,17 @@
       msHtml += '<div class="modal-milestone-row">';
       msHtml += '<div class="modal-milestone-label">' + formatHeader(ms.name) + '</div>';
       msHtml += '<div class="modal-milestone-dates">';
-      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="text" class="form-control form-control-sm ms-planned' + (isAdmin ? '' : ' readonly-field') + '" data-ms-idx="' + i + '" value="' + (plannedDisplay || '') + '"' + (isAdmin ? ' placeholder="YYYY-MM-DD or NA"' : ' readonly') + '></div>';
+      if (isAdmin) {
+        msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="text" class="form-control form-control-sm ms-planned" data-ms-idx="' + i + '" value="' + (plannedDisplay || '') + '" placeholder="YYYY-MM-DD or NA"></div>';
+      } else {
+        msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label>';
+        msHtml += '<div class="input-group input-group-sm">';
+        msHtml += '<input type="text" class="form-control form-control-sm readonly-field" value="' + (plannedDisplay || '') + '" readonly style="font-size:12px;">';
+        if (plannedDisplay && plannedDisplay !== 'NA') {
+          msHtml += '<button class="btn btn-sm btn-outline-warning request-delay-btn" type="button" data-ms-idx="' + i + '" data-ms-name="' + ms.name.replace(/"/g, '&quot;') + '" data-ms-planned="' + (plannedDisplay || '') + '" style="font-size:10px;white-space:nowrap;border-color:#fd7e14;color:#fd7e14;">申请推迟<br><small>Delay</small></button>';
+        }
+        msHtml += '</div></div>';
+      }
       msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + normalizeDate(ms.actual) + '"></div>';
       msHtml += '</div>';
       msHtml += '</div>';
@@ -579,34 +728,73 @@
       updates.status = newStatus;
     }
 
-    Swal.fire({
-      title: '正在保存... / Saving...',
-      allowOutsideClick: false,
-      didOpen: function() { Swal.showLoading(); }
+    // Detect future actual dates
+    var futureMilestones = [];
+    $('#modalMilestones .ms-actual').each(function() {
+      var idx = parseInt($(this).data('msIndex'));
+      var actual = $(this).val().trim();
+      if (actual) {
+        var d = parseDate(actual);
+        if (d && d > today) {
+          futureMilestones.push({
+            name: proj && proj.milestones[idx] ? proj.milestones[idx].name : ('里程碑 ' + idx),
+            date: actual
+          });
+        }
+      }
     });
 
-    google.script.run
-      .withSuccessHandler(function(result) {
-        Swal.close();
-        try {
-          var res = typeof result === 'string' ? JSON.parse(result) : result;
-          if (res.success) {
-            Swal.fire('成功 / Success', res.message, 'success').then(function() {
-              $('#updateModal').modal('hide');
-              loadData();
-            });
-          } else {
-            Swal.fire('失败 / Failed', res.message, 'error');
+    function executeSave(pn, upd) {
+      Swal.fire({
+        title: '正在保存... / Saving...',
+        allowOutsideClick: false,
+        didOpen: function() { Swal.showLoading(); }
+      });
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          Swal.close();
+          try {
+            var res = typeof result === 'string' ? JSON.parse(result) : result;
+            if (res.success) {
+              Swal.fire('成功 / Success', res.message, 'success').then(function() {
+                $('#updateModal').modal('hide');
+                loadData();
+              });
+            } else {
+              Swal.fire('失败 / Failed', res.message, 'error');
+            }
+          } catch(e) {
+            Swal.fire('错误 / Error', e.message, 'error');
           }
-        } catch(e) {
-          Swal.fire('错误 / Error', e.message, 'error');
-        }
-      })
-      .withFailureHandler(function(err) {
-        Swal.close();
-        Swal.fire('错误 / Error', '保存失败 / Save failed: ' + err.message, 'error');
-      })
-      .updateProjectTracking(projectName, JSON.stringify(updates), globalName);
+        })
+        .withFailureHandler(function(err) {
+          Swal.close();
+          Swal.fire('错误 / Error', '保存失败 / Save failed: ' + err.message, 'error');
+        })
+        .updateProjectTracking(pn, JSON.stringify(upd), globalName);
+    }
+
+    if (futureMilestones.length > 0) {
+      var listHtml = futureMilestones.map(function(fm) {
+        return '<li>' + fm.name.split(' / ')[0] + ': ' + fm.date + '</li>';
+      }).join('');
+      Swal.fire({
+        title: '实际完成日期异常 / Actual Date Warning',
+        html: '<p>以下里程碑的实际完成日期晚于今日，该节点将显示为「计划时间推迟」，确认继续保存吗？</p>'
+          + '<p style="font-size:0.85em;color:#666;">The following milestones have actual dates in the future. The node will show as "Planned Delayed". Confirm to save?</p>'
+          + '<ul style="text-align:left;">' + listHtml + '</ul>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '确认保存 / Confirm',
+        cancelButtonText: '返回修改 / Cancel'
+      }).then(function(result) {
+        if (result.isConfirmed) executeSave(projectName, updates);
+      });
+      return;
+    }
+
+    executeSave(projectName, updates);
   }
 
   // ==========================================
