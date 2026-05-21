@@ -10086,33 +10086,45 @@ function sendPlannedDateChangeNotification(projectName, editorName, plannedDates
     }
     if (adminEmails.length === 0) return;
     const webPage = getReleaseWebPage();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
     const subject = '【项目跟进】计划日期变更通知 / Planned Date Change - ' + projectName;
-    var htmlBody = '<html><body>';
-    htmlBody += '<h2>项目跟进 - 计划日期变更通知 / Project Tracking - Planned Date Change</h2>';
-    htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
-    htmlBody += '<tr><td><b>项目 / Project</b></td><td>' + escapeHtml(projectName) + '</td></tr>';
-    htmlBody += '<tr><td><b>编辑人 / Editor</b></td><td>' + escapeHtml(editorName) + '</td></tr>';
-    htmlBody += '</table>';
-    htmlBody += '<br><b>变更里程碑 / Changed Milestones:</b>';
-    htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
-    htmlBody += '<tr><th>里程碑 / Milestone</th><th>新计划日期 / New Planned Date</th></tr>';
-    plannedDates.forEach(function(pd) {
+    let rows = '';
+    plannedDates.forEach(function(pd, i) {
       if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
-        htmlBody += '<tr><td>' + escapeHtml(PROJECT_MILESTONE_COLS[pd.index].name) + '</td><td>' + escapeHtml(pd.planned || 'NA') + '</td></tr>';
+        rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(PROJECT_MILESTONE_COLS[pd.index].name) + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#34495e;font-family:monospace;">' + escapeHtml(pd.planned || 'NA') + '</td>'
+          + '</tr>';
       }
     });
-    htmlBody += '</table>';
-    htmlBody += '<p><a href="' + webPage + '?v=ProjectTracking">点击查看项目跟进 / View Project Tracking</a></p>';
-    htmlBody += '<p>此邮件由系统自动发送 / Auto-sent by system.</p>';
-    htmlBody += '</body></html>';
-    adminEmails.forEach(function(email) {
-      try {
-        GmailApp.sendEmail(email, subject, '', { htmlBody: htmlBody });
-        console.log('计划日期变更通知已发送 / Notification sent to: ' + email);
-      } catch (e) {
-        console.error('发送通知失败 / Failed to send to ' + email + ': ' + e);
-      }
-    });
+    const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+      + '<div style="background:#fff0f0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid #E60012;">'
+      + '<h2 style="color:#E60012;text-align:center;margin-bottom:20px;border-bottom:3px solid #E60012;padding-bottom:10px;">'
+      + '【计划日期变更通知】项目跟进<br><span style="font-size:0.8em;">Planned Date Change - Project Tracking</span></h2>'
+      + '<p style="font-size:15px;line-height:1.6;color:#c0392b;">（' + today + '）以下项目的里程碑计划日期已变更：<br>'
+      + '<span style="font-size:0.9em;opacity:0.85;">Milestone planned dates have been updated for the following project:</span></p>'
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
+      + '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">'
+      + '<tr><td style="padding:8px 12px;width:140px;font-weight:600;color:#555;">项目 / Project</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(projectName) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">编辑人 / Editor</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(editorName) + '</td></tr>'
+      + '</table>'
+      + '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin-bottom:16px;">变更里程碑计划日期 / Changed Planned Dates</h3>'
+      + '<div style="overflow-x:auto;">'
+      + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+      + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">新计划日期 / New Planned Date</th>'
+      + '</tr></thead>'
+      + '<tbody>' + rows + '</tbody>'
+      + '</table></div></div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:20px;text-align:center;">'
+      + '<p style="margin-bottom:12px;"><a href="' + webPage + '?v=ProjectTracking" style="background:#E60012;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">点击查看项目跟进 / View Project Tracking</a></p>'
+      + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
+      + '</div></div>';
+    GmailApp.sendEmail(adminEmails.join(','), subject, '', { htmlBody: htmlBody });
+    console.log('计划日期变更通知已发送 / Notification sent to: ' + adminEmails.join(','));
   } catch (e) {
     console.error('sendPlannedDateChangeNotification error: ' + e);
   }
@@ -10138,40 +10150,94 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
     }
     if (adminEmails.length === 0) return;
     const webPage = getReleaseWebPage();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
     const subject = '【项目跟进】项目更新通知 / Project Update - ' + projectName;
-    var htmlBody = '<html><body>';
-    htmlBody += '<h2>项目跟进 - 更新通知 / Project Tracking - Update Notification</h2>';
-    htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
-    htmlBody += '<tr><td><b>项目 / Project</b></td><td>' + escapeHtml(projectName) + '</td></tr>';
-    htmlBody += '<tr><td><b>编辑人 / Editor</b></td><td>' + escapeHtml(editorName) + '</td></tr>';
-    htmlBody += '</table><br>';
+
+    const fmtDate = function(val) {
+      if (!val || val === '空/Empty' || val === 'NA') return val || '空/Empty';
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return val;
+      return Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    };
+
+    let sectionsHtml = '';
+
     if (changes.leader) {
-      htmlBody += '<b>负责人变更 / Leader Change:</b> ' + escapeHtml(changes.leader.old || '空/Empty') + ' → ' + escapeHtml(changes.leader.new) + '<br><br>';
+      sectionsHtml += '<div style="background:#f8f9fa;border-radius:6px;padding:12px 16px;margin-bottom:12px;border-left:4px solid #E60012;">'
+        + '<span style="font-weight:600;color:#E60012;">负责人变更 / Leader Change：</span>'
+        + '<span style="color:#555;">' + escapeHtml(changes.leader.old || '空/Empty') + '</span>'
+        + ' <span style="color:#999;font-size:1.1em;">→</span> '
+        + '<span style="color:#2c3e50;font-weight:600;">' + escapeHtml(changes.leader.new) + '</span>'
+        + '</div>';
     }
+
     if (changes.status) {
-      htmlBody += '<b>状态变更 / Status Change:</b> ' + escapeHtml(changes.status.old || '空/Empty') + ' → ' + escapeHtml(changes.status.new) + '<br><br>';
+      sectionsHtml += '<div style="background:#f8f9fa;border-radius:6px;padding:12px 16px;margin-bottom:12px;border-left:4px solid #E60012;">'
+        + '<span style="font-weight:600;color:#E60012;">状态变更 / Status Change：</span>'
+        + '<span style="color:#555;">' + escapeHtml(changes.status.old || '空/Empty') + '</span>'
+        + ' <span style="color:#999;font-size:1.1em;">→</span> '
+        + '<span style="color:#2c3e50;font-weight:600;">' + escapeHtml(changes.status.new) + '</span>'
+        + '</div>';
     }
+
     if (changes.milestones && changes.milestones.length > 0) {
-      htmlBody += '<b>里程碑实际完成日期更新 / Milestone Actual Date Update:</b>';
-      htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
-      htmlBody += '<tr><th>里程碑 / Milestone</th><th>原日期 / Old</th><th>新日期 / New</th></tr>';
-      changes.milestones.forEach(function(ms) {
-        htmlBody += '<tr><td>' + escapeHtml(ms.name) + '</td><td>' + escapeHtml(ms.old || '空/Empty') + '</td><td>' + escapeHtml(ms.new || '空/Empty') + '</td></tr>';
+      let rows = '';
+      changes.milestones.forEach(function(ms, i) {
+        rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(ms.name) + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#777;font-family:monospace;">' + escapeHtml(fmtDate(ms.old) || '空/Empty') + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-family:monospace;font-weight:600;">' + escapeHtml(fmtDate(ms.new) || '空/Empty') + '</td>'
+          + '</tr>';
       });
-      htmlBody += '</table><br>';
+      sectionsHtml += '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">里程碑实际完成日期更新 / Milestone Actual Date Update</h3>'
+        + '<div style="overflow-x:auto;">'
+        + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+        + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">原日期 / Old</th>'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">新日期 / New</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
+
     if (changes.plannedDates && changes.plannedDates.length > 0) {
-      htmlBody += '<b>里程碑计划日期变更 / Planned Date Change:</b>';
-      htmlBody += '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">';
-      htmlBody += '<tr><th>里程碑 / Milestone</th><th>原计划 / Old</th><th>新计划 / New</th></tr>';
-      changes.plannedDates.forEach(function(pd) {
-        htmlBody += '<tr><td>' + escapeHtml(pd.name) + '</td><td>' + escapeHtml(pd.old || 'NA') + '</td><td>' + escapeHtml(pd.new) + '</td></tr>';
+      let rows = '';
+      changes.plannedDates.forEach(function(pd, i) {
+        rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(pd.name) + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#777;font-family:monospace;">' + escapeHtml(pd.old || 'NA') + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-family:monospace;font-weight:600;">' + escapeHtml(pd.new) + '</td>'
+          + '</tr>';
       });
-      htmlBody += '</table><br>';
+      sectionsHtml += '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">里程碑计划日期变更 / Planned Date Change</h3>'
+        + '<div style="overflow-x:auto;">'
+        + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+        + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">原计划 / Old</th>'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">新计划 / New</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
-    htmlBody += '<p><a href="' + webPage + '?v=ProjectTracking">点击查看项目跟进 / View Project Tracking</a></p>';
-    htmlBody += '<p>此邮件由系统自动发送 / Auto-sent by system.</p>';
-    htmlBody += '</body></html>';
+
+    const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+      + '<div style="background:#fff0f0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid #E60012;">'
+      + '<h2 style="color:#E60012;text-align:center;margin-bottom:20px;border-bottom:3px solid #E60012;padding-bottom:10px;">'
+      + '【项目更新通知】项目跟进<br><span style="font-size:0.8em;">Project Update Notification - Project Tracking</span></h2>'
+      + '<p style="font-size:15px;line-height:1.6;color:#c0392b;">（' + today + '）以下项目数据已更新：<br>'
+      + '<span style="font-size:0.9em;opacity:0.85;">The following project data has been updated:</span></p>'
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
+      + '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">'
+      + '<tr><td style="padding:8px 12px;width:140px;font-weight:600;color:#555;">项目 / Project</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(projectName) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">编辑人 / Editor</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(editorName) + '</td></tr>'
+      + '</table>'
+      + sectionsHtml
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:20px;text-align:center;">'
+      + '<p style="margin-bottom:12px;"><a href="' + webPage + '?v=ProjectTracking" style="background:#E60012;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">点击查看项目跟进 / View Project Tracking</a></p>'
+      + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
+      + '</div></div>';
+
     GmailApp.sendEmail(adminEmails.join(','), subject, '', { htmlBody: htmlBody });
     console.log('项目更新通知已发送 / Project update notification sent to: ' + adminEmails.join(','));
   } catch (e) {
