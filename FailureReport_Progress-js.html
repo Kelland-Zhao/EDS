@@ -143,10 +143,10 @@ function initializeTables() {
                 orderable: false,
                 render: function(data, type) {
                     if (type !== 'display') return data || '';
-                    if (!data) return '<span class="text-muted">-</span>';
+                    if (!data) return '<span class="badge bg-secondary">-</span>';
                     var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
-                    if (m) return '<a href="' + m[1] + '" target="_blank" class="text-info"><i class="fas fa-file-alt me-1"></i>' + m[2].replace(/\.[^/.]+$/, '') + '</a>';
-                    return '<span class="text-info"><i class="fas fa-file-alt me-1"></i>' + data + '</span>';
+                    if (m) return '<a href="' + m[1] + '" target="_blank"><span class="badge bg-info">附件</span></a>';
+                    return '<span class="badge bg-secondary">-</span>';
                 }
             },
             {
@@ -224,10 +224,10 @@ function initializeTables() {
                 orderable: false,
                 render: function(data, type) {
                     if (type !== 'display') return data || '';
-                    if (!data) return '<span class="text-muted">-</span>';
+                    if (!data) return '<span class="badge bg-secondary">-</span>';
                     var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
-                    if (m) return '<a href="' + m[1] + '" target="_blank" class="text-info"><i class="fas fa-file-alt me-1"></i>' + m[2].replace(/\.[^/.]+$/, '') + '</a>';
-                    return '<span class="text-info"><i class="fas fa-file-alt me-1"></i>' + data + '</span>';
+                    if (m) return '<a href="' + m[1] + '" target="_blank"><span class="badge bg-info">附件</span></a>';
+                    return '<span class="badge bg-secondary">-</span>';
                 }
             },
             {
@@ -305,10 +305,10 @@ function initializeTables() {
                 orderable: false,
                 render: function(data, type) {
                     if (type !== 'display') return data || '';
-                    if (!data) return '<span class="text-muted">-</span>';
+                    if (!data) return '<span class="badge bg-secondary">-</span>';
                     var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
-                    if (m) return '<a href="' + m[1] + '" target="_blank" class="text-info"><i class="fas fa-file-alt me-1"></i>' + m[2].replace(/\.[^/.]+$/, '') + '</a>';
-                    return '<span class="text-info"><i class="fas fa-file-alt me-1"></i>' + data + '</span>';
+                    if (m) return '<a href="' + m[1] + '" target="_blank"><span class="badge bg-info">附件</span></a>';
+                    return '<span class="badge bg-secondary">-</span>';
                 }
             },
             {
