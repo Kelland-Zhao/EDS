@@ -292,6 +292,10 @@ function getFailureReportFormData(reportId) {
       throw new Error('该报告暂无表单数据 / No form data found');
     }
     const formData = JSON.parse(jsonStr);
+    if (!formData.time_used) {
+      const repairTime = String(values[rowIndex][13] || '').trim();
+      if (repairTime) formData.time_used = repairTime;
+    }
     let existingFileUrl = '', existingFileName = '';
     const cellJ = values[rowIndex][9];
     if (cellJ) {
@@ -6780,6 +6784,23 @@ function getFailureReportProgressData(userEmail, userName) {
     // 收集每行的完成天数，用于批量回写后端表格
     const completionDaysBackfill = [];
 
+    // 如有记录缺少 repairTime，从 Shift 表回补
+    const shiftRepairTimeMap = {};
+    const hasEmptyRepairTime = data.slice(1).some(function(r) { return !String(r[13] || '').trim(); });
+    if (hasEmptyRepairTime) {
+      const shiftSS = SpreadsheetApp.openById('10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w');
+      ['Shift_INJ_TB1','Shift_INJ_TB2','Shift_TF_TB1','Shift_TF_TB2','Shift_PK_TB1','Shift_PK_TB2'].forEach(function(sn) {
+        const sSheet = shiftSS.getSheetByName(sn);
+        if (!sSheet) return;
+        const sData = sSheet.getDataRange().getValues();
+        for (let j = 1; j < sData.length; j++) {
+          const rNo = String(sData[j][0] || '').trim();
+          const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
+          if (rNo && rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+        }
+      });
+    }
+
     // 从第2行开始遍历数据（第1行是表头）
     for (let i = 1; i < data.length; i++) {
       let row = data[i];
@@ -6841,7 +6862,11 @@ function getFailureReportProgressData(userEmail, userName) {
       const attachments = formulas[i][9] || row[9] || ""; // 附件
       const responsiblePerson = String(row[11] || '').trim(); // 责任人（第12列，索引11）
       const existingCompletionDays = String(row[12] || '').trim(); // 已有的完成天数（列13）
-      const repairTime = String(row[13] || '').trim(); // 维修时间 / MDT（列14）
+      let repairTime = String(row[13] || '').trim(); // 维修时间 / MDT（列14）
+      if (!repairTime && reportNo && shiftRepairTimeMap[reportNo]) {
+        repairTime = shiftRepairTimeMap[reportNo];
+        failureDatabaseSheet.getRange(i + 1, 14).setValue(repairTime);
+      }
 
       // 验证进度（从 followup Map 聚合）+ 状态三态
       const verifyAgg = verifyMap.get(String(failureReportNumber).trim()) || { pass: 0, total: 0 };
