@@ -36,7 +36,6 @@ function doGet(e) {
   Route.path("FailureReport_Upload", loadFailureReport_Upload);
   Route.path("FailureReport_Manage", loadFailureReport_Manage);
   Route.path("FailureReport_Progress", loadFailureReport_Progress);
-  Route.path("FailureReport_View", loadFailureReport_View);
   Route.path("FailureReport_Followup", loadFailureReport_Followup);
   Route.path("FailureReport_Followup_Manage", loadFailureReport_Followup_Manage);
   Route.path("FailureReport_Followup_Verify", loadFailureReport_Followup_Verify);
@@ -6747,6 +6746,7 @@ function getFailureReportProgressData(userEmail, userName) {
 
     // 获取所有数据
     const data = failureDatabaseSheet.getDataRange().getValues();
+    const formulas = failureDatabaseSheet.getDataRange().getFormulas();
     if (data.length <= 1) {
       console.log(
         "Failure_Database sheet数据为空 / Failure_Database sheet data is empty"
@@ -6838,7 +6838,7 @@ function getFailureReportProgressData(userEmail, userName) {
         }
       }
 
-      const attachments = row[9] || ""; // 附件
+      const attachments = formulas[i][9] || row[9] || ""; // 附件
       const responsiblePerson = String(row[11] || '').trim(); // 责任人（第12列，索引11）
       const existingCompletionDays = String(row[12] || '').trim(); // 已有的完成天数（列13）
       const repairTime = String(row[13] || '').trim(); // 维修时间 / MDT（列14）
@@ -8422,196 +8422,6 @@ function getFollowupRecordsForVerifier(userName) {
   }
 }
 
-/**
- * 获取故障报告查阅数据
- * 从Failure_Database表中获取所有故障报告数据用于查阅页面
- */
-function getFailureReportViewData() {
-  try {
-    console.log("=== 开始获取故障报告查阅数据 ===");
-
-    const failureDatabaseID = "1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU"; // Failure_Database Spreadsheet ID
-    const failureDatabaseSheet =
-      SpreadsheetApp.openById(failureDatabaseID).getSheetByName(
-        "Failure_Database"
-      );
-    const data = failureDatabaseSheet.getDataRange().getValues();
-    const formulas = failureDatabaseSheet.getDataRange().getFormulas();
-
-    console.log("从Google Sheets获取到的原始数据行数:", data.length);
-    console.log("表头行:", data[0]);
-    console.log("从Google Sheets获取到的公式行数:", formulas.length);
-    console.log("表头行公式:", formulas[0]);
-
-    // 定义列索引（基于Failure_Database表的实际结构）
-    // 表格抬头：编号	机台号	问题描述	提交日期	车间	工序	故障报告编号	分配日期	上传日期	附件
-    const columnIndexes = {
-      reportNumber: 0, // 编号（第1列，索引为0）
-      machineNumber: 1, // 机台号（第2列，索引为1）
-      problemDescription: 2, // 问题描述（第3列，索引为2）
-      submitDate: 3, // 提交日期（第4列，索引为3）
-      workshop: 4, // 车间（第5列，索引为4）
-      process: 5, // 工序（第6列，索引为5）
-      failureReportNumber: 6, // 故障报告编号（第7列，索引为6）
-      assignDate: 7, // 分配日期（第8列，索引为7）
-      uploadDate: 8, // 上传日期（第9列，索引为8）
-      attachment: 9, // 附件（第10列，索引为9）
-    };
-
-    console.log("列索引映射:", columnIndexes);
-    console.log("附件列索引:", columnIndexes.attachment);
-
-    const reports = [];
-    for (let i = 1; i < data.length; i++) {
-      // 从第2行开始
-      const row = data[i];
-
-      // 记录每一行的原始数据
-      console.log("=== 处理第 " + (i + 1) + " 行数据 ===");
-      console.log("完整行数据:", row);
-      console.log("完整行公式:", formulas[i]);
-      console.log("故障报告编号列值:", row[columnIndexes.failureReportNumber]);
-      console.log("机台号列值:", row[columnIndexes.machineNumber]);
-      console.log("提交日期列值:", row[columnIndexes.submitDate]);
-      console.log("附件列原始值:", row[columnIndexes.attachment]);
-      console.log("附件列公式:", formulas[i][columnIndexes.attachment]);
-      console.log("附件列数据类型:", typeof row[columnIndexes.attachment]);
-      console.log(
-        "附件列值长度:",
-        row[columnIndexes.attachment] ? row[columnIndexes.attachment].length : 0
-      );
-
-      if (
-        row[columnIndexes.failureReportNumber] &&
-        row[columnIndexes.failureReportNumber].trim() !== ""
-      ) {
-        let uploadDateValue = row[columnIndexes.uploadDate];
-        let uploadDate = "";
-
-        if (uploadDateValue) {
-          if (uploadDateValue instanceof Date) {
-            uploadDate = uploadDateValue.toISOString();
-          } else if (typeof uploadDateValue === "string") {
-            // 尝试解析字符串为Date
-            const parsedDate = new Date(uploadDateValue);
-            if (!isNaN(parsedDate.getTime())) {
-              uploadDate = parsedDate.toISOString();
-            } else {
-              // 如果无法解析，使用原始字符串
-              uploadDate = uploadDateValue;
-            }
-          } else {
-            // 其他类型，转换为字符串
-            uploadDate = String(uploadDateValue);
-          }
-        }
-
-        let assignDateValue = row[columnIndexes.assignDate];
-        let assignDate = "";
-
-        if (assignDateValue) {
-          if (assignDateValue instanceof Date) {
-            assignDate = assignDateValue.toISOString();
-          } else if (typeof assignDateValue === "string") {
-            // 尝试解析字符串为Date
-            const parsedDate = new Date(assignDateValue);
-            if (!isNaN(parsedDate.getTime())) {
-              assignDate = parsedDate.toISOString();
-            } else {
-              // 如果无法解析，使用原始字符串
-              assignDate = String(assignDateValue);
-            }
-          } else {
-            // 其他类型，转换为字符串
-            assignDate = String(assignDateValue);
-          }
-        }
-
-        // 优先使用公式，如果没有公式则使用显示值
-        let attachmentValue =
-          formulas[i][columnIndexes.attachment] ||
-          row[columnIndexes.attachment] ||
-          "";
-
-        const report = {
-          failureReportNumber: row[columnIndexes.failureReportNumber] || "",
-          workshop: row[columnIndexes.workshop] || "",
-          process: row[columnIndexes.process] || "",
-          machineNo: row[columnIndexes.machineNumber] || "", // 新增：机台号
-          submitDate: row[columnIndexes.submitDate] || "", // 新增：提交日期
-          problemDescription: row[columnIndexes.problemDescription] || "",
-          assignDate: assignDate,
-          uploadDate: uploadDate,
-          attachment: attachmentValue,
-        };
-
-        console.log("最终使用的附件值:", attachmentValue);
-        console.log("构造的报告对象:", report);
-        console.log("报告对象中机台号值:", report.machineNo);
-        console.log("报告对象中提交日期值:", report.submitDate);
-        console.log("报告对象中附件列值:", report.attachment);
-        console.log("=== 第 " + (i + 1) + " 行数据处理完成 ===");
-
-        reports.push(report);
-      } else {
-        console.log("第 " + (i + 1) + " 行跳过：故障报告编号为空");
-      }
-    }
-
-    console.log("=== 数据处理完成 ===");
-    console.log("有效报告数量:", reports.length);
-    console.log("所有报告数据:", reports);
-
-    // 特别检查附件列数据
-    console.log("=== 附件列数据检查 ===");
-    reports.forEach((report, index) => {
-      console.log("报告 " + (index + 1) + " 附件列数据:");
-      console.log("  故障报告编号:", report.failureReportNumber);
-      console.log("  附件列值:", report.attachment);
-      console.log("  附件列类型:", typeof report.attachment);
-      console.log(
-        "  附件列长度:",
-        report.attachment ? report.attachment.length : 0
-      );
-    });
-
-    const result = {
-      success: true,
-      reports: reports,
-      total: reports.length,
-      message: "数据获取成功 / Data retrieved successfully",
-    };
-
-    console.log("=== 最终返回结果 ===");
-    console.log("结果对象:", result);
-    console.log("JSON字符串长度:", JSON.stringify(result).length);
-
-    // 返回 JSON 字符串
-    return JSON.stringify(result);
-  } catch (error) {
-    console.error(
-      "获取故障报告查阅数据时出错 / Error getting failure report view data:",
-      error
-    );
-    const errorResult = {
-      success: false,
-      message:
-        "获取故障报告查阅数据失败 / Failed to get failure report view data: " +
-        error.message,
-    };
-    return JSON.stringify(errorResult);
-  }
-}
-
-/**
- * 加载故障报告查阅页面
- */
-function loadFailureReport_View() {
-  let webPage = getReleaseWebPage();
-  return render("FailureReport_View", { webPage: webPage })
-    .setTitle("故障报告查阅 / Failure Report View")
-    .setFaviconUrl(webIconUrl);
-}
 
 /**
  * 加载故障报告跟进验证页面

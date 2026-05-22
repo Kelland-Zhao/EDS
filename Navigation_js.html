@@ -141,17 +141,6 @@
         $('#failureReportModal').modal('hide');
     });
 
-    // 故障报告查阅
-    $('#FailureReport_View').click(() => {
-        let url = siWebPage + '?v=FailureReport_View'
-            + '&ID=' + encodeURIComponent(id)
-            + '&Name=' + encodeURIComponent(name)
-            + '&Process=' + encodeURIComponent(process)
-            + '&Workshop=' + encodeURIComponent(workshop);
-        window.open(url);
-        $('#failureReportModal').modal('hide');
-    });
-
     // 故障报告进度
     $('#FailureReport_Progress').click(() => {
         let url = siWebPage + '?v=FailureReport_Progress'

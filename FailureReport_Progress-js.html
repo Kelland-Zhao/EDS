@@ -137,6 +137,19 @@ function initializeTables() {
                 }
             },
             {
+                data: 'attachments',
+                title: buildBilingualTitle('附件', 'Attachments'),
+                className: 'text-center align-middle',
+                orderable: false,
+                render: function(data, type) {
+                    if (type !== 'display') return data || '';
+                    if (!data) return '<span class="text-muted">-</span>';
+                    var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
+                    if (m) return '<a href="' + m[1] + '" target="_blank" class="text-info"><i class="fas fa-file-alt me-1"></i>' + m[2].replace(/\.[^/.]+$/, '') + '</a>';
+                    return '<span class="text-info"><i class="fas fa-file-alt me-1"></i>' + data + '</span>';
+                }
+            },
+            {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
@@ -205,6 +218,19 @@ function initializeTables() {
                 }
             },
             {
+                data: 'attachments',
+                title: buildBilingualTitle('附件', 'Attachments'),
+                className: 'text-center align-middle',
+                orderable: false,
+                render: function(data, type) {
+                    if (type !== 'display') return data || '';
+                    if (!data) return '<span class="text-muted">-</span>';
+                    var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
+                    if (m) return '<a href="' + m[1] + '" target="_blank" class="text-info"><i class="fas fa-file-alt me-1"></i>' + m[2].replace(/\.[^/.]+$/, '') + '</a>';
+                    return '<span class="text-info"><i class="fas fa-file-alt me-1"></i>' + data + '</span>';
+                }
+            },
+            {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
@@ -270,6 +296,19 @@ function initializeTables() {
                         return '<span class="badge bg-warning text-dark">已上传<br>Uploaded</span>';
                     }
                     return '<span class="badge bg-danger">未上传<br>Not Uploaded</span>';
+                }
+            },
+            {
+                data: 'attachments',
+                title: buildBilingualTitle('附件', 'Attachments'),
+                className: 'text-center align-middle',
+                orderable: false,
+                render: function(data, type) {
+                    if (type !== 'display') return data || '';
+                    if (!data) return '<span class="text-muted">-</span>';
+                    var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
+                    if (m) return '<a href="' + m[1] + '" target="_blank" class="text-info"><i class="fas fa-file-alt me-1"></i>' + m[2].replace(/\.[^/.]+$/, '') + '</a>';
+                    return '<span class="text-info"><i class="fas fa-file-alt me-1"></i>' + data + '</span>';
                 }
             },
             {
