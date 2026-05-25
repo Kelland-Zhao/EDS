@@ -23,7 +23,6 @@ Google API/
 .claude/
 .codex/
 .mcp.json
-AGENTS.md
 
 # GAS 本地配置
 .clasprc.json
