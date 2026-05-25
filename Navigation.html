@@ -1,13 +1,16 @@
-<html>
+<!DOCTYPE html>
+<html lang="zh-CN">
 
 <head>
   <base target="_top">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <?!=include("Kez_datatables@1.11.5_css");?>
   <?!=include("Kez_Bootstrap@5.3.1_css");?>
   <?!=include("kez_Datatables_css");?>
   <?!=include("CSS");?>
   <?!=include("Kez_sweetalert2_js");?>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 </head>
 
 <body>
@@ -15,52 +18,200 @@
   <nav class="navbar navbar-expand-lg bg-nav">
     <div class="container-fluid">
       <a class="navbar-brand"
-        style="color: white; font-family: Arial, Helvetica, sans-serif;font-size: xx-large; font-weight: bold;">导航页/
-        Navigation
-        Page</a>
+        style="color: white; font-family: Arial, Helvetica, sans-serif;font-size: xx-large; font-weight: bold;">导航页 /
+        Navigation Page</a>
     </div>
   </nav>
 
-
-
   <style>
-    .marquee-container { overflow: hidden; white-space: nowrap; width: 100%; }
-    .marquee-content { display: inline-block; animation: marquee 20s linear infinite; }
-    @keyframes marquee {
-      0%   { transform: translateX(100vw); }
-      100% { transform: translateX(-100%); }
+    body { background: #f5f6f8; }
+    .welcome-bar {
+      background: #fff;
+      border-left: 4px solid #E60012;
+      padding: 10px 18px;
+      margin: 12px 0 18px;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .btn-area { min-height: calc(100vh - 80px); display: flex; align-items: center; justify-content: center; }
+    .welcome-bar .greet { color: #333; font-size: 16px; }
+    .welcome-bar .greet #name { color: #E60012; font-weight: 600; }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6c757d;
+      letter-spacing: 1px;
+      margin: 18px 0 10px;
+      border-left: 3px solid #E60012;
+      padding-left: 10px;
+    }
+    .nav-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px 14px;
+      cursor: pointer;
+      transition: all .15s;
+      border: 1px solid #e9ecef;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      min-height: 96px;
+      justify-content: center;
+      color: #333;
+      width: 100%;
+    }
+    .nav-card:hover {
+      border-color: #E60012;
+      box-shadow: 0 4px 12px rgba(230,0,18,0.12);
+      transform: translateY(-2px);
+      color: #E60012;
+    }
+    .nav-card:disabled,
+    .nav-card.disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      background: #f8f9fa;
+      position: relative;
+    }
+    .nav-card.disabled:hover {
+      transform: none;
+      border-color: #e9ecef;
+      box-shadow: none;
+      color: #333;
+    }
+    .nav-card .icon { font-size: 26px; margin-bottom: 6px; }
+    .nav-card .title-cn { font-size: 14px; font-weight: 600; line-height: 1.2; }
+    .nav-card .title-en { font-size: 11px; color: #888; margin-top: 2px; line-height: 1.2; }
+    .nav-card .badge-soon {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: #adb5bd;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    .domain-daily .nav-card .icon { color: #0d6efd; }
+    .domain-fault .nav-card .icon { color: #fd7e14; }
+    .domain-asset .nav-card .icon { color: #198754; }
   </style>
 
   <div class="container-fluid px-3">
-    <div class="marquee-container mt-2">
-      <span class="marquee-content">
-        <span id="name" style="color:#E60012; font-size:24px"></span>
-        <span style="color:#E60012; font-size:24px">,欢迎进入设备部数字化系统/ Welcome to Equipment Digital System</span>
-      </span>
-    </div>
-    <div class="btn-area">
-      <div class="row g-3" style="max-width:1000px; width:100%;">
-        <div class="col-6 d-grid gap-3">
-          <button class="btn btn-primary btn-lg" type="button" id="PM" style="font-size: 1rem;">保养/ PM</button>
-          <button class="btn btn-primary btn-lg" type="button" id="Handover" style="font-size: 1rem;">交接班 & 故障记录/ Handover & Fault Record</button>
-          <button class="btn btn-primary btn-lg" type="button" id="PonitCheck" style="font-size: 1rem;">点检/ Inspection</button>
-          <button class="btn btn-primary btn-lg" type="button" id="PPMS" style="font-size: 1rem;">工艺参数管理/ Process Parameters Management</button>
-          <button class="btn btn-primary btn-lg" type="button" id="FailureReport" style="font-size: 1rem;">故障报告/ Failure Report</button>
-          <button class="btn btn-primary btn-lg" type="button" id="ProcessSamplingInspection" style="font-size: 1rem;">工艺抽检/ Process Sampling Inspection</button>
-        </div>
-        <div class="col-6 d-grid gap-3">
-          <button class="btn btn-primary btn-lg" type="button" id="SHSP" style="font-size: 1rem;">二手备件/ Second Hand Spare Parts</button>
-          <button class="btn btn-primary btn-lg disabled" type="button" style="font-size: 1rem;">文档索引/ Document Library</button>
-          <button class="btn btn-primary btn-lg" type="button" id="MMS" style="font-size: 1rem;">模具管理/ Mold Management</button>
-          <button class="btn btn-primary btn-lg" type="button" id="SEI" style="font-size: 1rem;">特种设备检查/ Special Equipment Inspection</button>
-          <button class="btn btn-primary btn-lg" type="button" id="TLMoC" style="font-size: 1rem;">任务清单变更管理/ Tasklist MoC</button>
-          <button class="btn btn-primary btn-lg" type="button" id="moldSurfaceCleanButton" style="font-size: 1rem;">模面清理/ Mold Surface Clean</button>
-          <button class="btn btn-primary btn-lg" type="button" id="ProjectTracking" style="font-size: 1rem;">项目跟进/ Project Tracking</button>
-        </div>
+    <div class="welcome-bar">
+      <div class="greet">
+        <span id="name"></span>，欢迎进入设备部数字化系统 / Welcome to Equipment Digital System
       </div>
     </div>
+
+    <!-- 日常作业 -->
+    <div class="section-title">日常作业 / DAILY OPERATIONS</div>
+    <div class="row g-3 domain-daily">
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="PM">
+          <i class="bi bi-tools icon"></i>
+          <div class="title-cn">保养</div>
+          <div class="title-en">PM</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="Handover">
+          <i class="bi bi-arrow-left-right icon"></i>
+          <div class="title-cn">交接班 &amp; 故障记录</div>
+          <div class="title-en">Handover &amp; Fault Record</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="PonitCheck">
+          <i class="bi bi-clipboard-check icon"></i>
+          <div class="title-cn">点检</div>
+          <div class="title-en">Inspection</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="ProcessSamplingInspection">
+          <i class="bi bi-rulers icon"></i>
+          <div class="title-cn">工艺抽检</div>
+          <div class="title-en">Process Sampling Inspection</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="PPMS">
+          <i class="bi bi-sliders icon"></i>
+          <div class="title-cn">工艺参数管理</div>
+          <div class="title-en">Process Parameters Management</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="moldSurfaceCleanButton">
+          <i class="bi bi-brush icon"></i>
+          <div class="title-cn">模面清理</div>
+          <div class="title-en">Mold Surface Clean</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- 故障与改善 -->
+    <div class="section-title">故障与改善 / FAULT &amp; IMPROVEMENT</div>
+    <div class="row g-3 domain-fault">
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="FailureReport">
+          <i class="bi bi-exclamation-triangle icon"></i>
+          <div class="title-cn">故障报告</div>
+          <div class="title-en">Failure Report</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="ProjectTracking">
+          <i class="bi bi-kanban icon"></i>
+          <div class="title-cn">项目跟进</div>
+          <div class="title-en">Project Tracking</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="TLMoC">
+          <i class="bi bi-list-check icon"></i>
+          <div class="title-cn">任务清单变更管理</div>
+          <div class="title-en">Tasklist MoC</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- 资产管理 -->
+    <div class="section-title">资产管理 / ASSET MANAGEMENT</div>
+    <div class="row g-3 domain-asset">
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="MMS">
+          <i class="bi bi-box-seam icon"></i>
+          <div class="title-cn">模具管理</div>
+          <div class="title-en">Mold Management</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="SHSP">
+          <i class="bi bi-gear-wide-connected icon"></i>
+          <div class="title-cn">二手备件</div>
+          <div class="title-en">Second Hand Spare Parts</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="SEI">
+          <i class="bi bi-shield-check icon"></i>
+          <div class="title-cn">特种设备检查</div>
+          <div class="title-en">Special Equipment Inspection</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card disabled" disabled>
+          <span class="badge-soon">即将上线</span>
+          <i class="bi bi-folder icon"></i>
+          <div class="title-cn">文档索引</div>
+          <div class="title-en">Document Library</div>
+        </button>
+      </div>
+    </div>
+
+    <div style="height: 24px;"></div>
   </div>
 
   <!-- 保养/PM 弹出窗口 -->
