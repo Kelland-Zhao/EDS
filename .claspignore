@@ -1,0 +1,38 @@
+# clasp push 排除清单（语法与 .gitignore 相同）
+# 仅 .html / .js / .json (appsscript.json) 会被推到 GAS
+
+# 本地预览产物（Claude Preview 等）
+.preview/**
+
+# 文档（不需要部署到 GAS）
+*.md
+README.md
+需求文档.md
+项目记录.md
+
+# 工具与配置
+push.ps1
+pull.ps1
+.gitignore
+.claspignore
+.clasp.json
+.clasprc.json
+
+# Claude / IDE 配置
+.claude/**
+.codex/**
+.vscode/**
+.mcp.json
+AGENTS.md
+CLAUDE.md
+
+# 凭据
+Google API/**
+
+# 系统/临时
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+node_modules/**
