@@ -654,9 +654,10 @@
                                 item.responsiblePerson = item.responsiblePerson || '';
                             });
                         });
-                        const filteredIM = (parsedData.IM || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport));
-                        const filteredTF = (parsedData.TF || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport));
-                        const filteredPK = (parsedData.PK || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport));
+                        const isResolved = (status) => { const s = String(status || ''); return s.indexOf('已解决') !== -1 || s.indexOf('Solved') !== -1; };
+                        const filteredIM = (parsedData.IM || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && isResolved(item.status));
+                        const filteredTF = (parsedData.TF || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && isResolved(item.status));
+                        const filteredPK = (parsedData.PK || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && isResolved(item.status));
                         if (imTable) {
                             imTable.clear().rows.add(filteredIM).draw();
                             enhanceResponsibleSelects($('#imTable'));
