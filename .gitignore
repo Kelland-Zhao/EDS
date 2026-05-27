@@ -30,3 +30,7 @@ node_modules/
 
 # 本地预览产物（Claude Preview 等）
 .preview/
+
+# docs 生成产物（可由 generate_pdf.py 重新生成）
+docs/_mermaid.min.js
+docs/*.html
