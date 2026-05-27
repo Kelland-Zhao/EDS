@@ -95,6 +95,55 @@
     .domain-daily .nav-card .icon { color: #0d6efd; }
     .domain-fault .nav-card .icon { color: #fd7e14; }
     .domain-asset .nav-card .icon { color: #198754; }
+
+    /* 模态框子按钮（卡片式） */
+    .modal-card-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      background: #fff;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .15s;
+      text-align: left;
+      width: 100%;
+      color: #333;
+    }
+    .modal-card-btn:hover {
+      border-color: #E60012;
+      box-shadow: 0 2px 8px rgba(230,0,18,0.10);
+      transform: translateX(2px);
+      color: #E60012;
+    }
+    .modal-card-btn .mc-icon {
+      font-size: 22px;
+      width: 36px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    .modal-card-btn .mc-text { flex: 1; }
+    .modal-card-btn .title-cn {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .modal-card-btn .title-en {
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+    .modal-card-btn .mc-arrow {
+      color: #adb5bd;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .modal-card-btn:hover .mc-arrow { color: #E60012; }
+    .modal-domain-daily .modal-card-btn .mc-icon { color: #0d6efd; }
+    .modal-domain-fault .modal-card-btn .mc-icon { color: #fd7e14; }
+    .modal-domain-asset .modal-card-btn .mc-icon { color: #198754; }
   </style>
 
   <div class="container-fluid px-3">
@@ -222,13 +271,48 @@
           <h5 class="modal-title" id="pmModalLabel">保养 / PM</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body">
-          <div class="d-grid gap-3">
-            <button class="btn btn-info" type="button" id="PM_Plan">保养计划 / Maintenance Plan</button>
-            <button class="btn btn-info" type="button" id="PM_ShiftFollowUp">三班转保养跟进 / PM Shift Follow-up</button>
-            <button class="btn btn-info" type="button" id="PM_Task">任务管理 / Task Management</button>
-            <button class="btn btn-info" type="button" id="PM_Query">记录查询 / Record Query</button>
-            <button class="btn btn-info" type="button" id="PM_Report">保养报告 / Maintenance Report</button>
+        <div class="modal-body modal-domain-daily">
+          <div class="d-grid gap-2">
+            <button class="modal-card-btn" type="button" id="PM_Plan">
+              <i class="bi bi-calendar-check mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">保养计划</div>
+                <div class="title-en">Maintenance Plan</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="PM_ShiftFollowUp">
+              <i class="bi bi-clock-history mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">三班转保养跟进</div>
+                <div class="title-en">PM Shift Follow-up</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="PM_Task">
+              <i class="bi bi-list-task mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">任务管理</div>
+                <div class="title-en">Task Management</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="PM_Query">
+              <i class="bi bi-search mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">记录查询</div>
+                <div class="title-en">Record Query</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="PM_Report">
+              <i class="bi bi-file-earmark-text mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">保养报告</div>
+                <div class="title-en">Maintenance Report</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -243,10 +327,24 @@
           <h5 class="modal-title" id="handoverModalLabel">交接班 & 故障记录 / Handover & Fault Record</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body">
-          <div class="d-grid gap-3">
-            <button class="btn btn-info" type="button" id="Handover_Shift">交接班 & 留言板 / Handover & MessageBoard</button>
-            <button class="btn btn-info" type="button" id="Fault_Record">故障 & 安全隐患记录 / Fault & Safety Hazard Record</button>
+        <div class="modal-body modal-domain-daily">
+          <div class="d-grid gap-2">
+            <button class="modal-card-btn" type="button" id="Handover_Shift">
+              <i class="bi bi-chat-square-text mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">交接班 &amp; 留言板</div>
+                <div class="title-en">Handover &amp; MessageBoard</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="Fault_Record">
+              <i class="bi bi-shield-exclamation mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">故障 &amp; 安全隐患记录</div>
+                <div class="title-en">Fault &amp; Safety Hazard Record</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -262,12 +360,40 @@
           <h5 class="modal-title" id="failureReportModalLabel">故障报告 / Failure Report</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body">
-          <div class="d-grid gap-3">
-            <button class="btn btn-info" type="button" id="FailureReport_Manage">故障报告管理 / Manage Failure Report</button>
-            <button class="btn btn-info" type="button" id="FailureReport_Upload">故障报告填写 / Fill Failure Report</button>
-            <button class="btn btn-info" type="button" id="FailureReport_Progress">故障报告进度 / Failure Report Progress</button>
-            <button class="btn btn-info" type="button" id="FailureReport_Followup">故障报告跟进验证 / Follow-up Verification</button>
+        <div class="modal-body modal-domain-fault">
+          <div class="d-grid gap-2">
+            <button class="modal-card-btn" type="button" id="FailureReport_Manage">
+              <i class="bi bi-kanban mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">故障报告管理</div>
+                <div class="title-en">Manage Failure Report</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="FailureReport_Upload">
+              <i class="bi bi-pencil-square mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">故障报告填写</div>
+                <div class="title-en">Fill Failure Report</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="FailureReport_Progress">
+              <i class="bi bi-bar-chart-line mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">故障报告进度</div>
+                <div class="title-en">Failure Report Progress</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="FailureReport_Followup">
+              <i class="bi bi-check2-square mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">故障报告跟进验证</div>
+                <div class="title-en">Follow-up Verification</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -283,10 +409,24 @@
           <h5 class="modal-title" id="inspectionModalLabel">点检 / Inspection</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body">
-          <div class="d-grid gap-3">
-            <button class="btn btn-info" type="button" id="Inspection_Execute">点检执行 / Execute Inspection</button>
-            <button class="btn btn-info" type="button" id="Inspection_Report">点检报告 / Inspection Report</button>
+        <div class="modal-body modal-domain-daily">
+          <div class="d-grid gap-2">
+            <button class="modal-card-btn" type="button" id="Inspection_Execute">
+              <i class="bi bi-clipboard-check mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">点检执行</div>
+                <div class="title-en">Execute Inspection</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="Inspection_Report">
+              <i class="bi bi-file-earmark-text mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">点检报告</div>
+                <div class="title-en">Inspection Report</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -302,10 +442,24 @@
           <h5 class="modal-title" id="processInspectionModalLabel">工艺抽检 / Process Inspection</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body">
-          <div class="d-grid gap-3">
-            <button class="btn btn-info" type="button" id="ProcessInspection_Execute">工艺抽检执行 / Process Inspection Execution</button>
-            <button class="btn btn-info" type="button" id="ProcessInspection_Report">工艺抽检报告 / Process Inspection Report</button>
+        <div class="modal-body modal-domain-daily">
+          <div class="d-grid gap-2">
+            <button class="modal-card-btn" type="button" id="ProcessInspection_Execute">
+              <i class="bi bi-rulers mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">工艺抽检执行</div>
+                <div class="title-en">Process Inspection Execution</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" id="ProcessInspection_Report">
+              <i class="bi bi-file-earmark-bar-graph mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">工艺抽检报告</div>
+                <div class="title-en">Process Inspection Report</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
           </div>
         </div>
       </div>

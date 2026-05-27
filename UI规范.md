@@ -294,7 +294,7 @@
 
 ### 4.5 模态框 Modal
 
-用于功能聚合（如一个按钮触发出 5 个子功能选择）：
+用于功能聚合（如一个按钮触发出 5 个子功能选择）。子按钮采用**卡片式**布局：左图标 + 中英双行文字 + 右箭头，hover 时红边框 + 右移 2px。
 
 ```html
 <div class="modal fade" id="xxxModal" tabindex="-1" aria-labelledby="xxxModalLabel" aria-hidden="true">
@@ -304,21 +304,71 @@
         <h5 class="modal-title" id="xxxModalLabel">标题中文 / English Title</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body">
-        <div class="d-grid gap-3">
-          <button class="btn btn-info" type="button" id="Sub_Action_1">子功能 1 / Sub Action 1</button>
-          <button class="btn btn-info" type="button" id="Sub_Action_2">子功能 2 / Sub Action 2</button>
+      <!-- modal-body 加业务域 class：modal-domain-daily / modal-domain-fault / modal-domain-asset -->
+      <div class="modal-body modal-domain-daily">
+        <div class="d-grid gap-2">
+          <button class="modal-card-btn" type="button" id="Sub_Action_1">
+            <i class="bi bi-xxx mc-icon"></i>
+            <div class="mc-text">
+              <div class="title-cn">子功能中文</div>
+              <div class="title-en">Sub Action EN</div>
+            </div>
+            <i class="bi bi-chevron-right mc-arrow"></i>
+          </button>
+          <button class="modal-card-btn" type="button" id="Sub_Action_2">
+            <i class="bi bi-yyy mc-icon"></i>
+            <div class="mc-text">
+              <div class="title-cn">子功能中文</div>
+              <div class="title-en">Sub Action EN</div>
+            </div>
+            <i class="bi bi-chevron-right mc-arrow"></i>
+          </button>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<style>
+.modal-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left;
+  width: 100%;
+  color: #333;
+}
+.modal-card-btn:hover {
+  border-color: #E60012;
+  box-shadow: 0 2px 8px rgba(230,0,18,0.10);
+  transform: translateX(2px);
+  color: #E60012;
+}
+.modal-card-btn .mc-icon { font-size: 22px; width: 36px; flex-shrink: 0; text-align: center; }
+.modal-card-btn .mc-text { flex: 1; }
+.modal-card-btn .title-cn { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.modal-card-btn .title-en { font-size: 11px; color: #888; margin-top: 2px; line-height: 1.2; }
+.modal-card-btn .mc-arrow { color: #adb5bd; font-size: 14px; flex-shrink: 0; }
+.modal-card-btn:hover .mc-arrow { color: #E60012; }
+.modal-domain-daily .modal-card-btn .mc-icon { color: #0d6efd; }
+.modal-domain-fault .modal-card-btn .mc-icon { color: #fd7e14; }
+.modal-domain-asset .modal-card-btn .mc-icon { color: #198754; }
+</style>
 ```
 
 **规则**：
-- 模态框标题用 `中文 / English`（横线分隔，例外，与 navbar 一致）
-- 模态框内的功能按钮用 `btn-info`（浅蓝），与主操作按钮 `btn-primary` 区分
-- 子按钮文字用 `中文 / English`
+- 模态框**标题**用 `中文 / English`（横线分隔，例外，与 navbar 一致）
+- 模态框**子按钮**用 `modal-card-btn`，**不再用 `btn-info`**（btn-info 现仅保留给非聚合场景）
+- 子按钮文字：中文在上（粗体 14px）、英文在下（灰色 11px），**不用 `/` 横向分隔**（与表头一致）
+- `modal-body` 必须加业务域 class（`modal-domain-daily/fault/asset`），图标颜色随业务域
+- 间距用 `gap-2`（旧 `gap-3` 偏空，卡片式按钮已有 padding）
+- 子按钮 ID 保持 PascalCase，JS 用 `$('#Id').click(...)` 绑定
 
 ### 4.6 按钮
 
@@ -375,7 +425,26 @@
 | 特种设备 Special Equipment | `bi-shield-check` |
 | 文档索引 Document Library | `bi-folder` |
 
-新增模块时先来这张表查，没有再去 [icons.getbootstrap.com](https://icons.getbootstrap.com/) 选。
+**模态框子功能图标**（聚合模态框内的子按钮，与上表模块级图标互补）：
+
+| 子功能 | 图标 | 所属模态框 |
+|---|---|---|
+| 保养计划 PM Plan | `bi-calendar-check` | 保养 PM |
+| 三班转保养跟进 PM Shift Follow-up | `bi-clock-history` | 保养 PM |
+| 任务管理 Task Management | `bi-list-task` | 保养 PM |
+| 记录查询 Record Query | `bi-search` | 保养 PM |
+| 保养报告 / 点检报告 Report | `bi-file-earmark-text` | 保养 / 点检 |
+| 交接班 & 留言板 Handover & MessageBoard | `bi-chat-square-text` | 交接班 |
+| 故障 & 安全隐患记录 Fault & Safety Hazard | `bi-shield-exclamation` | 交接班 |
+| 故障报告管理 Manage Failure Report | `bi-kanban` | 故障报告 |
+| 故障报告填写 Fill Failure Report | `bi-pencil-square` | 故障报告 |
+| 故障报告进度 Failure Report Progress | `bi-bar-chart-line` | 故障报告 |
+| 故障报告跟进验证 Follow-up Verification | `bi-check2-square` | 故障报告 |
+| 点检执行 Execute Inspection | `bi-clipboard-check` | 点检 |
+| 工艺抽检执行 Process Inspection Execution | `bi-rulers` | 工艺抽检 |
+| 工艺抽检报告 Process Inspection Report | `bi-file-earmark-bar-graph` | 工艺抽检 |
+
+新增模块/子功能时先来这两张表查，没有再去 [icons.getbootstrap.com](https://icons.getbootstrap.com/) 选。
 
 ---
 

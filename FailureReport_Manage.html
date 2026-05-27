@@ -1,22 +1,164 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 
 <head>
     <base target="_top">
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
+    <?!=include("Kez_Bootstrap@5.3.1_css");?>
+    <?!=include("Kez_datatables@1.11.5_css");?>
+    <?!=include("kez_Datatables_css");?>
+    <?!=include("Kez_Select2@4.0.13_css");?>
+    <?!=include("Kez_Select2-bootstrap_css");?>
+    <?!=include("Kez_bootstrap-datepicker_css");?>
+    <?!=include("CSS");?>
+    <?!=include("Compressor_js");?>
+    <?!=include("Kez_sweetalert2_js");?>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
-<?!=include("kez_Datatables_css");?>
-<?!=include("Kez_Bootstrap@5.3.1_css");?>
-<?!=include("Kez_datatables@1.11.5_css");?>
-<?!=include("Kez_Select2@4.0.13_css");?>
-<?!=include("Kez_Select2-bootstrap_css");?>
-<?!=include("Kez_bootstrap-datepicker_css");?>
-<?!=include("CSS");?>
-<?!=include("Compressor_js");?>
-<?!=include("Kez_sweetalert2_js");?>
-    
     <style>
+        body { background: #f5f6f8; }
+
+        /* 欢迎条 */
+        .welcome-bar {
+            background: #fff;
+            border-left: 4px solid #E60012;
+            padding: 10px 18px;
+            margin: 12px 0 14px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .welcome-bar .greet { color: #333; font-size: 16px; }
+        .welcome-bar .greet #name { color: #E60012; font-weight: 600; }
+        .welcome-bar .perm-info { font-size: 12px; color: #6c757d; }
+        .welcome-bar .perm-info .badge { font-size: 11px; vertical-align: middle; }
+
+        /* 分组标题 */
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #6c757d;
+            letter-spacing: 1px;
+            margin: 18px 0 10px;
+            border-left: 3px solid #E60012;
+            padding-left: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .section-title .toolbar { display: flex; gap: 6px; }
+        .section-title .toolbar .btn { font-size: 12px; padding: 4px 10px; }
+
+        /* 规则芯片 */
+        .rule-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: #fff;
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            margin-bottom: 14px;
+            align-items: center;
+        }
+        .rule-chips .rule-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-right: 6px;
+        }
+        .rule-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 14px;
+            font-size: 12px;
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .rule-chip strong { font-weight: 700; }
+        .rule-chip .process-tag {
+            background: #E60012;
+            color: white;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        /* 手动添加折叠提示 */
+        .manual-add-hint {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        .manual-add-hint > summary {
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+            list-style: none;
+        }
+        .manual-add-hint > summary::-webkit-details-marker { display: none; }
+        .manual-add-hint > summary i.bi-info-circle { color: #0d6efd; }
+        .manual-add-hint > summary .bi-chevron-down {
+            margin-left: auto;
+            transition: transform .15s;
+        }
+        .manual-add-hint[open] > summary .bi-chevron-down { transform: rotate(180deg); }
+        .manual-add-hint .hint-body {
+            padding: 10px 14px 12px;
+            font-size: 12px;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
+        .manual-add-hint .hint-body ol { padding-left: 18px; margin: 0; }
+        .manual-add-hint .hint-body ol li { margin-bottom: 4px; line-height: 1.5; }
+        .manual-add-hint .hint-body .en { color: #adb5bd; display: block; font-size: 11px; }
+
+        /* 标签页 */
+        .nav-tabs { border-bottom: 2px solid #e9ecef; }
+        .nav-tabs .nav-link {
+            color: #6c757d;
+            border: none;
+            font-size: 13px;
+            padding: 8px 16px;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .nav-tabs .nav-link.active {
+            color: #E60012;
+            background: transparent;
+            border-bottom-color: #E60012;
+            font-weight: 600;
+        }
+        .nav-tabs .nav-link .tab-cn { display: block; line-height: 1.1; }
+        .nav-tabs .nav-link .tab-en { display: block; font-size: 11px; color: #adb5bd; line-height: 1.1; margin-top: 2px; }
+        .nav-tabs .nav-link.active .tab-en { color: #E60012; opacity: 0.7; }
+
+        /* 表格容器 */
+        .table-wrapper {
+            background: #fff;
+            border-radius: 0 0 8px 8px;
+            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        /* 表格规范（§4.4） */
         #imTable thead th,
         #tfTable thead th,
         #pkTable thead th {
@@ -26,38 +168,33 @@
             top: 0;
             z-index: 10;
         }
-
-        #imTable th,
-        #imTable td,
-        #tfTable th,
-        #tfTable td,
-        #pkTable th,
-        #pkTable td {
+        #imTable th, #imTable td,
+        #tfTable th, #tfTable td,
+        #pkTable th, #pkTable td {
             padding: 5px 6px;
             font-size: 12px;
             vertical-align: middle;
         }
-
         .bilingual-table tbody td {
             white-space: normal;
             line-height: 1.2;
             text-align: center;
-        }
-
-        #imTable tbody tr.odd > td, #tfTable tbody tr.odd > td, #pkTable tbody tr.odd > td {
-            background-color: #f5f5f5;
-        }
-
-        #imTable tbody tr.even > td, #tfTable tbody tr.even > td, #pkTable tbody tr.even > td {
-            background-color: #ffffff;
-        }
-
-
-        .bilingual-table tbody td {
             vertical-align: middle;
         }
+        /* 问题描述列内容左对齐（第 3 列） */
+        #imTable tbody td:nth-child(3),
+        #tfTable tbody td:nth-child(3),
+        #pkTable tbody td:nth-child(3) {
+            text-align: left;
+        }
+        #imTable tbody tr.odd > td,
+        #tfTable tbody tr.odd > td,
+        #pkTable tbody tr.odd > td { background-color: #f5f5f5; }
+        #imTable tbody tr.even > td,
+        #tfTable tbody tr.even > td,
+        #pkTable tbody tr.even > td { background-color: #ffffff; }
 
-        /* 覆盖 DataTables 默认排序图标的背景图，避免请求缺失的 PNG 资源 */
+        /* 覆盖 DataTables 默认排序图标的背景图，避免请求缺失的 PNG */
         table.dataTable thead > tr > th.sorting,
         table.dataTable thead > tr > th.sorting_asc,
         table.dataTable thead > tr > th.sorting_desc,
@@ -66,6 +203,7 @@
             background-image: none !important;
         }
 
+        /* 确认按钮组（-js.html 引用） */
         .confirm-action-group {
             display: inline-flex;
             flex-wrap: wrap;
@@ -73,207 +211,225 @@
             gap: 0.5rem;
             width: 100%;
         }
+        .confirm-actions-cell { text-align: center; }
 
-        .confirm-actions-cell {
-            text-align: center;
+        /* Select2 控件与页面协调 */
+        .select2-container--bootstrap .select2-selection--single {
+            height: 28px;
+            padding: 0 !important;
+            font-size: 12px;
+            border-color: #ced4da;
+            display: flex;
+            align-items: center;
         }
-
-        .manual-add-guide {
-            background-color: #f1f8ff;
-            border-color: #74a9ff;
+        .select2-container--bootstrap .select2-selection--single .select2-selection__rendered {
+            line-height: 28px;
+            padding: 0 22px 0 8px;
+            color: #333;
+            width: 100%;
         }
-
-        .manual-add-guide p {
-            margin-bottom: 0.5rem;
+        .select2-container--bootstrap .select2-selection--single .select2-selection__placeholder {
+            line-height: 28px;
+            color: #adb5bd;
         }
-
-        .manual-add-guide ul {
-            margin-bottom: 0;
+        .select2-container--bootstrap .select2-selection--single .select2-selection__arrow {
+            height: 26px;
+            top: 1px;
         }
+        .select2-container--bootstrap.select2-container--focus .select2-selection,
+        .select2-container--bootstrap.select2-container--open .select2-selection {
+            border-color: #E60012;
+            box-shadow: 0 0 0 0.15rem rgba(230,0,18,0.15);
+        }
+        .select2-dropdown { border-color: #E60012; font-size: 12px; }
+        .select2-results__option--highlighted[aria-selected],
+        .select2-container--bootstrap .select2-results__option--highlighted[aria-selected] {
+            background-color: #E60012 !important;
+            color: white !important;
+        }
+        table.bilingual-table td .select2-container { vertical-align: middle; }
     </style>
+</head>
 
 <body>
     <nav class="navbar navbar-expand-lg bg-nav">
         <div class="container-fluid">
-            <a class="navbar-brand" style="
-                color: white;
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: xx-large;
-                font-weight: bold;
-              ">故障报告管理 / Failure Report Management</a>
-            <span id="userLevelBadge" class="badge ms-3 bg-secondary" style="font-size: 0.9rem; vertical-align: middle;">加载中... / Loading...</span>
+            <a class="navbar-brand"
+                style="color: white; font-family: Arial, Helvetica, sans-serif; font-size: xx-large; font-weight: bold;">故障报告管理 / Failure Report Management</a>
         </div>
     </nav>
 
-    <br>
+    <div class="container-fluid px-3">
 
-    <div class="container mt-2">
-        <div class="card">
-            <div class="card-header">
-                Failure Report Management / 故障报告管理
+        <!-- 欢迎条（含权限徽章） -->
+        <div class="welcome-bar">
+            <div class="greet">
+                <span id="name"></span>，欢迎进入故障报告管理 / Welcome to Failure Report Management
             </div>
-            <div class="card-body">
-                <!-- 故障报告管理功能区域 -->
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="alert alert-info">
-                            <h5>故障报告管理功能/ Failure Report Management Functions</h5>
-                            <p>此页面用于管理故障报告是否需要书写的判定。</p>
-                            <p>This page is used for managing whether failure reports need to be written or not.</p>
-                            <p>注塑工序(IM)故障时间大于240min，原则需要书写故障报告。</p>
-                            <p>IM process failure time greater than 240min, failure report should be written in principle.</p>
-                            <p>植磨毛工序(TF)故障时间大于120min，原则需要书写故障报告。</p>
-                            <p>TF process failure time greater than 120min, failure report should be written in principle.</p>
-                            <p>包装工序(PK)故障时间大于60min，原则需要书写故障报告。</p>
-                            <p>PK process failure time greater than 60min, failure report should be written in principle.</p>
-                        </div>
+            <div class="perm-info">
+                <span id="userLevelBadge" class="badge bg-secondary">加载中... / Loading...</span>
+                <span id="permissionNotice" class="ms-2" style="display:none;">
+                    <span class="label-cn">无操作权限，请联系管理员</span>
+                    <span class="label-en">No permission, please contact admin</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- 故障时间阈值芯片 -->
+        <div class="rule-chips">
+            <span class="rule-label">需写报告阈值 / Threshold:</span>
+            <span class="rule-chip"><span class="process-tag">IM</span>注塑 &gt; <strong>240 min</strong></span>
+            <span class="rule-chip"><span class="process-tag">TF</span>植磨毛 &gt; <strong>120 min</strong></span>
+            <span class="rule-chip"><span class="process-tag">PK</span>包装 &gt; <strong>60 min</strong></span>
+        </div>
+
+        <!-- 分组标题 + 手动添加按钮 -->
+        <div class="section-title">
+            <span class="title-text">故障报告列表 / FAILURE REPORT LIST</span>
+            <div class="toolbar">
+                <button id="manualAddBtn" class="btn btn-outline-primary">
+                    <i class="bi bi-plus-circle"></i>
+                    <span class="label-cn">手动添加</span>
+                    <span class="label-en">Manual Add</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 手动添加说明（默认收起） -->
+        <details class="manual-add-hint">
+            <summary>
+                <i class="bi bi-info-circle"></i>
+                <span>手动添加使用说明 / Manual Add Instructions</span>
+                <i class="bi bi-chevron-down"></i>
+            </summary>
+            <div class="hint-body">
+                <ol>
+                    <li>
+                        点击"手动添加"按钮，会在当前工序表格末尾生成一条黄色高亮的录入行
+                        <span class="en">A highlighted manual entry row is appended to the current process table.</span>
+                    </li>
+                    <li>
+                        系统自动生成编号，维修时间字段仅支持数字输入，其余字段按照提示完成填写
+                        <span class="en">Report number is auto-generated; repair time field accepts digits only; other fields follow placeholders.</span>
+                    </li>
+                    <li>
+                        信息填写完毕后，请使用"需要 / 不需要故障报告"按钮完成判定
+                        <span class="en">After filling in the details, complete the decision using the decision buttons.</span>
+                    </li>
+                </ol>
+            </div>
+        </details>
+
+        <!-- 工序标签页 -->
+        <ul class="nav nav-tabs" id="processTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="im-tab" data-bs-toggle="tab" data-bs-target="#im-content" type="button" role="tab" aria-controls="im-content" aria-selected="true">
+                    <span class="tab-cn">注塑工序 (IM)</span>
+                    <span class="tab-en">Injection Molding</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tf-tab" data-bs-toggle="tab" data-bs-target="#tf-content" type="button" role="tab" aria-controls="tf-content" aria-selected="false">
+                    <span class="tab-cn">植磨毛工序 (TF)</span>
+                    <span class="tab-en">Tufting</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="pk-tab" data-bs-toggle="tab" data-bs-target="#pk-content" type="button" role="tab" aria-controls="pk-content" aria-selected="false">
+                    <span class="tab-cn">包装工序 (PK)</span>
+                    <span class="tab-en">Packaging</span>
+                </button>
+            </li>
+        </ul>
+
+        <!-- 标签页内容 -->
+        <div class="tab-content" id="processTabContent">
+            <!-- IM工序 -->
+            <div class="tab-pane fade show active" id="im-content" role="tabpanel" aria-labelledby="im-tab">
+                <div class="table-wrapper">
+                    <div class="table-responsive">
+                        <table id="imTable" class="display bilingual-table" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>编号<br>Report No.</th>
+                                    <th>机台号<br>Machine No.</th>
+                                    <th>问题描述<br>Problem Description</th>
+                                    <th>状态<br>Status</th>
+                                    <th>维修时间<br>Repair Time</th>
+                                    <th>提交日期<br>Submit Date</th>
+                                    <th>车间<br>Workshop</th>
+                                    <th>工序<br>Process</th>
+                                    <th>责任人<br>Responsible</th>
+                                    <th>故障报告确认<br>Failure Report Confirmation</th>
+                                    <th>是否需要故障报告<br>Need Failure Report</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- IM数据将通过JavaScript动态加载 -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
+            </div>
 
-                <!-- 数据表格区域 -->
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">故障报告列表 / Failure Report List</h6>
-                                <div id="permissionNotice" class="text-muted small" style="display:none;">
-                                    <span class="label-cn">您没有操作权限，如需操作请联系管理员</span>
-                                    <span class="label-en">No permission, please contact admin</span>
-                                </div>
-                                <button id="manualAddBtn" class="btn btn-outline-primary btn-sm">
-                                    <span class="label-cn">手动添加</span>
-                                    <span class="label-en">Manual Add</span>
-                                </button>
-                            </div>
-                            <div class="card-body">
-                                <div class="alert alert-info manual-add-guide" role="alert">
-                                    <p class="fw-bold mb-2">手动添加使用说明 / Manual Add Instructions</p>
-                                    <ul class="ps-3">
-                                        <li>
-                                            <span class="d-block">点击右上角“手动添加 / Manual Add”按钮后，会在当前工序表格末尾生成一条黄色高亮的手动录入行。</span>
-                                            <span class="d-block text-muted">After clicking the “手动添加 / Manual Add” button, a highlighted manual entry row is appended to the current process table.</span>
-                                        </li>
-                                        <li>
-                                            <span class="d-block">系统自动生成编号，维修时间字段仅支持数字输入，其余字段按照提示完成填写。</span>
-                                            <span class="d-block text-muted">The report number is auto-generated; the repair time field only accepts digits, and other fields follow the on-screen placeholders.</span>
-                                        </li>
-                                        <li>
-                                            <span class="d-block">信息填写完毕后，请使用“需要 / 不需要故障报告”按钮完成判定。</span>
-                                            <span class="d-block text-muted">After filling in the details, complete the decision using the “需要故障报告 / Need Failure Report” or “不需要故障报告 / No Failure Report” buttons.</span>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <!-- 工序标签页 -->
-                                <ul class="nav nav-tabs" id="processTabs" role="tablist">
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link active" id="im-tab" data-bs-toggle="tab" data-bs-target="#im-content" type="button" role="tab" aria-controls="im-content" aria-selected="true">
-                                            注塑工序(IM) / Injection Molding
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="tf-tab" data-bs-toggle="tab" data-bs-target="#tf-content" type="button" role="tab" aria-controls="tf-content" aria-selected="false">
-                                            植磨毛工序(TF) / Tufting
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="pk-tab" data-bs-toggle="tab" data-bs-target="#pk-content" type="button" role="tab" aria-controls="pk-content" aria-selected="false">
-                                            包装工序(PK) / Packaging
-                                        </button>
-                                    </li>
-                                </ul>
-                                
-                                <!-- 标签页内容 -->
-                                <div class="tab-content" id="processTabContent">
-                                    <!-- IM工序内容 -->
-                                    <div class="tab-pane fade show active" id="im-content" role="tabpanel" aria-labelledby="im-tab">
-                                        <div class="mt-3">
-                                            <div class="table-responsive">
-                                                <table id="imTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>编号<br>Report No.</th>
-                                                            <th>机台号<br>Machine No.</th>
-                                                            <th>问题描述<br>Problem Description</th>
-                                                            <th>状态<br>Status</th>
-                                                            <th>维修时间<br>Repair Time</th>
-                                                            <th>提交日期<br>Submit Date</th>
-                                                            <th>车间<br>Workshop</th>
-                                                            <th>工序<br>Process</th>
-                                                            <th>责任人<br>Responsible</th>
-                                                            <th>故障报告确认<br>Failure Report Confirmation</th>
-                                                            <th>是否需要故障报告<br>Need Failure Report</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <!-- IM数据将通过JavaScript动态加载 -->
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- TF工序内容 -->
-                                    <div class="tab-pane fade" id="tf-content" role="tabpanel" aria-labelledby="tf-tab">
-                                        <div class="mt-3">
-                                            <div class="table-responsive">
-                                                <table id="tfTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>编号<br>Report No.</th>
-                                                            <th>机台号<br>Machine No.</th>
-                                                            <th>问题描述<br>Problem Description</th>
-                                                            <th>状态<br>Status</th>
-                                                            <th>维修时间<br>Repair Time</th>
-                                                            <th>提交日期<br>Submit Date</th>
-                                                            <th>车间<br>Workshop</th>
-                                                            <th>工序<br>Process</th>
-                                                            <th>责任人<br>Responsible</th>
-                                                            <th>故障报告确认<br>Failure Report Confirmation</th>
-                                                            <th>是否需要故障报告<br>Need Failure Report</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <!-- TF数据将通过JavaScript动态加载 -->
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- PK工序内容 -->
-                                    <div class="tab-pane fade" id="pk-content" role="tabpanel" aria-labelledby="pk-tab">
-                                        <div class="mt-3">
-                                            <div class="table-responsive">
-                                                <table id="pkTable" class="display table table-bordered table-hover bilingual-table" style="width:100%">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>编号<br>Report No.</th>
-                                                            <th>机台号<br>Machine No.</th>
-                                                            <th>问题描述<br>Problem Description</th>
-                                                            <th>状态<br>Status</th>
-                                                            <th>维修时间<br>Repair Time</th>
-                                                            <th>提交日期<br>Submit Date</th>
-                                                            <th>车间<br>Workshop</th>
-                                                            <th>工序<br>Process</th>
-                                                            <th>责任人<br>Responsible</th>
-                                                            <th>故障报告确认<br>Failure Report Confirmation</th>
-                                                            <th>是否需要故障报告<br>Need Failure Report</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <!-- PK数据将通过JavaScript动态加载 -->
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            <!-- TF工序 -->
+            <div class="tab-pane fade" id="tf-content" role="tabpanel" aria-labelledby="tf-tab">
+                <div class="table-wrapper">
+                    <div class="table-responsive">
+                        <table id="tfTable" class="display bilingual-table" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>编号<br>Report No.</th>
+                                    <th>机台号<br>Machine No.</th>
+                                    <th>问题描述<br>Problem Description</th>
+                                    <th>状态<br>Status</th>
+                                    <th>维修时间<br>Repair Time</th>
+                                    <th>提交日期<br>Submit Date</th>
+                                    <th>车间<br>Workshop</th>
+                                    <th>工序<br>Process</th>
+                                    <th>责任人<br>Responsible</th>
+                                    <th>故障报告确认<br>Failure Report Confirmation</th>
+                                    <th>是否需要故障报告<br>Need Failure Report</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- TF数据将通过JavaScript动态加载 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PK工序 -->
+            <div class="tab-pane fade" id="pk-content" role="tabpanel" aria-labelledby="pk-tab">
+                <div class="table-wrapper">
+                    <div class="table-responsive">
+                        <table id="pkTable" class="display bilingual-table" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>编号<br>Report No.</th>
+                                    <th>机台号<br>Machine No.</th>
+                                    <th>问题描述<br>Problem Description</th>
+                                    <th>状态<br>Status</th>
+                                    <th>维修时间<br>Repair Time</th>
+                                    <th>提交日期<br>Submit Date</th>
+                                    <th>车间<br>Workshop</th>
+                                    <th>工序<br>Process</th>
+                                    <th>责任人<br>Responsible</th>
+                                    <th>故障报告确认<br>Failure Report Confirmation</th>
+                                    <th>是否需要故障报告<br>Need Failure Report</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- PK数据将通过JavaScript动态加载 -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
+
+        <div style="height: 30px;"></div>
     </div>
 
     <!-- 引入JavaScript文件 -->

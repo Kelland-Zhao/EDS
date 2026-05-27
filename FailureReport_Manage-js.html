@@ -3,6 +3,10 @@
         console.error('[onerror] ' + msg + ' | src:' + src + ' | line:' + line + ':' + col);
     };
 
+    // 双语 Swal 提示 helper：中文在上，英文在下（小字号、灰色）
+    const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+    const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
     let userHasManagePermission = false;
     let currentUserEmail = sessionStorage.getItem('Email') || '';
     let currentUserName = sessionStorage.getItem('Name') || '';
@@ -420,6 +424,14 @@
                 { value: '未解决', text: '未解决 / Unresolved' }
             ]),
             submitDate: function (data, type, row) {
+                // 排序时让手动录入行永远置顶（用 9999- 前缀的时间戳，越新越大）
+                if (type === 'sort' || type === 'type') {
+                    if (row && row.manualEntry) {
+                        const ts = row.tempId ? String(row.tempId).replace('manual-', '') : '0';
+                        return '9999-' + ts;
+                    }
+                    return data || '';
+                }
                 if (type !== 'display') return escapeHtml(data);
                 if (row && row.manualEntry) {
                     const identifier = getRowIdentifier(row);
@@ -470,7 +482,7 @@
                 { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description'), render: manualFieldRenderer('problemDescription', '请输入问题描述 / Describe the problem') },
                 { data: 'status', title: buildBilingualTitle('状态', 'Status'), render: manualFieldRenderer('status', '请输入状态 / Enter Status') },
                 { data: 'repairTime', title: buildBilingualTitle('维修时间', 'Repair Time'), render: manualFieldRenderer('repairTime', '请输入维修时间 / Enter Repair Time') },
-                { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date'), render: manualFieldRenderer('submitDate', '请输入提交日期 / Enter Submit Date') },
+                { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date'), type: 'string', render: manualFieldRenderer('submitDate', '请输入提交日期 / Enter Submit Date') },
                 { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop'), render: manualFieldRenderer('workshop', '请输入车间 / Enter Workshop') },
                 { data: 'process', title: buildBilingualTitle('工序', 'Process'), render: manualFieldRenderer('process', '请输入工序 / Enter Process') },
                 {
@@ -531,8 +543,8 @@
 
         // 页面加载时显示一个提示框
         Swal.fire({
-            title: '加载数据中... / Loading Data...',
-            text: '正在从服务器获取故障报告列表，请稍候。 / Fetching failure report list from server, please wait.',
+            title: swalTitle('加载数据中...', 'Loading Data...'),
+            html: swalHtml('正在从服务器获取故障报告列表，请稍候。', 'Fetching failure report list from server, please wait.'),
             allowOutsideClick: false,
             didOpen: () => {
                 Swal.showLoading();
@@ -552,7 +564,8 @@
                 imTable = $('#imTable').DataTable({
                     pageLength: 10,
                     responsive: true,
-                    columns: buildColumnsConfig('IM')
+                    columns: buildColumnsConfig('IM'),
+                    order: [[5, 'desc']]  // 按提交日期降序
                 });
                 imTable.on('draw', function () {
                     const $table = $('#imTable');
@@ -573,7 +586,8 @@
                 tfTable = $('#tfTable').DataTable({
                     pageLength: 10,
                     responsive: true,
-                    columns: buildColumnsConfig('TF')
+                    columns: buildColumnsConfig('TF'),
+                    order: [[5, 'desc']]  // 按提交日期降序
                 });
                 tfTable.on('draw', function () {
                     const $table = $('#tfTable');
@@ -594,7 +608,8 @@
                 pkTable = $('#pkTable').DataTable({
                     pageLength: 10,
                     responsive: true,
-                    columns: buildColumnsConfig('PK')
+                    columns: buildColumnsConfig('PK'),
+                    order: [[5, 'desc']]  // 按提交日期降序
                 });
                 pkTable.on('draw', function () {
                     const $table = $('#pkTable');
@@ -662,8 +677,8 @@
                         console.error('获取故障报告列表失败 / Failed to fetch failure report list:', error);
                         Swal.fire({
                             icon: 'error',
-                            title: '加载失败 / Load Failed',
-                            text: '无法加载故障报告列表，请稍后重试。 / Unable to load failure report list, please try again later.',
+                            title: swalTitle('加载失败', 'Load Failed'),
+                            html: swalHtml('无法加载故障报告列表，请稍后重试。', 'Unable to load failure report list, please try again later.'),
                             confirmButtonText: '确定 / OK'
                         });
                     })
@@ -687,8 +702,8 @@
             if (!table) {
                 Swal.fire({
                     icon: 'error',
-                    title: '操作失败 / Action Failed',
-                    text: '当前工序表格尚未准备好，无法添加手动记录。 / Current process table is not ready for manual entry.',
+                    title: swalTitle('操作失败', 'Action Failed'),
+                    html: swalHtml('当前工序表格尚未准备好，无法添加手动记录。', 'Current process table is not ready for manual entry.'),
                     confirmButtonText: '确定 / OK'
                 });
                 return;
@@ -710,18 +725,10 @@
                 needFailureReport: 'pending',
                 confirmation: ''
             };
-            Swal.fire({
-                title: '创建手动录入行... / Creating Manual Entry...',
-                text: '正在为当前工序插入手动录入行，请稍候。 / Inserting manual entry row for the active process, please wait.',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
+            // 添加后跳到第一页，让用户立即看到新行（排序已保证手动行在最前）
+            table.row.add(data).draw('full-reset');
 
-            table.row.add(data).draw(false);
-
-            // 使用微延时等待 DataTable 完成渲染后再高亮行并关闭弹窗
+            // 使用微延时等待 DataTable 完成渲染后再高亮新行
             window.setTimeout(() => {
                 const rowIndex = findRowIndexByIdentifier(table, tempId);
                 if (rowIndex !== undefined) {
@@ -730,10 +737,7 @@
                         $(node).addClass('table-warning');
                     }
                 }
-                if (Swal.isVisible()) {
-                    Swal.close();
-                }
-            }, 120);
+            }, 80);
         };
 
         // 页面加载时获取数据
@@ -780,8 +784,8 @@
             if (!responsible) {
                 Swal.fire({
                     icon: 'warning',
-                    title: '请先分配责任人 / Assign Responsible',
-                    text: '请在责任人列选择负责人后再标记需要故障报告。 / Please select a responsible person before marking as need failure report.',
+                    title: swalTitle('请先分配责任人', 'Assign Responsible'),
+                    html: swalHtml('请在责任人列选择负责人后再标记需要故障报告。', 'Please select a responsible person before marking as need failure report.'),
                     confirmButtonText: '确定 / OK'
                 });
                 return;
@@ -789,8 +793,11 @@
 
             // 弹窗确认操作
             Swal.fire({
-                title: '确认操作 / Confirm Action',
-                text: `确定要将故障报告 ${reportId} 标记为"需要故障报告"吗？/ Are you sure you want to mark failure report ${reportId} as "Need Failure Report"?`,
+                title: swalTitle('确认操作', 'Confirm Action'),
+                html: swalHtml(
+                    `确定要将故障报告 ${reportId} 标记为"需要故障报告"吗？`,
+                    `Are you sure you want to mark failure report ${reportId} as "Need Failure Report"?`
+                ),
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#28a745',
@@ -856,8 +863,11 @@
 
             // 弹窗确认操作
             Swal.fire({
-                title: '确认操作 / Confirm Action',
-                text: `确定要将故障报告 ${reportId} 标记为"不需要故障报告"吗？/ Are you sure you want to mark failure report ${reportId} as "No Failure Report"?`,
+                title: swalTitle('确认操作', 'Confirm Action'),
+                html: swalHtml(
+                    `确定要将故障报告 ${reportId} 标记为"不需要故障报告"吗？`,
+                    `Are you sure you want to mark failure report ${reportId} as "No Failure Report"?`
+                ),
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#6c757d',
@@ -889,8 +899,8 @@
             if (needReport && !responsiblePerson) {
                 Swal.fire({
                     icon: 'warning',
-                    title: '请先分配责任人 / Assign Responsible',
-                    text: '请先选择责任人后再提交需要故障报告。 / Please assign a responsible person before updating.',
+                    title: swalTitle('请先分配责任人', 'Assign Responsible'),
+                    html: swalHtml('请先选择责任人后再提交需要故障报告。', 'Please assign a responsible person before updating.'),
                     confirmButtonText: '确定 / OK'
                 });
                 return;
@@ -908,8 +918,8 @@
             if (typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined') {
                 // 显示加载提示
                 Swal.fire({
-                    title: '更新中... / Updating...',
-                    text: '正在将故障报告状态写回到后台，请稍候。 / Writing failure report status back to backend, please wait.',
+                    title: swalTitle('更新中...', 'Updating...'),
+                    html: swalHtml('正在将故障报告状态写回到后台，请稍候。', 'Writing failure report status back to backend, please wait.'),
                     allowOutsideClick: false,
                     didOpen: () => {
                         Swal.showLoading();
@@ -923,8 +933,8 @@
                         // 显示成功提示
                         Swal.fire({
                             icon: 'success',
-                            title: '更新成功 / Update Successful',
-                            text: '故障报告状态已成功写回到后台。 / Failure report status has been successfully written back to backend.',
+                            title: swalTitle('更新成功', 'Update Successful'),
+                            html: swalHtml('故障报告状态已成功写回到后台。', 'Failure report status has been successfully written back to backend.'),
                             timer: 2000,
                             showConfirmButton: false
                         }).then(function () {
@@ -941,8 +951,8 @@
                         // 显示错误提示
                         Swal.fire({
                             icon: 'error',
-                            title: '更新失败 / Update Failed',
-                            text: '故障报告状态写回后台失败: ' + error + ' / Failed to write failure report status back to backend: ' + error,
+                            title: swalTitle('更新失败', 'Update Failed'),
+                            html: swalHtml('故障报告状态写回后台失败: ' + error, 'Failed to write failure report status back to backend: ' + error),
                             confirmButtonText: '确定 / OK'
                         });
                     })
@@ -951,8 +961,8 @@
                 console.error('google.script.run不可用，无法调用后端函数 / google.script.run is not available, cannot call backend function');
                 Swal.fire({
                     icon: 'error',
-                    title: '环境错误 / Environment Error',
-                    text: '无法连接到后端服务，请确保在Google Apps Script环境中运行 / Cannot connect to backend service, please ensure running in Google Apps Script environment',
+                    title: swalTitle('环境错误', 'Environment Error'),
+                    html: swalHtml('无法连接到后端服务，请确保在Google Apps Script环境中运行', 'Cannot connect to backend service, please ensure running in Google Apps Script environment'),
                     confirmButtonText: '确定 / OK'
                 });
             }
