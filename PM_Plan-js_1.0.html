@@ -168,11 +168,11 @@
      dropdownParent: $('.swal2-modal')
     });
     let week = [];
-    global_data.Content.forEach((r) => { week.push(r["日历周次"]) })
+    global_data.Content.forEach((r) => { if (r["日历周次"]) week.push(r["日历周次"]); })
     let uniqueWeek = [...new Set(week)];
-    uniqueWeek.sort()
+    uniqueWeek.sort();
     $('#WeekNo').select2({
-     data: uniqueWeek,
+     data: uniqueWeek.map(w => ({ id: w, text: w })),
      theme: 'bootstrap',
      dropdownParent: $('.swal2-modal')
     });
