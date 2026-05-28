@@ -165,7 +165,7 @@
     $("#process,#workshop").select2({
      theme: 'bootstrap',
      minimumResultsForSearch: -1,
-     dropdownParent: $('.swal2-modal')
+     dropdownParent: $('.swal2-popup')
     });
     let week = [];
     global_data.Content.forEach((r) => { if (r["日历周次"]) week.push(r["日历周次"]); })
@@ -174,7 +174,7 @@
     $('#WeekNo').select2({
      data: uniqueWeek.map(w => ({ id: w, text: w })),
      theme: 'bootstrap',
-     dropdownParent: $('.swal2-modal')
+     dropdownParent: $('.swal2-popup')
     });
     function setQueryMode(mode) {
      queryMode = mode;
