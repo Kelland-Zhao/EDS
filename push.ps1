@@ -15,6 +15,13 @@ if ($LASTEXITCODE -ne 0) {
     exit
 }
 
+# 2.5 Deploy to update /exec URL
+Write-Host "[INFO] Deploying to update /exec..." -ForegroundColor Cyan
+clasp deploy --deploymentId "AKfycbyaQjG5yFGYxU825DrODhSLl2bdfbYKpqAH4qOIzKoTJ4b-5qU" --description $msg
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[WARN] Clasp deploy failed! /exec may serve old code." -ForegroundColor Yellow
+}
+
 # 3. Git push
 Write-Host "[INFO] Pushing to Git..." -ForegroundColor Cyan
 git add .
