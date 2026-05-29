@@ -99,6 +99,7 @@
                 html: swalHtml('正在获取验证记录，请稍候。', 'Loading verification records, please wait.'),
                 showConfirmButton: false
             });
+            Swal.showLoading();
         } else {
             Swal.fire({
                 title: swalTitle('加载中...', 'Loading...'),

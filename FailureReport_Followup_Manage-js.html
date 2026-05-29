@@ -119,6 +119,7 @@
                 html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
                 showConfirmButton: false
             });
+            Swal.showLoading();
         } else {
             Swal.fire({
                 title: swalTitle('加载中...', 'Loading...'),
