@@ -546,6 +546,7 @@
             title: swalTitle('加载数据中...', 'Loading Data...'),
             html: swalHtml('正在从服务器获取故障报告列表，请稍候。', 'Fetching failure report list from server, please wait.'),
             allowOutsideClick: false,
+            showConfirmButton: false,
             didOpen: () => {
                 Swal.showLoading();
             }
@@ -921,6 +922,7 @@
                     title: swalTitle('更新中...', 'Updating...'),
                     html: swalHtml('正在将故障报告状态写回到后台，请稍候。', 'Writing failure report status back to backend, please wait.'),
                     allowOutsideClick: false,
+                    showConfirmButton: false,
                     didOpen: () => {
                         Swal.showLoading();
                     }

@@ -32,6 +32,7 @@
             title: swalTitle('加载中...', 'Loading...'),
             html: swalHtml('正在初始化页面，请稍候。', 'Initializing page, please wait.'),
             allowOutsideClick: false,
+            showConfirmButton: false,
             didOpen: function() { Swal.showLoading(); }
         });
 
@@ -92,13 +93,15 @@
         if (Swal.isVisible()) {
             Swal.update({
                 title: swalTitle('加载中...', 'Loading...'),
-                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.')
+                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
+                showConfirmButton: false
             });
         } else {
             Swal.fire({
                 title: swalTitle('加载中...', 'Loading...'),
                 html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
                 allowOutsideClick: false,
+                showConfirmButton: false,
                 didOpen: function() { Swal.showLoading(); }
             });
         }

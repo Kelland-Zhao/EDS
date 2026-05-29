@@ -376,6 +376,7 @@ $(document).ready(function () {
     html: swalHtml('正在加载表单模板，请稍候。', 'Loading form template, please wait.'),
     allowOutsideClick: false,
     allowEscapeKey: false,
+    showConfirmButton: false,
     didOpen: function() { Swal.showLoading(); }
   });
 
@@ -720,6 +721,7 @@ $(document).ready(function () {
             title: swalTitle('加载数据中...', 'Loading Data...'),
             html: swalHtml('正在获取已有报告数据，请稍候。', 'Fetching existing report data, please wait.'),
             allowOutsideClick: false,
+            showConfirmButton: false,
             didOpen: function() { Swal.showLoading(); }
           });
 

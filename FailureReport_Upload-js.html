@@ -180,6 +180,7 @@ $(document).ready(function() {
         title: swalTitle('加载数据中...', 'Loading Data...'),
         html: swalHtml('正在从服务器获取故障报告数据，请稍候。', 'Fetching failure report data from server, please wait.'),
         allowOutsideClick: false,
+        showConfirmButton: false,
         didOpen: () => {
             Swal.showLoading();
         }
