@@ -5,6 +5,7 @@
 .preview/**
 
 # 文档（不需要部署到 GAS）
+docs/**
 *.md
 README.md
 需求文档.md

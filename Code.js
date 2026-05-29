@@ -36,7 +36,6 @@ function doGet(e) {
   Route.path("FailureReport_Upload", loadFailureReport_Upload);
   Route.path("FailureReport_Manage", loadFailureReport_Manage);
   Route.path("FailureReport_Progress", loadFailureReport_Progress);
-  Route.path("FailureReport_Followup", loadFailureReport_Followup);
   Route.path("FailureReport_Followup_Manage", loadFailureReport_Followup_Manage);
   Route.path("FailureReport_Followup_Verify", loadFailureReport_Followup_Verify);
   Route.path("MoldSurfaceClean", loadMoldSurfaceClean); // Changed to MoldSurfaceClean
@@ -8447,16 +8446,6 @@ function getFollowupRecordsForVerifier(userName) {
   }
 }
 
-
-/**
- * 加载故障报告跟进验证页面
- */
-function loadFailureReport_Followup() {
-  let webPage = getReleaseWebPage();
-  return render("FailureReport_Followup", { webPage: webPage })
-    .setTitle("故障报告跟进验证 / Failure Report Follow-up Verification")
-    .setFaviconUrl(webIconUrl);
-}
 
 /**
  * 加载故障报告跟进页面（责任人使用）
