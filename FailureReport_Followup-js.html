@@ -6,6 +6,35 @@
     let followupTable = null;
     let followupData = [];
     let userOptions = [];
+    let showCompleted = false;
+
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex, rowData) {
+        if (!followupTable || settings.nTable !== followupTable.table().node()) return true;
+        return showCompleted || !String((rowData || {}).status || '').includes('已通过');
+    });
+
+    function setupCompletedToggle() {
+        if (!$('#completedToggle').length) {
+            $('#followupTable').closest('.table-responsive').after(
+                '<div id="completedToggle" style="cursor:pointer;padding:8px 14px;margin-top:8px;border-radius:6px;background:#f8f9fa;border:1px solid #dee2e6;font-size:0.9rem;"></div>'
+            );
+            $(document).on('click', '#completedToggle', function() {
+                showCompleted = !showCompleted;
+                followupTable.draw();
+                updateCompletedToggle();
+            });
+        }
+        updateCompletedToggle();
+    }
+
+    function updateCompletedToggle() {
+        const count = (followupData || []).filter(function(r) { return String(r.status || '').includes('已通过'); }).length;
+        const $t = $('#completedToggle');
+        if (count === 0) { $t.hide(); return; }
+        $t.show();
+        $t.html((showCompleted ? '▼' : '▶') + ' 已通过 ' + count + ' 条 / ' + count + ' Passed' +
+            ' &nbsp;<small class="text-muted">— ' + (showCompleted ? '收起 / Collapse' : '展开 / Expand') + '</small>');
+    }
 
     const STATUS_OPTIONS = ['进行中 / Ongoing', '已完成 / Completed'];
     const FIELD_LABELS = {
@@ -26,6 +55,14 @@
 
     $(document).ready(function() {
         console.log('页面DOM加载完成，开始初始化...');
+
+        Swal.fire({
+            title: swalTitle('加载中...', 'Loading...'),
+            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: function() { Swal.showLoading(); }
+        });
 
         populateVerifyStatusOptions();
 
@@ -80,13 +117,15 @@
     }
 
     function fetchFollowupRecords() {
-        Swal.fire({
-            title: swalTitle('加载中...', 'Loading...'),
-            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: function() { Swal.showLoading(); }
-        });
+        if (!Swal.isVisible()) {
+            Swal.fire({
+                title: swalTitle('加载中...', 'Loading...'),
+                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: function() { Swal.showLoading(); }
+            });
+        }
 
         google.script.run
             .withSuccessHandler(function(response) {
@@ -144,6 +183,7 @@
             followupTable.clear();
             followupTable.rows.add(data);
             followupTable.draw();
+            updateCompletedToggle();
             return;
         }
 
@@ -240,6 +280,8 @@
         });
 
         enhanceSelects();
+        followupTable.draw(false);
+        setupCompletedToggle();
         console.log('表格初始化完成');
     }
 
@@ -276,14 +318,18 @@
     function buildStatusSelectHtml(followupId, currentValue) {
         const safeId = escapeHtml(followupId);
         const normalizedValue = String(currentValue || '').trim();
+        if (normalizedValue.includes('已通过')) {
+            return '<span class="badge bg-success">已通过<br>Passed</span>';
+        }
+        if (normalizedValue.includes('未通过')) {
+            return '<span class="badge bg-danger">未通过<br>Not Passed</span>';
+        }
         let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
         let hasCurrent = normalizedValue === '';
 
         STATUS_OPTIONS.forEach(function(option) {
             const selected = option === normalizedValue ? ' selected' : '';
-            if (selected) {
-                hasCurrent = true;
-            }
+            if (selected) { hasCurrent = true; }
             optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
         });
 

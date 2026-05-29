@@ -8,6 +8,35 @@
     let currentUserName = '';
     let currentUserEmail = '';
     let userIsAdmin = false;
+    let showCompleted = false;
+
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex, rowData) {
+        if (!followupTable || settings.nTable !== followupTable.table().node()) return true;
+        return showCompleted || !String((rowData || {}).status || '').includes('已通过');
+    });
+
+    function setupCompletedToggle() {
+        if (!$('#completedToggle').length) {
+            $('#followupTable').closest('.table-responsive').after(
+                '<div id="completedToggle" style="cursor:pointer;padding:8px 14px;margin-top:8px;border-radius:6px;background:#f8f9fa;border:1px solid #dee2e6;font-size:0.9rem;"></div>'
+            );
+            $(document).on('click', '#completedToggle', function() {
+                showCompleted = !showCompleted;
+                followupTable.draw();
+                updateCompletedToggle();
+            });
+        }
+        updateCompletedToggle();
+    }
+
+    function updateCompletedToggle() {
+        const count = (followupData || []).filter(function(r) { return String(r.status || '').includes('已通过'); }).length;
+        const $t = $('#completedToggle');
+        if (count === 0) { $t.hide(); return; }
+        $t.show();
+        $t.html((showCompleted ? '▼' : '▶') + ' 已通过 ' + count + ' 条 / ' + count + ' Passed' +
+            ' &nbsp;<small class="text-muted">— ' + (showCompleted ? '收起 / Collapse' : '展开 / Expand') + '</small>');
+    }
 
     const FIELD_LABELS = {
         paPlan: '预防性措施 / PA Action',
@@ -36,6 +65,14 @@
         currentUserName = getCurrentUser();
         currentUserEmail = sessionStorage.getItem('Email') || '';
         console.log('当前用户:', currentUserName);
+
+        Swal.fire({
+            title: swalTitle('加载中...', 'Loading...'),
+            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: function() { Swal.showLoading(); }
+        });
 
         checkUserPermission();
     });
@@ -104,13 +141,15 @@
     }
 
     function fetchFollowupRecords() {
-        Swal.fire({
-            title: swalTitle('加载中...', 'Loading...'),
-            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: function() { Swal.showLoading(); }
-        });
+        if (!Swal.isVisible()) {
+            Swal.fire({
+                title: swalTitle('加载中...', 'Loading...'),
+                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: function() { Swal.showLoading(); }
+            });
+        }
 
         const serverFn = userIsAdmin ? 'getFollowupRecords' : 'getFollowupRecordsForResponsiblePerson';
         const serverArgs = userIsAdmin ? [] : [currentUserName];
@@ -170,6 +209,7 @@
             followupTable.clear();
             followupTable.rows.add(data);
             followupTable.draw();
+            updateCompletedToggle();
             return;
         }
 
@@ -274,6 +314,8 @@
             responsive: true
         });
 
+        followupTable.draw(false);
+        setupCompletedToggle();
         console.log('表格初始化完成');
     }
 
@@ -285,9 +327,11 @@
         const cn = parts[0] || v;
         const en = parts[1] || '';
         let bg = 'bg-secondary';
-        if (v === '已完成 / Completed') bg = 'bg-success';
-        else if (v === '进行中 / Ongoing') bg = 'bg-warning text-dark';
-        else if (v === '未验证 / Not Verified') bg = 'bg-info text-dark';
+        if (v.includes('已通过')) bg = 'bg-success';
+        else if (v.includes('未通过')) bg = 'bg-danger';
+        else if (v.includes('已完成')) bg = 'bg-success';
+        else if (v.includes('进行中')) bg = 'bg-warning text-dark';
+        else if (v.includes('未验证')) bg = 'bg-info text-dark';
         const display = en ? (cn + '<br>' + en) : cn;
         return '<span class="badge ' + bg + '" style="font-size:0.8rem;">' + display + '</span>';
     }
