@@ -263,15 +263,16 @@
                 { data: 'updatedDate' },
                 {
                     data: null,
+                    className: 'text-center align-middle',
                     orderable: false,
                     render: function(data, type, row) {
                         if (type !== 'display') return '';
-                        var btnStyle = 'font-size:0.75rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;';
-                        var actions = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;">';
-                        actions += '<button class="btn btn-sm btn-primary save-status-btn" data-id="' + row.followupId + '" style="' + btnStyle + '"><i class="fas fa-save"></i><br>保存<br>Save</button>';
+                        var btnStyle = 'font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;';
+                        var actions = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;justify-content:center;">';
+                        actions += '<button class="btn btn-sm btn-primary save-status-btn" data-id="' + row.followupId + '" style="' + btnStyle + '"><i class="bi bi-save"></i><br>保存<br>Save</button>';
                         if (row.pdfUrl) {
                             actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '">';
-                            actions += '<i class="fas fa-file-pdf"></i><br>查看PDF<br>View PDF';
+                            actions += '<i class="bi bi-file-pdf"></i><br>查看PDF<br>View PDF';
                             actions += '</button>';
                         }
                         actions += '</div>';
@@ -467,36 +468,6 @@
                 confirmButtonText: '确定 / OK'
             });
         }
-    });
-
-    // 预防性措施双击编辑 - 单元格内直接编辑（只读）
-    $('#followupTable tbody').on('dblclick', 'td.pa-readonly-cell', function(e) {
-        if (!followupTable) return;
-        const $cell = $(this);
-        if ($cell.find('textarea').length > 0) return;
-
-        const rowApi = followupTable.row($cell.closest('tr'));
-        const rowData = rowApi.data();
-        if (!rowData) return;
-
-        const originalValue = String(rowData.paPlan || '').trim();
-
-        const $textarea = $('<textarea class="form-control pa-action-editor" rows="3" readonly>' + escapeHtml(originalValue) + '</textarea>');
-        $cell.empty().append($textarea);
-        $textarea.focus();
-
-        const cancelEdit = function() {
-            $textarea.off('blur');
-            rowApi.draw(false);
-        };
-
-        $textarea.on('blur', cancelEdit);
-        $textarea.on('keydown', function(e) {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelEdit();
-            }
-        });
     });
 
     // 下拉更新（支持状态列和验证列）

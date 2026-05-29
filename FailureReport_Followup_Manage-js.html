@@ -279,15 +279,16 @@
                 },
                 {
                     data: null,
+                    className: 'text-center align-middle',
                     orderable: false,
                     render: function(data, type, row) {
                         if (type !== 'display') return '';
-                        const btnStyle = 'font-size:0.75rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;';
-                        let actions = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;">';
-                        actions += '<button class="btn btn-sm btn-primary save-content-btn" data-id="' + row.followupId + '" style="' + btnStyle + '"><i class="fas fa-save"></i><br>保存<br>Save</button>';
+                        const btnStyle = 'font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;';
+                        let actions = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;justify-content:center;">';
+                        actions += '<button class="btn btn-sm btn-primary save-content-btn" data-id="' + row.followupId + '" style="' + btnStyle + '"><i class="bi bi-save"></i><br>保存<br>Save</button>';
                         if (row.pdfUrl) {
                             actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '">';
-                            actions += '<i class="fas fa-file-pdf"></i><br>查看PDF<br>View PDF';
+                            actions += '<i class="bi bi-file-pdf"></i><br>查看PDF<br>View PDF';
                             actions += '</button>';
                         }
                         actions += '</div>';
@@ -333,7 +334,7 @@
         else if (v.includes('进行中')) bg = 'bg-warning text-dark';
         else if (v.includes('未验证')) bg = 'bg-info text-dark';
         const display = en ? (cn + '<br>' + en) : cn;
-        return '<span class="badge ' + bg + '" style="font-size:0.8rem;">' + display + '</span>';
+        return '<span class="badge ' + bg + '" style="font-size:12px;">' + display + '</span>';
     }
 
     function showToast(message, icon) {
@@ -462,68 +463,6 @@
                 confirmButtonText: '确定 / OK'
             });
         }
-    });
-
-    // 预防性措施双击编辑 - 单元格内直接编辑
-    $('#followupTable tbody').on('dblclick', 'td.pa-action-cell', function(e) {
-        if (!followupTable) return;
-        const $cell = $(this);
-        if ($cell.find('textarea').length > 0) return;
-
-        const rowApi = followupTable.row($cell.closest('tr'));
-        const rowData = rowApi.data();
-        if (!rowData) return;
-
-        const originalValue = String(rowData.paPlan || '').trim();
-
-        const $textarea = $('<textarea class="form-control pa-action-editor" rows="3">' + escapeHtml(originalValue) + '</textarea>');
-        $cell.empty().append($textarea);
-        $textarea.focus();
-        $textarea[0].setSelectionRange($textarea.val().length, $textarea.val().length);
-
-        let isSaved = false;
-
-        const saveEdit = function() {
-            if (isSaved) return;
-            isSaved = true;
-            const newValue = String($textarea.val() || '').trim();
-            $textarea.off('blur keydown');
-
-            if (newValue === originalValue) {
-                rowApi.draw(false);
-                return;
-            }
-
-            updateFollowupField('paPlan', rowData.followupId, newValue, function(response) {
-                const updatedRow = Object.assign({}, rowData, { paPlan: newValue });
-                if (response && response.updatedDate) {
-                    updatedRow.updatedDate = response.updatedDate;
-                }
-                rowApi.data(updatedRow).draw(false);
-                showToast(buildDualMessage('paPlan', '已更新', ' updated'), 'success');
-            }, function(message) {
-                rowApi.data(rowData).draw(false);
-                showToast(message || buildDualMessage('paPlan', '更新失败', ' update failed'), 'error');
-            });
-        };
-
-        const cancelEdit = function() {
-            if (isSaved) return;
-            isSaved = true;
-            $textarea.off('blur keydown');
-            rowApi.draw(false);
-        };
-
-        $textarea.on('blur', saveEdit);
-        $textarea.on('keydown', function(e) {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelEdit();
-            } else if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                saveEdit();
-            }
-        });
     });
 
     // 邮件提醒验证人按钮点击事件

@@ -1,7 +1,10 @@
-﻿<script>
-  let global_Name = sessionStorage.getItem('Name');
- let global_Process = sessionStorage.getItem('Process');
- let global_ID = sessionStorage.getItem('ID');
+<script>
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+  let global_Name = (typeof _injectedName !== 'undefined' && _injectedName) ? _injectedName : sessionStorage.getItem('Name');
+  $('#name').text(global_Name);
+ let global_Process = (typeof _injectedType !== 'undefined' && _injectedType) ? _injectedType : sessionStorage.getItem('Process');
+ let global_ID = (typeof _injectedID !== 'undefined' && _injectedID) ? _injectedID : sessionStorage.getItem('ID');
  let global_Workshop = sessionStorage.getItem('Workshop');
  let siWebPage = sessionStorage.getItem('siWebPage') || (typeof _injectedWebPage !== 'undefined' ? _injectedWebPage : '');
  let global_data;
@@ -23,9 +26,10 @@
   // 2024年优化：页面加载逻辑
   // 1. 页面加载时显示 Loading 弹窗（中英双语）
   Swal.fire({
-    title: '正在加载数据...\nLoading data...',
-    text: '请稍候\nPlease wait',
+    title: swalTitle('正在加载数据...', 'Loading Data...'),
+    html: swalHtml('请稍候', 'Please wait'),
     allowOutsideClick: false,
+    showConfirmButton: false,
     didOpen: () => {
       Swal.showLoading();
     }
@@ -317,7 +321,7 @@
     {
      targets: 15,
      data: null, 
-     defaultContent: '<button class="btn btn-info btn-sm text-center">跟进</button>',
+     defaultContent: '<button class="btn btn-sm btn-info" style="font-size:0.75rem;width:68px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;"><i class="bi bi-arrow-right-circle"></i><br>跟进<br>Follow-up</button>',
      orderable: false,
      className: 'operation-column text-center'
     },
@@ -329,10 +333,10 @@
       
       // 只有已完成状态才显示可用按钮
       if (status && (status.includes('Finished') || status.includes('已完成'))) {
-        return `<button class="btn btn-sm text-center btn-danger" style="background-color:#FF6F91;color:white;font-weight:bold;">班组确认/ Production Confirm</button>`;
+        return '<button class="btn btn-sm btn-danger" style="font-size:0.75rem;width:96px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;"><i class="bi bi-check-lg"></i><br>班组确认<br>Production Confirm</button>';
       } else {
         // 其他状态显示禁用按钮
-        return `<button class="btn btn-outline-secondary btn-sm text-center" disabled>班组确认<br><small>Production Confirm</small></button>`;
+        return '<button class="btn btn-sm btn-outline-secondary" disabled style="font-size:0.75rem;width:96px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;"><i class="bi bi-check-lg"></i><br>班组确认<br>Production Confirm</button>';
       }
      },
      orderable: false,
@@ -364,15 +368,15 @@
     var statusValue = data["保养状态/ PM Status"];
     if (!statusValue) return;
     var colorMap = [
-      { keys: ['Finished', '已完成'], bg: '#32CD32' },
-      { keys: ['Ongoing', '进行中'], bg: '#FFC300' },
-      { keys: ['已添加临时任务'], bg: '#9370DB' },
-      { keys: ['人员已分配'], bg: '#00BFFF' },
-      { keys: ['未开始'], bg: '#FFB6C1' }
+      { keys: ['Finished', '已完成'], bg: '#32CD32', tc: '#fff' },
+      { keys: ['Ongoing', '进行中'], bg: '#FFC300', tc: '#333' },
+      { keys: ['已添加临时任务'], bg: '#9370DB', tc: '#fff' },
+      { keys: ['人员已分配'], bg: '#00BFFF', tc: '#fff' },
+      { keys: ['未开始'], bg: '#FFB6C1', tc: '#333' }
     ];
     var match = colorMap.find(function(m) { return m.keys.some(function(k) { return statusValue.includes(k); }); });
     if (match) {
-     $('td', row).eq(14).css({ 'font-weight': 'bold', 'background-color': match.bg, 'color': 'white' });
+     $('td', row).eq(14).css({ 'font-weight': 'bold', 'background-color': match.bg, 'color': match.tc });
     }
    }
   });

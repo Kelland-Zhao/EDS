@@ -9,6 +9,7 @@ const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;
 // 页面加载完成后初始化
 $(document).ready(function() {
     console.log('故障报告进度页面初始化开始...');
+    $('#name').text(sessionStorage.getItem('Name') || '');
 
     // 基于 sessionStorage.Process 决定默认显示哪个工序 Tab（与 FailureReport_Manage 一致）
     (function setDefaultProcessTabBySession() {

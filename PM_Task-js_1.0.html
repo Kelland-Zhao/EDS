@@ -1,5 +1,10 @@
 ﻿<script>
+  // 双语 Swal 提示 helper：中文在上，英文在下（小字号、灰色）
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
   let global_Name = sessionStorage.getItem('Name');
+  $('#name').text(global_Name);
   let global_Process = sessionStorage.getItem('Process');
   let global_ID = sessionStorage.getItem('ID');
   let global_Workshop = sessionStorage.getItem('Workshop');
@@ -1043,9 +1048,9 @@
   function Tasklist(data) {
     Swal.close();
     Swal.fire({
-      title: '加载成功',
-          html: '<span style="font-size:14px;color:#6c757d;">LOADING SUCCESS</span>',
-      icon: 'success'
+      title: swalTitle('加载成功', 'Loading Success'),
+      icon: 'success',
+      timer: 1500
     });
 
     let filterData = dataFilter(data);
@@ -1350,11 +1355,12 @@
   }
 
   function Initialization() {
-    // 页面加载时显示加载提示框（参考TaskManagement_js.html的样式）
+    // 页面加载时显示加载提示框（参考 FailureReport_Manage 的样式）
     Swal.fire({
-      title: '加载数据中...',
-      text: '正在从服务器获取任务列表，请稍候。',
+      title: swalTitle('加载数据中...', 'Loading Data...'),
+      html: swalHtml('正在从服务器获取任务列表，请稍候。', 'Fetching task list from server, please wait.'),
       allowOutsideClick: false,
+      showConfirmButton: false,
       didOpen: () => {
         Swal.showLoading();
       }

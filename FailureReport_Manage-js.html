@@ -10,6 +10,7 @@
     let userHasManagePermission = false;
     let currentUserEmail = sessionStorage.getItem('Email') || '';
     let currentUserName = sessionStorage.getItem('Name') || '';
+    $('#name').text(currentUserName);
 
     function checkUserManagePermission() {
         if (typeof google === 'undefined' || typeof google.script === 'undefined' || typeof google.script.run === 'undefined') {

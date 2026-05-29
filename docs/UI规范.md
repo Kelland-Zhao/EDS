@@ -93,11 +93,14 @@
 
 <body>
   <!-- 顶部 navbar -->
-  <nav class="navbar navbar-expand-lg">
+  <nav class="navbar navbar-expand-lg bg-nav">
     <div class="container-fluid">
-      <a class="navbar-brand"
-        style="color: white; font-size: xx-large; font-weight: bold;">
-        中文名 / English Name
+      <a class="navbar-brand" style="display:flex;align-items:center;gap:12px;text-decoration:none;">
+        <img src="[Colgate logo data URI, see §3.1]" alt="Colgate" style="height:60px;">
+        <span style="color:white;font-family:Arial,Helvetica,sans-serif;line-height:1.2;">
+          <span style="font-size:xx-large;font-weight:bold;">中文名</span><br>
+          <span style="font-size:14px;font-weight:400;opacity:0.85;">English Name</span>
+        </span>
       </a>
     </div>
   </nav>
@@ -124,7 +127,29 @@
 **强制规则**：
 - `<!DOCTYPE html>` + `<html lang="zh-CN">`，旧页面只写 `<html>` 的要补上
 - `<meta charset="UTF-8">` 必须有
-- navbar 品牌名格式是**例外**：用 `中文 / English`（横线分隔），不用 `<br>` 换行（来自 CLAUDE.md）
+- navbar 品牌名：中文在上（`xx-large bold`）、英文在下（`14px` 85% 透明度），不用 `/` 分隔
+- 所有页面必须引入 Colgate logo（§3.1），位于品牌文字左侧，间距 12px
+- HTML 文件必须以 UTF-8 无 BOM 编码保存
+
+### 3.1 Colgate Logo
+
+所有页面 navbar 左侧必须放置 Colgate logo。
+
+**来源**：Wikipedia Commons `Colgate_logo_red.svg`，经以下处理：
+- 所有红色（`#ba151b`、`#ed1c24`、`#df1a21`、`#e41b22`、`#d2010d`）统一替换为 EDS 品牌色 `#E60012`
+- 转换为 base64 内联 data URI（`data:image/svg+xml;base64,...`）
+- 高度 60px，通过 `<img>` 标签嵌入
+- SVG 矢量格式，透明背景，任意缩放不模糊
+
+**嵌入方式**：
+```html
+<img src="data:image/svg+xml;base64,[base64 string]" alt="Colgate" style="height:60px;">
+```
+
+**注意**：
+- logo 与品牌文字间距 12px（`gap:12px`）
+- 不要在 logo 外围加白色衬底，直接放在红色 navbar 上
+- SVG 红色已适配品牌色，与 navbar 背景形成视觉层次
 
 ---
 
@@ -133,6 +158,8 @@
 ### 4.1 欢迎条 welcome-bar
 
 用于登录后第一屏，替代跑马灯。
+
+**基础版**（仅欢迎文字）：
 
 ```html
 <div class="welcome-bar">
@@ -154,6 +181,39 @@
 .welcome-bar .greet #name { color: #E60012; font-weight: 600; }
 </style>
 ```
+
+**权限版**（欢迎文字 + 右侧权限徽章，适合有角色区分的页面）：
+
+```html
+<div class="welcome-bar">
+  <div class="greet">
+    <span id="name"></span>，欢迎进入 XX 模块 / Welcome to XX Module
+  </div>
+  <div class="perm-info">
+    <span id="userLevelBadge" class="badge bg-secondary">加载中... / Loading...</span>
+    <span id="permissionNotice" class="ms-2" style="display:none;">
+      <span class="label-cn">无操作权限，请联系管理员</span>
+      <span class="label-en">No permission, please contact admin</span>
+    </span>
+  </div>
+</div>
+
+<style>
+.welcome-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.welcome-bar .perm-info { font-size: 12px; color: #6c757d; }
+.welcome-bar .perm-info .badge { font-size: 11px; vertical-align: middle; }
+</style>
+```
+
+**`#name` 填充规则**：
+- 服务端渲染传入 `userName` 时：`<span id="name"><?= userName ?></span>`（直接模板注入）
+- 无模板变量时：JS 初始化阶段 `$('#name').text(sessionStorage.getItem('Name') || '')`
 
 ### 4.2 分组标题 section-title
 
@@ -275,22 +335,49 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  text-align: center !important;
 }
 #xxxTable th, #xxxTable td {
   padding: 5px 6px;
   font-size: 12px;
   vertical-align: middle;
+  text-align: center;
+}
+/* 长文本列左对齐 + 限宽换行 */
+#xxxTable td:nth-child(N) {
+  text-align: left;
+  max-width: 200px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 #xxxTable tbody tr.odd > td { background-color: #f5f5f5; }
 #xxxTable tbody tr.even > td { background-color: #ffffff; }
+/* 操作列统一居中 */
+#xxxTable td:last-child {
+  text-align: center;
+  vertical-align: middle;
+}
+/* 覆盖 DataTables 默认排序图标背景图，避免请求缺失的 PNG */
+table.dataTable thead > tr > th.sorting,
+table.dataTable thead > tr > th.sorting_asc,
+table.dataTable thead > tr > th.sorting_desc,
+table.dataTable thead > tr > th.sorting_asc_disabled,
+table.dataTable thead > tr > th.sorting_desc_disabled {
+  background-image: none !important;
+}
 </style>
 ```
 
 **规则**：
 - 表头红底白字，sticky 顶部
+- 表头文字居中（`text-align: center !important`，`!important` 必须，否则 Bootstrap 覆盖）
+- 内容默认居中，长文本列（问题描述、预防性措施、跟进内容等）左对齐
+- 长文本列需加 `max-width: 200~220px; word-wrap: break-word; overflow-wrap: break-word;` 限制列宽通过换行管理
+- 操作列（最后一列）统一 `text-align: center; vertical-align: middle;`
 - 双语表头**必须**用 `<br>` 换行（中上英下），不用 `/`
 - 数据 key 保持原样（如 `"保养状态/ PM Status"`），只前端显示时拆分
 - 斑马纹隔行变色
+- DataTables 排序图标设为 `background-image: none` 避免 404 请求
 
 ### 4.5 模态框 Modal
 
@@ -380,6 +467,289 @@
 | 危险操作（删除） | `btn btn-danger` | 必须配 SweetAlert 二次确认 |
 | 确认操作组 | `.btn-confirm-action`（CSS.html 已定义） | 故障报告等需统一宽度场景 |
 
+**表格内操作按钮**（Actions 列）：
+
+- DataTables 列定义必须加 `className: 'text-center align-middle'`
+- 按钮文字统一用 `<br>` 上下排列（中文在上、英文在下），不用 `/` 横向分隔
+- 按钮须足够宽以保证中文一行、英文一行不换行：
+  - 短文字（2-4 字符）：`width: 84px`
+  - 长文字（5-8 字符）：`width: 120px` 或 `min-width: 130px`
+- 按钮样式模板：
+  ```js
+  const btnStyle = 'font-size:0.75rem;width:84px;display:inline-flex;'
+    + 'flex-direction:column;align-items:center;'
+    + 'justify-content:center;line-height:1.2;white-space:normal;';
+  ```
+- 多个按钮用 wrapper `<div>` 包裹：`style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;"`
+- 图标**只能**用 Bootstrap Icons（`bi-*`），不用 Font Awesome（`fas fa-*`）
+
+**图标对应**：
+| 操作 | 图标 |
+|---|---|
+| 查看 | `bi-eye` |
+| 保存 | `bi-save` |
+| PDF | `bi-file-pdf` |
+| 邮件 | `bi-envelope` |
+
+### 4.7 标签页 Tabs
+
+用于同一页面按工序/类型切换表格或内容区域，避免页面过长。
+
+```html
+<ul class="nav nav-tabs" id="processTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-a" data-bs-toggle="tab" data-bs-target="#content-a"
+            type="button" role="tab" aria-controls="content-a" aria-selected="true">
+      <span class="tab-cn">工序中文</span>
+      <span class="tab-en">Process EN</span>
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-b" data-bs-toggle="tab" data-bs-target="#content-b"
+            type="button" role="tab" aria-controls="content-b" aria-selected="false">
+      <span class="tab-cn">工序中文</span>
+      <span class="tab-en">Process EN</span>
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content" id="processTabContent">
+  <div class="tab-pane fade show active" id="content-a" role="tabpanel" aria-labelledby="tab-a">
+    <!-- 表格或其他内容 -->
+  </div>
+  <div class="tab-pane fade" id="content-b" role="tabpanel" aria-labelledby="tab-b">
+    <!-- 表格或其他内容 -->
+  </div>
+</div>
+
+<style>
+.nav-tabs { border-bottom: 2px solid #e9ecef; }
+.nav-tabs .nav-link {
+  color: #6c757d;
+  border: none;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+.nav-tabs .nav-link.active {
+  color: #E60012;
+  background: transparent;
+  border-bottom-color: #E60012;
+  font-weight: 600;
+}
+.nav-tabs .nav-link .tab-cn { display: block; line-height: 1.1; }
+.nav-tabs .nav-link .tab-en {
+  display: block;
+  font-size: 11px;
+  color: #adb5bd;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.nav-tabs .nav-link.active .tab-en { color: #E60012; opacity: 0.7; }
+</style>
+```
+
+**规则**：
+- tab 标签用双语（中上英下），与表头/卡片标题一致
+- active 态红色下划线 `2px solid #E60012`，与品牌色统一
+- 每个 tab-pane 内放独立表格（DataTables 按 tab 分别初始化），切换时调用 `columns.adjust()`
+- 表格容器用 `.table-wrapper` 包裹（白底 + 圆角 + 阴影），与 tab 形成视觉整体
+
+```html
+<style>
+.table-wrapper {
+  background: #fff;
+  border-radius: 0 0 8px 8px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+</style>
+```
+
+### 4.8 规则芯片 Rule Chips
+
+用于展示当前页面的业务规则阈值，以芯片（chip）形式紧凑呈现。
+
+```html
+<div class="rule-chips">
+  <span class="rule-label">需写报告阈值 / Threshold:</span>
+  <span class="rule-chip">
+    <span class="process-tag">IM</span>注塑 &gt; <strong>240 min</strong>
+  </span>
+  <span class="rule-chip">
+    <span class="process-tag">TF</span>植磨毛 &gt; <strong>120 min</strong>
+  </span>
+  <span class="rule-chip">
+    <span class="process-tag">PK</span>包装 &gt; <strong>60 min</strong>
+  </span>
+</div>
+
+<style>
+.rule-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: #fff;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 14px;
+  align-items: center;
+}
+.rule-chips .rule-label {
+  font-size: 12px;
+  color: #6c757d;
+  margin-right: 6px;
+}
+.rule-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+.rule-chip strong { font-weight: 700; }
+.rule-chip .process-tag {
+  background: #E60012;
+  color: white;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+</style>
+```
+
+**规则**：
+- 芯片底色用 `#fff3cd`（与状态色"进行中"一致，表示"需关注的阈值"语义）
+- 工序标签 `.process-tag` 红底白字，紧凑标识工序缩写
+- 数值加粗突出，阈值为纯展示不参与交互
+- 如页面无业务阈值需求则不使用此组件
+
+### 4.9 折叠提示 Collapsible Hint
+
+用于收纳操作说明、注意事项等辅助信息，默认收起，减少首屏干扰。
+
+```html
+<details class="manual-add-hint">
+  <summary>
+    <i class="bi bi-info-circle"></i>
+    <span>手动添加使用说明 / Manual Add Instructions</span>
+    <i class="bi bi-chevron-down"></i>
+  </summary>
+  <div class="hint-body">
+    <ol>
+      <li>
+        步骤说明中文
+        <span class="en">Step description in English</span>
+      </li>
+    </ol>
+  </div>
+</details>
+
+<style>
+.manual-add-hint {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.manual-add-hint > summary {
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  list-style: none;
+}
+.manual-add-hint > summary::-webkit-details-marker { display: none; }
+.manual-add-hint > summary i.bi-info-circle { color: #0d6efd; }
+.manual-add-hint > summary .bi-chevron-down {
+  margin-left: auto;
+  transition: transform .15s;
+}
+.manual-add-hint[open] > summary .bi-chevron-down { transform: rotate(180deg); }
+.manual-add-hint .hint-body {
+  padding: 10px 14px 12px;
+  font-size: 12px;
+  color: #6c757d;
+  border-top: 1px solid #e9ecef;
+}
+.manual-add-hint .hint-body ol { padding-left: 18px; margin: 0; }
+.manual-add-hint .hint-body ol li { margin-bottom: 4px; line-height: 1.5; }
+.manual-add-hint .hint-body .en {
+  color: #adb5bd;
+  display: block;
+  font-size: 11px;
+}
+</style>
+```
+
+**规则**：
+- 使用原生 `<details>` 元素，无需 JS，兼容性好
+- 左侧蓝色 `bi-info-circle` 信息图标，右侧 `bi-chevron-down` 展开/收起箭头
+- 英文步骤说明用 `.en` 灰色小字，每条中文下另起一行
+- 类名 `manual-add-hint` 为项目约定名，后续页面复用此 class 即可
+
+### 4.10 Select2 与表格协调
+
+当 DataTables 表格内嵌 Select2 下拉控件时，需统一尺寸和焦点色：
+
+```html
+<style>
+/* Select2 控件紧凑化 */
+.select2-container--bootstrap .select2-selection--single {
+  height: 28px;
+  padding: 0 !important;
+  font-size: 12px;
+  border-color: #ced4da;
+  display: flex;
+  align-items: center;
+}
+.select2-container--bootstrap .select2-selection--single .select2-selection__rendered {
+  line-height: 28px;
+  padding: 0 22px 0 8px;
+  color: #333;
+  width: 100%;
+}
+.select2-container--bootstrap .select2-selection--single .select2-selection__placeholder {
+  line-height: 28px;
+  color: #adb5bd;
+}
+.select2-container--bootstrap .select2-selection--single .select2-selection__arrow {
+  height: 26px;
+  top: 1px;
+}
+/* 焦点与品牌色统一 */
+.select2-container--bootstrap.select2-container--focus .select2-selection,
+.select2-container--bootstrap.select2-container--open .select2-selection {
+  border-color: #E60012;
+  box-shadow: 0 0 0 0.15rem rgba(230,0,18,0.15);
+}
+.select2-dropdown { border-color: #E60012; font-size: 12px; }
+.select2-results__option--highlighted[aria-selected],
+.select2-container--bootstrap .select2-results__option--highlighted[aria-selected] {
+  background-color: #E60012 !important;
+  color: white !important;
+}
+table.bilingual-table td .select2-container { vertical-align: middle; }
+</style>
+```
+
+**规则**：
+- Select2 高度 28px 与表格行高协调
+- 焦点/下拉边框用品牌红 `#E60012`，高亮选项红底白字
+- 表格单元格内的 Select2 用 `vertical-align: middle` 对齐
+
 ---
 
 ## 5. 响应式断点
@@ -451,8 +821,8 @@
 ## 7. 命名规范
 
 ### 7.1 显示文字
-- **表头/卡片标题**：中文上、英文下，用 `<br>` 换行；不用 `/`
-- **navbar 品牌 / 模态框标题**：例外，用 `中文 / English`
+- **表头/卡片标题/navbar**：中文上、英文下，用 `<br>` 换行；不用 `/`
+- **模态框标题**：例外，用 `中文 / English`
 - **段落正文混排**：用 `/`（如"导航页 / Navigation Page"）
 
 ### 7.2 ID / class
@@ -474,10 +844,20 @@
 | 操作成功 | `Swal.fire({icon:'success', title:'...', timer:1500})` |
 | 操作失败 | `Swal.fire({icon:'error', title:'...', text:错误详情})` |
 | 危险操作前 | `Swal.fire({icon:'warning', showCancelButton:true, ...})` 二次确认 |
-| 数据加载 | `Swal.fire({title:'加载中...', didOpen:()=>Swal.showLoading()})` |
+| 数据加载 | `Swal.fire({title:swalTitle('加载数据中...','Loading Data...'), html:swalHtml('正在获取数据，请稍候。','Fetching data, please wait.'), allowOutsideClick:false, showConfirmButton:false, didOpen:()=>Swal.showLoading()})` |
 | 卡片 hover | 上浮 2px + 红色边框 + 阴影（`.nav-card:hover` 已定义） |
 | 表格行点击 | 整行高亮 / 跳转 / 弹出详情，二选一不要混 |
 | 禁用状态 | `opacity: .5; cursor: not-allowed;` + 显式标签（如 `即将上线`） |
+
+**双语 Toast 规范**：
+- 所有页面的 `-js.html` 文件开头必须定义双语 helper：
+  ```js
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+  ```
+- `swalTitle` — toast 标题（中文在上、英文在下小字灰色）
+- `swalHtml` — toast 正文（中文在上、英文在下小字灰色）
+- 加载 toast 必须配置 `allowOutsideClick: false` + `showConfirmButton: false` + `didOpen: () => Swal.showLoading()`
 
 ---
 
@@ -502,6 +882,15 @@
 [ ] 图标从 §6 已用图标表选，没有再去官网选
 [ ] 内联 `<style>` 仅放页面特有样式，通用样式放 CSS.html
 [ ] 没有引入新的第三方库（如必须，建议先做成 Kez_ 内联文件）
+[ ] 如有多工序/分类切换，用双语 tabs（§4.7），切换时调用 columns.adjust()
+[ ] 如有业务阈值展示，用 rule-chips（§4.8）
+[ ] 如有操作说明文字，用折叠 hint（§4.9），默认收起
+[ ] 如表格内嵌 Select2，焦点/高亮色统一为品牌红（§4.10）
+[ ] welcome-bar 的 #name 已填充（<?= userName ?> 或 sessionStorage）
+[ ] 表格操作列 class 含 text-center align-middle，按钮中上英下 <br> 格式
+[ ] 表格操作按钮宽度足够中文一行英文一行（短 84px / 长 120px+）
+[ ] 长文本列已加 max-width + word-wrap 换行控制
+[ ] 图标只用 Bootstrap Icons (bi-*)，未混入 Font Awesome (fas)
 ```
 
 ---
@@ -523,7 +912,8 @@
 ## 附录：参考实现
 
 - ✅ **导航页**：`Navigation.html`（本规范的源页面）
-- ✅ **典型数据表格页**：`FailureReport_Manage.html`（表格 + 模态框 + 状态色完整示例）
+- ✅ **典型数据表格页**：`FailureReport_Manage.html`（tabs + 表格 + rule-chips + 折叠提示 + Select2 完整示例）
+- ✅ **跟进/验证页**：`FailureReport_Followup_Manage.html`、`FailureReport_Followup_Verify.html`（单表格 + 内嵌编辑 + Select2 + 状态 badge/下拉）
 - ✅ **全局样式**：`CSS.html`（状态色、表格、Select2、SweetAlert 适配）
 - 📖 项目通用规范：`CLAUDE.md`
 
