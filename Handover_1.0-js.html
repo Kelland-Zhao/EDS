@@ -1,15 +1,25 @@
 <script>
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
   $(document).ready(function () {
-    showPageLoadingSwal();
+    $('#name').text(sessionStorage.getItem('Name') || '');
+    Swal.fire({
+      title: swalTitle('加载数据中...', 'Loading Data...'),
+      html: swalHtml('正在载入留言板数据，请稍候。', 'Loading message board data, please wait.'),
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: function() { Swal.showLoading(); }
+    });
   });
 
   // 图片上传功能
   $("#upload").click(function () {
     Swal.fire({
-      title: '数据上传中/ Data Uploading',
-      icon: 'info',
+      title: swalTitle('数据上传中...', 'Data Uploading...'),
+      html: swalHtml('正在上传文件，请稍候。', 'Uploading file, please wait.'),
       allowOutsideClick: false,
-      showConfirmButton: false
+      showConfirmButton: false,
+      didOpen: function() { Swal.showLoading(); }
     });
     var fileInput = document.getElementById('take-photo');
     var file = fileInput.files[0];
@@ -24,8 +34,8 @@
           Swal.close();
           fileInput.value = '';
           Swal.fire({
-            title: '上传成功/ Upload Success',
-            text: '文件已成功上传到Drive',
+            title: swalTitle('上传成功', 'Upload Success'),
+            text: '文件已成功上传到Drive / File uploaded to Drive',
             icon: 'success',
             timer: 2000,
             showConfirmButton: false
@@ -33,8 +43,8 @@
         }).withFailureHandler(function (error) {
           Swal.close();
           Swal.fire({
-            title: '上传失败/ Upload Failed',
-            text: '请重试或联系管理员',
+            title: swalTitle('上传失败', 'Upload Failed'),
+            text: '请重试或联系管理员 / Please retry or contact admin',
             icon: 'error'
           });
           console.error('文件上传失败:', error);
@@ -44,7 +54,7 @@
     } else {
       Swal.close();
       Swal.fire({
-        title: '请选择文件/ Please Select File',
+        title: swalTitle('请选择文件', 'Please Select File'),
         icon: 'warning'
       });
     }
@@ -122,12 +132,11 @@
 
     // 提交数据
     Swal.fire({
-      title: '提交中 / Submitting',
-      text: '请稍候 / Please wait',
+      title: swalTitle('提交中...', 'Submitting...'),
+      html: swalHtml('正在提交安全检查记录，请稍候。', 'Submitting safety check record, please wait.'),
       allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
+      showConfirmButton: false,
+      didOpen: function() { Swal.showLoading(); }
     });
 
     // 调用后端接口提交数据
@@ -142,7 +151,7 @@
           
           // 显示成功提示
           Swal.fire({
-            title: '提交成功 / Submit Success',
+            title: swalTitle('提交成功', 'Submit Success'),
             html: '<div style="text-align: left;">' +
                   '<strong>安全4检查已成功记录 / Safety 4 Check recorded successfully</strong><br><br>' +
                   '检查编号 / Check ID: ' + response.checkId + '<br>' +
@@ -181,27 +190,6 @@
   let currentUserName = sessionStorage.getItem('Name') || '';
   let pageLoadingSwalShown = false;
 
-  function showPageLoadingSwal() {
-    if (!pageLoadingSwalShown) {
-      Swal.fire({
-        title: '页面加载中 / Loading Page',
-        text: '正在载入留言板数据 / Loading message board data',
-        allowOutsideClick: false,
-        showConfirmButton: false,
-        didOpen: function() {
-          Swal.showLoading();
-        }
-      });
-      pageLoadingSwalShown = true;
-    }
-  }
-
-  function closePageLoadingSwal() {
-    if (pageLoadingSwalShown) {
-      Swal.close();
-      pageLoadingSwalShown = false;
-    }
-  }
 
   function finalizeMessageRender(afterRenderCallback, retryCount) {
     retryCount = retryCount || 0;
@@ -209,7 +197,7 @@
     if (userHasEditPermission) {
       const hasButtons = $('#message_list .message-actions').length > 0;
       if (hasButtons || retryCount >= MAX_RETRY) {
-        closePageLoadingSwal();
+        Swal.close();
         if (typeof afterRenderCallback === 'function') afterRenderCallback();
       } else {
         setTimeout(function() {
@@ -217,7 +205,7 @@
         }, 100);
       }
     } else {
-      closePageLoadingSwal();
+      Swal.close();
       if (typeof afterRenderCallback === 'function') afterRenderCallback();
     }
   }
@@ -317,13 +305,13 @@
           renderMessageList(filteredData, afterRenderCallback);
         } else {
           $('#message_list').html('<div class="text-center text-muted small">' + response.message + '</div>');
-          closePageLoadingSwal();
+          Swal.close();
           if (typeof afterRenderCallback === 'function') afterRenderCallback();
         }
       })
       .withFailureHandler(function(error) {
         $('#message_list').html('<div class="text-center text-muted small">加载失败 / Failed to load</div>');
-        closePageLoadingSwal();
+        Swal.close();
         if (typeof afterRenderCallback === 'function') afterRenderCallback();
       })
       .getMessageBoardList('', '', 50);
@@ -457,13 +445,11 @@
     $('#btn_post_message').prop('disabled', true).text('提交中... / Submitting...');
 
     Swal.fire({
-      title: '处理中 / Processing',
-      text: '请稍候 / Please wait',
+      title: swalTitle('处理中...', 'Processing...'),
+      html: swalHtml('正在处理留言，请稍候。', 'Processing message, please wait.'),
       allowOutsideClick: false,
       showConfirmButton: false,
-      didOpen: function() {
-        Swal.showLoading();
-      }
+      didOpen: function() { Swal.showLoading(); }
     });
 
     google.script.run
@@ -474,7 +460,7 @@
             $('#btn_post_message').prop('disabled', false).text('发表 / Post');
             Swal.close();
             Swal.fire({
-              title: '成功 / Success',
+              title: swalTitle('成功', 'Success'),
               text: '留言发表成功 / Message posted successfully',
               icon: 'success',
               timer: 1500,
@@ -538,13 +524,11 @@
       if (result.isConfirmed) {
         const editor = sessionStorage.getItem('Name') || '';
         Swal.fire({
-          title: '处理中 / Processing',
-          text: '请稍候 / Please wait',
+          title: swalTitle('处理中...', 'Processing...'),
+          html: swalHtml('正在处理，请稍候。', 'Processing, please wait.'),
           allowOutsideClick: false,
           showConfirmButton: false,
-          didOpen: function() {
-            Swal.showLoading();
-          }
+          didOpen: function() { Swal.showLoading(); }
         });
         google.script.run
           .withSuccessHandler(function(response) {
@@ -552,7 +536,7 @@
               loadMessages(function() {
                 Swal.close();
                 Swal.fire({
-                  title: '成功 / Success',
+                  title: swalTitle('成功', 'Success'),
                   text: '留言编辑成功 / Message edited successfully',
                   icon: 'success',
                   timer: 1500,
@@ -596,13 +580,11 @@
     }).then(function(result) {
       if (result.isConfirmed) {
         Swal.fire({
-          title: '处理中 / Processing',
-          text: '请稍候 / Please wait',
+          title: swalTitle('处理中...', 'Processing...'),
+          html: swalHtml('正在处理，请稍候。', 'Processing, please wait.'),
           allowOutsideClick: false,
           showConfirmButton: false,
-          didOpen: function() {
-            Swal.showLoading();
-          }
+          didOpen: function() { Swal.showLoading(); }
         });
         google.script.run
           .withSuccessHandler(function(response) {
@@ -610,7 +592,7 @@
               loadMessages(function() {
                 Swal.close();
                 Swal.fire({
-                  title: '成功 / Success',
+                  title: swalTitle('成功', 'Success'),
                   text: '留言删除成功 / Message deleted successfully',
                   icon: 'success',
                   timer: 1500,

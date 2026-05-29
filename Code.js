@@ -137,9 +137,19 @@ function loadPM_Task_new() {
     .setFaviconUrl(webIconUrl);
 }
 
-function loadPM_Plan_new() {
+function loadPM_Plan_new(
+  intoWebUrl,
+  intoWebLoginId,
+  intoWebLoginName,
+  intoWebLoginType
+) {
   let webPage = getReleaseWebPage();
-  return render("PM_Plan_1.0", { webPage: webPage })
+  return render("PM_Plan_1.0", {
+    webPage: webPage,
+    intoWebID: intoWebLoginId || "",
+    intoWebName: intoWebLoginName || "",
+    intoWebType: intoWebLoginType || "",
+  })
     .setTitle("保养计划 PM Plan")
     .setFaviconUrl(webIconUrl);
 }
@@ -732,7 +742,7 @@ function loadhome_new() {
 function loadNavigation() {
   let webPage = getReleaseWebPage();
   return render("Navigation", { webPage: webPage })
-    .setTitle("Navigation/ 导航")
+    .setTitle("导航 / Navigation")
     .setFaviconUrl(webIconUrl);
 }
 

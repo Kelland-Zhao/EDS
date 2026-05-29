@@ -1,4 +1,6 @@
-﻿<script>
+<script>
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
   let globalWorkcenter = [];
   let globalName = [];
   let globalErrorCode = [];
@@ -17,13 +19,13 @@
   let failureProcessLoaded = false;
 
   $(document).ready(function () {
+    $('#name').text(sessionStorage.getItem('Name') || '');
     Swal.fire({
-      title: '正在加载数据...\nLoading data...',
-      text: '请稍候\nPlease wait',
+      title: swalTitle('正在加载数据...', 'Loading Data...'),
+      html: swalHtml('正在获取数据，请稍候。', 'Fetching data, please wait.'),
       allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
+      showConfirmButton: false,
+      didOpen: function() { Swal.showLoading(); }
     });
 
     google.script.run.withSuccessHandler(showSelectItem).SelectItem();
@@ -52,8 +54,8 @@
       pageLoadComplete = true;
       Swal.close();
       Swal.fire({
-        title: '页面加载完成 / Page Loaded',
-        text: '请填写交接班记录和故障信息',
+        title: swalTitle('页面加载完成', 'Page Loaded'),
+        text: '请填写交接班记录和故障信息 / Please fill in handover records and fault info',
         icon: 'success',
         timer: 3000,
         showConfirmButton: false
@@ -397,10 +399,11 @@
 
     let isModalSubmit = (id === 'ModalSubmit');
     Swal.fire({
-      title: '数据上传中/ Data Uploading',
-      icon: 'info',
+      title: swalTitle('数据上传中...', 'Data Uploading...'),
+      html: swalHtml('正在处理，请稍候。', 'Processing, please wait.'),
       allowOutsideClick: false,
-      showConfirmButton: false
+      showConfirmButton: false,
+      didOpen: function() { Swal.showLoading(); }
     });
     google.script.run.withSuccessHandler((r) => {
       console.log(r)
@@ -815,18 +818,15 @@
       if (processValue && processValue !== 'ALL') table.column(15).search(processValue);
       table.draw(false);
 
-      // 初始化后强制应用表头样式与双语内容
-      $('#Failure_History_Table thead th').each(function(i) {
-        $(this).css({
+      // 初始化后强制应用表头样式与双语内容（按真实列索引取表头，避免隐藏列导致 DOM 位置错位）
+      for (let c = 0; c < head.length; c++) {
+        let rawKey = (head[c] || '').toString().trim();
+        let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
+        $(table.column(c).header()).html(displayHead).css({
           'background-color': '#E60012',
           'color': 'white'
         });
-        if (i < head.length) {
-          let rawKey = (head[i] || '').toString().trim();
-          let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
-          $(this).html(displayHead);
-        }
-      });
+      }
 
       return;
     }
@@ -880,11 +880,13 @@
               return val;
             }
             return data;
-          }
+          },
+          className: 'text-start'
         },
         // "故障信息"列：合并行用 _merged故障信息（多段上大下小）；否则单行三段
         {
           targets: 3, // 原"问题描述"列索引为3
+          className: 'text-start',
           render: function (data, type, row) {
             if (type === 'display' || type === 'filter') {
               if (row._merged故障信息) return row._merged故障信息;
@@ -916,9 +918,9 @@
             }
             if (type === 'display' || type === 'filter') {
               if (data && data.includes('已解决')) {
-                return '<span class="badge bg-success">已解决/ Solved</span>';
+                return '<span class="badge bg-success">已解决<br><small>Solved</small></span>';
               } else if (data && data.includes('未解决')) {
-                return '<span class="badge bg-danger">未解决/ Unsolved</span>';
+                return '<span class="badge bg-danger">未解决<br><small>Unsolved</small></span>';
               } else {
                 return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
               }
@@ -933,9 +935,9 @@
           render: function (data, type, row) {
             if (type === 'display' || type === 'filter') {
               if (data && data.includes('是')) {
-                return '<span class="badge bg-danger">是/ Yes</span>';
+                return '<span class="badge bg-danger">是<br><small>Yes</small></span>';
               } else if (data && data.includes('否')) {
-                return '<span class="badge bg-success">否/ No</span>';
+                return '<span class="badge bg-success">否<br><small>No</small></span>';
               } else {
                 return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
               }
@@ -952,7 +954,7 @@
               if (data && data.includes('是')) {
                 return '<span class="badge bg-danger">' + data + '</span>';
               } else if (data && data.includes('否')) {
-                return '<span class="badge bg-success">否/ No</span>';
+                return '<span class="badge bg-success">否<br><small>No</small></span>';
               } else {
                 return `<span class="badge bg-secondary">${data ? data : ''}</span>`;
               }
@@ -964,13 +966,13 @@
         {
           targets: head.length,
           data: null,
-          defaultContent: '<button class="btn btn-info btn-sm">跟进</button>',
+          defaultContent: '<button class="btn btn-info btn-sm" style="font-size:0.75rem;width:84px;">跟进<br>Follow-up</button>',
           orderable: false
         },
         {
           targets: head.length + 1,
           data: null,
-          defaultContent: '<div class="btn-group" role="group"><button class="btn btn-sm btn-outline-primary pm-btn">保养/ PM</button><button class="btn btn-sm btn-outline-info kaizen-btn">改善/ Kaizen & CI</button><button class="btn btn-sm btn-outline-success training-btn">培训/ Training</button></div>',
+          defaultContent: '<div class="btn-group" role="group"><button class="btn btn-sm btn-outline-primary pm-btn">保养<br>PM</button><button class="btn btn-sm btn-outline-info kaizen-btn">改善<br>Kaizen & CI</button><button class="btn btn-sm btn-outline-success training-btn">培训<br>Training</button></div>',
           orderable: false,
           className: 'text-center'
         },
@@ -1008,6 +1010,7 @@
         },
         {
           targets: head.indexOf('故障代码') >= 0 ? head.indexOf('故障代码') : -1,
+          className: 'text-start',
           render: function (data, type, row) {
             if ((type === 'display' || type === 'filter') && row._merged故障代码) return row._merged故障代码;
             return data;
@@ -1052,18 +1055,15 @@
       }
     });
 
-    // 初始化后强制应用表头样式与双语内容
-    $('#Failure_History_Table thead th').each(function(i) {
-      $(this).css({
+    // 初始化后强制应用表头样式与双语内容（按真实列索引取表头，避免隐藏列导致 DOM 位置错位）
+    for (let c = 0; c < head.length; c++) {
+      let rawKey = (head[c] || '').toString().trim();
+      let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
+      $(table.column(c).header()).html(displayHead).css({
         'background-color': '#E60012',
         'color': 'white'
       });
-      if (i < head.length) {
-        let rawKey = (head[i] || '').toString().trim();
-        let displayHead = headerBilingual[rawKey] || rawKey.replace(/\//g, '<br>');
-        $(this).html(displayHead);
-      }
-    });
+    }
 
     // 仅注塑工序（INJ/IM）显示"是否跟随"列；TF/PK 隐藏该列
     let sessionProcess = (sessionStorage.getItem('Process') || global_Process || '').toString().trim();
@@ -1393,10 +1393,11 @@
   $("#upload").click(function () {
     // console.log('上传');
     Swal.fire({
-      title: '数据上传中/ Data Uploading',
-      icon: 'info',
+      title: swalTitle('数据上传中...', 'Data Uploading...'),
+      html: swalHtml('正在处理，请稍候。', 'Processing, please wait.'),
       allowOutsideClick: false,
-      showConfirmButton: false
+      showConfirmButton: false,
+      didOpen: function() { Swal.showLoading(); }
     });
     var fileInput = document.getElementById('take-photo');
     var file = fileInput.files[0]; // 获取选中的文件对象
@@ -1504,11 +1505,11 @@
     
     // 显示加载中
     Swal.fire({
-      title: '加载中 / Loading...',
+      title: swalTitle('加载中...', 'Loading...'),
+      html: swalHtml('正在读取数据，请稍候。', 'Reading data, please wait.'),
       allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
+      showConfirmButton: false,
+      didOpen: function() { Swal.showLoading(); }
     });
     
     // 先读取已有数据
@@ -1575,11 +1576,11 @@
           if (result.isConfirmed) {
             // 显示加载中
             Swal.fire({
-              title: '提交中 / Submitting...',
+              title: swalTitle('提交中...', 'Submitting...'),
+              html: swalHtml('正在提交数据，请稍候。', 'Submitting data, please wait.'),
               allowOutsideClick: false,
-              didOpen: () => {
-                Swal.showLoading();
-              }
+              showConfirmButton: false,
+              didOpen: function() { Swal.showLoading(); }
             });
             
             // 准备提交数据
@@ -1717,12 +1718,11 @@
       if (result.isConfirmed) {
         // 显示提交中状态
         Swal.fire({
-          title: '正在提交...\nSubmitting...',
-          text: '请稍候\nPlease wait',
+          title: swalTitle('正在提交...', 'Submitting...'),
+          html: swalHtml('正在提交隐患汇报，请稍候。', 'Submitting hazard report, please wait.'),
           allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
+          showConfirmButton: false,
+          didOpen: function() { Swal.showLoading(); }
         });
         
         // 调用后端保存函数
