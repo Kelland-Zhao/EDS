@@ -37,15 +37,6 @@
         currentUserEmail = sessionStorage.getItem('Email') || '';
         console.log('当前用户:', currentUserName);
 
-        // 立即显示加载弹窗
-        Swal.fire({
-            title: swalTitle('加载中...', 'Loading...'),
-            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: function() { Swal.showLoading(); }
-        });
-
         checkUserPermission();
     });
 
@@ -113,22 +104,13 @@
     }
 
     function fetchFollowupRecords() {
-        if (Swal.isVisible()) {
-            Swal.update({
-                title: swalTitle('加载中...', 'Loading...'),
-                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-                showConfirmButton: false
-            });
-            Swal.showLoading();
-        } else {
-            Swal.fire({
-                title: swalTitle('加载中...', 'Loading...'),
-                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-                allowOutsideClick: false,
-                showConfirmButton: false,
-                didOpen: function() { Swal.showLoading(); }
-            });
-        }
+        Swal.fire({
+            title: swalTitle('加载中...', 'Loading...'),
+            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: function() { Swal.showLoading(); }
+        });
 
         const serverFn = userIsAdmin ? 'getFollowupRecords' : 'getFollowupRecordsForResponsiblePerson';
         const serverArgs = userIsAdmin ? [] : [currentUserName];

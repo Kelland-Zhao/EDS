@@ -27,15 +27,6 @@
     $(document).ready(function() {
         console.log('页面DOM加载完成，开始初始化...');
 
-        // 立即显示加载弹窗
-        Swal.fire({
-            title: swalTitle('加载中...', 'Loading...'),
-            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: function() { Swal.showLoading(); }
-        });
-
         populateVerifyStatusOptions();
 
         loadUserOptions().then(function() {
@@ -89,23 +80,13 @@
     }
 
     function fetchFollowupRecords() {
-        // 如果已经有loading弹窗在显示，则更新文本，否则显示新的
-        if (Swal.isVisible()) {
-            Swal.update({
-                title: swalTitle('加载中...', 'Loading...'),
-                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-                showConfirmButton: false
-            });
-            Swal.showLoading();
-        } else {
-            Swal.fire({
-                title: swalTitle('加载中...', 'Loading...'),
-                html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
-                allowOutsideClick: false,
-                showConfirmButton: false,
-                didOpen: function() { Swal.showLoading(); }
-            });
-        }
+        Swal.fire({
+            title: swalTitle('加载中...', 'Loading...'),
+            html: swalHtml('正在获取跟进记录，请稍候。', 'Loading follow-up records, please wait.'),
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: function() { Swal.showLoading(); }
+        });
 
         google.script.run
             .withSuccessHandler(function(response) {
