@@ -228,7 +228,8 @@ function getEDSUserNames() {
         users.push({
           display: email ? name + '【' + email + '】' : name,
           email: email,
-          defaultVerifierEmail: defaultVerifierEmail
+          defaultVerifierEmail: defaultVerifierEmail,
+          process: colO  // O列：工序（IM/TF/PK），用于前端按工序过滤责任人
         });
       }
     }
@@ -6685,15 +6686,38 @@ function getFilteredFailureReportData() {
           }
           // 根据工序筛选 - 临时显示所有数据
           if (repairTime >= threshold) {
+            // PK工序：仅显示 2026-05-15 之后的数据
+            if (process === 'PK') {
+              const rawSubmitDate = row[11];
+              if (rawSubmitDate) {
+                let submitDateObj;
+                if (rawSubmitDate instanceof Date) {
+                  submitDateObj = rawSubmitDate;
+                } else {
+                  submitDateObj = new Date(rawSubmitDate);
+                }
+                const cutoffDate = new Date('2026-05-15');
+                if (submitDateObj < cutoffDate) {
+                  continue; // 跳过 2026-05-15 之前的数据
+                }
+              }
+            }
+            // PK工序：剔除问题描述中包含"转规格"的记录
+            const problemDesc = String(row[3] || '');
+            if (process === 'PK' && problemDesc.includes('转规格')) {
+              continue;
+            }
             result[process].push({
               reportNo: row[0] || "",
               machineNo: row[2] || "",
-              problemDescription: row[3] || "",
+              problemDescription: problemDesc,
               status: row[5] || "",
               repairTime: repairTimeStr,
               submitDate: row[11] ? row[11].toString() : "",
+              shift: row[1] || "",        // B列：班次
               workshop: row[14] || "",
               process: row[15] || process,
+              submitter: row[13] || "",   // N列：填写人
               confirmation: row[18] || "待确认 / Pending Confirmation",
               needFailureReport: row[19] || "", // 第20列：是否需要填写故障报告
               responsiblePerson: "",
@@ -6793,10 +6817,13 @@ function getFailureReportProgressData(userEmail, userName) {
     // 收集每行的完成天数，用于批量回写后端表格
     const completionDaysBackfill = [];
 
-    // 如有记录缺少 repairTime，从 Shift 表回补
+    // 从 Shift 表查找班次、填写人，以及回补缺失的 repairTime
+    const shiftShiftMap = {};      // 班次查找表
+    const shiftSubmitterMap = {};  // 填写人查找表
     const shiftRepairTimeMap = {};
     const hasEmptyRepairTime = data.slice(1).some(function(r) { return !String(r[13] || '').trim(); });
-    if (hasEmptyRepairTime) {
+    // 始终构建班次和填写人查找表；仅在需要回补时构建 repairTime 表
+    (function buildShiftLookupMaps() {
       const shiftSS = SpreadsheetApp.openById('10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w');
       ['Shift_INJ_TB1','Shift_INJ_TB2','Shift_TF_TB1','Shift_TF_TB2','Shift_PK_TB1','Shift_PK_TB2'].forEach(function(sn) {
         const sSheet = shiftSS.getSheetByName(sn);
@@ -6804,11 +6831,18 @@ function getFailureReportProgressData(userEmail, userName) {
         const sData = sSheet.getDataRange().getValues();
         for (let j = 1; j < sData.length; j++) {
           const rNo = String(sData[j][0] || '').trim();
-          const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
-          if (rNo && rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+          if (!rNo) continue;
+          const rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
+          const rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
+          if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
+          if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
+          if (hasEmptyRepairTime) {
+            const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
+            if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+          }
         }
       });
-    }
+    })();
 
     // 从第2行开始遍历数据（第1行是表头）
     for (let i = 1; i < data.length; i++) {
@@ -6949,6 +6983,8 @@ function getFailureReportProgressData(userEmail, userName) {
         attachments: attachments,
         responsiblePerson: responsiblePerson,
         repairTime: repairTime,
+        shift: shiftShiftMap[String(reportNo).trim()] || '',      // 从Shift表查找班次
+        submitter: shiftSubmitterMap[String(reportNo).trim()] || '', // 从Shift表查找填写人
         verifyTotal: verifyTotal,
         verifyPassed: verifyPassed,
         progressStatus: progressStatus,

@@ -184,6 +184,8 @@
             return String(user.display || '').trim();
         };
 
+        let responsibleOptionsByProcess = {}; // { IM: [display1, display2, ...], TF: [...], PK: [...] }
+
         const loadResponsibleOptions = () => {
             if (typeof google === 'undefined' || typeof google.script === 'undefined' || typeof google.script.run === 'undefined') {
                 console.warn('无法加载责任人列表：google.script.run 不可用 / Cannot load responsible options');
@@ -193,7 +195,22 @@
                 .withSuccessHandler(function (result) {
                     try {
                         const parsed = typeof result === 'string' ? JSON.parse(result) : (result || []);
-                        responsibleOptions = (parsed || []).map(normalizeResponsibleDisplay).filter(Boolean);
+                        // parsed 现在是对象数组 {display, email, defaultVerifierEmail, process}
+                        const users = (parsed || []).filter(function(u) { return u && u.display; });
+                        // 保持全局全量列表（用于新增/搜索 fallback）
+                        responsibleOptions = users.map(function(u) { return normalizeResponsibleDisplay(u.display); }).filter(Boolean);
+                        // 按工序分组
+                        responsibleOptionsByProcess = {};
+                        users.forEach(function(u) {
+                            const proc = String(u.process || '').trim().toUpperCase();
+                            if (!responsibleOptionsByProcess[proc]) {
+                                responsibleOptionsByProcess[proc] = [];
+                            }
+                            const display = normalizeResponsibleDisplay(u.display);
+                            if (display) {
+                                responsibleOptionsByProcess[proc].push(display);
+                            }
+                        });
                         responsibleOptionsLoaded = true;
                         refreshResponsibleColumnRenders();
                     } catch (err) {
@@ -370,7 +387,9 @@
                 const current = data || '';
                 const options = ['<option value="">请选择 / Select</option>'];
                 const identifier = getRowIdentifier(row);
-                (responsibleOptions || []).forEach(function (option) {
+                // 优先使用本工序人员列表，fallback 到全局列表
+                const filteredOptions = responsibleOptionsByProcess[processKey] || responsibleOptions || [];
+                filteredOptions.forEach(function (option) {
                     if (!option) return;
                     const selected = option === current ? ' selected' : '';
                     options.push(`<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`);
@@ -484,8 +503,10 @@
                 { data: 'status', title: buildBilingualTitle('状态', 'Status'), render: manualFieldRenderer('status', '请输入状态 / Enter Status') },
                 { data: 'repairTime', title: buildBilingualTitle('维修时间', 'Repair Time'), render: manualFieldRenderer('repairTime', '请输入维修时间 / Enter Repair Time') },
                 { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date'), type: 'string', render: manualFieldRenderer('submitDate', '请输入提交日期 / Enter Submit Date') },
+                { data: 'shift', title: buildBilingualTitle('班次', 'Shift'), render: manualFieldRenderer('shift', '请输入班次 / Enter Shift') },
                 { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop'), render: manualFieldRenderer('workshop', '请输入车间 / Enter Workshop') },
                 { data: 'process', title: buildBilingualTitle('工序', 'Process'), render: manualFieldRenderer('process', '请输入工序 / Enter Process') },
+                { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter'), render: manualFieldRenderer('submitter', '请输入填写人 / Enter Submitter') },
                 {
                     data: 'responsiblePerson',
                     title: buildBilingualTitle('责任人', 'Responsible'),
