@@ -40,7 +40,10 @@
 
     <!-- 故障记录说明区域 -->
     <div class="alert alert-info mt-3 mb-3" role="alert">
-      <h5 class="alert-heading mb-2">填写说明 / Instructions</h5>
+      <h5 class="alert-heading mb-2" data-bs-toggle="collapse" href="#instrFaultRecord" role="button" style="cursor:pointer; user-select:none;">
+        填写说明 / Instructions <i class="bi bi-chevron-down float-end collapse-icon"></i>
+      </h5>
+      <div class="collapse" id="instrFaultRecord">
       <ul class="mb-0" style="text-align: left;">
         <li>需要填写本班欠产大于半小时的机台情况 / Record machines with production shortage exceeding 30 minutes in current shift</li>
         <li>需要填写重点质量问题的跟进情况 / Record follow-up on key quality issues:
@@ -63,16 +66,21 @@
           </ul>
         </li>
       </ul>
+      </div>
     </div>
 
     <!-- 数据源说明区域 -->
     <div class="alert alert-warning mt-3 mb-3" role="alert">
-      <h5 class="alert-heading mb-2">数据源说明 / Data Source Information</h5>
+      <h5 class="alert-heading mb-2" data-bs-toggle="collapse" href="#datasourceInfo" role="button" style="cursor:pointer; user-select:none;">
+        数据源说明 / Data Source Information <i class="bi bi-chevron-down float-end collapse-icon"></i>
+      </h5>
+      <div class="collapse" id="datasourceInfo">
       <ul class="mb-0" style="text-align: left;">
         <li>机台号已与三工序计划Matrix联动，所有有效机台实现自动同步，合并后文件名称：Workcenter_V202602 / Workcenter is synchronized with the 3-process planning Matrix, all valid workcenters are automatically synced, merged file name: Workcenter_V202602</li>
         <li>故障代码已与OE故障代码联动，并增加了转规格代码，合并后文件名称：errorCode 2.0 / Failure codes are synchronized with OE failure codes, with additional changeover codes added, merged file name: errorCode 2.0</li>
         <li>故障处理条目由各工序自行决定，数据来自于"故障处理选项设置"sheet / Failure process items are determined by each process, and the data source is the "故障处理选项设置" sheet</li>
       </ul>
+      </div>
     </div>
 
     <div class="mt-3">
@@ -155,13 +163,17 @@
 
     <!-- 4D隐患汇报说明区域 -->
     <div class="alert alert-warning mt-3 mb-3" role="alert">
-      <h5 class="alert-heading mb-2">填写说明 / Reporting Instructions</h5>
+      <h5 class="alert-heading mb-2" data-bs-toggle="collapse" href="#instr4D" role="button" style="cursor:pointer; user-select:none;">
+        填写说明 / Reporting Instructions <i class="bi bi-chevron-down float-end collapse-icon"></i>
+      </h5>
+      <div class="collapse" id="instr4D">
       <ul class="mb-0" style="text-align: left;">
         <li><strong>技术员</strong>可以将工作过程中遇到的任何安全隐患问题在此提出来 / <strong>Technicians</strong> can report any safety hazards encountered during work here</li>
         <li>包括但不限于设备安全、环境安全、操作安全、人员安全等隐患 / Including but not limited to equipment safety, environmental safety, operational safety, personnel safety hazards</li>
         <li>请详细描述隐患的具体情况、位置和可能的风险 / Please describe the specific situation, location, and potential risks of the hazard in detail</li>
         <li>提交后相关部门将及时处理和跟进 / After submission, relevant departments will handle and follow up in a timely manner</li>
       </ul>
+      </div>
     </div>
 
     <!-- 4D隐患汇报输入区域 -->
@@ -220,7 +232,10 @@
 
     <!-- 故障历史说明区域 -->
     <div class="alert alert-info mt-3 mb-3" role="alert">
-      <h5 class="alert-heading mb-2">处理说明 / Follow-up Instructions</h5>
+      <h5 class="alert-heading mb-2" data-bs-toggle="collapse" href="#instrFollowup" role="button" style="cursor:pointer; user-select:none;">
+        处理说明 / Follow-up Instructions <i class="bi bi-chevron-down float-end collapse-icon"></i>
+      </h5>
+      <div class="collapse" id="instrFollowup">
       <ul class="mb-0" style="text-align: left;">
         <li>重大故障判定标准：注塑（IM）> 240分钟、植磨毛（TF）> 120分钟、包装（PK）> 60分钟 / Major failure criteria: IM > 240 mins, TF > 120 mins, PK > 60 mins</li>
         <li>重大故障需要在每日SDM讨论，并决定后续措施（培训/ 改善/ 保养）/ Major failures must be discussed in daily SDM and determine follow-up actions (Training / Kaizen/CI / PM)</li>
@@ -228,17 +243,22 @@
         <li>已解决和未解决故障都需要遵循上述规则 / Both solved and unsolved failures must follow the above rules</li>
         <li><strong>直接原因 / Direct Cause</strong> 与 <strong>建议措施 / Suggested Action</strong> 为必填项，否则无法提交 / Direct Cause and Suggested Action are required fields, submission will be blocked if empty</li>
       </ul>
+      </div>
     </div>
 
     <!-- 故障历史显示范围说明区域 -->
     <div class="alert alert-warning mt-3 mb-3" role="alert">
-      <h5 class="alert-heading mb-2">显示范围说明 / Display Range Information</h5>
+      <h5 class="alert-heading mb-2" data-bs-toggle="collapse" href="#displayRange" role="button" style="cursor:pointer; user-select:none;">
+        显示范围说明 / Display Range Information <i class="bi bi-chevron-down float-end collapse-icon"></i>
+      </h5>
+      <div class="collapse" id="displayRange">
       <ul class="mb-0" style="text-align: left;">
         <li><strong>未解决故障 / Unsolved Failures</strong>：显示所有未解决的故障记录，无时间限制 / Display all unsolved failure records without time limitation</li>
         <li><strong>已解决故障 / Solved Failures</strong>：仅显示最近30天内解决的故障记录 / Only display failure records resolved within the last 30 days</li>
         <li><strong>历史数据 / Historical Data</strong>：30天前已解决的故障记录不会显示，以优化页面性能 / Failure records resolved more than 30 days ago are not displayed to optimize page performance</li>
         <li><strong>数据来源 / Data Source</strong>：包含所有工序（注塑/植磨毛/包装）的故障记录 / Includes failure records from all processes (Injection/Flocking/Packaging)</li>
       </ul>
+      </div>
     </div>
 
     <div class="table-wrapper">
@@ -297,6 +317,9 @@
     table.dataTable thead > tr > th.sorting_desc_disabled {
       background-image: none !important;
     }
+    /* 折叠图标旋转动画 */
+    .collapse-icon { transition: transform 0.2s ease; }
+    .alert-heading[aria-expanded="true"] .collapse-icon { transform: rotate(180deg); }
   </style>
 </body>
 

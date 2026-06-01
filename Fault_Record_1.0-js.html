@@ -876,6 +876,12 @@
             if (type === 'display' || type === 'filter') {
               if (row._merged处理过程) return row._merged处理过程;
               let val = (row['处理过程'] || '').toString();
+              // 过滤掉内容为空的【标签】：行（如 【bbb】：后面没有实际内容）
+              if (val.includes('【')) {
+                val = val.split('\n').filter(function(line) {
+                  return !/【[^】]*】：\s*(无)?\s*$/.test(line.trim());
+                }).join('\n');
+              }
               if (val.includes('\n')) val = val.replace(/\n/g, '<br>');
               return val;
             }
