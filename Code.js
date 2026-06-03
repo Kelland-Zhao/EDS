@@ -61,7 +61,7 @@ function doGet(e) {
   } else {
     let webPage = getReleaseWebPage();
     return render("home_new_1.0", { webPage: webPage })
-      .setTitle("登录")
+      .setTitle("EDS 登录 | EDS Login")
       .setFaviconUrl(webIconUrl);
   }
 }
@@ -736,7 +736,7 @@ function loadFault_Record_1_0() {
 function loadhome_new() {
   let webPage = getReleaseWebPage();
   return render("home_new_1.0", { webPage: webPage })
-    .setTitle("Login/ 登录")
+    .setTitle("EDS 登录 | EDS Login")
     .setFaviconUrl(webIconUrl);
 }
 
