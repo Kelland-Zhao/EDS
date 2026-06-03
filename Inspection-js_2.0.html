@@ -21,6 +21,9 @@
   $(document).ready(function () {
     const pageLoadStartTime = performance.now();
 
+    // 填充 welcome-bar 用户名
+    $('#name').text(global_Name || '');
+
     // 初始化页面：设置当前日期
     initializePage();
 
@@ -1341,19 +1344,78 @@
     let thead = $('<thead></thead>');
     let headerRow = $('<tr></tr>');
 
+    // 数据列中英文映射（键 → 中文名）
+    var headerLabelMap = {
+      'Resource': '资源',
+      'Frequency': '频次',
+      'Process': '工序',
+      'Method': '方法',
+      'Unit': '单位',
+      'Tool': '工具',
+      'Machine': '机台',
+      'Machine Type': '任务类型',
+      'MachineType': '任务类型',
+      'Workcenter': '机台号',
+      'Task': '任务',
+      'Task No': '任务序号',
+      'TaskNo': '任务序号',
+      'Item': '点检项目',
+      'No': '序号',
+      'Standard': '检查标准',
+      'Inspection Std': '检查标准',
+      'InspectionStd': '检查标准',
+      'Inspection Standard': '检查标准',
+      'Parts': '部件',
+      'Part': '部件',
+      'Type': '类型',
+      'Status': '状态',
+      'Date': '日期',
+      'Shift': '班次',
+      'Remark': '备注',
+      'Remarks': '备注',
+      'Result': '结果',
+      'Check Item': '点检内容',
+      'CheckItem': '点检内容',
+      'Check Content': '点检内容',
+      'Description': '描述',
+      'Specification': '规格',
+      'Value': '数值',
+      'Range': '范围',
+      'Target': '目标值',
+      'Actual': '实际值',
+      'Operator': '操作员',
+      'Inspector': '点检人',
+      'Team': '班组',
+      'Workshop': '车间',
+      'Line': '产线',
+      'Area': '区域'
+    };
+
+    // 生成双语表头：中文在上，英文在下（小字灰色）
+    function formatHeader(key) {
+      var cn = headerLabelMap[key] || key;
+      var en = key;
+      // 如果映射值和key相同（无中文翻译），则只显示英文
+      if (cn === key) {
+        return key;
+      }
+      return cn + '<br><span style="font-size:10px;font-weight:400;opacity:0.85;">' + en + '</span>';
+    }
+
     // 添加主要数据列
     mainColumns.forEach(key => {
-      headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">' + key + '</th>');
+      var label = formatHeader(key);
+      headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">' + label + '</th>');
     });
 
     // 添加折叠列组
-    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">详细信息 / Details</th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">详细信息<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Details</span></th>');
 
     // 添加操作列
-    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">结果 / Result</th>');
-    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">备注 / Remarks</th>');
-    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">是否解决 / Resolved</th>');
-    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">操作 / Actions</th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">结果<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Result</span></th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">备注<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Remarks</span></th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">是否解决<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Resolved</span></th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">操作<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Actions</span></th>');
 
     thead.append(headerRow);
     table.append(thead);
@@ -1412,8 +1474,14 @@
 
             // 操作列 - 按钮
             row.append('<td>' +
-              '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '">预览/Preview</button>' +
-              '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '">上传/Upload</button>' +
+              '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;">' +
+              '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '" ' +
+              'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+              '<i class="bi bi-eye"></i>预览<br>Preview</button>' +
+              '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '" ' +
+              'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+              '<i class="bi bi-upload"></i>上传<br>Upload</button>' +
+              '</div>' +
               '<input type="hidden" class="photo-id-input" data-row-id="' + rowId + '" value="">' +
               '</td>');
 
@@ -1468,8 +1536,14 @@
 
         // 操作列 - 按钮
         row.append('<td>' +
-          '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '">预览/Preview</button>' +
-          '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '">上传/Upload</button>' +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;">' +
+          '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '" ' +
+          'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+          '<i class="bi bi-eye"></i>预览<br>Preview</button>' +
+          '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '" ' +
+          'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+          '<i class="bi bi-upload"></i>上传<br>Upload</button>' +
+          '</div>' +
           '<input type="hidden" class="photo-id-input" data-row-id="' + rowId + '" value="">' +
           '</td>');
 
