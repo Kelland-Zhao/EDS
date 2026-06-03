@@ -12,7 +12,8 @@
 
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex, rowData) {
         if (!followupTable || settings.nTable !== followupTable.table().node()) return true;
-        return showCompleted || !String((rowData || {}).status || '').includes('已通过');
+        const status = String((rowData || {}).status || '');
+        return showCompleted || (!status.includes('已通过') && !status.includes('已取消'));
     });
 
     function setupCompletedToggle() {
@@ -30,11 +31,13 @@
     }
 
     function updateCompletedToggle() {
-        const count = (followupData || []).filter(function(r) { return String(r.status || '').includes('已通过'); }).length;
+        const passedCount = (followupData || []).filter(function(r) { return String(r.status || '').includes('已通过'); }).length;
+        const cancelledCount = (followupData || []).filter(function(r) { return String(r.status || '').includes('已取消'); }).length;
+        const total = passedCount + cancelledCount;
         const $t = $('#completedToggle');
-        if (count === 0) { $t.hide(); return; }
+        if (total === 0) { $t.hide(); return; }
         $t.show();
-        $t.html((showCompleted ? '▼' : '▶') + ' 已通过 ' + count + ' 条 / ' + count + ' Passed' +
+        $t.html((showCompleted ? '▼' : '▶') + ' 已通过 ' + passedCount + ' 条 / 已取消 ' + cancelledCount + ' 条' +
             ' &nbsp;<small class="text-muted">— ' + (showCompleted ? '收起 / Collapse' : '展开 / Expand') + '</small>');
     }
 
@@ -249,11 +252,23 @@
                     data: 'verifyReply',
                     className: 'pa-reply-cell',
                     orderable: false,
-                    render: function(value, type, row) {
+                    render: function(value, type) {
                         if (type !== 'display') return value || '';
-                        var safeId = escapeHtml(row.followupId);
-                        var safeVal = escapeHtml(value || '');
-                        return '<textarea class="form-control form-control-sm verify-reply-input" data-id="' + safeId + '" rows="2" placeholder="请输入验证回复 / Enter verification reply" style="min-width:160px;">' + safeVal + '</textarea>';
+                        if (!value) return '<span class="text-muted">-</span>';
+                        var lines = String(value).split('\n').filter(function(l) { return l.trim(); });
+                        var html = '<div style="min-width:160px;max-width:240px;">';
+                        lines.forEach(function(line, i) {
+                            var m = line.match(/^(\[.+?\])\s*([\s\S]*)$/);
+                            if (m) {
+                                html += (i > 0 ? '<hr style="margin:4px 0;border-color:#dee2e6;">' : '');
+                                html += '<div style="font-size:0.72rem;font-weight:bold;color:#856404;background:#fff3cd;border-radius:3px;padding:1px 4px;margin-bottom:2px;">' + escapeHtml(m[1]) + '</div>';
+                                html += '<div style="font-size:0.82rem;color:#555;word-break:break-word;">' + escapeHtml(m[2]) + '</div>';
+                            } else {
+                                html += '<div style="font-size:0.82rem;color:#555;word-break:break-word;">' + escapeHtml(line) + '</div>';
+                            }
+                        });
+                        html += '</div>';
+                        return html;
                     }
                 },
                 { data: 'createdDate', render: function(value, type) {
@@ -267,12 +282,23 @@
                     orderable: false,
                     render: function(data, type, row) {
                         if (type !== 'display') return '';
-                        var btnStyle = 'font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;';
-                        var actions = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;justify-content:center;">';
-                        actions += '<button class="btn btn-sm btn-primary save-status-btn" data-id="' + row.followupId + '" style="' + btnStyle + '"><i class="bi bi-save"></i><br>保存<br>Save</button>';
+                        var btnStyle = 'font-size:0.7rem;width:52px;padding:3px 2px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.3;white-space:normal;';
+                        var status = String(row.status || '');
+                        var isEnded = status.includes('已取消');
+                        var isPassed = status.includes('已通过');
+                        var actions = '<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:stretch;justify-content:center;">';
+                        if (!isPassed && !isEnded) {
+                            actions += '<button class="btn btn-sm btn-success pass-btn" data-id="' + row.followupId + '" style="' + btnStyle + '" title="通过 Pass"><i class="bi bi-check-circle"></i><br>通过</button>';
+                        }
+                        if (!isPassed && !isEnded) {
+                            actions += '<button class="btn btn-sm btn-warning return-btn" data-id="' + row.followupId + '" style="' + btnStyle + 'color:#fff;" title="退回 Return"><i class="bi bi-arrow-return-left"></i><br>退回</button>';
+                        }
+                        if (!isEnded) {
+                            actions += '<button class="btn btn-sm btn-secondary cancel-btn" data-id="' + row.followupId + '" style="' + btnStyle + '" title="取消 Cancel"><i class="bi bi-x-circle"></i><br>取消</button>';
+                        }
                         if (row.pdfUrl) {
-                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '">';
-                            actions += '<i class="bi bi-file-pdf"></i><br>查看PDF<br>View PDF';
+                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '" title="查看PDF View PDF">';
+                            actions += '<i class="bi bi-file-pdf"></i><br>PDF';
                             actions += '</button>';
                         }
                         actions += '</div>';
@@ -296,7 +322,13 @@
             },
             order: [[8, 'desc']],
             pageLength: 25,
-            responsive: true
+            responsive: true,
+            drawCallback: function() {
+                $('#followupTable textarea.verify-reply-input').each(function() {
+                    this.style.height = 'auto';
+                    this.style.height = this.scrollHeight + 'px';
+                });
+            }
         });
 
         followupTable.draw(false);
@@ -305,35 +337,12 @@
     }
 
     function buildStatusSelectHtml(followupId, currentValue) {
-        const safeId = escapeHtml(followupId);
-        const normalizedValue = String(currentValue || '').trim();
-
-        // 根据状态值设置颜色类
-        let statusColorClass = '';
-        if (normalizedValue === '已通过 / Passed') {
-            statusColorClass = 'status-completed';
-        } else if (normalizedValue === '未通过 / Not Passed') {
-            statusColorClass = 'status-failed';
-        } else if (normalizedValue === '未验证 / Not Verified') {
-            statusColorClass = 'status-ongoing';
-        }
-
-        let optionsHtml = '<option value="">' + escapeHtml('请选择 / Select') + '</option>';
-        let hasCurrent = normalizedValue === '';
-
-        STATUS_OPTIONS.forEach(function(option) {
-            const selected = option === normalizedValue ? ' selected' : '';
-            if (selected) {
-                hasCurrent = true;
-            }
-            optionsHtml += '<option value="' + escapeHtml(option) + '"' + selected + '>' + escapeHtml(option) + '</option>';
-        });
-
-        if (!hasCurrent && normalizedValue) {
-            optionsHtml += '<option value="' + escapeHtml(normalizedValue) + '" selected>' + escapeHtml(normalizedValue) + '</option>';
-        }
-
-        return '<select class="form-select form-select-sm followup-select followup-select-status ' + statusColorClass + '" data-field="status" data-id="' + safeId + '">' + optionsHtml + '</select>';
+        const v = String(currentValue || '').trim();
+        if (v.includes('已通过'))  return '<span class="badge bg-success" style="font-size:12px;white-space:normal;">已通过<br>Passed</span>';
+        if (v.includes('需补充')) return '<span class="badge bg-warning text-dark" style="font-size:12px;white-space:normal;">需补充<br>Requires Supplement</span>';
+        if (v.includes('已取消')) return '<span class="badge bg-secondary" style="font-size:12px;white-space:normal;">已取消<br>Cancelled</span>';
+        if (v.includes('未通过'))  return '<span class="badge bg-danger" style="font-size:12px;white-space:normal;">未通过<br>Not Passed</span>';
+        return '<span class="badge bg-warning text-dark" style="font-size:12px;white-space:normal;">未验证<br>Not Verified</span>';
     }
 
     function formatDateYMD(val) {
@@ -393,63 +402,135 @@
             .updateFollowupFieldValue(followupId, fieldKey, value);
     }
 
-    // 保存状态按钮点击事件 - 同步保存验证状态 + 验证回复，触发邮件通知
-    $(document).on('click', '.save-status-btn', function() {
+    // 通过按钮
+    $(document).on('click', '.pass-btn', function() {
         if (!followupTable) return;
         var followupId = $(this).data('id');
-        var $btn = $(this);
-        var $row = $btn.closest('tr');
-        var $select = $row.find('select.followup-select-status');
-        var $reply = $row.find('textarea.verify-reply-input');
-        var newValue = String($select.val() || '').trim();
-        var replyValue = String($reply.val() || '');
-
-        if (!newValue) {
-            showToast('请先选择状态 / Please select status first', 'warning');
-            return;
-        }
-
-        var rowApi = followupTable.row($row);
+        var rowApi = followupTable.row($(this).closest('tr'));
         var rowData = rowApi.data();
         if (!rowData) return;
+        Swal.fire({
+            title: swalTitle('通过验证', 'Pass Verification'),
+            html: '<div class="text-start">'
+                + '<div class="mb-2"><label class="form-label fw-bold">验证回复 Verification Reply <small class="text-muted">（选填 / Optional）</small></label>'
+                + '<textarea id="swal-pass-reply" class="form-control" rows="3" placeholder="输入验证回复（选填）/ Enter verification reply (optional)"></textarea></div></div>',
+            showCancelButton: true,
+            confirmButtonText: '确认通过 / Confirm Pass',
+            cancelButtonText: '返回 / Back',
+            confirmButtonColor: '#198754',
+            preConfirm: function() { return { reply: $('#swal-pass-reply').val().trim() }; }
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            var reply = result.value.reply;
+            loadingSpinner.show();
+            google.script.run
+                .withSuccessHandler(function(resp) {
+                    loadingSpinner.hide();
+                    if (resp && resp.success) {
+                        var updated = Object.assign({}, rowData, { status: '已通过 / Passed', verifyReply: reply || rowData.verifyReply, updatedDate: resp.updatedDate });
+                        rowApi.data(updated).draw(false);
+                        var idx = followupData.findIndex(function(r) { return r.followupId === followupId; });
+                        if (idx !== -1) followupData[idx] = updated;
+                        updateCompletedToggle();
+                        showToast('已通过验证 / Verification passed', 'success');
+                    } else { showToast((resp && resp.message) || '操作失败 / Failed', 'error'); }
+                })
+                .withFailureHandler(function(err) { loadingSpinner.hide(); showToast('操作失败 / Failed: ' + (err.message || ''), 'error'); })
+                .saveVerifyStatusAndReply(followupId, '已通过 / Passed', reply || '', currentUserName);
+        });
+    });
 
-        $btn.prop('disabled', true);
+    // 验证回复 textarea 自动高度
+    $(document).on('input', '.verify-reply-input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+    });
 
-        Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 0,
-            timerProgressBar: false
-        }).fire({ icon: 'info', title: '保存中 / Saving...' });
+    // 退回按钮
+    $(document).on('click', '.return-btn', function() {
+        if (!followupTable) return;
+        var followupId = $(this).data('id');
+        var rowApi = followupTable.row($(this).closest('tr'));
+        var rowData = rowApi.data();
+        if (!rowData) return;
+        Swal.fire({
+            title: swalTitle('退回跟进', 'Return Follow-up'),
+            html: '<div class="text-start">'
+                + '<div class="mb-3"><label class="form-label fw-bold">退回原因 Return Reason <span class="text-danger">*</span></label>'
+                + '<textarea id="swal-return-reason" class="form-control" rows="3" placeholder="请输入退回原因 / Please enter return reason"></textarea></div>'
+                + '<div class="mb-2"><label class="form-label fw-bold">新完成日期 New Completion Date <span class="text-danger">*</span></label>'
+                + '<input type="date" id="swal-new-date" class="form-control" value="' + new Date().toISOString().slice(0,10) + '"></div></div>',
+            showCancelButton: true,
+            confirmButtonText: '确认退回 / Confirm',
+            cancelButtonText: '返回 / Back',
+            confirmButtonColor: '#fd7e14',
+            preConfirm: function() {
+                var reason = $('#swal-return-reason').val().trim();
+                var newDate = $('#swal-new-date').val();
+                if (!reason) { Swal.showValidationMessage('请输入退回原因 / Please enter return reason'); return false; }
+                if (!newDate) { Swal.showValidationMessage('请选择新完成日期 / Please select new completion date'); return false; }
+                return { reason: reason, newDate: newDate };
+            }
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            loadingSpinner.show();
+            google.script.run
+                .withSuccessHandler(function(resp) {
+                    loadingSpinner.hide();
+                    if (resp && resp.success) {
+                        var updated = Object.assign({}, rowData, { status: '需补充 / Requires Supplement', verifyReply: resp.updatedReply || rowData.verifyReply, paWhen: result.value.newDate, updatedDate: resp.updatedDate });
+                        rowApi.data(updated).draw(false);
+                        var idx = followupData.findIndex(function(r) { return r.followupId === followupId; });
+                        if (idx !== -1) followupData[idx] = updated;
+                        updateCompletedToggle();
+                        showToast('已退回，责任人将收到邮件通知 / Returned, responsible person notified', 'success');
+                    } else { showToast((resp && resp.message) || '退回失败 / Return failed', 'error'); }
+                })
+                .withFailureHandler(function(err) { loadingSpinner.hide(); showToast('退回失败 / Return failed: ' + (err.message || ''), 'error'); })
+                .returnFollowupRecord(followupId, result.value.reason, result.value.newDate, currentUserName);
+        });
+    });
 
-        loadingSpinner.show();
-        google.script.run
-            .withSuccessHandler(function(response) {
-                loadingSpinner.hide();
-                Swal.close();
-                $btn.prop('disabled', false);
-                if (response && response.success) {
-                    var updatedRow = Object.assign({}, rowData, { status: newValue, verifyReply: replyValue });
-                    if (response.updatedDate) updatedRow.updatedDate = response.updatedDate;
-                    rowApi.data(updatedRow).draw(false);
-                    var $savedTr = $(rowApi.node());
-                    $savedTr.addClass('row-saved-flash');
-                    setTimeout(function() { $savedTr.removeClass('row-saved-flash'); }, 2000);
-                    var index = followupData.findIndex(function(r) { return r.followupId === followupId; });
-                    if (index !== -1) { followupData[index] = updatedRow; }
-                    showToast('已保存并已发送通知 / Saved & notified', 'success');
-                } else {
-                    showToast((response && response.message) || '保存失败 / Save failed', 'error');
-                }
-            })
-            .withFailureHandler(function(error) {
-                loadingSpinner.hide();
-                Swal.close();
-                $btn.prop('disabled', false);
-                showToast('保存失败 / Save failed: ' + (error.message || ''), 'error');
-            })
-            .saveVerifyStatusAndReply(followupId, newValue, replyValue, currentUserName);
+    // 取消按钮
+    $(document).on('click', '.cancel-btn', function() {
+        if (!followupTable) return;
+        var followupId = $(this).data('id');
+        var rowApi = followupTable.row($(this).closest('tr'));
+        var rowData = rowApi.data();
+        if (!rowData) return;
+        Swal.fire({
+            title: swalTitle('取消条目', 'Cancel Entry'),
+            html: '<div class="text-start">'
+                + '<div class="mb-2"><label class="form-label fw-bold">取消原因 Cancel Reason <span class="text-danger">*</span></label>'
+                + '<textarea id="swal-cancel-reason" class="form-control" rows="3" placeholder="请输入取消原因 / Please enter cancel reason"></textarea></div></div>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '确认取消 / Confirm Cancel',
+            cancelButtonText: '返回 / Back',
+            confirmButtonColor: '#6c757d',
+            preConfirm: function() {
+                var reason = $('#swal-cancel-reason').val().trim();
+                if (!reason) { Swal.showValidationMessage('请输入取消原因 / Please enter cancel reason'); return false; }
+                return { reason: reason };
+            }
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+            loadingSpinner.show();
+            google.script.run
+                .withSuccessHandler(function(resp) {
+                    loadingSpinner.hide();
+                    if (resp && resp.success) {
+                        var updated = Object.assign({}, rowData, { status: '已取消 / Cancelled', verifyReply: resp.updatedReply || rowData.verifyReply, updatedDate: resp.updatedDate });
+                        rowApi.data(updated).draw(false);
+                        var idx = followupData.findIndex(function(r) { return r.followupId === followupId; });
+                        if (idx !== -1) followupData[idx] = updated;
+                        updateCompletedToggle();
+                        showToast('条目已取消，通知已发送 / Entry cancelled, notifications sent', 'success');
+                    } else { showToast((resp && resp.message) || '取消失败 / Cancel failed', 'error'); }
+                })
+                .withFailureHandler(function(err) { loadingSpinner.hide(); showToast('取消失败 / Cancel failed: ' + (err.message || ''), 'error'); })
+                .cancelFollowupRecord(followupId, result.value.reason, currentUserName);
+        });
     });
 
     // 查看PDF按钮点击事件

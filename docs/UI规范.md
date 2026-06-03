@@ -824,6 +824,8 @@ table.bilingual-table td .select2-container { vertical-align: middle; }
 - **表头/卡片标题/navbar**：中文上、英文下，用 `<br>` 换行；不用 `/`
 - **模态框标题**：例外，用 `中文 / English`
 - **段落正文混排**：用 `/`（如"导航页 / Navigation Page"）
+- **浏览器 Tab 标题**（`Code.js` 中 `setTitle()`）：统一用 `中文名 | English Name` 格式，` | ` 两侧各一个空格，不用 `/`
+  - 例：`"保养计划 | PM Plan"`、`"导航 | Navigation"`、`"EDS 登录 | EDS Login"`
 
 ### 7.2 ID / class
 - 按钮 ID：业务功能英文名 PascalCase（`FailureReport`、`PM_Plan`）

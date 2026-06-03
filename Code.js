@@ -86,7 +86,7 @@ function getReleaseWebPage() {
 function loadPM_Production_Confirm() {
   let webPage = getReleaseWebPage();
   return render("PM_Production_Confirm", { webPage: webPage })
-    .setTitle("保养班组确认/ PM Production Team confirmation")
+    .setTitle("保养班组确认 | PM Production Team Confirmation")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -94,7 +94,7 @@ function loadPM_Production_Confirm() {
 function loadPM_RecordQuery() {
   let webPage = getReleaseWebPage();
   return render("PM_RecordQuery", { webPage: webPage })
-    .setTitle("记录查询")
+    .setTitle("记录查询 | Record Query")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -102,7 +102,7 @@ function loadPM_RecordQuery() {
 function loadPM_ShiftFollowUp() {
   let webPage = getReleaseWebPage();
   return render("PM_ShiftFollowUp", { webPage: webPage })
-    .setTitle("三班转保养跟进 / PM Shift Follow-up")
+    .setTitle("三班转保养跟进 | PM Shift Follow-up")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -110,7 +110,7 @@ function loadPM_ShiftFollowUp() {
 function loadTaskEdit() {
   let webPage = getReleaseWebPage();
   return render("TaskEdit", { webPage: webPage })
-    .setTitle("任务清单编辑 / Task List Edit")
+    .setTitle("任务清单编辑 | Task List Edit")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -118,7 +118,7 @@ function loadTaskEdit() {
 function loadTaskManagement() {
   let webPage = getReleaseWebPage();
   return render("TaskManagement", { webPage: webPage })
-    .setTitle("任务管理 / Task Management")
+    .setTitle("任务管理 | Task Management")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -126,14 +126,14 @@ function loadTaskManagement() {
 function loadPersonnelAssignment() {
   let webPage = getReleaseWebPage();
   return render("PersonnelAssignment", { webPage: webPage })
-    .setTitle("人员分配 / Personnel Assignment")
+    .setTitle("人员分配 | Personnel Assignment")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadPM_Task_new() {
   let webPage = getReleaseWebPage();
   return render("PM_Task_1.0", { webPage: webPage })
-    .setTitle("保养任务/ PM Task")
+    .setTitle("保养任务 | PM Task")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -150,14 +150,14 @@ function loadPM_Plan_new(
     intoWebName: intoWebLoginName || "",
     intoWebType: intoWebLoginType || "",
   })
-    .setTitle("保养计划 PM Plan")
+    .setTitle("保养计划 | PM Plan")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadShift_new() {
   let webPage = getReleaseWebPage();
   return render("Shift_1.0", { webPage: webPage })
-    .setTitle("交接班/ Handover")
+    .setTitle("交接班 | Handover")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -165,21 +165,21 @@ function loadShift_new() {
 function loadHandover_1_0() {
   let webPage = getReleaseWebPage();
   return render("Handover_1.0", { webPage: webPage })
-    .setTitle("交接班 / Handover")
+    .setTitle("交接班 | Handover")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadFailureReport_Template() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Template", { webPage: webPage })
-    .setTitle("故障报告模板 / Failure Report Template")
+    .setTitle("故障报告模板 | Failure Report Template")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadProjectTracking() {
   let webPage = getReleaseWebPage();
   return render("ProjectTracking", { webPage: webPage })
-    .setTitle("项目跟进 / Project Tracking")
+    .setTitle("项目跟进 | Project Tracking")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -729,7 +729,7 @@ function buildReportHtml_(data) {
 function loadFault_Record_1_0() {
   let webPage = getReleaseWebPage();
   return render("Fault_Record_1.0", { webPage: webPage })
-    .setTitle("故障记录 / Fault Record")
+    .setTitle("故障记录 | Fault Record")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -743,7 +743,7 @@ function loadhome_new() {
 function loadNavigation() {
   let webPage = getReleaseWebPage();
   return render("Navigation", { webPage: webPage })
-    .setTitle("导航 / Navigation")
+    .setTitle("导航 | Navigation")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -751,7 +751,7 @@ function loadNavigation() {
 function loadMoldSurfaceClean() {
   let webPage = getReleaseWebPage();
   return render("MoldSurfaceClean", { webPage: webPage })
-    .setTitle("模面清理/ Mold Surface Clean") // Changed title
+    .setTitle("模面清理 | Mold Surface Clean")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -759,7 +759,7 @@ function loadMoldSurfaceClean() {
 function loadProcessSamplingInspection() {
   let webPage = getReleaseWebPage();
   return render("Process_Inspection", { webPage: webPage })
-    .setTitle("工艺抽检 / Process Inspection")
+    .setTitle("工艺抽检 | Process Inspection")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -786,28 +786,28 @@ function loadPM_Plan(
     intoWebName: intoWebLoginName,
     intoWebType: intoWebLoginType,
   })
-    .setTitle("AM/PM计划查询")
+    .setTitle("AM/PM计划查询 | AM/PM Plan Query")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadPM_Task() {
   let webPage = getReleaseWebPage();
   return render("PM_Task", { webPage: webPage })
-    .setTitle("保养任务")
+    .setTitle("保养任务 | PM Task")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadShift() {
   let webPage = getReleaseWebPage();
   return render("Shift", { webPage: webPage })
-    .setTitle("交接班")
+    .setTitle("交接班 | Handover")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadaddItem_manage() {
   let webPage = getReleaseWebPage();
   return render("addItem_manage", { webPage: webPage })
-    .setTitle("三班项目管理")
+    .setTitle("三班项目管理 | Shift Project Management")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -815,7 +815,7 @@ function loadaddItem_manage() {
 function loadFailureReport_Upload() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Upload", { webPage: webPage })
-    .setTitle("故障报告上传/ Upload Failure Report")
+    .setTitle("故障报告上传 | Upload Failure Report")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -823,7 +823,7 @@ function loadFailureReport_Upload() {
 function loadFailureReport_Manage() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Manage", { webPage: webPage })
-    .setTitle("故障报告管理/ Failure Report Management")
+    .setTitle("故障报告管理 | Failure Report Management")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -831,14 +831,14 @@ function loadFailureReport_Manage() {
 function loadFailureReport_Progress() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Progress", { webPage: webPage })
-    .setTitle("故障报告进度/ Failure Report Progress")
+    .setTitle("故障报告进度 | Failure Report Progress")
     .setFaviconUrl(webIconUrl);
 }
 
 function tmp_stop_machine() {
   let webPage = getReleaseWebPage();
   return render("tmp_stop_machine", { webPage: webPage })
-    .setTitle("临时停机管理")
+    .setTitle("临时停机管理 | Temporary Stop Management")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -866,21 +866,21 @@ function PointCheck(
     intoWebName: intoWebLoginName,
     intoWebType: intoWebLoginType,
   })
-    .setTitle("点检")
+    .setTitle("点检 | Inspection")
     .setFaviconUrl(webIconUrl);
 }
 
 function MaintenanceReport_Manage() {
   let webPage = getReleaseWebPage();
   return render("MaintenanceReport_Manage", { webPage: webPage })
-    .setTitle("故障报告管理")
+    .setTitle("故障报告管理 | Failure Report Management")
     .setFaviconUrl(webIconUrl);
 }
 
 function loadViewHistory() {
   let webPage = getReleaseWebPage();
   return render("ViewHistory", { webPage: webPage })
-    .setTitle("查询数据")
+    .setTitle("查询数据 | Data Query")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -897,7 +897,7 @@ function loadInspection2_0(
     intoWebID: intoWebLoginId,
     intoWebType: intoWebLoginType,
   })
-    .setTitle("点检2.0 / Inspection 2.0")
+    .setTitle("点检2.0 | Inspection 2.0")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -7705,6 +7705,118 @@ function saveVerifyStatusAndReply(followupId, status, verifyReply, verifierName)
   }
 }
 
+function returnFollowupRecord(followupId, reason, newDate, verifierName) {
+  try {
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+    if (!wsFollow) throw new Error('Failure_Report_followup sheet未找到');
+    const data = wsFollow.getDataRange().getValues();
+    let rowIndex = -1, rowData = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(followupId).trim()) { rowIndex = i + 1; rowData = data[i]; break; }
+    }
+    if (rowIndex === -1) throw new Error('未找到跟进ID: ' + followupId);
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const nowYmd = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const nowStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm');
+    const existingReply = String(rowData[14] || '');
+    const newEntry = '[' + nowStr + ' ' + (verifierName || '') + ' 退回] ' + (reason || '');
+    const updatedReply = existingReply ? existingReply + '\n' + newEntry : newEntry;
+    wsFollow.getRange(rowIndex, 9).setValue('需补充 / Requires Supplement');
+    wsFollow.getRange(rowIndex, 15).setValue(updatedReply);
+    wsFollow.getRange(rowIndex, 6).setValue(newDate);
+    wsFollow.getRange(rowIndex, 11).setValue(nowYmd);
+    try { sendReturnNotificationToResponsible(rowData, reason, newDate, verifierName, nowStr); } catch (e) { console.error('退回邮件发送失败:', e); }
+    return { success: true, updatedDate: nowYmd, updatedReply: updatedReply };
+  } catch (error) {
+    console.error('returnFollowupRecord 失败:', error);
+    return { success: false, message: error.toString() };
+  }
+}
+
+function sendReturnNotificationToResponsible(rowData, reason, newDate, verifierName, nowStr) {
+  const paWho = String(rowData[4] || '');
+  const match = paWho.match(/【(.+)】/);
+  const email = match ? match[1].trim() : '';
+  if (!email) return;
+  const name = paWho.replace(/【.+】/, '').trim();
+  const followupId = String(rowData[0] || '');
+  const failureReportNo = String(rowData[1] || '');
+  const paType = String(rowData[2] || '');
+  const paPlan = String(rowData[3] || '');
+  const subject = '故障报告跟进退回通知 / Follow-up Returned - ' + followupId;
+  let html = '<h2>故障报告跟进退回通知 / Failure Report Follow-up Returned</h2>';
+  html += '<p>您好 ' + escapeHtml(name) + '，您的跟进记录未通过验证，需进行补充 / Hello ' + escapeHtml(name) + ', your follow-up was returned and requires further action.</p>';
+  html += '<table border="1" cellpadding="5" style="border-collapse:collapse;width:100%;">';
+  html += '<tr style="background:#E60012;color:white;"><th>字段/Field</th><th>内容/Content</th></tr>';
+  html += '<tr><td>跟进ID / Follow-up ID</td><td>' + escapeHtml(followupId) + '</td></tr>';
+  html += '<tr><td>故障报告编号 / Failure Report No.</td><td>' + escapeHtml(failureReportNo) + '</td></tr>';
+  html += '<tr><td>PA类型 / PA Type</td><td>' + escapeHtml(paType) + '</td></tr>';
+  html += '<tr><td>预防性措施 / PA Action</td><td>' + escapeHtml(paPlan).replace(/\n/g, '<br>') + '</td></tr>';
+  html += '<tr style="background:#fff3cd;"><td><strong>退回原因 / Return Reason</strong></td><td>' + escapeHtml(reason || '-').replace(/\n/g, '<br>') + '</td></tr>';
+  html += '<tr style="background:#cce5ff;"><td><strong>新完成日期 / New Completion Date</strong></td><td>' + escapeHtml(newDate || '-') + '</td></tr>';
+  html += '<tr><td>退回人 / Returned By</td><td>' + escapeHtml(verifierName || '-') + '</td></tr>';
+  html += '<tr><td>退回时间 / Return Time</td><td>' + escapeHtml(nowStr || '-') + '</td></tr>';
+  html += '</table>';
+  html += '<p style="margin-top:16px;">请尽快登录系统更新跟进内容 / Please log in to update your follow-up content as soon as possible.</p>';
+  html += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
+  GmailApp.sendEmail(email, subject, '', { htmlBody: html });
+}
+
+function cancelFollowupRecord(followupId, reason, verifierName) {
+  try {
+    const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+    if (!wsFollow) throw new Error('Failure_Report_followup sheet未找到');
+    const data = wsFollow.getDataRange().getValues();
+    let rowIndex = -1, rowData = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(followupId).trim()) { rowIndex = i + 1; rowData = data[i]; break; }
+    }
+    if (rowIndex === -1) throw new Error('未找到跟进ID: ' + followupId);
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const nowYmd = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const nowStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm');
+    const existingReply = String(rowData[14] || '');
+    const newEntry = '[' + nowStr + ' ' + (verifierName || '') + ' 取消] ' + (reason || '');
+    const updatedReply = existingReply ? existingReply + '\n' + newEntry : newEntry;
+    wsFollow.getRange(rowIndex, 9).setValue('已取消 / Cancelled');
+    wsFollow.getRange(rowIndex, 15).setValue(updatedReply);
+    wsFollow.getRange(rowIndex, 11).setValue(nowYmd);
+    try { sendCancelNotificationToAll(rowData, reason, verifierName, nowStr); } catch (e) { console.error('取消邮件发送失败:', e); }
+    return { success: true, updatedDate: nowYmd, updatedReply: updatedReply };
+  } catch (error) {
+    console.error('cancelFollowupRecord 失败:', error);
+    return { success: false, message: error.toString() };
+  }
+}
+
+function sendCancelNotificationToAll(rowData, reason, verifierName, nowStr) {
+  const paWho = String(rowData[4] || '');
+  const paVerifier = String(rowData[6] || '');
+  const followupId = String(rowData[0] || '');
+  const failureReportNo = String(rowData[1] || '');
+  const paType = String(rowData[2] || '');
+  const recipients = [];
+  [paWho, paVerifier].forEach(function(p) { const m = p.match(/【(.+)】/); if (m) recipients.push(m[1].trim()); });
+  if (recipients.length === 0) return;
+  const unique = [...new Set(recipients)];
+  const subject = '故障报告跟进取消通知 / Follow-up Cancelled - ' + followupId;
+  let html = '<h2>故障报告跟进取消通知 / Failure Report Follow-up Cancelled</h2>';
+  html += '<p>以下跟进条目已被取消 / The following follow-up entry has been cancelled:</p>';
+  html += '<table border="1" cellpadding="5" style="border-collapse:collapse;width:100%;">';
+  html += '<tr style="background:#E60012;color:white;"><th>字段/Field</th><th>内容/Content</th></tr>';
+  html += '<tr><td>跟进ID / Follow-up ID</td><td>' + escapeHtml(followupId) + '</td></tr>';
+  html += '<tr><td>故障报告编号 / Failure Report No.</td><td>' + escapeHtml(failureReportNo) + '</td></tr>';
+  html += '<tr><td>PA类型 / PA Type</td><td>' + escapeHtml(paType) + '</td></tr>';
+  html += '<tr style="background:#f8d7da;"><td><strong>取消原因 / Cancel Reason</strong></td><td>' + escapeHtml(reason || '-').replace(/\n/g, '<br>') + '</td></tr>';
+  html += '<tr><td>操作人 / Cancelled By</td><td>' + escapeHtml(verifierName || '-') + '</td></tr>';
+  html += '<tr><td>操作时间 / Time</td><td>' + escapeHtml(nowStr || '-') + '</td></tr>';
+  html += '</table>';
+  html += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
+  GmailApp.sendEmail(unique.join(','), subject, '', { htmlBody: html });
+}
+
 /**
  * 验证操作邮件通知
  * 状态 = 已通过 / 未通过 / 未验证 三态均发送
@@ -8001,6 +8113,8 @@ function sendVerificationReminderToVerifiers(records) {
         htmlBody += '<th>故障报告编号<br>Failure Report No.</th>';
         htmlBody += '<th>PA类型<br>PA Type</th>';
         htmlBody += '<th>预防性措施<br>PA Action</th>';
+        htmlBody += '<th>跟进内容<br>Follow-up Content</th>';
+        htmlBody += '<th>跟进人<br>Updated By</th>';
         htmlBody += '<th>计划完成日期<br>Planned Completion Date</th>';
         htmlBody += '<th>状态<br>Status</th>';
         htmlBody += '</tr>';
@@ -8011,6 +8125,8 @@ function sendVerificationReminderToVerifiers(records) {
           htmlBody += '<td>' + escapeHtml(record.failureReportNo) + '</td>';
           htmlBody += '<td>' + escapeHtml(record.paType) + '</td>';
           htmlBody += '<td>' + escapeHtml(record.paPlan).replace(/\n/g, '<br>') + '</td>';
+          htmlBody += '<td style="background:#fffbe6;">' + escapeHtml(record.followupContent || '-').replace(/\n/g, '<br>') + '</td>';
+          htmlBody += '<td>' + escapeHtml(record.updatedBy || '-') + '</td>';
           htmlBody += '<td>' + escapeHtml(record.paWhen) + '</td>';
           htmlBody += '<td style="color: #28a745; font-weight: bold;">' + escapeHtml(record.status) + '</td>';
           htmlBody += '</tr>';
@@ -8503,7 +8619,7 @@ function loadFailureReport_Followup_Manage(webPage, id, name, type) {
     webPage: pageUrl,
     userName: userName 
   })
-    .setTitle("故障报告跟进 / Failure Report Follow-up")
+    .setTitle("故障报告跟进 | Failure Report Follow-up")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -8517,7 +8633,7 @@ function loadFailureReport_Followup_Verify(webPage, id, name, type) {
     webPage: pageUrl,
     userName: userName 
   })
-    .setTitle("故障报告验证 / Failure Report Verification")
+    .setTitle("故障报告验证 | Failure Report Verification")
     .setFaviconUrl(webIconUrl);
 }
 
