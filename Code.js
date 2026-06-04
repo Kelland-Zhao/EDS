@@ -2817,137 +2817,72 @@ function getData_PointCheck_Inspection2(process) {
     
     // 在 if 块外部定义变量，确保作用域正确
     let workcenter_list = [];
-    let nimWorkcenters_raw = []; // NIM机台号原始列表（不做排除，传给前端）
+    let workcenterOptions = []; // 预计算的机台选项（替代 nimWorkcenters_raw）
+    let rbmMachineCodes = []; // RBM 机台号集合
     let excludedCombinations = []; // 当周已检查的"机台号+任务类型"组合
-    
-    // 注塑工序（INJ）使用新的机台号获取逻辑
-    if (process === "INJ") {
-      // ========== NIM机台号数据准备 ==========
-      // 1. 从 Workcenter_List_IM 获取数据（从第1行开始）
-      let ss_WorkcenterList = SpreadsheetApp.openById("1RQql-PrcBWiAQNeg7hQKcocpllSUMRhT5XPrDTVWoBY");
-      let ws_WorkcenterList_IM = ss_WorkcenterList.getSheetByName("Workcenter_List_IM");
-      let data_WorkcenterList_IM = ws_WorkcenterList_IM
-        .getRange(1, 1, ws_WorkcenterList_IM.getLastRow(), 2)
-        .getDisplayValues();
-      
-      // 2. 筛选机型为 ENG、FCS 或 6AX
-      let filtered_WorkcenterList_IM = data_WorkcenterList_IM.filter(row => {
-        let machineType = row[1] ? row[1].toString().trim() : "";
-        return machineType === "ENG" || machineType === "FCS" || machineType === "6AX";
-      });
-      
-      // 3. 与 MachineList 的D列机台号取交集
-      let ws_MachineList = ss_PointCheck.getSheetByName("MachineList");
-      let data_MachineList_D = ws_MachineList
-        .getRange(2, 4, ws_MachineList.getLastRow() - 1, 1)
-        .getDisplayValues()
-        .map(row => row[0].toString().trim());
-      let nimWorkcenterSet = new Set(data_MachineList_D);
-      
-      // 提取 Workcenter_List_IM 的 NIM 机台号
-      let nimWorkcenters_from_IM = filtered_WorkcenterList_IM
-        .map(row => row[0].toString().trim())
-        .filter(machineCode => machineCode && nimWorkcenterSet.has(machineCode));
-      
-      // 4. 从 Workcenter_List_Others 获取数据
-      let ws_WorkcenterList_Others = ss_WorkcenterList.getSheetByName("Workcenter_List_Others");
-      let nimWorkcenters_from_Others = [];
-      if (ws_WorkcenterList_Others) {
-        let data_WorkcenterList_Others = ws_WorkcenterList_Others
-          .getRange(2, 1, ws_WorkcenterList_Others.getLastRow() - 1, 3)
-          .getDisplayValues();
-        
-        // 筛选 Process = "IM"
-        nimWorkcenters_from_Others = data_WorkcenterList_Others
-          .filter(row => {
-            let process = row[2] ? row[2].toString().trim() : "";
-            return process === "IM";
-          })
-          .map(row => row[0].toString().trim())
-          .filter(machineCode => machineCode && nimWorkcenterSet.has(machineCode));
-      }
-      
-      // 5. 合并 NIM 机台号（不去重，因为数据源不会重复）
-      nimWorkcenters_raw = [...nimWorkcenters_from_IM, ...nimWorkcenters_from_Others];
-            
-      // ========== 获取当周已检查记录（传递机台号+任务类型组合） ==========
-      let totalRows = 0;
-      let matchedRows = 0;
 
-      if (USE_UNIFIED_INSPECTION_SHEET) {
-        // 统一记录表：从 InspectionRecords 按工序过滤
-        let ws_Records = ss_PointCheck.getSheetByName("InspectionRecords");
-        if (ws_Records && ws_Records.getLastRow() > 1) {
-          let data = ws_Records.getRange(2, 1, ws_Records.getLastRow() - 1, 9).getDisplayValues()
-            .filter(row => {
-              let rp = (row[2] || "").toString().trim().toUpperCase();
-              return rp === "INJ" || rp === "IM";
-            });
-          totalRows = data.length;
-          data.forEach(row => {
-            let colA = row[0] ? row[0].toString().trim() : "";
-            let colD = row[3] ? row[3].toString().trim() : "";
-            let colI = row[8] ? row[8].toString().trim() : "";
-            let weekMatch = colA.match(/(\d{4}W\d{2})/);
-            if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
-              matchedRows++;
-              excludedCombinations.push({ workcenter: colI, machineType: colD });
-            }
+    // ========== 读取 Workcenter 表（INJ 工序用） ==========
+    let workcenterKtoA = {}; // K(NewFormedCell) → [A列机台号]
+    if (process === "INJ") {
+      var ss_WorkcenterPlan = SpreadsheetApp.openById("12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM");
+      var ws_Workcenter = ss_WorkcenterPlan.getSheetByName("Workcenter");
+      if (ws_Workcenter && ws_Workcenter.getLastRow() > 1) {
+        var data_Workcenter = ws_Workcenter.getRange(2, 1, ws_Workcenter.getLastRow() - 1, 11).getDisplayValues();
+        data_Workcenter.forEach(function(row) {
+          var wc = row[0] ? row[0].toString().trim() : "";
+          var nfc = row[10] ? row[10].toString().trim() : "";
+          if (wc && nfc) {
+            if (!workcenterKtoA[nfc]) workcenterKtoA[nfc] = [];
+            workcenterKtoA[nfc].push(wc);
+          }
+        });
+      }
+    }
+
+    // ========== 获取当周已检查记录（传递机台号+任务类型组合） ==========
+    if (USE_UNIFIED_INSPECTION_SHEET) {
+      // 统一记录表：从 InspectionRecords 按工序过滤
+      let ws_Records = ss_PointCheck.getSheetByName("InspectionRecords");
+      if (ws_Records && ws_Records.getLastRow() > 1) {
+        let data = ws_Records.getRange(2, 1, ws_Records.getLastRow() - 1, 9).getDisplayValues()
+          .filter(row => {
+            let rp = (row[2] || "").toString().trim().toUpperCase();
+            if (process === "INJ") return rp === "INJ" || rp === "IM";
+            return rp === process;
           });
-        }
-      } else {
-        // 旧逻辑：读 INJ-TB1, INJ-TB2
-        let ws_INJ_TB1 = ss_PointCheck.getSheetByName("INJ-TB1");
-        let ws_INJ_TB2 = ss_PointCheck.getSheetByName("INJ-TB2");
-        [ws_INJ_TB1, ws_INJ_TB2].forEach(ws => {
+        data.forEach(row => {
+          let colA = row[0] ? row[0].toString().trim() : "";
+          let colD = row[3] ? row[3].toString().trim() : "";
+          let colI = row[8] ? row[8].toString().trim() : "";
+          let weekMatch = colA.match(/(\d{4}W\d{2})/);
+          if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
+            excludedCombinations.push({ workcenter: colI, machineType: colD });
+          }
+        });
+      }
+    } else {
+      // 旧逻辑：读 {process}-TB1, {process}-TB2
+      if (process === "INJ") {
+        ["INJ-TB1", "INJ-TB2"].forEach(function(name) {
+          let ws = ss_PointCheck.getSheetByName(name);
           if (ws && ws.getLastRow() > 1) {
             let data = ws.getRange(2, 1, ws.getLastRow() - 1, 9).getDisplayValues();
-            totalRows += data.length;
             data.forEach(row => {
               let colA = row[0] ? row[0].toString().trim() : "";
               let colD = row[3] ? row[3].toString().trim() : "";
               let colI = row[8] ? row[8].toString().trim() : "";
               let weekMatch = colA.match(/(\d{4}W\d{2})/);
               if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
-                matchedRows++;
                 excludedCombinations.push({ workcenter: colI, machineType: colD });
               }
             });
           }
         });
-      }
-      
-      // 注意：不再在后端合并 NIM 和 IM 机台号
-      // workcenter_list 保持为空，由前端动态生成
-      workcenter_list = [];
-    } else if (process === "TF" || process === "PK") {
-      // ========== TF和PK工序：获取当周已检查记录 ==========
-      if (USE_UNIFIED_INSPECTION_SHEET) {
-        // 统一记录表：从 InspectionRecords 按工序过滤
-        let ws_Records = ss_PointCheck.getSheetByName("InspectionRecords");
-        if (ws_Records && ws_Records.getLastRow() > 1) {
-          let data = ws_Records.getRange(2, 1, ws_Records.getLastRow() - 1, 9).getDisplayValues()
-            .filter(row => {
-              let rp = (row[2] || "").toString().trim();
-              return rp === process;
-            });
-          data.forEach(row => {
-            let colA = row[0] ? row[0].toString().trim() : "";
-            let colD = row[3] ? row[3].toString().trim() : "";
-            let colI = row[8] ? row[8].toString().trim() : "";
-            let weekMatch = colA.match(/(\d{4}W\d{2})/);
-            if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
-              excludedCombinations.push({ workcenter: colI, machineType: colD });
-            }
-          });
-        }
       } else {
-        // 旧逻辑：读 process-TB1, process-TB2
         let sheetName1 = process + "-TB1";
         let sheetName2 = process + "-TB2";
-        let ws_Process_TB1 = ss_PointCheck.getSheetByName(sheetName1);
-        let ws_Process_TB2 = ss_PointCheck.getSheetByName(sheetName2);
-        [ws_Process_TB1, ws_Process_TB2].forEach(ws => {
+        [sheetName1, sheetName2].forEach(function(name) {
+          let ws = ss_PointCheck.getSheetByName(name);
           if (ws && ws.getLastRow() > 1) {
             let data = ws.getRange(2, 1, ws.getLastRow() - 1, 9).getDisplayValues();
             data.forEach(row => {
@@ -2962,10 +2897,9 @@ function getData_PointCheck_Inspection2(process) {
           }
         });
       }
-      
-      // TF/PK工序保持workcenter_list为空，由前端基于MachineList生成
-      workcenter_list = [];
     }
+
+    workcenter_list = [];
     
     // 非注塑工序保持原有逻辑，继续获取 MachineList 数据
     let ws_MachineList = ss_PointCheck.getSheetByName("MachineList");
@@ -3012,8 +2946,22 @@ function getData_PointCheck_Inspection2(process) {
       return item;
     });
 
-    // 将data_RunInfo转换为一维数组，方便查找
-    let runInfoValues = data_RunInfo.map(row => row[0].toString().trim());
+    // 将data_RunInfo转换为一维数组
+    // INJ 工序：通过 Workcenter 表将 RunInfo 组号展开为实际机台号
+    let runInfoValues = [];
+    if (process === "INJ" && Object.keys(workcenterKtoA).length > 0) {
+      data_RunInfo.forEach(row => {
+        let groupCode = row[0].toString().trim();
+        if (workcenterKtoA[groupCode]) {
+          runInfoValues = runInfoValues.concat(workcenterKtoA[groupCode]);
+        }
+      });
+      // 去重
+      runInfoValues = [...new Set(runInfoValues)];
+      rbmMachineCodes = runInfoValues.slice(); // 保存 RBM 机台号集合
+    } else {
+      runInfoValues = data_RunInfo.map(row => row[0].toString().trim());
+    }
 
     // 从obj_PointCheckInfo中提取所有机台号
     let pointCheckInfoMachineCodes = obj_PointCheckInfo.map(item => {
@@ -3150,6 +3098,68 @@ function getData_PointCheck_Inspection2(process) {
       });
     }
 
+    // ========== 构建 workcenterOptions（INJ 工序：RBM/TBM 机台预计算） ==========
+    if (process === "INJ") {
+      // MachineList 机型映射（机台号 → 机型）
+      var mlMachineTypeMap = {};
+      data_MachineList.forEach(function(row) {
+        var mc = row[3] ? row[3].toString().trim() : "";
+        var mt = row[2] ? row[2].toString().trim() : "";
+        if (mc) { if (!mlMachineTypeMap[mc]) mlMachineTypeMap[mc] = mt; }
+      });
+
+      // 当周已检查排除集合（机台号|机型）
+      var excludedSet = {};
+      excludedCombinations.forEach(function(combo) {
+        if (combo.workcenter && combo.machineType) {
+          excludedSet[combo.workcenter + "|" + combo.machineType] = true;
+        }
+      });
+
+      var optionsMap = {};
+
+      // 1. TBM：filtered_machine_info（已排除 RBM 机台）中的 INJ 机台
+      filtered_machine_info.forEach(function(row) {
+        var mc = row[3] ? row[3].toString().trim() : "";
+        var mt = row[2] ? row[2].toString().trim() : "";
+        if (!mc) return;
+        if (excludedSet[mc + "|" + mt]) return;
+        optionsMap[mc] = { id: mc, text: mc, secondInfo: "", uniqueKey: mc };
+      });
+
+      // 2. RBM：PointCheckInfo 非"已做"机台
+      filtered_pointCheckInfo.forEach(function(item) {
+        var mc = item["机台号"] ? item["机台号"].toString().trim() : "";
+        var mt = item["机型"] ? item["机型"].toString().trim() : "";
+        var status = item["是否已做"] ? item["是否已做"].toString().trim() : "";
+        var yearWeek = item["年周"] ? item["年周"].toString().trim() : "";
+        var startDate = item["开始日期"] ? FormatVariableToYMD(item["开始日期"]) : "";
+        var startShift = item["开始班次"] ? item["开始班次"].toString().trim() : "";
+        if (!mc) return;
+        // 排除当周已检查
+        if (excludedSet[mc + "|" + mt]) return;
+        // 兜底：检查 allHistoricalRecords
+        var pointCheckId = yearWeek + mc;
+        var alreadySubmitted = allHistoricalRecords.some(function(rec) {
+          var codeSuffix = rec.Code.length >= 9 ? rec.Code.substring(8) : "";
+          return codeSuffix === pointCheckId && rec.MachineType === mt;
+        });
+        if (alreadySubmitted) return;
+
+        var key, secondInfo;
+        if (status === "未做") {
+          key = mc + "_" + yearWeek;
+          secondInfo = yearWeek + "_" + startDate + "_" + startShift;
+        } else {
+          key = mc;
+          secondInfo = "";
+        }
+        optionsMap[key] = { id: mc, text: mc, secondInfo: secondInfo, uniqueKey: key };
+      });
+
+      workcenterOptions = Object.keys(optionsMap).map(function(k) { return optionsMap[k]; });
+    }
+
     var info = {
       machine_info: filtered_machine_info,
       user: data_userID,
@@ -3158,11 +3168,12 @@ function getData_PointCheck_Inspection2(process) {
       pointCheckInfo: filtered_pointCheckInfo,
       current_PointCheckInfo: filtered_current_PointCheckInfo,
       history_PointCheckInfo: filtered_history_PointCheckInfo,
-      workcenter_list: workcenter_list, // 注塑工序的机台号列表（后端不再使用，保留兼容性）
-      nimWorkcenters_raw: nimWorkcenters_raw, // NIM机台号原始列表（前端动态过滤）
-      excludedCombinations: excludedCombinations, // 当周已检查的"机台号+任务类型"组合
-      currentYearWeek: now_YearWeek, // 当前周次
-      allHistoricalRecords: allHistoricalRecords, // 所有历史点检记录的完整对象数据
+      workcenter_list: workcenter_list,
+      workcenterOptions: workcenterOptions,
+      rbmMachineCodes: rbmMachineCodes,
+      excludedCombinations: excludedCombinations,
+      currentYearWeek: now_YearWeek,
+      allHistoricalRecords: allHistoricalRecords,
     };
     
             

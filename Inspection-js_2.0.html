@@ -5,7 +5,8 @@
   let globalMachineInfo = []; // 保存machine_info数据，用于机台号选择后自动匹配
   let globalTasklist = []; // 保存tasklist数据，避免重复获取
   let globalUserData = []; // 保存user数据
-  let globalNIMWorkcenters = []; // NIM机台号原始列表（INJ工序专用）
+  let globalWorkcenterOptions = []; // 预计算的机台选项（INJ工序专用，替代NIM）
+  let globalRBMMachineCodes = []; // RBM机台号集合（INJ工序专用）
   let globalExcludedCombinations = []; // 当周已检查的"机台号+任务类型"组合（所有工序）
   let globalPointCheckInfo = []; // PointCheckInfo 完整数据（INJ工序专用）
   let globalCurrentYearWeek = ""; // 当前周次（从后端获取）
@@ -252,8 +253,11 @@
     }
 
     // 保存 INJ 工序的新数据
-    if (data.nimWorkcenters_raw) {
-      globalNIMWorkcenters = data.nimWorkcenters_raw;
+    if (data.workcenterOptions) {
+      globalWorkcenterOptions = data.workcenterOptions;
+    }
+    if (data.rbmMachineCodes) {
+      globalRBMMachineCodes = data.rbmMachineCodes;
     }
     if (data.excludedCombinations) {
       globalExcludedCombinations = data.excludedCombinations;
@@ -556,182 +560,49 @@
         // 在已选点检人类型基础上过滤
         let matchedMachines = filterFieldsBySelection();
 
-        // ========== 新逻辑：INJ 工序的机台号动态过滤 ==========
+        // ========== INJ 工序：RBM/TBM 机台号动态过滤 ==========
         if (window.currentProcess === "INJ") {
-          // INJ 工序：根据任务类型动态过滤 NIM 和 IM 机台号
+          // 从 MachineList 获取该任务类型对应的机台号集合
+          let machineTypeWorkcenters = matchedMachines
+            .filter(r => r[2] === selectedMachineType)
+            .map(r => r[3]);
 
-          // 1. NIM 机台号过滤
-          let nimWorkcenters = [];
-          if (globalNIMWorkcenters && globalNIMWorkcenters.length > 0) {
-            // 从 MachineList 筛选该任务类型的机台号
-            let machineTypeWorkcenters = matchedMachines
-              .filter(r => r[2] === selectedMachineType)
-              .map(r => r[3]);
+          // 从预计算的 workcenterOptions 中筛选
+          let filteredOptions = globalWorkcenterOptions.filter(opt =>
+            machineTypeWorkcenters.includes(opt.id)
+          );
 
-            // 与 NIM 机台号取交集
-            let nimIntersection = globalNIMWorkcenters.filter(wc =>
-              machineTypeWorkcenters.includes(wc)
-            );
+          // 排除当周该任务类型已检查的机台号
+          let excludedForThisType = globalExcludedCombinations
+            .filter(combo => combo.machineType === selectedMachineType)
+            .map(combo => combo.workcenter);
 
-            // 排除当周该任务类型已检查的机台号
-            let excludedForThisType = globalExcludedCombinations
-              .filter(combo => combo.machineType === selectedMachineType)
-              .map(combo => combo.workcenter);
+          let uniqueWorkcenters = filteredOptions.filter(opt =>
+            !excludedForThisType.includes(opt.id)
+          );
 
-            let nimFiltered = nimIntersection.filter(wc =>
-              !excludedForThisType.includes(wc)
-            );
-
-            nimWorkcenters = nimFiltered.map(wc => ({
-              id: wc,
-              text: wc,
-              secondInfo: "",
-              uniqueKey: wc // NIM 机台号使用机台号本身作为唯一键
-            }));
-          }
-
-          // 2. IM 机台号过滤
-          let imWorkcenters = [];
-
-          if (globalPointCheckInfo && globalPointCheckInfo.length > 0) {
-
-            // 从 PointCheckInfo 筛选该任务类型的条目
-            let filteredByTaskType = globalPointCheckInfo.filter(item => {
-
-              let taskType = item["机型"] ? item["机型"].toString().trim() : "";
-
-              return taskType === selectedMachineType;
-            });
-
-            console.log("该机型未完成点检的条目", filteredByTaskType);
-
-            // 通过年周+机台号匹配历史记录的Code后缀
-            let filteredByExcluded = filteredByTaskType.filter(item => {
-
-              let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
-
-              let yearWeekFromPointCheck = item["年周"] ? item["年周"].toString().trim() : "";
-
-              let machineType = item["机型"] ? item["机型"].toString().trim() : "";
-              
-              // 构建PointCheckInfo中的标识符：年周+机台号
-              let pointCheckIdentifier = yearWeekFromPointCheck + machineCode;
-
-              // 检查是否在历史记录的Code后缀中存在
-              if (globalAllHistoricalRecords && globalAllHistoricalRecords.length > 0) {
-
-                let isAlreadyChecked = globalAllHistoricalRecords.some(record => {
-
-                  // 提取历史记录Code的后缀（从第9位开始）
-                  let codeSuffix = record.Code.length >= 9 ? record.Code.substring(8) : "";
-
-                  let machineTypeFromHistory = record.MachineType ? record.MachineType.toString().trim() : "";
-
-                  // 匹配条件：年周+机台号相同
-                  return codeSuffix === pointCheckIdentifier && machineType === machineTypeFromHistory;
-                });
-
-                console.log("isAlreadyChecked", isAlreadyChecked);
-                
-                // 如果已存在，则排除
-                if (isAlreadyChecked) {
-                  return false;
-                }
-
-              }
-
-              // 其他情况保留
-              return true;
-            });
-
-            console.log("filteredByExcluded", filteredByExcluded);
-
-
-            imWorkcenters = filteredByExcluded
-              .map(item => {
-                let machineCode = item["机台号"] ? item["机台号"].toString().trim() : "";
-                let status = item["是否已做"] ? item["是否已做"].toString().trim() : "";
-                let yearWeek = item["年周"] ? item["年周"].toString().trim() : "";
-                let startDate = item["开始日期"] ? item["开始日期"].toString().trim() : "";
-                let startShift = item["开始班次"] ? item["开始班次"].toString().trim() : "";
-
-                let result = {
-                  id: machineCode, // 实际的机台号
-                  text: machineCode,
-                  secondInfo: "",
-                  uniqueKey: machineCode // 用于去重的唯一键
-                };
-
-                // 如果是"未做"，添加红色备注
-                if (status === "未做" && machineCode) {
-                  if (yearWeek && startDate && startShift) {
-                    result.secondInfo = yearWeek + "_" + startDate + "_" + startShift;
-                    // 为不同周次的未做记录创建唯一键
-                    result.uniqueKey = machineCode + "_" + yearWeek;
-                  }
-                }
-
-                return result;
-              })
-              .filter(item => item.id);
-
-          }
-
-          console.log("imWorkcenters", imWorkcenters);
-
-          // 3. 合并 NIM 和 IM 机台号
-          let allWorkcenters = [...nimWorkcenters, ...imWorkcenters];
-
-          // 4. 去重（基于 uniqueKey，确保不同周次的未做记录都显示）
+          // 去重（基于 uniqueKey）
           let workcenterMap = new Map();
-          allWorkcenters.forEach(wc => {
-            // 使用 uniqueKey 进行去重
-            // 对于 IM 未做记录：uniqueKey = 机台号_年周（不同周次视为不同选项）
-            // 对于 NIM 和 IM 已做记录：uniqueKey = 机台号
+          uniqueWorkcenters.forEach(wc => {
             let key = wc.uniqueKey || wc.id;
-
-            if (!workcenterMap.has(key)) {
-              workcenterMap.set(key, wc);
-            }
+            if (!workcenterMap.has(key)) workcenterMap.set(key, wc);
           });
-          let uniqueWorkcenters = Array.from(workcenterMap.values());
+          uniqueWorkcenters = Array.from(workcenterMap.values());
 
-          // 5. 更新机台号下拉框
-          if (uniqueWorkcenters.length > 0) {
-            // 在数据前面添加一个空的placeholder选项
-            let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }, ...uniqueWorkcenters];
-
-            $('#workcenter').empty();
-            $('#workcenter').select2({
-              data: dataWithPlaceholder,
-              theme: 'bootstrap',
-              templateResult: formatOption,
-              width: '100%',
-              placeholder: "机台号/ Workcenter",
-              dropdownParent: $('body'),
-              autocomplete: 'off',
-              minimumResultsForSearch: Infinity
-            });
-            // 确保不自动选择第一个选项，保持placeholder状态
-            $("#workcenter").val('').trigger('change');
-          } else {
-            // 即使没有数据也添加placeholder选项
-            let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }];
-
-            $('#workcenter').empty();
-            $('#workcenter').select2({
-              data: dataWithPlaceholder,
-              theme: 'bootstrap',
-              templateResult: formatOption,
-              width: '100%',
-              placeholder: "机台号/ Workcenter",
-              dropdownParent: $('body'),
-              autocomplete: 'off',
-              minimumResultsForSearch: Infinity
-            });
-            // 确保显示placeholder
-            $("#workcenter").val('').trigger('change');
-          }
+          // 渲染下拉框
+          let dataWithPlaceholder = [{ id: '', text: '机台号/ Workcenter', disabled: true }, ...uniqueWorkcenters];
+          $('#workcenter').empty();
+          $('#workcenter').select2({
+            data: dataWithPlaceholder,
+            theme: 'bootstrap',
+            templateResult: formatOption,
+            width: '100%',
+            placeholder: "机台号/ Workcenter",
+            dropdownParent: $('body'),
+            autocomplete: 'off',
+            minimumResultsForSearch: Infinity
+          });
+          $("#workcenter").val('').trigger('change');
         } else {
           // 非 INJ 工序（TF、PK）：应用当周已检查排除逻辑
           let uniqueWorkcenters = [...new Set(matchedMachines.map(r => r[3]).filter(v => v && v.trim() !== ''))];
@@ -2085,9 +1956,9 @@
     // 从 globalWorkcenter 中移除
     globalWorkcenter = globalWorkcenter.filter(wc => wc.id !== workcenterToRemove);
 
-    // 从 globalNIMWorkcenters 中移除（如果存在）
-    if (globalNIMWorkcenters && globalNIMWorkcenters.length > 0) {
-      globalNIMWorkcenters = globalNIMWorkcenters.filter(wc => wc !== workcenterToRemove);
+    // 从 globalWorkcenterOptions 中移除
+    if (globalWorkcenterOptions && globalWorkcenterOptions.length > 0) {
+      globalWorkcenterOptions = globalWorkcenterOptions.filter(opt => opt.uniqueKey !== selectedUniqueKey);
     }
 
     // 从 globalPointCheckInfo 中精确标记为已完成（基于机台号+年周）
@@ -2107,7 +1978,7 @@
             item["是否已做"] = "已做";
           }
         } else if (!selectedSecondInfo && machineCode === workcenterToRemove) {
-          // 如果没有 secondInfo，说明是 NIM 或已做记录，标记所有该机台号的记录
+          // 如果没有 secondInfo，说明是 TBM 或已做记录，标记所有该机台号的记录
           item["是否已做"] = "已做";
         }
       });
