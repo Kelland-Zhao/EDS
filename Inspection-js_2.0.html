@@ -567,9 +567,9 @@
             .filter(r => r[2] === selectedMachineType)
             .map(r => r[3]);
 
-          // 从预计算的 workcenterOptions 中筛选
+          // 从预计算的 workcenterOptions 中筛选（按机台号 + 机型双匹配）
           let filteredOptions = globalWorkcenterOptions.filter(opt =>
-            machineTypeWorkcenters.includes(opt.id)
+            machineTypeWorkcenters.includes(opt.id) && opt.machineType === selectedMachineType
           );
 
           // 排除当周该任务类型已检查的机台号

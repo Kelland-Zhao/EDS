@@ -3119,12 +3119,14 @@ function getData_PointCheck_Inspection2(process) {
       var optionsMap = {};
 
       // 1. TBM：filtered_machine_info（已排除 RBM 机台）中的 INJ 机台
+      // 用 机台号|机型 做 key，同一机台在不同机型下分别出现
       filtered_machine_info.forEach(function(row) {
         var mc = row[3] ? row[3].toString().trim() : "";
         var mt = row[2] ? row[2].toString().trim() : "";
         if (!mc) return;
         if (excludedSet[mc + "|" + mt]) return;
-        optionsMap[mc] = { id: mc, text: mc, secondInfo: "", uniqueKey: mc };
+        var key = mc + "|" + mt;
+        optionsMap[key] = { id: mc, text: mc, secondInfo: "", uniqueKey: mc, machineType: mt };
       });
 
       // 2. RBM：PointCheckInfo 非"已做"机台
@@ -3146,15 +3148,17 @@ function getData_PointCheck_Inspection2(process) {
         });
         if (alreadySubmitted) return;
 
-        var key, secondInfo;
+        var key, secondInfo, uniqueKey;
         if (status === "未做") {
-          key = mc + "_" + yearWeek;
+          uniqueKey = mc + "_" + yearWeek;
           secondInfo = yearWeek + "_" + startDate + "_" + startShift;
         } else {
-          key = mc;
+          uniqueKey = mc;
           secondInfo = "";
         }
-        optionsMap[key] = { id: mc, text: mc, secondInfo: secondInfo, uniqueKey: key };
+        // 用 机台号|机型 做 map key，确保机型区分
+        key = mc + "|" + mt;
+        optionsMap[key] = { id: mc, text: mc, secondInfo: secondInfo, uniqueKey: uniqueKey, machineType: mt };
       });
 
       workcenterOptions = Object.keys(optionsMap).map(function(k) { return optionsMap[k]; });
