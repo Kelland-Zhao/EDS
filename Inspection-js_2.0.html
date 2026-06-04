@@ -21,8 +21,10 @@
   $(document).ready(function () {
     const pageLoadStartTime = performance.now();
 
-    // 填充 welcome-bar 用户名
-    $('#name').text(global_Name || '');
+    // 填充 welcome-bar 用户名（优先 sessionStorage，兜底模板变量）
+    if (global_Name) {
+      $('#name').text(global_Name);
+    }
 
     // 初始化页面：设置当前日期
     initializePage();
