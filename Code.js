@@ -6,6 +6,9 @@ const userLogInformationId = "1ecEx7G_FX7DAJ_8cm1AxSaN2h95IVo8n-W4WMX-g1m4";
 const webIconUrl =
   "https://images.ctfassets.net/m3056igwnpsm/2QQOLoOlu2v9JFVVjTnsrz/8fea197464768353c908b0c2c9d0edb3/EDS.png";
 
+// Inspection2.0 统一记录表开关（紧急回滚设 false）
+var USE_UNIFIED_INSPECTION_SHEET = true;
+
 var Route = {};
 
 Route.path = function (route, callback) {
@@ -2703,9 +2706,10 @@ function getData_PointCheck(workshop, process) {
 
     let ws_PointCheckTasklist =
       ss_PointCheck.getSheetByName("PointCheckTaskList");
-    let ws_PointCheckData = ss_PointCheck.getSheetByName(
-      process + "-" + workshop
-    );
+    let SheetName_PointCheck = USE_UNIFIED_INSPECTION_SHEET
+      ? "InspectionRecords"
+      : process + "-" + workshop;
+    let ws_PointCheckData = ss_PointCheck.getSheetByName(SheetName_PointCheck);
     let data_PointCheckTasklist = ws_PointCheckTasklist
       .getRange(
         2,
@@ -2718,6 +2722,12 @@ function getData_PointCheck(workshop, process) {
     let data_PoickCheck = ws_PointCheckData
       .getRange(2, 1, ws_PointCheckData.getLastRow() - 1, 9)
       .getDisplayValues()
+      .filter(row => {
+        if (!USE_UNIFIED_INSPECTION_SHEET) return true;
+        let rw = (row[1] || "").toString().trim();
+        let rp = (row[2] || "").toString().trim();
+        return rw === workshop && rp === process;
+      })
       .map((v) => {
         return [
           v[0].toString().substring(8, 23),
@@ -2861,66 +2871,97 @@ function getData_PointCheck_Inspection2(process) {
       nimWorkcenters_raw = [...nimWorkcenters_from_IM, ...nimWorkcenters_from_Others];
             
       // ========== 获取当周已检查记录（传递机台号+任务类型组合） ==========
-      let ws_INJ_TB1 = ss_PointCheck.getSheetByName("INJ-TB1");
-      let ws_INJ_TB2 = ss_PointCheck.getSheetByName("INJ-TB2");
-      
       let totalRows = 0;
       let matchedRows = 0;
-      
-      [ws_INJ_TB1, ws_INJ_TB2].forEach(ws => {
-        if (ws && ws.getLastRow() > 1) {
-          let data = ws.getRange(2, 1, ws.getLastRow() - 1, 9).getDisplayValues();
-          totalRows += data.length;
-                    
+
+      if (USE_UNIFIED_INSPECTION_SHEET) {
+        // 统一记录表：从 InspectionRecords 按工序过滤
+        let ws_Records = ss_PointCheck.getSheetByName("InspectionRecords");
+        if (ws_Records && ws_Records.getLastRow() > 1) {
+          let data = ws_Records.getRange(2, 1, ws_Records.getLastRow() - 1, 9).getDisplayValues()
+            .filter(row => {
+              let rp = (row[2] || "").toString().trim().toUpperCase();
+              return rp === "INJ" || rp === "IM";
+            });
+          totalRows = data.length;
           data.forEach(row => {
             let colA = row[0] ? row[0].toString().trim() : "";
-            let colD = row[3] ? row[3].toString().trim() : ""; // D列：任务类型
-            let colI = row[8] ? row[8].toString().trim() : ""; // I列：机台号
-            
-            // 从A列提取周次
+            let colD = row[3] ? row[3].toString().trim() : "";
+            let colI = row[8] ? row[8].toString().trim() : "";
             let weekMatch = colA.match(/(\d{4}W\d{2})/);
             if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
               matchedRows++;
-              excludedCombinations.push({
-                workcenter: colI,
-                machineType: colD
-              });
+              excludedCombinations.push({ workcenter: colI, machineType: colD });
             }
           });
         }
-      });
+      } else {
+        // 旧逻辑：读 INJ-TB1, INJ-TB2
+        let ws_INJ_TB1 = ss_PointCheck.getSheetByName("INJ-TB1");
+        let ws_INJ_TB2 = ss_PointCheck.getSheetByName("INJ-TB2");
+        [ws_INJ_TB1, ws_INJ_TB2].forEach(ws => {
+          if (ws && ws.getLastRow() > 1) {
+            let data = ws.getRange(2, 1, ws.getLastRow() - 1, 9).getDisplayValues();
+            totalRows += data.length;
+            data.forEach(row => {
+              let colA = row[0] ? row[0].toString().trim() : "";
+              let colD = row[3] ? row[3].toString().trim() : "";
+              let colI = row[8] ? row[8].toString().trim() : "";
+              let weekMatch = colA.match(/(\d{4}W\d{2})/);
+              if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
+                matchedRows++;
+                excludedCombinations.push({ workcenter: colI, machineType: colD });
+              }
+            });
+          }
+        });
+      }
       
       // 注意：不再在后端合并 NIM 和 IM 机台号
       // workcenter_list 保持为空，由前端动态生成
       workcenter_list = [];
     } else if (process === "TF" || process === "PK") {
       // ========== TF和PK工序：获取当周已检查记录 ==========
-      let sheetName1 = process + "-TB1";
-      let sheetName2 = process + "-TB2";
-      let ws_Process_TB1 = ss_PointCheck.getSheetByName(sheetName1);
-      let ws_Process_TB2 = ss_PointCheck.getSheetByName(sheetName2);
-      
-      [ws_Process_TB1, ws_Process_TB2].forEach(ws => {
-        if (ws && ws.getLastRow() > 1) {
-          let data = ws.getRange(2, 1, ws.getLastRow() - 1, 9).getDisplayValues();
-          
+      if (USE_UNIFIED_INSPECTION_SHEET) {
+        // 统一记录表：从 InspectionRecords 按工序过滤
+        let ws_Records = ss_PointCheck.getSheetByName("InspectionRecords");
+        if (ws_Records && ws_Records.getLastRow() > 1) {
+          let data = ws_Records.getRange(2, 1, ws_Records.getLastRow() - 1, 9).getDisplayValues()
+            .filter(row => {
+              let rp = (row[2] || "").toString().trim();
+              return rp === process;
+            });
           data.forEach(row => {
             let colA = row[0] ? row[0].toString().trim() : "";
-            let colD = row[3] ? row[3].toString().trim() : ""; // D列：任务类型
-            let colI = row[8] ? row[8].toString().trim() : ""; // I列：机台号
-            
-            // 从A列提取周次
+            let colD = row[3] ? row[3].toString().trim() : "";
+            let colI = row[8] ? row[8].toString().trim() : "";
             let weekMatch = colA.match(/(\d{4}W\d{2})/);
-            
             if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
-              excludedCombinations.push({
-                workcenter: colI,
-                machineType: colD
-              });
+              excludedCombinations.push({ workcenter: colI, machineType: colD });
             }
           });
         }
-      });
+      } else {
+        // 旧逻辑：读 process-TB1, process-TB2
+        let sheetName1 = process + "-TB1";
+        let sheetName2 = process + "-TB2";
+        let ws_Process_TB1 = ss_PointCheck.getSheetByName(sheetName1);
+        let ws_Process_TB2 = ss_PointCheck.getSheetByName(sheetName2);
+        [ws_Process_TB1, ws_Process_TB2].forEach(ws => {
+          if (ws && ws.getLastRow() > 1) {
+            let data = ws.getRange(2, 1, ws.getLastRow() - 1, 9).getDisplayValues();
+            data.forEach(row => {
+              let colA = row[0] ? row[0].toString().trim() : "";
+              let colD = row[3] ? row[3].toString().trim() : "";
+              let colI = row[8] ? row[8].toString().trim() : "";
+              let weekMatch = colA.match(/(\d{4}W\d{2})/);
+              if (weekMatch && weekMatch[1] === now_YearWeek && colI && colD) {
+                excludedCombinations.push({ workcenter: colI, machineType: colD });
+              }
+            });
+          }
+        });
+      }
       
       // TF/PK工序保持workcenter_list为空，由前端基于MachineList生成
       workcenter_list = [];
@@ -3059,35 +3100,55 @@ function getData_PointCheck_Inspection2(process) {
     });
 
     // ========== 获取该工序的所有历史点检记录的Code数据 ==========
-    let sheetNames = ss_PointCheck.getSheets().map(sheet => sheet.getName());
     let allHistoricalRecords = [];
-    
-    sheetNames.forEach(sheetName => {
-      if (sheetName.includes("-") && sheetName.startsWith(process + "-")) {
-        let ws = ss_PointCheck.getSheetByName(sheetName);
-        if (ws && ws.getLastRow() > 1) {
-          let lastRow = ws.getLastRow();
-          let data = ws.getRange(2, 1, lastRow - 1, 17) // 获取A到Q列的所有数据
-            .getDisplayValues();
-          
-          data.forEach(row => {
-            if (row[0] && row[0].toString().trim()) { // 确保Code不为空
-              let record = {
-                Code: row[0] ? row[0].toString().trim() : "",
-                Workshop: row[1] ? row[1].toString().trim() : "",
-                // Process: row[2] ? row[2].toString().trim() : "",
-                MachineType: row[3] ? row[3].toString().trim() : "",
-                // PointChecker: row[5] ? row[5].toString().trim() : "",
-                // Ownner: row[6] ? row[6].toString().trim() : "",
-                SubmitDate: row[7] ? row[7].toString().trim() : "",
-                Workcenter: row[8] ? row[8].toString().trim() : ""
-              };
-              allHistoricalRecords.push(record);
-            }
+
+    if (USE_UNIFIED_INSPECTION_SHEET) {
+      // 统一记录表：从 InspectionRecords 按工序过滤
+      let ws_Records = ss_PointCheck.getSheetByName("InspectionRecords");
+      if (ws_Records && ws_Records.getLastRow() > 1) {
+        let data = ws_Records.getRange(2, 1, ws_Records.getLastRow() - 1, 17).getDisplayValues()
+          .filter(row => {
+            let rp = (row[2] || "").toString().trim().toUpperCase();
+            return process === "INJ" ? (rp === "INJ" || rp === "IM") : rp === process;
           });
-        }
+        data.forEach(row => {
+          if (row[0] && row[0].toString().trim()) {
+            let record = {
+              Code: row[0] ? row[0].toString().trim() : "",
+              Workshop: row[1] ? row[1].toString().trim() : "",
+              MachineType: row[3] ? row[3].toString().trim() : "",
+              SubmitDate: row[7] ? row[7].toString().trim() : "",
+              Workcenter: row[8] ? row[8].toString().trim() : ""
+            };
+            allHistoricalRecords.push(record);
+          }
+        });
       }
-    });
+    } else {
+      // 旧逻辑：遍历所有 sheet 按前缀匹配
+      let sheetNames = ss_PointCheck.getSheets().map(sheet => sheet.getName());
+      sheetNames.forEach(sheetName => {
+        if (sheetName.includes("-") && sheetName.startsWith(process + "-")) {
+          let ws = ss_PointCheck.getSheetByName(sheetName);
+          if (ws && ws.getLastRow() > 1) {
+            let lastRow = ws.getLastRow();
+            let data = ws.getRange(2, 1, lastRow - 1, 17).getDisplayValues();
+            data.forEach(row => {
+              if (row[0] && row[0].toString().trim()) {
+                let record = {
+                  Code: row[0] ? row[0].toString().trim() : "",
+                  Workshop: row[1] ? row[1].toString().trim() : "",
+                  MachineType: row[3] ? row[3].toString().trim() : "",
+                  SubmitDate: row[7] ? row[7].toString().trim() : "",
+                  Workcenter: row[8] ? row[8].toString().trim() : ""
+                };
+                allHistoricalRecords.push(record);
+              }
+            });
+          }
+        }
+      });
+    }
 
     var info = {
       machine_info: filtered_machine_info,
@@ -3160,7 +3221,9 @@ function upload_PointCheck(obj, arrPmInfoJson) {
   try {
     let saasId = "1RQql-PrcBWiAQNeg7hQKcocpllSUMRhT5XPrDTVWoBY";
     let ss_PointCheck = SpreadsheetApp.openById(saasId);
-    let SheetName = obj.process + "-" + obj.workshop;
+    let SheetName = USE_UNIFIED_INSPECTION_SHEET
+      ? "InspectionRecords"
+      : obj.process + "-" + obj.workshop;
     let ws_PointCheckData = ss_PointCheck.getSheetByName(SheetName);
     let arrWsPointCheckNo = ws_PointCheckData
       .getRange(2, 1, ws_PointCheckData.getLastRow() - 1, 6)
@@ -3388,7 +3451,9 @@ function submitInspectionResults(obj, arrPmInfoJson) {
     console.log("📝 步骤1: 打开主数据表");
     let saasId = "1RQql-PrcBWiAQNeg7hQKcocpllSUMRhT5XPrDTVWoBY";
     let ss_PointCheck = SpreadsheetApp.openById(saasId);
-    let SheetName = obj.process + "-" + obj.workshop;
+    let SheetName = USE_UNIFIED_INSPECTION_SHEET
+      ? "InspectionRecords"
+      : obj.process + "-" + obj.workshop;
     console.log("📋 Sheet名称:", SheetName);
     let ws_PointCheckData = ss_PointCheck.getSheetByName(SheetName);
     console.log("📝 步骤2: 检查现有记录");
@@ -10908,4 +10973,87 @@ function addProject(dataStr) {
   } catch (e) {
     return JSON.stringify({ success: false, message: '添加失败 / Add failed: ' + e.toString() });
   }
+}
+
+// ========== Inspection2.0 数据迁移：6 Sheet → 1 统一记录表 ==========
+// 使用方式：在 GAS 编辑器中手动执行一次 migrateToInspectionRecords()
+// 验证方式：执行 countInspectionRows() 对比新旧行数
+function migrateToInspectionRecords() {
+  var ss = SpreadsheetApp.openById("1RQql-PrcBWiAQNeg7hQKcocpllSUMRhT5XPrDTVWoBY");
+
+  // 1. 创建或清空目标表
+  var target = ss.getSheetByName("InspectionRecords");
+  if (target) {
+    ss.deleteSheet(target);
+  }
+  target = ss.insertSheet("InspectionRecords");
+  target.setFrozenRows(1);
+
+  var sheetNames = ["INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2"];
+  var headers = null;
+  var allData = [];
+
+  sheetNames.forEach(function (name) {
+    var ws = ss.getSheetByName(name);
+    if (!ws || ws.getLastRow() <= 1) {
+      console.log("跳过空表: " + name);
+      return;
+    }
+
+    // 从第一个非空表获取表头
+    if (!headers) {
+      headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+      console.log("表头来源: " + name + ", 列数: " + headers.length);
+    }
+
+    var data = ws.getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn()).getValues();
+    var parts = name.split("-"); // e.g. ["INJ", "TB1"]
+
+    // 补全空白的 B(车间)/C(工序) 列
+    data.forEach(function (row) {
+      if (!row[1] || row[1].toString().trim() === "") row[1] = parts[1]; // 车间
+      if (!row[2] || row[2].toString().trim() === "") row[2] = parts[0]; // 工序
+    });
+
+    console.log("从 " + name + " 读取 " + data.length + " 行");
+    allData = allData.concat(data);
+  });
+
+  console.log("总计: " + allData.length + " 行数据待写入");
+
+  // 2. 写入表头
+  if (headers) {
+    target.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+
+  // 3. 分批写入数据
+  var batch = 500;
+  for (var i = 0; i < allData.length; i += batch) {
+    var chunk = allData.slice(i, Math.min(i + batch, allData.length));
+    target.getRange(i + 2, 1, chunk.length, chunk[0].length).setValues(chunk);
+    SpreadsheetApp.flush();
+  }
+
+  console.log("迁移完成！共写入 " + allData.length + " 行至 InspectionRecords");
+  return "OK: " + allData.length + " rows migrated";
+}
+
+// 验证函数：统计各表行数
+function countInspectionRows() {
+  var ss = SpreadsheetApp.openById("1RQql-PrcBWiAQNeg7hQKcocpllSUMRhT5XPrDTVWoBY");
+  var sheetNames = ["INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2"];
+  var oldTotal = 0;
+
+  sheetNames.forEach(function (name) {
+    var ws = ss.getSheetByName(name);
+    var rows = ws && ws.getLastRow() > 1 ? ws.getLastRow() - 1 : 0;
+    console.log(name + ": " + rows + " 行");
+    oldTotal += rows;
+  });
+
+  var newWs = ss.getSheetByName("InspectionRecords");
+  var newRows = newWs && newWs.getLastRow() > 1 ? newWs.getLastRow() - 1 : 0;
+  console.log("InspectionRecords: " + newRows + " 行");
+  console.log("旧6表合计: " + oldTotal + " | 新表: " + newRows + " | 匹配: " + (oldTotal === newRows));
+  return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
 }
