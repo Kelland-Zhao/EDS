@@ -217,6 +217,7 @@
           let Count_of_image = 0;
           let images = [];
           let promises = [];
+          const TASK_FIELDS = ['MachineType', 'Task No', 'Resource', 'Frecuency', 'Section', 'Function', 'Task Description', '执行人员', 'Unit', 'Component', 'Logic', 'TagName', 'LL Limited', 'HH Limited'];
 
           table_tasklist.rows().every(function (rowIdx) {
             let obj = {};
@@ -224,8 +225,8 @@
             let rowData = this.data();
             let taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
             let valueAndNote = $(row).find('input[type="text"]').val();
-            let photoInput = $(row).find('.photo-input').get(0);
-            let file = photoInput.files[0];
+            let photoInput = row ? $(row).find('.photo-input').get(0) : null;
+            let file = photoInput ? photoInput.files[0] : undefined;
             let image = '无图片';
 
             // 【图片上传相关】如有图片，转Base64并存入images数组，后续上传（只保留一处，避免重复）
@@ -248,28 +249,28 @@
               promises.push(promise)
             }
 
-            // 构建任务数据时，不包含 imageContent 字段，只存图片标记或文件名
+            // 构建任务数据时，只保留白名单字段，避免超出GAS参数大小限制
+            let trimmedRowData = {};
+            TASK_FIELDS.forEach(f => { if (rowData[f] !== undefined) trimmedRowData[f] = rowData[f]; });
             let taskData = {
-              ...rowData,
+              ...trimmedRowData,
               taskStatus: taskStatusCheckbox,
               valueAndNote: valueAndNote,
               image: image
             };
 
             if (!taskStatusCheckbox) {
-              uncheckedTasks.push({ ...taskData });
+              uncheckedTasks.push({ 'Task No': rowData['Task No'], 'Task Description': rowData['Task Description'], taskStatus: false });
               uncheckedCount++;
             }
-            if (valueAndNote.trim() !== "") {
-              nonEmptyNotes.push({ ...taskData });
+            if (valueAndNote && valueAndNote.trim() !== "") {
+              nonEmptyNotes.push({ 'Task No': rowData['Task No'], 'Task Description': rowData['Task Description'], valueAndNote: valueAndNote });
               nonEmptyNotesCount++;
             }
             task.push(taskData);
           })
           // 提交到表格时，移除所有 imageContent 字段，确保任务明细无base64内容
           task = task.map(t => { let { imageContent, ...rest } = t; return rest; });
-          uncheckedTasks = uncheckedTasks.map(t => { let { imageContent, ...rest } = t; return rest; });
-          nonEmptyNotes = nonEmptyNotes.map(t => { let { imageContent, ...rest } = t; return rest; });
 
           let totalRows = table_tasklist.rows().count();
           data["PM No."] = $("#PmNo").val();
@@ -746,6 +747,33 @@
     // 【图片上传相关】拍照按钮事件，触发文件选择
     $(document).on('click', '#table_tasklist .take-photo-btn', function () {
       $(this).siblings('.photo-input').click();
+    });
+
+    // 表头全选复选框：点击时全选/取消全选所有行
+    $(document).on('click', '#selectAllTaskStatus', function () {
+      const checked = $(this).prop('checked');
+      table_tasklist.rows().every(function () {
+        let row = this.node();
+        if (row) $(row).find('.form-check-input').prop('checked', checked);
+      });
+    });
+
+    // 行复选框变化时同步表头全选状态
+    $(document).on('change', '#table_tasklist tbody .form-check-input', function () {
+      const total = table_tasklist.rows().count();
+      let checkedCount = 0;
+      table_tasklist.rows().every(function () {
+        let row = this.node();
+        if (row && $(row).find('.form-check-input').prop('checked')) checkedCount++;
+      });
+      const $hCb = $('#selectAllTaskStatus');
+      if (checkedCount === 0) {
+        $hCb.prop('checked', false).prop('indeterminate', false);
+      } else if (checkedCount === total) {
+        $hCb.prop('checked', true).prop('indeterminate', false);
+      } else {
+        $hCb.prop('checked', false).prop('indeterminate', true);
+      }
     });
 
     // 【图片上传相关】监听文件输入变化，处理选中的图片，转为Base64并存入行数据
@@ -1260,6 +1288,9 @@
         };
       }
       if (title === 'Task Status') {
+        if (isEditable) {
+          colDef.title = `<input type="checkbox" id="selectAllTaskStatus" class="form-check-input" style="width:18px;height:18px;cursor:pointer;display:block;margin:0 auto 2px;"><br>完成状态<br>Task Status`;
+        }
         colDef.render = function (data, type, row) {
           const checked = data === true || row.taskStatus === true;
           return `<input class="form-check-input" type="checkbox" value="" style="border: 2px solid #696969; width: 24px; height: 24px; cursor: pointer;" ${checked ? 'checked' : ''} ${!isEditable ? 'disabled' : ''}>`;
