@@ -991,8 +991,8 @@
     $('#modalMilestones').empty();
     $('#updateMsAddBtn').removeClass('d-none');
     $('#modalMilestonesHint').text(currentUpdateIsCI
-      ? '可增删/修改 follow-up 事项（事项 / 责任人 / 计划完成 / 实际完成）'
-      : '可增删/修改里程碑，保存后管理员将收到邮件通知 / Edit milestones; admin will be notified on save');
+      ? '可增删/修改 follow-up 事项，状态选"已完成"自动记录完成日期 / Status→Done auto-records completion date'
+      : '可增删/修改里程碑，状态选"已完成"自动记录完成日期，保存后管理员将收到邮件通知 / Status→Done auto-records date; admin notified on save');
     proj.milestones.forEach(function(ms) {
       addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
     });
@@ -1036,13 +1036,13 @@
       if (!name) return;
       if (actualVal) { var d = parseDate(actualVal); if (d && d > today) futureMilestones.push({ name: name, date: actualVal }); }
       var ownerName = '', ownerEmail = '', itemStatus = '';
+      itemStatus = $(this).find('.upd-ms-status').val() || '';
       if (currentUpdateIsCI) {
         var disp = $(this).find('.upd-ms-owner').val() || '';
         var cache = (userListCache || []).filter(function(u) { return u.display === disp; })[0];
         if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
         else if (disp) { ownerName = disp; }
         if (!ownerName) ciMissingOwner = true;
-        itemStatus = $(this).find('.upd-ms-status').val() || '未开始';
       }
       newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail, status: itemStatus });
     });
@@ -1115,19 +1115,28 @@
     var ownerCol = isCI
       ? '<div style="flex:0 0 140px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>'
       : '';
-    var statusCol = isCI
-      ? '<div style="flex:0 0 110px;"><label style="font-size:10px;color:#666;">状态<br><small>Status</small></label>' + ciStatusSelectHtml('upd-ms-status', status) + '</div>'
-      : '';
+    var statusCol = '<div style="flex:0 0 110px;"><label style="font-size:10px;color:#666;">状态<br><small>Status</small></label>' + ciStatusSelectHtml('upd-ms-status', status) + '</div>';
     var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;">'
       + '<div class="flex-fill"><label style="font-size:10px;color:#666;">' + nameLabel + '</label><input type="text" class="form-control form-control-sm upd-ms-name" placeholder="名称 / Name" value="' + (name || '').replace(/"/g,'&quot;') + '"></div>'
       + ownerCol
       + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">' + plannedLabel + '</label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
-      + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></div>'
+      + '<div style="flex:0 0 120px;display:none;"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></div>'
       + statusCol
       + '<button type="button" class="btn btn-sm btn-outline-secondary upd-ms-del-btn mb-0" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
     $row.find('.upd-ms-del-btn').on('click', function() { $row.remove(); });
     $('#modalMilestones').append($row);
+
+    // 标准项目：若已有实际完成日期但无状态，自动推断为"已完成"（兼容历史数据）
+    if (!isCI && !status && actual && parseDate(actual)) {
+      $row.find('.upd-ms-status').val('已完成');
+    }
+    // 状态为"已完成"时确保隐藏的实际完成日期有值
+    if ($row.find('.upd-ms-status').val() === '已完成') {
+      var $act = $row.find('.ms-actual');
+      if (!$act.val()) $act.val(formatDateYMD(today));
+    }
+
     if (isCI) {
       var $sel = $row.find('.upd-ms-owner');
       if (owner) {
@@ -1141,12 +1150,6 @@
         templateSelection: function(it) { return it.name || it.text || ''; },
         placeholder: '责任人 / Owner', allowClear: false, width: '100%'
       });
-      // CI 事项已"已完成"时，实际完成日期自动只读（防止手动修改）
-      if (status === '已完成') {
-        var $act = $row.find('.ms-actual');
-        if (!$act.val()) $act.val(formatDateYMD(today));
-        $act.prop('readonly', true).addClass('readonly-field');
-      }
     }
   }
 
