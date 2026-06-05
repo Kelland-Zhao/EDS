@@ -10199,6 +10199,7 @@ const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
 const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理
 const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
 const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
+const PROJECT_MILESTONES_JSON_COL = 18; // Col S (0-indexed) — 存储里程碑 JSON 数组
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10239,19 +10240,27 @@ function getProjectTrackingData() {
     });
 
     const projects = rows.map(function(row, index) {
+      var milestones;
+      var jsonRaw = row[PROJECT_MILESTONES_JSON_COL];
+      if (jsonRaw && String(jsonRaw).trim().charAt(0) === '[') {
+        try { milestones = JSON.parse(String(jsonRaw)); } catch(e) { milestones = null; }
+      }
+      if (!milestones) {
+        milestones = PROJECT_MILESTONE_COLS.map(function(ms) {
+          return {
+            name: ms.name,
+            planned: formatSheetDate_(row[ms.planned]),
+            actual: formatSheetDate_(row[ms.actual])
+          };
+        });
+      }
       const project = {
         rowIndex: index + 2,
         projectName: String(row[0] || ''),
         leader: String(row[1] || ''),
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
-        milestones: PROJECT_MILESTONE_COLS.map(function(ms) {
-          return {
-            name: ms.name,
-            planned: formatSheetDate_(row[ms.planned]),
-            actual: formatSheetDate_(row[ms.actual])
-          };
-        })
+        milestones: milestones
       };
       return project;
     });
@@ -10303,16 +10312,31 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     // Update milestone actual dates
     if (updates.milestones && Array.isArray(updates.milestones)) {
       const actualChanges = [];
+      // Read current JSON milestones
+      var currentJsonRaw = currentRow[PROJECT_MILESTONES_JSON_COL];
+      var currentMsArr = null;
+      if (currentJsonRaw && String(currentJsonRaw).trim().charAt(0) === '[') {
+        try { currentMsArr = JSON.parse(String(currentJsonRaw)); } catch(e) { currentMsArr = null; }
+      }
+      if (!currentMsArr) {
+        currentMsArr = PROJECT_MILESTONE_COLS.map(function(ms) {
+          return { name: ms.name, planned: formatSheetDate_(currentRow[ms.planned]), actual: formatSheetDate_(currentRow[ms.actual]) };
+        });
+      }
       updates.milestones.forEach(function(ms) {
-        if (ms.index >= 0 && ms.index < PROJECT_MILESTONE_COLS.length) {
-          const actualCol = PROJECT_MILESTONE_COLS[ms.index].actual;
-          const currentActual = String(currentRow[actualCol] || '').trim();
+        if (ms.index >= 0 && ms.index < currentMsArr.length) {
+          const currentActual = String(currentMsArr[ms.index].actual || '').trim();
           if ((ms.actual || '') !== currentActual) {
-            actualChanges.push({ name: PROJECT_MILESTONE_COLS[ms.index].name, old: currentActual, new: ms.actual || '' });
+            actualChanges.push({ name: currentMsArr[ms.index].name, old: currentActual, new: ms.actual || '' });
           }
-          ws.getRange(rowIndex, actualCol + 1).setValue(ms.actual || '');
+          currentMsArr[ms.index].actual = ms.actual || '';
+          // Also write to legacy fixed cols if within standard range
+          if (ms.index < PROJECT_MILESTONE_COLS.length) {
+            ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[ms.index].actual + 1).setValue(ms.actual || '');
+          }
         }
       });
+      ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(currentMsArr));
       if (actualChanges.length > 0) changes.milestones = actualChanges;
     }
 
@@ -10333,17 +10357,32 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     // Update milestone planned dates (admin only)
     if (updates.plannedDates && isAdmin) {
       const plannedChanges = [];
+      // Re-read current JSON milestones for planned update
+      var curJsonRaw2 = currentRow[PROJECT_MILESTONES_JSON_COL];
+      var curMsArr2 = null;
+      if (curJsonRaw2 && String(curJsonRaw2).trim().charAt(0) === '[') {
+        try { curMsArr2 = JSON.parse(String(curJsonRaw2)); } catch(e) { curMsArr2 = null; }
+      }
+      if (!curMsArr2) {
+        curMsArr2 = PROJECT_MILESTONE_COLS.map(function(ms) {
+          return { name: ms.name, planned: formatSheetDate_(currentRow[ms.planned]), actual: formatSheetDate_(currentRow[ms.actual]) };
+        });
+      }
       updates.plannedDates.forEach(function(pd) {
-        if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
-          const plannedCol = PROJECT_MILESTONE_COLS[pd.index].planned;
-          const currentPlanned = String(currentRow[plannedCol] || '').trim();
+        if (pd.index >= 0 && pd.index < curMsArr2.length) {
+          const currentPlanned = String(curMsArr2[pd.index].planned || '').trim();
           const newPlanned = pd.planned || 'NA';
           if (newPlanned !== currentPlanned) {
-            plannedChanges.push({ name: PROJECT_MILESTONE_COLS[pd.index].name, old: currentPlanned, new: newPlanned });
+            plannedChanges.push({ name: curMsArr2[pd.index].name, old: currentPlanned, new: newPlanned });
           }
-          ws.getRange(rowIndex, plannedCol + 1).setValue(pd.planned || 'NA');
+          curMsArr2[pd.index].planned = newPlanned;
+          // Also write to legacy fixed cols if within standard range
+          if (pd.index < PROJECT_MILESTONE_COLS.length) {
+            ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[pd.index].planned + 1).setValue(pd.planned || 'NA');
+          }
         }
       });
+      ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(curMsArr2));
       if (plannedChanges.length > 0) {
         changes.plannedDates = plannedChanges;
         // Record planned date change history
@@ -10970,24 +11009,64 @@ function addProject(dataStr) {
     const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
     if (!ws) return JSON.stringify({ success: false, message: 'Sheet 项目总表 not found' });
 
-    // Build new row: 18 columns
+    // milestones: array of {name, planned} from frontend
+    const msData = Array.isArray(data.milestones) ? data.milestones : [];
+    const msJsonArr = msData.map(function(ms) {
+      if (typeof ms === 'string') return { name: ms, planned: ms || 'NA', actual: '' };
+      return { name: ms.name || '', planned: ms.planned || 'NA', actual: '' };
+    });
+
+    // Build row: cols A~R = fixed legacy format, col S = JSON
     const row = [];
-    row.push(data.projectName || '');                         // 0: 项目名称
-    row.push(data.leader || '');                              // 1: Leader
-    row.push(data.technician || '');                          // 2: 测试责任技术员
-    // 7 milestones: planned (odd indices) + actual (even indices, blank)
-    const milestonePlanned = data.milestones || [];
+    row.push(data.projectName || '');   // 0: 项目名称
+    row.push(data.leader || '');        // 1: Leader
+    row.push(data.technician || '');    // 2: 测试责任技术员
+    // Legacy fixed cols D~Q (7 milestones × 2)
+    const STANDARD_MS = ['模具/自动化改造（供应商）/ Tooling & Automation (Supplier)','FAT / FAT','现场安装 / On-site Installation','IQ/OQ / IQ/OQ','工程测试 / Engineering Test','PQ / PQ','Mass Production / Mass Production'];
     for (let i = 0; i < 7; i++) {
-      row.push(milestonePlanned[i] || '');                    // planned date
-      row.push('');                                            // actual date (blank)
+      const found = msJsonArr.find(function(m) { return m.name === STANDARD_MS[i]; });
+      row.push(found ? (found.planned || '') : '');  // planned
+      row.push('');                                   // actual blank
     }
-    row.push(data.status || 'Not start');                     // 17: Status
+    row.push(data.status || 'Not start');             // 17: Status
+    row.push(JSON.stringify(msJsonArr));               // 18: Milestones_JSON
 
     ws.appendRow(row);
     return JSON.stringify({ success: true, message: '添加成功 / Project added successfully' });
   } catch (e) {
     return JSON.stringify({ success: false, message: '添加失败 / Add failed: ' + e.toString() });
   }
+}
+
+// ========== ProjectTracking 里程碑迁移：固定列 → JSON 列 ==========
+// 使用方式：在 GAS 编辑器中手动执行一次 migrateProjectMilestonesToJSON()
+function migrateProjectMilestonesToJSON() {
+  const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+  const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+  if (!ws) return 'Sheet not found';
+  const data = ws.getDataRange().getValues();
+  // Write header for JSON col if empty
+  if (!data[0][PROJECT_MILESTONES_JSON_COL]) {
+    ws.getRange(1, PROJECT_MILESTONES_JSON_COL + 1).setValue('Milestones_JSON');
+  }
+  let count = 0;
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0] || String(row[0]).trim() === '') continue;
+    const existing = row[PROJECT_MILESTONES_JSON_COL];
+    if (existing && String(existing).trim().charAt(0) === '[') continue; // already migrated
+    const msArr = PROJECT_MILESTONE_COLS.map(function(ms) {
+      return {
+        name: ms.name,
+        planned: formatSheetDate_(row[ms.planned]) || 'NA',
+        actual: formatSheetDate_(row[ms.actual]) || ''
+      };
+    });
+    ws.getRange(i + 1, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(msArr));
+    count++;
+  }
+  SpreadsheetApp.flush();
+  return 'Migrated ' + count + ' rows to JSON milestones';
 }
 
 // ========== Inspection2.0 数据迁移：6 Sheet → 1 统一记录表 ==========

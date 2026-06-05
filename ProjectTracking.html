@@ -6,6 +6,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("Kez_datatables@1.11.5_css");?>
+  <?!=include("kez_Datatables_css");?>
   <?!=include("Kez_bootstrap-datepicker_css");?>
   <?!=include("Kez_Select2@4.0.13_css");?>
   <?!=include("Kez_Select2-bootstrap_css");?>
@@ -32,104 +34,35 @@
     .welcome-bar .greet #name { color: #E60012; font-weight: 600; }
     .welcome-bar .perm-info { font-size: 12px; color: #6c757d; }
     .welcome-bar .perm-info .badge { font-size: 11px; vertical-align: middle; }
-    .gantt-container {
-      overflow-x: auto;
-      position: relative;
-    }
-    .gantt-table {
-      border-collapse: collapse;
-      min-width: 100%;
-    }
-    .gantt-table th {
-      background-color: #E60012;
-      color: white;
-      vertical-align: middle;
-      text-align: center;
-      padding: 6px 4px;
-      font-size: 11px;
-      white-space: nowrap;
-      border: 1px solid #ddd;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .gantt-table td {
-      vertical-align: middle;
-      padding: 4px;
-      border: 1px solid #eee;
-    }
-    .gantt-info {
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .gantt-leader {
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .gantt-status {
-      text-align: center;
-      white-space: nowrap;
-    }
-    .gantt-table td.today-col {
-      border-left: 2px solid #E60012 !important;
-      border-right: 2px solid #E60012 !important;
-    }
-    .status-badge {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 10px;
-      color: white;
-    }
-    .legend-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-right: 16px;
-      font-size: 12px;
-    }
-    legend-bar {
-      width: 20px;
-      height: 12px;
-      border-radius: 2px;
-      display: inline-block;
-    }
-    .modal-milestone-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 0;
-      border-bottom: 1px solid #eee;
-    }
-    .modal-milestone-row:last-child {
-      border-bottom: none;
-    }
-    .modal-milestone-label {
-      flex: 0 0 180px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-    .modal-milestone-dates {
-      flex: 1;
-      display: flex;
-      gap: 10px;
-    }
-    .modal-milestone-dates input {
-      font-size: 12px;
-    }
-    .readonly-field {
-      background-color: #e9ecef !important;
-    }
-    #addModal .select2-container--default .select2-selection--single {
-      font-size: 12px;
-      height: auto;
-      padding: 4px 8px;
-    }
-    #addModal .select2-container--default .select2-results__option {
-      font-size: 12px;
-    }
-    #addModal .select2-container--default .select2-selection__placeholder {
-      font-size: 12px;
-    }
+    /* DataTables overrides */
+    #projectTable thead th { background:#E60012; color:#fff; white-space:nowrap; font-size:12px; }
+    #projectTable tbody tr:hover { background:#fff5f5 !important; }
+    #projectTable td { font-size:12px; vertical-align:middle; }
+    .dt-expand-btn { cursor:pointer; color:#E60012; font-size:16px; user-select:none; }
+    .status-badge { font-size:11px; padding:2px 8px; border-radius:10px; color:white; }
+    .ms-pill { display:inline-block; font-size:10px; padding:1px 6px; border-radius:8px; margin:1px; color:#fff; }
+    /* Gantt mini */
+    .gantt-container { overflow-x:auto; position:relative; }
+    .gantt-table { border-collapse:collapse; min-width:100%; }
+    .gantt-table th { background:#E60012; color:#fff; font-size:10px; padding:4px 3px; border:1px solid #ddd; position:sticky; top:0; z-index:10; white-space:nowrap; text-align:center; }
+    .gantt-table td { vertical-align:middle; padding:3px; border:1px solid #eee; }
+    .gantt-table td.today-col { border-left:2px solid #E60012 !important; border-right:2px solid #E60012 !important; }
+    /* Modal milestones */
+    .modal-milestone-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid #eee; }
+    .modal-milestone-row:last-child { border-bottom:none; }
+    .modal-milestone-label { flex:0 0 180px; font-size:12px; font-weight:500; }
+    .modal-milestone-dates { flex:1; display:flex; gap:8px; }
+    .modal-milestone-dates input { font-size:12px; }
+    .readonly-field { background-color:#e9ecef !important; }
+    /* Add modal milestone rows */
+    .add-ms-row { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f0f0f0; }
+    .add-ms-row:last-child { border-bottom:none; }
+    .add-ms-name { flex:1; font-size:12px; }
+    .add-ms-date { width:140px; font-size:12px; }
+    .add-ms-del { flex:0 0 28px; }
+    #addModal .select2-container--default .select2-selection--single { font-size:12px; height:auto; padding:4px 8px; }
+    #addModal .select2-container--default .select2-results__option { font-size:12px; }
+    #updateModal .select2-container--default .select2-selection--single { font-size:12px; height:auto; padding:4px 8px; }
   </style>
 </head>
 
@@ -156,57 +89,36 @@
       </div>
     </div>
 
-    <!-- Legend -->
-    <div class="d-flex align-items-center flex-wrap mb-2 p-2 border rounded bg-white">
-      <span class="fw-bold me-3" style="font-size:12px;">图例 / Legend:</span>
-      <span class="legend-item">
-        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#007bff;"></span> 进行中 / Ongoing
-      </span>
-      <span class="legend-item">
-        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#dc3545;"></span> 延误 / Delayed
-      </span>
-      <span class="legend-item">
-        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#28a745;"></span> 已完成 / Done
-      </span>
-      <span class="legend-item">
-        <span style="width:20px;height:12px;border-radius:2px;display:inline-block;background:#6c757d;"></span> 未开始 / Not Start
-      </span>
-      <span class="legend-item ms-3">
-        <span style="font-size:20px;color:#28a745;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span> 已完成 / Completed
-      </span>
-      <span class="legend-item">
-        <span style="font-size:20px;color:#dc3545;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span> 逾期 / Overdue
-      </span>
-      <span class="legend-item">
-        <span style="font-size:20px;color:#adb5bd;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span> 待完成 / Pending
-      </span>
-      <span class="legend-item">
-        <span style="font-size:20px;color:#fd7e14;text-shadow:-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;">&#9670;</span> 计划推迟 / Planned Delayed
-      </span>
-    </div>
-
     <!-- Controls -->
     <div class="d-flex justify-content-between align-items-center mb-2">
       <div>
-        <button class="btn btn-sm btn-outline-success" id="refreshBtn">刷新<br><small>Refresh</small></button>
-        <button class="btn btn-sm btn-outline-success" id="todayBtn">定位今天<br><small>Go to Today</small></button>
-        <button class="btn btn-sm btn-outline-success" id="addProjectBtn">＋ 添加项目<br><small>Add Project</small></button>
+        <button class="btn btn-sm btn-outline-success" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i> 刷新<br><small>Refresh</small></button>
+        <button class="btn btn-sm btn-outline-danger" id="addProjectBtn"><i class="bi bi-plus-lg"></i> 添加项目<br><small>Add Project</small></button>
       </div>
-      <div id="dataRangeInfo" style="font-size:11px;color:#666;"></div>
+      <div class="d-flex align-items-center gap-2" style="font-size:11px;color:#666;">
+        <span class="legend-ms" style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:#28a745;display:inline-block;"></span>已完成</span>
+        <span class="legend-ms" style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:#dc3545;display:inline-block;"></span>逾期</span>
+        <span class="legend-ms" style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:#fd7e14;display:inline-block;"></span>计划推迟</span>
+        <span class="legend-ms" style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:#adb5bd;display:inline-block;"></span>待完成</span>
+      </div>
     </div>
 
-    <!-- Gantt Chart -->
-    <div class="gantt-container border rounded" id="ganttContainer" style="max-height:70vh;overflow-y:auto;">
-      <table class="gantt-table" id="ganttTable">
-        <thead id="ganttHead"></thead>
-        <tbody id="ganttBody"></tbody>
+    <!-- Project Table -->
+    <div class="bg-white border rounded p-2">
+      <table id="projectTable" class="table table-striped table-bordered table-hover w-100" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th style="width:30px;"></th>
+            <th>项目名称<br><small>Project Name</small></th>
+            <th>Leader</th>
+            <th>状态<br><small>Status</small></th>
+            <th>进度<br><small>Progress</small></th>
+            <th>下一里程碑<br><small>Next Milestone</small></th>
+            <th>操作<br><small>Action</small></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
       </table>
-    </div>
-    <div id="loadingOverlay" class="text-center py-5" style="display:none;">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">加载中... / Loading...</span>
-      </div>
-      <p class="mt-2 text-muted">正在加载项目数据... / Loading project data...</p>
     </div>
   </div>
 
@@ -278,7 +190,7 @@
               <select class="form-select select2-user" id="addTechnician" style="width:100%;"></select>
             </div>
           </div>
-          <div class="row mb-3">
+          <div class="row mb-2">
             <div class="col-6">
               <label class="form-label fw-bold" style="font-size:12px;">状态<br><small>Status</small></label>
               <select class="form-select" id="addStatus">
@@ -288,12 +200,25 @@
                 <option value="Not start" selected>未开始 / Not Start</option>
               </select>
             </div>
+            <div class="col-6">
+              <label class="form-label fw-bold" style="font-size:12px;">里程碑模板<br><small>Milestone Template</small></label>
+              <select class="form-select" id="addTemplate" style="font-size:12px;">
+                <option value="standard">标准设备安装（7节点）/ Standard 7-node</option>
+                <option value="simple">精简版（3节点）/ Simplified 3-node</option>
+                <option value="custom">空白自定义 / Custom</option>
+              </select>
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-bold" style="font-size:13px;">里程碑计划日期<br><small>Milestone Planned Dates (YYYY-MM-DD)</small></label>
-            <div class="text-muted mb-2" style="font-size:11px;">非必填，留空表示 NA / Optional, blank = NA</div>
+          <div class="mb-2">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label fw-bold mb-0" style="font-size:12px;">里程碑计划日期<br><small>Milestone Planned Dates</small></label>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="addMsAddBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加节点<br><small>Add Milestone</small></button>
+            </div>
+            <div class="text-muted mb-1" style="font-size:11px;">留空表示 NA / Blank = NA</div>
+            <div style="max-height:260px;overflow-y:auto;">
+              <div id="addMilestones"></div>
+            </div>
           </div>
-          <div id="addMilestones"></div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
@@ -308,6 +233,7 @@
   <?!=include("Kez_bootstrap-datepicker-js");?>
   <?!=include("Kez_select2@4.0.13_js");?>
   <?!=include("Kez_sweetalert2_js");?>
+  <?!=include("Kez_datatables@1.13.6_js");?>
   <?!=include("ProjectTracking-js");?>
 </body>
 
