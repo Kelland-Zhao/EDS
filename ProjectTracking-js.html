@@ -49,7 +49,7 @@
       names.forEach(function(n) { addMilestoneRow(n, ''); });
     });
 
-    // 项目类型切换：标准 ↔ CI
+    // 项目类型切换：新品/新自动化 ↔ CI
     $('#addType').on('change', function() { toggleAddType($(this).val()); });
     $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', ''); });
 
@@ -392,7 +392,7 @@
   function typeBadge(p) {
     var isCI = projType(p) === 'CI';
     var bg = isCI ? '#6f42c1' : '#0d6efd';
-    var txt = isCI ? 'CI' : '标准';
+    var txt = isCI ? 'CI' : '新品/新自动化';
     return '<span class="status-badge" style="background:' + bg + ';">' + txt + '</span>';
   }
 
@@ -1127,7 +1127,7 @@
     $row.find('.upd-ms-del-btn').on('click', function() { $row.remove(); });
     $('#modalMilestones').append($row);
 
-    // 标准项目：若已有实际完成日期但无状态，自动推断为"已完成"（兼容历史数据）
+    // 新品/新自动化项目：若已有实际完成日期但无状态，自动推断为"已完成"（兼容历史数据）
     if (!isCI && !status && actual && parseDate(actual)) {
       $row.find('.upd-ms-status').val('已完成');
     }
@@ -1196,7 +1196,7 @@
     });
   }
 
-  // 切换录入表单：标准（里程碑）↔ CI（follow-up）
+  // 切换录入表单：新品/新自动化（里程碑）↔ CI（follow-up）
   function toggleAddType(type) {
     if (type === 'CI') {
       $('#addStandardSection').addClass('d-none');
