@@ -16,6 +16,8 @@
   var historyMap = {};
   var dtInstance = null;
   var userListCache = null;
+  var currentTypeFilter = 'all';
+  var currentUpdateIsCI = false;
 
   var MS_TEMPLATES = {
     standard: [
@@ -45,6 +47,18 @@
       var names = MS_TEMPLATES[tpl] || [];
       $('#addMilestones').empty();
       names.forEach(function(n) { addMilestoneRow(n, ''); });
+    });
+
+    // 项目类型切换：标准 ↔ CI
+    $('#addType').on('change', function() { toggleAddType($(this).val()); });
+    $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', ''); });
+
+    // 类型筛选
+    $('#typeFilter button').on('click', function() {
+      currentTypeFilter = $(this).data('type');
+      $('#typeFilter button').removeClass('btn-danger').addClass('btn-outline-danger');
+      $(this).removeClass('btn-outline-danger').addClass('btn-danger');
+      renderTable();
     });
 
     // Status editor check
@@ -133,7 +147,7 @@
         var users = typeof result === 'string' ? JSON.parse(result) : result;
         if (!users.error && Array.isArray(users)) {
           userListCache = users.map(function(u) {
-            return { id: u.display, text: u.display, name: u.name, display: u.display };
+            return { id: u.display, text: u.display, name: u.name, display: u.display, email: u.email || '' };
           });
         }
       } catch(e) { /* degrade gracefully */ }
@@ -360,8 +374,21 @@
 
   // ==================== Main table render ====================
 
+  function projType(p) { return (p.type === 'CI') ? 'CI' : '标准'; }
+
+  function typeBadge(p) {
+    var isCI = projType(p) === 'CI';
+    var bg = isCI ? '#6f42c1' : '#0d6efd';
+    var txt = isCI ? 'CI' : '标准';
+    return '<span class="status-badge" style="background:' + bg + ';">' + txt + '</span>';
+  }
+
   function renderTable() {
-    var projects = (globalData && globalData.projects) ? globalData.projects.filter(function(p) { return p.status !== 'Done'; }) : [];
+    var projects = (globalData && globalData.projects) ? globalData.projects.filter(function(p) {
+      if (p.status === 'Done') return false;
+      if (currentTypeFilter !== 'all' && projType(p) !== currentTypeFilter) return false;
+      return true;
+    }) : [];
 
     if (dtInstance) {
       dtInstance.destroy();
@@ -381,6 +408,7 @@
       return [
         '',
         proj.projectName,
+        typeBadge(proj),
         proj.leader || '',
         statusBadge,
         progBar,
@@ -394,10 +422,11 @@
       columns: [
         { orderable: false, searchable: false, width: '30px' },
         { title: '项目名称<br><small>Project Name</small>' },
+        { title: '类型<br><small>Type</small>', orderable: false, width: '56px' },
         { title: 'Leader', width: '100px' },
         { title: '状态<br><small>Status</small>', orderable: false, width: '80px' },
         { title: '进度<br><small>Progress</small>', orderable: false },
-        { title: '下一里程碑<br><small>Next Milestone</small>', orderable: false },
+        { title: '下一节点<br><small>Next</small>', orderable: false },
         { title: '操作<br><small>Action</small>', orderable: false, searchable: false, width: '72px' }
       ],
       language: {
@@ -436,9 +465,50 @@
         var ganttId = 'gantt_' + projName.replace(/[^a-zA-Z0-9]/g, '_');
         row.child('<div id="' + ganttId + '" class="p-2" style="background:#fafafa;"></div>').show();
         $btn.text('▼');
-        if (proj) renderSingleProjectGantt(ganttId, proj);
+        if (proj) {
+          if (projType(proj) === 'CI') renderCIChecklist(ganttId, proj);
+          else renderSingleProjectGantt(ganttId, proj);
+        }
       }
     });
+  }
+
+  // ==================== CI follow-up checklist ====================
+
+  function renderCIChecklist(containerId, proj) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var items = proj.milestones || [];
+    if (items.length === 0) {
+      container.innerHTML = '<p style="color:#999;font-size:12px;padding:8px;">无 follow-up 事项 / No follow-up items</p>';
+      return;
+    }
+    var rows = items.map(function(ms, i) {
+      var a = parseDate(ms.actual);
+      var p = parseDate(ms.planned);
+      var stHtml, stColor;
+      if (a) { stHtml = '✅ 完成 / Done'; stColor = '#28a745'; }
+      else if (p && p < today) { stHtml = '⚠️ 逾期 / Overdue'; stColor = '#dc3545'; }
+      else { stHtml = '待完成 / Pending'; stColor = '#6c757d'; }
+      var owner = ms.owner || (proj.leader ? proj.leader.replace(/\(.*\)/, '').trim() : '—');
+      var dueTxt = (ms.planned && ms.planned !== 'NA') ? normalizeDate(ms.planned) : 'NA';
+      var actTxt = ms.actual ? normalizeDate(ms.actual) : '—';
+      return '<tr style="background:' + (i % 2 === 0 ? '#fff5f5' : '#fff') + ';">'
+        + '<td style="padding:6px 8px;border-bottom:1px solid #eee;">' + (ms.name || '').replace(/</g,'&lt;') + '</td>'
+        + '<td style="padding:6px 8px;border-bottom:1px solid #eee;white-space:nowrap;">' + owner + '</td>'
+        + '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;white-space:nowrap;color:' + (p && p < today && !a ? '#dc3545' : '#555') + ';">' + dueTxt + '</td>'
+        + '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;white-space:nowrap;">' + actTxt + '</td>'
+        + '<td style="padding:6px 8px;border-bottom:1px solid #eee;white-space:nowrap;font-weight:600;color:' + stColor + ';">' + stHtml + '</td>'
+        + '</tr>';
+    }).join('');
+    container.innerHTML = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border-radius:6px;overflow:hidden;">'
+      + '<thead><tr style="background:linear-gradient(135deg,#6f42c1,#59359a);color:#fff;">'
+      + '<th style="padding:8px;text-align:left;">事项 / Item</th>'
+      + '<th style="padding:8px;text-align:left;">责任人 / Owner</th>'
+      + '<th style="padding:8px;text-align:left;">计划完成 / Due</th>'
+      + '<th style="padding:8px;text-align:left;">实际完成 / Actual</th>'
+      + '<th style="padding:8px;text-align:left;">状态 / Status</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
   // ==================== Single-project Gantt ====================
@@ -902,12 +972,15 @@
       $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
     }
 
-    // Build milestone rows — all users get editable rows; admin saves silently, non-admin triggers email
+    // Build milestone/follow-up rows — type-aware
+    currentUpdateIsCI = (projType(proj) === 'CI');
     $('#modalMilestones').empty();
     $('#updateMsAddBtn').removeClass('d-none');
-    $('#modalMilestonesHint').text('可增删/修改里程碑，保存后管理员将收到邮件通知 / Edit milestones; admin will be notified on save');
+    $('#modalMilestonesHint').text(currentUpdateIsCI
+      ? '可增删/修改 follow-up 事项（事项 / 责任人 / 计划完成 / 实际完成）'
+      : '可增删/修改里程碑，保存后管理员将收到邮件通知 / Edit milestones; admin will be notified on save');
     proj.milestones.forEach(function(ms) {
-      addUpdateMilestoneRow(ms.name, ms.planned, ms.actual);
+      addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail);
     });
 
     // Store current project for save
@@ -941,14 +1014,24 @@
 
     // All users: collect full milestone array
     var newMsArr = [];
+    var ciMissingOwner = false;
     $('#modalMilestones .upd-ms-row').each(function() {
       var name = $(this).find('.upd-ms-name').val().trim();
       var plannedVal = $(this).find('.upd-ms-planned').val().trim();
       var actualVal = $(this).find('.ms-actual').val().trim();
       if (!name) return;
       if (actualVal) { var d = parseDate(actualVal); if (d && d > today) futureMilestones.push({ name: name, date: actualVal }); }
-      newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '' });
+      var ownerName = '', ownerEmail = '';
+      if (currentUpdateIsCI) {
+        var disp = $(this).find('.upd-ms-owner').val() || '';
+        var cache = (userListCache || []).filter(function(u) { return u.display === disp; })[0];
+        if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
+        else if (disp) { ownerName = disp; }
+        if (!ownerName) ciMissingOwner = true;
+      }
+      newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail });
     });
+    if (ciMissingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
     updates.milestonesReplace = newMsArr;
 
     if (isStatusChanged) updates.status = newStatus;
@@ -1010,15 +1093,36 @@
 
   // ==================== Update milestone helper (admin) ====================
 
-  function addUpdateMilestoneRow(name, planned, actual) {
+  function addUpdateMilestoneRow(name, planned, actual, owner, ownerEmail) {
+    var isCI = currentUpdateIsCI;
+    var nameLabel = isCI ? '事项<br><small>Item</small>' : '里程碑名称<br><small>Name</small>';
+    var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划日期<br><small>Planned</small>';
+    var ownerCol = isCI
+      ? '<div style="flex:0 0 150px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>'
+      : '';
     var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;">'
-      + '<div class="flex-fill"><label style="font-size:10px;color:#666;">里程碑名称<br><small>Name</small></label><input type="text" class="form-control form-control-sm upd-ms-name" placeholder="名称 / Name" value="' + (name || '').replace(/"/g,'&quot;') + '"></div>'
-      + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
+      + '<div class="flex-fill"><label style="font-size:10px;color:#666;">' + nameLabel + '</label><input type="text" class="form-control form-control-sm upd-ms-name" placeholder="名称 / Name" value="' + (name || '').replace(/"/g,'&quot;') + '"></div>'
+      + ownerCol
+      + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">' + plannedLabel + '</label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
       + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></div>'
       + '<button type="button" class="btn btn-sm btn-outline-secondary upd-ms-del-btn mb-0" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
     $row.find('.upd-ms-del-btn').on('click', function() { $row.remove(); });
     $('#modalMilestones').append($row);
+    if (isCI) {
+      var $sel = $row.find('.upd-ms-owner');
+      if (owner) {
+        var disp = ownerEmail ? (owner + ' (' + ownerEmail + ')') : owner;
+        $sel.append('<option value="' + disp.replace(/"/g,'&quot;') + '" selected>' + owner + '</option>');
+      }
+      $sel.select2({
+        data: userListCache || [],
+        dropdownParent: $('#updateModal'),
+        templateResult: function(it) { return it.display || it.text; },
+        templateSelection: function(it) { return it.name || it.text || ''; },
+        placeholder: '责任人 / Owner', allowClear: false, width: '100%'
+      });
+    }
   }
 
   // ==================== Add Project ====================
@@ -1033,12 +1137,50 @@
     $('#addMilestones').append($row);
   }
 
+  // CI follow-up 录入行（事项 + 责任人select2 + 计划完成）
+  function addFollowupRow(name, ownerDisplay, ownerName, due) {
+    var $row = $('<div class="ci-fu-row">'
+      + '<input type="text" class="form-control form-control-sm ci-fu-name" placeholder="事项 / Item" value="' + (name || '').replace(/"/g, '&quot;') + '">'
+      + '<div class="ci-fu-owner-wrap"><select class="form-select form-select-sm ci-fu-owner" style="width:100%;"></select></div>'
+      + '<input type="date" class="form-control form-control-sm ci-fu-date" value="' + (due || '') + '">'
+      + '<button type="button" class="btn btn-sm btn-outline-secondary ci-fu-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
+      + '</div>');
+    $row.find('.ci-fu-del-btn').on('click', function() { $row.remove(); });
+    $('#addFollowups').append($row);
+    var $sel = $row.find('.ci-fu-owner');
+    if (ownerDisplay) $sel.append('<option value="' + ownerDisplay.replace(/"/g, '&quot;') + '" selected>' + (ownerName || ownerDisplay) + '</option>');
+    $sel.select2({
+      data: userListCache || [],
+      dropdownParent: $('#addModal'),
+      templateResult: function(item) { return item.display || item.text; },
+      templateSelection: function(item) { return item.name || item.text || ''; },
+      placeholder: '责任人 / Owner', allowClear: false, width: '100%'
+    });
+  }
+
+  // 切换录入表单：标准（里程碑）↔ CI（follow-up）
+  function toggleAddType(type) {
+    if (type === 'CI') {
+      $('#addStandardSection').addClass('d-none');
+      $('#addTemplateWrap').addClass('d-none');
+      $('#addCISection').removeClass('d-none');
+      if ($('#addFollowups').children().length === 0) addFollowupRow('', '', '', '');
+    } else {
+      $('#addCISection').addClass('d-none');
+      $('#addTemplateWrap').removeClass('d-none');
+      $('#addStandardSection').removeClass('d-none');
+    }
+  }
+
   function openAddModal() {
     $('#addProjectName').val('');
     $('#addStatus').val('Not start');
+    $('#addType').val('标准');
     $('#addTemplate').val('standard');
     $('#addMilestones').empty();
+    $('#addFollowups').empty();
     MS_TEMPLATES.standard.forEach(function(n) { addMilestoneRow(n, ''); });
+    toggleAddType('标准');
 
     if ($('.select2-user').hasClass('select2-hidden-accessible')) $('.select2-user').select2('destroy');
     $('.select2-user').empty().append('<option value=""></option>').val('');
@@ -1055,16 +1197,32 @@
   function submitAddProject() {
     var projectName = $('#addProjectName').val().trim();
     if (!projectName) { Swal.fire('提示 / Notice', '请输入项目名称 / Project name required', 'warning'); return; }
+    var type = $('#addType').val() || '标准';
     var milestones = [];
-    $('#addMilestones .add-ms-row').each(function() {
-      var name = $(this).find('.add-ms-name').val().trim();
-      var planned = $(this).find('.add-ms-date').val().trim();
-      if (name) milestones.push({ name: name, planned: planned || 'NA' });
-    });
+    if (type === 'CI') {
+      var missingOwner = false;
+      $('#addFollowups .ci-fu-row').each(function() {
+        var name = $(this).find('.ci-fu-name').val().trim();
+        if (!name) return;
+        var ownerDisp = $(this).find('.ci-fu-owner').val() || '';
+        var due = $(this).find('.ci-fu-date').val().trim();
+        var cache = (userListCache || []).filter(function(u) { return u.display === ownerDisp; })[0];
+        if (!ownerDisp || !cache) { missingOwner = true; return; }
+        milestones.push({ name: name, planned: due || 'NA', owner: cache.name, ownerEmail: cache.email || '' });
+      });
+      if (missingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
+      if (milestones.length === 0) { Swal.fire('提示 / Notice', '请至少添加一条 follow-up 事项 / Add at least one item', 'warning'); return; }
+    } else {
+      $('#addMilestones .add-ms-row').each(function() {
+        var name = $(this).find('.add-ms-name').val().trim();
+        var planned = $(this).find('.add-ms-date').val().trim();
+        if (name) milestones.push({ name: name, planned: planned || 'NA' });
+      });
+    }
     var data = {
       projectName: projectName, leader: $('#addLeader').val() || '',
       technician: $('#addTechnician').val() || '',
-      status: $('#addStatus').val() || 'Not start', milestones: milestones
+      status: $('#addStatus').val() || 'Not start', type: type, milestones: milestones
     };
     Swal.fire({ title: swalTitle('正在提交...', 'Submitting...'), html: swalHtml('正在添加新项目，请稍候。', 'Adding new project, please wait.'), allowOutsideClick: false, showConfirmButton: false, didOpen: function() { Swal.showLoading(); } });
     google.script.run

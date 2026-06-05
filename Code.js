@@ -10192,6 +10192,7 @@ const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理（用
 const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
 const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
 const PROJECT_MILESTONES_JSON_COL = 4;  // Col E — 里程碑 JSON 数组（单一数据源）
+const PROJECT_TYPE_COL = 5;             // Col F — 项目类型：标准 / CI（缺省按 标准）
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10251,6 +10252,7 @@ function getProjectTrackingData() {
         leader: String(row[1] || ''),
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
+        type: String(row[PROJECT_TYPE_COL] || '').trim() || '标准',
         milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL])
       };
       return project;
@@ -10327,7 +10329,13 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     // Full milestone replacement (all users; non-admin triggers email notification)
     if (updates.milestonesReplace !== undefined) {
       const newArr = updates.milestonesReplace.map(function(ms) {
-        return { name: String(ms.name || ''), planned: String(ms.planned || 'NA'), actual: String(ms.actual || '') };
+        return {
+          name: String(ms.name || ''),
+          planned: String(ms.planned || 'NA'),
+          actual: String(ms.actual || ''),
+          owner: String(ms.owner || ''),
+          ownerEmail: String(ms.ownerEmail || '')
+        };
       });
       ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(newArr));
       changes.milestonesReplace = newArr; // store full array for email
@@ -10918,20 +10926,29 @@ function addProject(dataStr) {
     const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
     if (!ws) return JSON.stringify({ success: false, message: 'Sheet 项目总表 not found' });
 
-    // milestones: array of {name, planned} from frontend
+    // milestones: array of {name, planned, owner?, ownerEmail?} from frontend
     const msData = Array.isArray(data.milestones) ? data.milestones : [];
     const msJsonArr = msData.map(function(ms) {
-      if (typeof ms === 'string') return { name: ms, planned: ms || 'NA', actual: '' };
-      return { name: ms.name || '', planned: ms.planned || 'NA', actual: '' };
+      if (typeof ms === 'string') return { name: ms, planned: ms || 'NA', actual: '', owner: '', ownerEmail: '' };
+      return {
+        name: ms.name || '',
+        planned: ms.planned || 'NA',
+        actual: '',
+        owner: ms.owner || '',
+        ownerEmail: ms.ownerEmail || ''
+      };
     });
 
-    // Build row: A 项目名称 / B Leader / C 技术员 / D 状态 / E 里程碑JSON（单一数据源）
+    const projType = (data.type === 'CI') ? 'CI' : '标准';
+
+    // Build row: A 项目名称 / B Leader / C 技术员 / D 状态 / E 里程碑JSON / F 类型
     const row = [
       data.projectName || '',
       data.leader || '',
       data.technician || '',
       data.status || 'Not start',
-      JSON.stringify(msJsonArr)
+      JSON.stringify(msJsonArr),
+      projType
     ];
 
     ws.appendRow(row);

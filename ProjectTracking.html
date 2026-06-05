@@ -60,6 +60,11 @@
     .add-ms-name { flex:1; font-size:12px; }
     .add-ms-date { width:140px; font-size:12px; }
     .add-ms-del { flex:0 0 28px; }
+    .ci-fu-row { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f0f0f0; }
+    .ci-fu-row:last-child { border-bottom:none; }
+    .ci-fu-name { flex:1.4; font-size:12px; }
+    .ci-fu-owner-wrap { flex:1; min-width:0; }
+    .ci-fu-date { width:130px; font-size:12px; }
     #addModal .select2-container--default .select2-selection--single { font-size:12px; height:auto; padding:4px 8px; }
     #addModal .select2-container--default .select2-results__option { font-size:12px; }
     #updateModal .select2-container--default .select2-selection--single { font-size:12px; height:auto; padding:4px 8px; }
@@ -91,9 +96,14 @@
 
     <!-- Controls -->
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <div>
+      <div class="d-flex align-items-center gap-2">
         <button class="btn btn-sm btn-outline-success" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i> 刷新<br><small>Refresh</small></button>
         <button class="btn btn-sm btn-outline-danger" id="addProjectBtn"><i class="bi bi-plus-lg"></i> 添加项目<br><small>Add Project</small></button>
+        <div class="btn-group btn-group-sm ms-2" role="group" id="typeFilter" style="font-size:11px;">
+          <button type="button" class="btn btn-danger" data-type="all">全部<br><small>All</small></button>
+          <button type="button" class="btn btn-outline-danger" data-type="标准">标准<br><small>Standard</small></button>
+          <button type="button" class="btn btn-outline-danger" data-type="CI">CI<br><small>CI</small></button>
+        </div>
       </div>
       <div class="d-flex align-items-center gap-2" style="font-size:11px;color:#666;">
         <span class="legend-ms" style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:#28a745;display:inline-block;"></span>已完成</span>
@@ -110,10 +120,11 @@
           <tr>
             <th style="width:30px;"></th>
             <th>项目名称<br><small>Project Name</small></th>
+            <th>类型<br><small>Type</small></th>
             <th>Leader</th>
             <th>状态<br><small>Status</small></th>
             <th>进度<br><small>Progress</small></th>
-            <th>下一里程碑<br><small>Next Milestone</small></th>
+            <th>下一节点<br><small>Next</small></th>
             <th>操作<br><small>Action</small></th>
           </tr>
         </thead>
@@ -194,7 +205,7 @@
             </div>
           </div>
           <div class="row mb-2">
-            <div class="col-6">
+            <div class="col-4">
               <label class="form-label fw-bold" style="font-size:12px;">状态<br><small>Status</small></label>
               <select class="form-select" id="addStatus">
                 <option value="Ongoing">进行中 / Ongoing</option>
@@ -203,7 +214,14 @@
                 <option value="Not start" selected>未开始 / Not Start</option>
               </select>
             </div>
-            <div class="col-6">
+            <div class="col-4">
+              <label class="form-label fw-bold" style="font-size:12px;">项目类型<br><small>Project Type</small></label>
+              <select class="form-select" id="addType" style="font-size:12px;">
+                <option value="标准" selected>标准（里程碑）/ Standard</option>
+                <option value="CI">CI（follow-up）/ CI</option>
+              </select>
+            </div>
+            <div class="col-4" id="addTemplateWrap">
               <label class="form-label fw-bold" style="font-size:12px;">里程碑模板<br><small>Milestone Template</small></label>
               <select class="form-select" id="addTemplate" style="font-size:12px;">
                 <option value="standard">标准设备安装（7节点）/ Standard 7-node</option>
@@ -212,7 +230,8 @@
               </select>
             </div>
           </div>
-          <div class="mb-2">
+          <!-- 标准类型：里程碑计划日期 -->
+          <div class="mb-2" id="addStandardSection">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <label class="form-label fw-bold mb-0" style="font-size:12px;">里程碑计划日期<br><small>Milestone Planned Dates</small></label>
               <button type="button" class="btn btn-sm btn-outline-danger" id="addMsAddBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加节点<br><small>Add Milestone</small></button>
@@ -220,6 +239,17 @@
             <div class="text-muted mb-1" style="font-size:11px;">留空表示 NA / Blank = NA</div>
             <div style="max-height:260px;overflow-y:auto;">
               <div id="addMilestones"></div>
+            </div>
+          </div>
+          <!-- CI 类型：follow-up 事项（事项 + 责任人 + 计划完成） -->
+          <div class="mb-2 d-none" id="addCISection">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label fw-bold mb-0" style="font-size:12px;">Follow-up 事项<br><small>Follow-up Items</small></label>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="addFollowupBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加事项<br><small>Add Item</small></button>
+            </div>
+            <div class="text-muted mb-1" style="font-size:11px;">每条需填：事项 + 责任人 + 计划完成日期 / Item + Owner + Due</div>
+            <div style="max-height:280px;overflow-y:auto;">
+              <div id="addFollowups"></div>
             </div>
           </div>
         </div>
