@@ -1,6 +1,7 @@
 <script>
   const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
   const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+  // ===== REPLACED_MARKER (do not remove) =====
   var globalName = sessionStorage.getItem('Name') || '';
   var globalId = sessionStorage.getItem('ID') || '';
   var globalProcess = sessionStorage.getItem('Process') || '';
@@ -13,6 +14,18 @@
   today.setHours(0, 0, 0, 0);
   var isAdmin = false;
   var historyMap = {};
+  var dtInstance = null;
+  var userListCache = null;
+
+  var MS_TEMPLATES = {
+    standard: [
+      '模具/自动化改造（供应商）/ Tooling & Automation (Supplier)',
+      'FAT / FAT', '现场安装 / On-site Installation', 'IQ/OQ / IQ/OQ',
+      '工程测试 / Engineering Test', 'PQ / PQ', 'Mass Production / Mass Production'
+    ],
+    simple: ['FAT / FAT', 'IQ/OQ / IQ/OQ', 'Mass Production / Mass Production'],
+    custom: []
+  };
 
   $(document).ready(function() {
     $('#name').text(globalName);
@@ -21,10 +34,18 @@
     checkAdminPermission();
 
     $('#refreshBtn').click(function() { loadData(); });
-    $('#todayBtn').click(function() { scrollToToday(); });
     $('#saveBtn').click(function() { saveUpdates(); });
     $('#addProjectBtn').click(function() { openAddModal(); });
     $('#addSubmitBtn').click(function() { submitAddProject(); });
+    $('#addMsAddBtn').click(function() { addMilestoneRow('', ''); });
+    $('#updateMsAddBtn').click(function() { addUpdateMilestoneRow('', '', ''); });
+
+    $('#addTemplate').on('change', function() {
+      var tpl = $(this).val();
+      var names = MS_TEMPLATES[tpl] || [];
+      $('#addMilestones').empty();
+      names.forEach(function(n) { addMilestoneRow(n, ''); });
+    });
 
     // Status editor check
     var isLyon = (globalName === 'Lyon Zhang');
@@ -130,12 +151,11 @@
     google.script.run
       .withSuccessHandler(function(result) {
         Swal.close();
-        $('#ganttContainer').show();
         try {
           var data = typeof result === 'string' ? JSON.parse(result) : result;
           if (data.error) { Swal.fire('错误 / Error', data.error, 'error'); return; }
           globalData = data;
-          renderGantt();
+          renderTable();
           loadHistorySummary();
         } catch(e) {
           Swal.fire('错误 / Error', '数据解析失败 / Data parse error: ' + e.message, 'error');
@@ -152,27 +172,8 @@
     google.script.run.withSuccessHandler(function(result) {
       try {
         historyMap = typeof result === 'string' ? JSON.parse(result) : {};
-        updateHistoryIcons();
       } catch(e) { /* degrade gracefully */ }
     }).getPlannedDateHistorySummary();
-  }
-
-  function updateHistoryIcons() {
-    $('#ganttBody tr.gantt-row').each(function() {
-      var $row = $(this);
-      var projectName = $row.find('.gantt-info').text().trim();
-      if (!projectName) return;
-      $row.find('.ms-node').each(function() {
-        var title = $(this).data('ms-title') || '';
-        var msName = title.split('<br>')[0];
-        if (msName && historyMap[projectName + '::' + msName]) {
-          var $histIcon = $('<span class="hist-icon" style="display:inline-block;cursor:pointer;font-size:10px;margin-right:1px;color:#E60012;" title="查看变更历史 / View Change History">&#x1F504;</span>');
-          $histIcon.data('project', projectName);
-          $histIcon.data('milestone', msName);
-          $(this).before($histIcon);
-        }
-      });
-    });
   }
 
   function parseDate(val) {
@@ -319,11 +320,258 @@
     return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
   }
 
-  function renderGantt() {
-    // 仅显示未完成项目
-    var projects = globalData.projects.filter(function(proj) {
-      return proj.status !== 'Done';
+  // ==================== Table helpers ====================
+
+  function getProgress(proj) {
+    var total = proj.milestones.length;
+    var done = proj.milestones.filter(function(ms) {
+      var a = parseDate(ms.actual);
+      return a && a <= today;
+    }).length;
+    return { done: done, total: total };
+  }
+
+  function getNextMilestone(proj) {
+    for (var i = 0; i < proj.milestones.length; i++) {
+      var ms = proj.milestones[i];
+      var a = parseDate(ms.actual);
+      if (!a || a > today) {
+        var planned = parseDate(ms.planned);
+        var shortName = ms.name.split(' / ')[0];
+        if (planned) {
+          var isOverdue = planned < today;
+          return '<span style="font-weight:500;">' + shortName + '</span><br>'
+            + '<span style="font-size:10px;color:' + (isOverdue ? '#dc3545' : '#555') + ';">' + (isOverdue ? '⚠️ ' : '') + normalizeDate(ms.planned) + '</span>';
+        }
+        return '<span style="font-size:11px;color:#999;">' + shortName + ' (NA)</span>';
+      }
+    }
+    return '<span style="font-size:11px;color:#28a745;">全部完成 / All done</span>';
+  }
+
+  function getMsPills(proj) {
+    return proj.milestones.map(function(ms) {
+      var color = getMilestoneColor(ms);
+      var shortName = ms.name.split(' / ')[0];
+      if (shortName.length > 5) shortName = shortName.substring(0, 5) + '…';
+      return '<span class="ms-pill" style="background:' + color + ';" title="' + ms.name.replace(/"/g, '&quot;') + '">' + shortName + '</span>';
+    }).join('');
+  }
+
+  // ==================== Main table render ====================
+
+  function renderTable() {
+    var projects = (globalData && globalData.projects) ? globalData.projects.filter(function(p) { return p.status !== 'Done'; }) : [];
+
+    if (dtInstance) {
+      dtInstance.destroy();
+      dtInstance = null;
+    }
+    $('#projectTable tbody').empty();
+
+    var rows = projects.map(function(proj) {
+      var stColor = getStatusColor(proj.status);
+      var stText = getStatusText(proj.status);
+      var prog = getProgress(proj);
+      var progPct = proj.milestones.length > 0 ? Math.round(prog.done / proj.milestones.length * 1000) / 10 : 0;
+      var progBar = '<div style="font-size:11px;margin-bottom:2px;">' + prog.done + '/' + proj.milestones.length + ' (' + progPct + '%)</div>'
+        + '<div style="background:#eee;border-radius:4px;height:5px;"><div style="background:' + stColor + ';width:' + progPct + '%;height:5px;border-radius:4px;"></div></div>'
+        + '<div style="margin-top:3px;">' + getMsPills(proj) + '</div>';
+      var statusBadge = '<span class="status-badge" style="background:' + stColor + ';">' + stText + '</span>';
+      return [
+        '',
+        proj.projectName,
+        proj.leader || '',
+        statusBadge,
+        progBar,
+        getNextMilestone(proj),
+        '<button class="btn btn-sm btn-outline-danger gantt-update-btn" data-project="' + proj.projectName.replace(/"/g,'&quot;') + '" style="font-size:11px;">✎ 更新<br><small>Update</small></button>'
+      ];
     });
+
+    dtInstance = $('#projectTable').DataTable({
+      data: rows,
+      columns: [
+        { orderable: false, searchable: false, width: '30px' },
+        { title: '项目名称<br><small>Project Name</small>' },
+        { title: 'Leader', width: '100px' },
+        { title: '状态<br><small>Status</small>', orderable: false, width: '80px' },
+        { title: '进度<br><small>Progress</small>', orderable: false },
+        { title: '下一里程碑<br><small>Next Milestone</small>', orderable: false },
+        { title: '操作<br><small>Action</small>', orderable: false, searchable: false, width: '72px' }
+      ],
+      language: {
+        search: '搜索 / Search:', lengthMenu: '每页 _MENU_ 条',
+        info: '共 _TOTAL_ 个项目', infoEmpty: '暂无数据',
+        zeroRecords: '无匹配结果', paginate: { first: '首页', last: '末页', next: '下一页', previous: '上一页' }
+      },
+      pageLength: 25, order: [[1, 'asc']],
+      createdRow: function(row, data, dataIndex) {
+        $(row).attr('data-project', projects[dataIndex] ? projects[dataIndex].projectName : '');
+      },
+      columnDefs: [{ targets: 0, render: function() { return '<span class="dt-expand-btn" title="展开甘特图 / Expand Gantt">▶</span>'; } }],
+      drawCallback: function() {
+        $('#projectTable tbody').off('click', '.gantt-update-btn').on('click', '.gantt-update-btn', function(e) {
+          e.stopPropagation();
+          openUpdateModal($(this).data('project'));
+        });
+      }
+    });
+
+    $('#projectTable tbody').off('click', '.dt-expand-btn').on('click', '.dt-expand-btn', function(e) {
+      e.stopPropagation();
+      var $btn = $(this);
+      var tr = $btn.closest('tr');
+      var row = dtInstance.row(tr);
+      var projName = tr.attr('data-project');
+      var proj = null;
+      if (globalData) {
+        for (var i = 0; i < globalData.projects.length; i++) {
+          if (globalData.projects[i].projectName === projName) { proj = globalData.projects[i]; break; }
+        }
+      }
+      if (row.child.isShown()) {
+        row.child.hide(); $btn.text('▶');
+      } else {
+        var ganttId = 'gantt_' + projName.replace(/[^a-zA-Z0-9]/g, '_');
+        row.child('<div id="' + ganttId + '" class="p-2" style="background:#fafafa;"></div>').show();
+        $btn.text('▼');
+        if (proj) renderSingleProjectGantt(ganttId, proj);
+      }
+    });
+  }
+
+  // ==================== Single-project Gantt ====================
+
+  function renderSingleProjectGantt(containerId, proj) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var milestones = proj.milestones;
+    if (!milestones || milestones.length === 0) {
+      container.innerHTML = '<p style="color:#999;font-size:12px;padding:8px;">无里程碑数据 / No milestone data</p>';
+      return;
+    }
+    var dates = [];
+    milestones.forEach(function(ms) {
+      var dp = parseDate(ms.planned); if (dp) dates.push(dp);
+      var da = parseDate(ms.actual);  if (da) dates.push(da);
+    });
+    dates.push(today);
+    dates.sort(function(a, b) { return a - b; });
+    var minDate = new Date(dates[0]); minDate.setDate(minDate.getDate() - 7);
+    var maxDate = new Date(dates[dates.length - 1]); maxDate.setDate(maxDate.getDate() + 14);
+    var days = [];
+    var cur = new Date(minDate);
+    while (cur <= maxDate) { days.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
+
+    function inDay(date, dayObj) {
+      return date.getFullYear() === dayObj.getFullYear() && date.getMonth() === dayObj.getMonth() && date.getDate() === dayObj.getDate();
+    }
+    var COLLAPSE_BUFFER = 3, COLLAPSE_GAP = 10;
+    var activeDaySet = {};
+    for (var di = 0; di < days.length; di++) { if (inDay(today, days[di])) activeDaySet[di] = true; }
+    milestones.forEach(function(ms) {
+      [parseDate(ms.planned), parseDate(ms.actual)].forEach(function(dt) {
+        if (!dt) return;
+        for (var di2 = 0; di2 < days.length; di2++) {
+          if (Math.abs((days[di2] - dt) / 86400000) <= COLLAPSE_BUFFER) activeDaySet[di2] = true;
+        }
+      });
+    });
+    var displayCols = [], ci = 0;
+    while (ci < days.length) {
+      if (activeDaySet[ci]) { displayCols.push({ type: 'day', dayIdx: ci }); ci++; }
+      else {
+        var gapStart = ci;
+        while (ci < days.length && !activeDaySet[ci]) ci++;
+        var gapLen = ci - gapStart;
+        if (gapLen >= COLLAPSE_GAP) displayCols.push({ type: 'collapse', count: gapLen, startDate: days[gapStart], endDate: days[ci - 1] });
+        else { for (var j = gapStart; j < ci; j++) displayCols.push({ type: 'day', dayIdx: j }); }
+      }
+    }
+    var monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    var monthSpans = [], lastKey = -1;
+    displayCols.forEach(function(col) {
+      var date = col.type === 'day' ? days[col.dayIdx] : col.startDate;
+      var key = date.getFullYear() * 100 + date.getMonth();
+      if (key !== lastKey) { monthSpans.push({ month: date.getMonth(), count: 1 }); lastKey = key; }
+      else monthSpans[monthSpans.length - 1].count++;
+    });
+    var stColor = getStatusColor(proj.status);
+    var barBg = rgba(stColor, 0.2);
+    var barBgC = rgba(stColor, 0.1);
+    var projStart = null, projEnd = null;
+    milestones.forEach(function(ms) {
+      var d = parseDate(ms.planned) || parseDate(ms.actual);
+      if (d) { if (!projStart || d < projStart) projStart = d; if (!projEnd || d > projEnd) projEnd = d; }
+    });
+    var html = '<div class="gantt-container"><table class="gantt-table" style="font-size:10px;"><thead>';
+    html += '<tr><th rowspan="2" style="min-width:80px;">里程碑 / Milestone</th>';
+    monthSpans.forEach(function(ms2) { html += '<th colspan="' + ms2.count + '">' + monthNames[ms2.month] + '</th>'; });
+    html += '</tr><tr>';
+    displayCols.forEach(function(col) {
+      if (col.type === 'day') html += '<th style="min-width:22px;padding:2px 1px;">' + days[col.dayIdx].getDate() + '</th>';
+      else html += '<th style="min-width:12px;max-width:12px;padding:2px 0;background:#e9ecef;color:#adb5bd;font-size:8px;">···</th>';
+    });
+    html += '</tr></thead><tbody>';
+    milestones.forEach(function(ms, msIdx) {
+      var shortName = ms.name.split(' / ')[0];
+      html += '<tr><td style="font-size:11px;white-space:nowrap;padding:2px 4px;">' + shortName + '</td>';
+      displayCols.forEach(function(col) {
+        if (col.type === 'day') {
+          var d = col.dayIdx;
+          var day = days[d];
+          var cellStyle = 'text-align:center;vertical-align:middle;';
+          var todayCls = inDay(today, day) ? ' class="today-col"' : '';
+          if (projStart && projEnd && projEnd >= day && projStart <= day) cellStyle += 'background:' + barBg + ';';
+          var cellContent = '';
+          var msPlanned = parseDate(ms.planned);
+          if (msPlanned && inDay(msPlanned, day)) {
+            var msColor = getMilestoneColor(ms);
+            var msTitle = getMilestoneTitle(ms);
+            var hasHist = historyMap && historyMap[proj.projectName + '::' + ms.name.split(' / ')[0]];
+            cellContent += (hasHist ? '<span class="hist-icon" data-project="' + proj.projectName.replace(/"/g,'&quot;') + '" data-milestone="' + ms.name.split(' / ')[0].replace(/"/g,'&quot;') + '" style="cursor:pointer;font-size:10px;color:#E60012;" title="查看变更历史">🔄</span>' : '')
+              + '<span class="ms-node" data-ms-title="' + msTitle.replace(/"/g, '&quot;') + '" style="display:inline-block;font-size:13px;color:' + msColor + ';cursor:pointer;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;">&#9670;</span>';
+          }
+          html += '<td' + todayCls + ' style="' + cellStyle + '">' + cellContent + '</td>';
+        } else {
+          var inRange = projStart && projEnd && col.endDate >= projStart && col.startDate <= projEnd;
+          html += '<td style="min-width:12px;max-width:12px;background:' + (inRange ? barBgC : '#f8f9fa') + ';border-left:1px dashed #dee2e6;border-right:1px dashed #dee2e6;"></td>';
+        }
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+    $(container).find('.ms-node').off('mouseenter mouseleave').on('mouseenter', function(e) {
+      var $tip = $('#msTooltip');
+      if (!$tip.length) { $tip = $('<div id="msTooltip" style="position:fixed;z-index:9999;max-width:200px;padding:6px 10px;background:rgba(0,0,0,0.85);color:#fff;border-radius:4px;font-size:12px;line-height:1.6;pointer-events:none;"></div>'); $('body').append($tip); }
+      $tip.html($(this).data('ms-title')).css({ left: e.clientX + 12, top: e.clientY - 8 }).show();
+    }).on('mousemove', function(e) { $('#msTooltip').css({ left: e.clientX + 12, top: e.clientY - 8 }); })
+      .on('mouseleave', function() { $('#msTooltip').hide(); });
+    $(container).find('.hist-icon').on('click', function() {
+      var projectName = $(this).data('project');
+      var milestoneName = $(this).data('milestone');
+      google.script.run.withSuccessHandler(function(result) {
+        try {
+          var history = typeof result === 'string' ? JSON.parse(result) : [];
+          if (history.error || !Array.isArray(history)) { Swal.fire('错误 / Error', '获取历史失败', 'error'); return; }
+          var filtered = history.filter(function(h) { return h.milestone === milestoneName; });
+          if (filtered.length === 0) { Swal.fire('提示', '无历史记录', 'info'); return; }
+          var html2 = '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#E60012;color:white;">'
+            + '<th style="padding:8px 6px;">原计划日期<br><small>Old</small></th><th style="padding:8px 6px;">新计划日期<br><small>New</small></th><th style="padding:8px 6px;">修改人<br><small>Editor</small></th><th style="padding:8px 6px;">修改时间<br><small>Time</small></th>'
+            + '</tr></thead><tbody>';
+          filtered.forEach(function(f, h) {
+            html2 += '<tr style="background:' + (h % 2 === 0 ? '#fff5f5' : '#fff') + ';">' + '<td style="padding:6px;font-family:monospace;">' + (f.oldDate || 'NA') + '</td>' + '<td style="padding:6px;font-family:monospace;font-weight:600;">' + (f.newDate || 'NA') + '</td>' + '<td style="padding:6px;">' + (f.editor || '') + '</td>' + '<td style="padding:6px;">' + (f.modifiedTime || '') + '</td></tr>';
+          });
+          html2 += '</tbody></table>';
+          Swal.fire({ title: milestoneName + '<br><small style="font-weight:normal;">计划日期变更历史</small>', html: html2, width: 600, confirmButtonText: '关闭 / Close' });
+        } catch(e) { Swal.fire('错误', e.message, 'error'); }
+      }).getPlannedDateHistory(projectName);
+    });
+  }
+
+  function renderGantt_DEAD_CODE_DO_NOT_USE() { return; /*
 
     if (projects.length === 0) {
       $('#ganttHead').html('<tr><th style="font-size:14px;padding:20px;">暂无未完成项目 / No unfinished projects</th></tr>');
@@ -605,14 +853,15 @@
     var collapsedDays = displayCols.filter(function(c) { return c.type === 'collapse'; }).reduce(function(s, c) { return s + c.count; }, 0);
     var collapseInfo = collapsedDays > 0 ? ' | 已折叠 ' + collapsedDays + ' 天（' + collapsedCount + ' 段）/ Collapsed ' + collapsedDays + ' days' : '';
     $('#dataRangeInfo').text('时间范围: ' + formatDateYMD(effectiveMin) + ' ~ ' + formatDateYMD(localMax) + ' | 共 ' + days.length + ' 天 | 仅未完成项目' + collapseInfo);
-  }
+  */ }
 
   function scrollToToday() {
     var cell = $('.today-col').first();
     if (cell.length) {
-      $('#ganttContainer').animate({
-        scrollLeft: cell[0].offsetLeft - $('#ganttContainer').width() / 2
-      }, 500);
+      var $container = cell.closest('.gantt-container');
+      if ($container.length) {
+        $container.animate({ scrollLeft: cell[0].offsetLeft - $container.width() / 2 }, 400);
+      }
     }
   }
 
@@ -653,29 +902,13 @@
       $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
     }
 
-    // Build milestone rows
-    var msHtml = '';
-    proj.milestones.forEach(function(ms, i) {
-      var plannedDisplay = normalizeDate(ms.planned) || (ms.planned === 'NA' ? 'NA' : ms.planned);
-      msHtml += '<div class="modal-milestone-row">';
-      msHtml += '<div class="modal-milestone-label">' + formatHeader(ms.name) + '</div>';
-      msHtml += '<div class="modal-milestone-dates">';
-      if (isAdmin) {
-        msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="text" class="form-control form-control-sm ms-planned" data-ms-idx="' + i + '" value="' + (plannedDisplay || '') + '" placeholder="YYYY-MM-DD or NA"></div>';
-      } else {
-        msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label>';
-        msHtml += '<div class="input-group input-group-sm">';
-        msHtml += '<input type="text" class="form-control form-control-sm readonly-field" value="' + (plannedDisplay || '') + '" readonly style="font-size:12px;">';
-        if (plannedDisplay && plannedDisplay !== 'NA') {
-          msHtml += '<button class="btn btn-sm btn-outline-warning request-delay-btn" type="button" data-ms-idx="' + i + '" data-ms-name="' + ms.name.replace(/"/g, '&quot;') + '" data-ms-planned="' + (plannedDisplay || '') + '" style="font-size:10px;white-space:nowrap;border-color:#fd7e14;color:#fd7e14;">申请推迟<br><small>Delay</small></button>';
-        }
-        msHtml += '</div></div>';
-      }
-      msHtml += '<div class="flex-fill"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" data-ms-index="' + i + '" value="' + normalizeDate(ms.actual) + '"></div>';
-      msHtml += '</div>';
-      msHtml += '</div>';
+    // Build milestone rows — all users get editable rows; admin saves silently, non-admin triggers email
+    $('#modalMilestones').empty();
+    $('#updateMsAddBtn').removeClass('d-none');
+    $('#modalMilestonesHint').text('可增删/修改里程碑，保存后管理员将收到邮件通知 / Edit milestones; admin will be notified on save');
+    proj.milestones.forEach(function(ms) {
+      addUpdateMilestoneRow(ms.name, ms.planned, ms.actual);
     });
-    $('#modalMilestones').html(msHtml);
 
     // Store current project for save
     $('#updateModal').data('projectName', proj.projectName);
@@ -699,58 +932,26 @@
       isStatusChanged = true;
     }
 
-    var milestones = [];
-    $('#modalMilestones .ms-actual').each(function() {
-      var idx = parseInt($(this).data('msIndex'));
-      var actual = $(this).val().trim();
-      milestones.push({ index: idx, actual: actual });
-    });
-
-    var updates = { milestones: milestones };
+    var updates = {};
+    var futureMilestones = [];
 
     // Leader change
     var newLeader = $('#modalLeader').val();
-    if (newLeader && proj && newLeader !== proj.leader) {
-      updates.leader = newLeader;
-    }
+    if (newLeader && proj && newLeader !== proj.leader) updates.leader = newLeader;
 
-    if (isAdmin) {
-      var plannedDates = [];
-      var hasPlannedChanges = false;
-      $('#modalMilestones .ms-planned').each(function() {
-        var idx = parseInt($(this).data('msIdx'));
-        var val = $(this).val().trim();
-        if (val && val !== 'NA') val = normalizeDateInput(val);
-        if (proj && proj.milestones[idx]) {
-          var oldVal = proj.milestones[idx].planned;
-          if (val !== oldVal) hasPlannedChanges = true;
-        }
-        plannedDates.push({ index: idx, planned: val || 'NA' });
-      });
-      if (hasPlannedChanges) {
-        updates.plannedDates = plannedDates;
-        updates.hasPlannedChanges = true;
-      }
-    }
-    if (isStatusChanged) {
-      updates.status = newStatus;
-    }
-
-    // Detect future actual dates
-    var futureMilestones = [];
-    $('#modalMilestones .ms-actual').each(function() {
-      var idx = parseInt($(this).data('msIndex'));
-      var actual = $(this).val().trim();
-      if (actual) {
-        var d = parseDate(actual);
-        if (d && d > today) {
-          futureMilestones.push({
-            name: proj && proj.milestones[idx] ? proj.milestones[idx].name : ('里程碑 ' + idx),
-            date: actual
-          });
-        }
-      }
+    // All users: collect full milestone array
+    var newMsArr = [];
+    $('#modalMilestones .upd-ms-row').each(function() {
+      var name = $(this).find('.upd-ms-name').val().trim();
+      var plannedVal = $(this).find('.upd-ms-planned').val().trim();
+      var actualVal = $(this).find('.ms-actual').val().trim();
+      if (!name) return;
+      if (actualVal) { var d = parseDate(actualVal); if (d && d > today) futureMilestones.push({ name: name, date: actualVal }); }
+      newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '' });
     });
+    updates.milestonesReplace = newMsArr;
+
+    if (isStatusChanged) updates.status = newStatus;
 
     function executeSave(pn, upd) {
       Swal.fire({
@@ -807,104 +1008,75 @@
     executeSave(projectName, updates);
   }
 
-  // ==========================================
-  // 添加项目 / Add Project
-  // ==========================================
-  var userListCache = null;
+  // ==================== Update milestone helper (admin) ====================
+
+  function addUpdateMilestoneRow(name, planned, actual) {
+    var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;">'
+      + '<div class="flex-fill"><label style="font-size:10px;color:#666;">里程碑名称<br><small>Name</small></label><input type="text" class="form-control form-control-sm upd-ms-name" placeholder="名称 / Name" value="' + (name || '').replace(/"/g,'&quot;') + '"></div>'
+      + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">计划日期<br><small>Planned</small></label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
+      + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></div>'
+      + '<button type="button" class="btn btn-sm btn-outline-secondary upd-ms-del-btn mb-0" title="删除 / Remove"><i class="bi bi-x"></i></button>'
+      + '</div>');
+    $row.find('.upd-ms-del-btn').on('click', function() { $row.remove(); });
+    $('#modalMilestones').append($row);
+  }
+
+  // ==================== Add Project ====================
+
+  function addMilestoneRow(name, planned) {
+    var $row = $('<div class="add-ms-row">'
+      + '<input type="text" class="form-control form-control-sm add-ms-name" placeholder="里程碑名称 / Milestone Name" value="' + (name || '').replace(/"/g, '&quot;') + '">'
+      + '<input type="date" class="form-control form-control-sm add-ms-date" value="' + (planned || '') + '">'
+      + '<button type="button" class="btn btn-sm btn-outline-secondary add-ms-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
+      + '</div>');
+    $row.find('.add-ms-del-btn').on('click', function() { $row.remove(); });
+    $('#addMilestones').append($row);
+  }
 
   function openAddModal() {
-    // Build milestone date inputs
-    var msNames = [
-      '模具/自动化改造（供应商）<br><small>Tooling & Automation (Supplier)</small>',
-      'FAT<br><small>FAT</small>',
-      '现场安装<br><small>On-site Installation</small>',
-      'IQ/OQ<br><small>IQ/OQ</small>',
-      '工程测试<br><small>Engineering Test</small>',
-      'PQ<br><small>PQ</small>',
-      'Mass Production<br><small>Mass Production</small>'
-    ];
-    var msHtml = '';
-    msNames.forEach(function(label, i) {
-      msHtml += '<div class="modal-milestone-row">';
-      msHtml += '<div class="modal-milestone-label" style="font-size:12px;font-weight:500;">' + label + '</div>';
-      msHtml += '<div style="flex:1;"><input type="date" class="form-control form-control-sm add-ms-planned" data-ms-idx="' + i + '"></div>';
-      msHtml += '</div>';
-    });
-    $('#addMilestones').html(msHtml);
-
-    // Reset form
     $('#addProjectName').val('');
     $('#addStatus').val('Not start');
+    $('#addTemplate').val('standard');
+    $('#addMilestones').empty();
+    MS_TEMPLATES.standard.forEach(function(n) { addMilestoneRow(n, ''); });
 
-    // Reset Select2 — destroy old, add empty option, re-init
-    if ($('.select2-user').hasClass('select2-hidden-accessible')) {
-      $('.select2-user').select2('destroy');
-    }
+    if ($('.select2-user').hasClass('select2-hidden-accessible')) $('.select2-user').select2('destroy');
     $('.select2-user').empty().append('<option value=""></option>').val('');
     $('.select2-user').select2({
       data: userListCache || [],
       dropdownParent: $('#addModal'),
       templateResult: function(item) { return item.display || item.text; },
       templateSelection: function(item) { return item.name || item.text || ''; },
-      placeholder: '请选择 / Select',
-      allowClear: false,
-      width: '100%'
+      placeholder: '请选择 / Select', allowClear: false, width: '100%'
     });
-
     $('#addModal').modal('show');
   }
 
   function submitAddProject() {
     var projectName = $('#addProjectName').val().trim();
-    if (!projectName) {
-      Swal.fire('提示 / Notice', '请输入项目名称 / Project name required', 'warning');
-      return;
-    }
-
-    // Collect milestone planned dates
+    if (!projectName) { Swal.fire('提示 / Notice', '请输入项目名称 / Project name required', 'warning'); return; }
     var milestones = [];
-    $('.add-ms-planned').each(function() {
-      var val = $(this).val().trim();
-      milestones.push(val || 'NA');
+    $('#addMilestones .add-ms-row').each(function() {
+      var name = $(this).find('.add-ms-name').val().trim();
+      var planned = $(this).find('.add-ms-date').val().trim();
+      if (name) milestones.push({ name: name, planned: planned || 'NA' });
     });
-
     var data = {
-      projectName: projectName,
-      leader: $('#addLeader').val() || '',
+      projectName: projectName, leader: $('#addLeader').val() || '',
       technician: $('#addTechnician').val() || '',
-      status: $('#addStatus').val() || 'Not start',
-      milestones: milestones
+      status: $('#addStatus').val() || 'Not start', milestones: milestones
     };
-
-    Swal.fire({
-      title: swalTitle('正在提交...', 'Submitting...'),
-      html: swalHtml('正在添加新项目，请稍候。', 'Adding new project, please wait.'),
-      allowOutsideClick: false,
-      showConfirmButton: false,
-      didOpen: function() { Swal.showLoading(); }
-    });
-
+    Swal.fire({ title: swalTitle('正在提交...', 'Submitting...'), html: swalHtml('正在添加新项目，请稍候。', 'Adding new project, please wait.'), allowOutsideClick: false, showConfirmButton: false, didOpen: function() { Swal.showLoading(); } });
     google.script.run
       .withSuccessHandler(function(result) {
         Swal.close();
         try {
           var res = typeof result === 'string' ? JSON.parse(result) : result;
-          if (res.success) {
-            Swal.fire('成功 / Success', res.message, 'success').then(function() {
-              $('#addModal').modal('hide');
-              loadData();
-            });
-          } else {
-            Swal.fire('失败 / Failed', res.message, 'error');
-          }
-        } catch(e) {
-          Swal.fire('错误 / Error', e.message, 'error');
-        }
+          if (res.success) { Swal.fire('成功 / Success', res.message, 'success').then(function() { $('#addModal').modal('hide'); loadData(); }); }
+          else { Swal.fire('失败 / Failed', res.message, 'error'); }
+        } catch(e) { Swal.fire('错误 / Error', e.message, 'error'); }
       })
-      .withFailureHandler(function(err) {
-        Swal.close();
-        Swal.fire('错误 / Error', '提交失败 / Submit failed: ' + err.message, 'error');
-      })
+      .withFailureHandler(function(err) { Swal.close(); Swal.fire('错误 / Error', '提交失败: ' + err.message, 'error'); })
       .addProject(JSON.stringify(data));
   }
 </script>
