@@ -10334,7 +10334,8 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
           planned: String(ms.planned || 'NA'),
           actual: String(ms.actual || ''),
           owner: String(ms.owner || ''),
-          ownerEmail: String(ms.ownerEmail || '')
+          ownerEmail: String(ms.ownerEmail || ''),
+          status: String(ms.status || '')
         };
       });
       ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(newArr));
@@ -10935,7 +10936,8 @@ function addProject(dataStr) {
         planned: ms.planned || 'NA',
         actual: '',
         owner: ms.owner || '',
-        ownerEmail: ms.ownerEmail || ''
+        ownerEmail: ms.ownerEmail || '',
+        status: ms.status || ''
       };
     });
 

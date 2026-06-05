@@ -339,6 +339,7 @@
   function getProgress(proj) {
     var total = proj.milestones.length;
     var done = proj.milestones.filter(function(ms) {
+      if (ms.status === '已完成') return true;
       var a = parseDate(ms.actual);
       return a && a <= today;
     }).length;
@@ -348,6 +349,7 @@
   function getNextMilestone(proj) {
     for (var i = 0; i < proj.milestones.length; i++) {
       var ms = proj.milestones[i];
+      if (ms.status === '已完成') continue;
       var a = parseDate(ms.actual);
       if (!a || a > today) {
         var planned = parseDate(ms.planned);
@@ -486,10 +488,11 @@
     var rows = items.map(function(ms, i) {
       var a = parseDate(ms.actual);
       var p = parseDate(ms.planned);
-      var stHtml, stColor;
-      if (a) { stHtml = '✅ 完成 / Done'; stColor = '#28a745'; }
-      else if (p && p < today) { stHtml = '⚠️ 逾期 / Overdue'; stColor = '#dc3545'; }
-      else { stHtml = '待完成 / Pending'; stColor = '#6c757d'; }
+      var st = ms.status || (a ? '已完成' : '未开始');
+      var overdue = (st !== '已完成' && p && p < today);
+      var stColor = st === '已完成' ? '#28a745' : (st === '进行中' ? '#fd7e14' : '#6c757d');
+      if (overdue) stColor = '#dc3545';
+      var stHtml = (overdue ? '⚠️ ' : '') + st + (overdue ? '（逾期）' : '');
       var owner = ms.owner || (proj.leader ? proj.leader.replace(/\(.*\)/, '').trim() : '—');
       var dueTxt = (ms.planned && ms.planned !== 'NA') ? normalizeDate(ms.planned) : 'NA';
       var actTxt = ms.actual ? normalizeDate(ms.actual) : '—';
@@ -980,7 +983,7 @@
       ? '可增删/修改 follow-up 事项（事项 / 责任人 / 计划完成 / 实际完成）'
       : '可增删/修改里程碑，保存后管理员将收到邮件通知 / Edit milestones; admin will be notified on save');
     proj.milestones.forEach(function(ms) {
-      addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail);
+      addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
     });
 
     // Store current project for save
@@ -1021,15 +1024,16 @@
       var actualVal = $(this).find('.ms-actual').val().trim();
       if (!name) return;
       if (actualVal) { var d = parseDate(actualVal); if (d && d > today) futureMilestones.push({ name: name, date: actualVal }); }
-      var ownerName = '', ownerEmail = '';
+      var ownerName = '', ownerEmail = '', itemStatus = '';
       if (currentUpdateIsCI) {
         var disp = $(this).find('.upd-ms-owner').val() || '';
         var cache = (userListCache || []).filter(function(u) { return u.display === disp; })[0];
         if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
         else if (disp) { ownerName = disp; }
         if (!ownerName) ciMissingOwner = true;
+        itemStatus = $(this).find('.upd-ms-status').val() || '未开始';
       }
-      newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail });
+      newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail, status: itemStatus });
     });
     if (ciMissingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
     updates.milestonesReplace = newMsArr;
@@ -1093,18 +1097,22 @@
 
   // ==================== Update milestone helper (admin) ====================
 
-  function addUpdateMilestoneRow(name, planned, actual, owner, ownerEmail) {
+  function addUpdateMilestoneRow(name, planned, actual, owner, ownerEmail, status) {
     var isCI = currentUpdateIsCI;
     var nameLabel = isCI ? '事项<br><small>Item</small>' : '里程碑名称<br><small>Name</small>';
     var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划日期<br><small>Planned</small>';
     var ownerCol = isCI
-      ? '<div style="flex:0 0 150px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>'
+      ? '<div style="flex:0 0 140px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>'
+      : '';
+    var statusCol = isCI
+      ? '<div style="flex:0 0 110px;"><label style="font-size:10px;color:#666;">状态<br><small>Status</small></label>' + ciStatusSelectHtml('upd-ms-status', status) + '</div>'
       : '';
     var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;">'
       + '<div class="flex-fill"><label style="font-size:10px;color:#666;">' + nameLabel + '</label><input type="text" class="form-control form-control-sm upd-ms-name" placeholder="名称 / Name" value="' + (name || '').replace(/"/g,'&quot;') + '"></div>'
       + ownerCol
       + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">' + plannedLabel + '</label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
       + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></div>'
+      + statusCol
       + '<button type="button" class="btn btn-sm btn-outline-secondary upd-ms-del-btn mb-0" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
     $row.find('.upd-ms-del-btn').on('click', function() { $row.remove(); });
@@ -1137,12 +1145,22 @@
     $('#addMilestones').append($row);
   }
 
-  // CI follow-up 录入行（事项 + 责任人select2 + 计划完成）
-  function addFollowupRow(name, ownerDisplay, ownerName, due) {
+  // CI 事项状态下拉 HTML
+  function ciStatusSelectHtml(cls, selected) {
+    var opts = [['未开始', '未开始 / Not start'], ['进行中', '进行中 / Ongoing'], ['已完成', '已完成 / Done']];
+    var s = selected || '未开始';
+    return '<select class="form-select form-select-sm ' + cls + '" style="font-size:12px;">'
+      + opts.map(function(o) { return '<option value="' + o[0] + '"' + (o[0] === s ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('')
+      + '</select>';
+  }
+
+  // CI follow-up 录入行（事项 + 责任人select2 + 计划完成 + 状态）
+  function addFollowupRow(name, ownerDisplay, ownerName, due, status) {
     var $row = $('<div class="ci-fu-row">'
       + '<input type="text" class="form-control form-control-sm ci-fu-name" placeholder="事项 / Item" value="' + (name || '').replace(/"/g, '&quot;') + '">'
       + '<div class="ci-fu-owner-wrap"><select class="form-select form-select-sm ci-fu-owner" style="width:100%;"></select></div>'
       + '<input type="date" class="form-control form-control-sm ci-fu-date" value="' + (due || '') + '">'
+      + ciStatusSelectHtml('ci-fu-status', status)
       + '<button type="button" class="btn btn-sm btn-outline-secondary ci-fu-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
     $row.find('.ci-fu-del-btn').on('click', function() { $row.remove(); });
@@ -1206,9 +1224,10 @@
         if (!name) return;
         var ownerDisp = $(this).find('.ci-fu-owner').val() || '';
         var due = $(this).find('.ci-fu-date').val().trim();
+        var status = $(this).find('.ci-fu-status').val() || '未开始';
         var cache = (userListCache || []).filter(function(u) { return u.display === ownerDisp; })[0];
         if (!ownerDisp || !cache) { missingOwner = true; return; }
-        milestones.push({ name: name, planned: due || 'NA', owner: cache.name, ownerEmail: cache.email || '' });
+        milestones.push({ name: name, planned: due || 'NA', owner: cache.name, ownerEmail: cache.email || '', status: status });
       });
       if (missingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
       if (milestones.length === 0) { Swal.fire('提示 / Notice', '请至少添加一条 follow-up 事项 / Add at least one item', 'warning'); return; }
