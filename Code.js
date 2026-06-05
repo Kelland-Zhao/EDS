@@ -10185,21 +10185,13 @@ function deleteMessageBoardMessage(messageId) {
 // ==========================================
 const PROJECT_TRACKING_SS_ID = '1aoQDjeWU9Xa9clloyTwiXL6WS62tYVbB0-VOavpAgAM';
 const PROJECT_TRACKING_SHEET_NAME = '项目总表';
-const PROJECT_MILESTONE_COLS = [
-  { name: '模具/自动化改造（供应商）/ Tooling & Automation (Supplier)', planned: 3, actual: 4 },
-  { name: 'FAT / FAT', planned: 5, actual: 6 },
-  { name: '现场安装 / On-site Installation', planned: 7, actual: 8 },
-  { name: 'IQ/OQ / IQ/OQ', planned: 9, actual: 10 },
-  { name: '工程测试 / Engineering Test', planned: 11, actual: 12 },
-  { name: 'PQ / PQ', planned: 13, actual: 14 },
-  { name: 'Mass Production / Mass Production', planned: 15, actual: 16 }
-];
-const PROJECT_STATUS_COL = 17;
+// 项目总表列结构（0-indexed）：A 项目名称 / B Leader / C 技术员 / D 状态 / E 里程碑JSON
+const PROJECT_STATUS_COL = 3;          // Col D
 const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
-const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理
+const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理（用户权限表，不受项目总表列变更影响）
 const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
 const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
-const PROJECT_MILESTONES_JSON_COL = 18; // Col S (0-indexed) — 存储里程碑 JSON 数组
+const PROJECT_MILESTONES_JSON_COL = 4;  // Col E — 里程碑 JSON 数组（单一数据源）
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10384,89 +10376,6 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     return JSON.stringify({ success: true, message: '更新成功 / Update successful' });
   } catch (e) {
     return JSON.stringify({ success: false, message: '更新失败 / Update failed: ' + e.toString() });
-  }
-}
-
-/**
- * 发送计划日期变更通知给所有"管理员"权限用户
- * @param {string} projectName
- * @param {string} editorName
- * @param {Array} plannedDates
- */
-function sendPlannedDateChangeNotification(projectName, editorName, plannedDates) {
-  try {
-    const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
-    const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
-    if (!permWs) return;
-    const permVals = permWs.getDataRange().getValues();
-    const adminEmails = [];
-    for (let i = 2; i < permVals.length; i++) {
-      const perm = String(permVals[i][PROJECT_PERMISSION_COL] || '').trim();
-      if (perm === '管理员') {
-        const email = String(permVals[i][9] || '').trim();
-        if (email) adminEmails.push(email);
-      }
-    }
-    if (adminEmails.length === 0) return;
-    const webPage = getReleaseWebPage();
-    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
-    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-    const subject = '【项目跟进】计划日期变更通知 / Planned Date Change - ' + projectName;
-    let rows = '';
-    // Read tracking sheet to get old planned dates from history
-    const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
-    const historyWs = trackSs.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
-    plannedDates.forEach(function(pd, i) {
-      if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
-        var oldDate = '';
-        if (historyWs) {
-          var hData = historyWs.getDataRange().getValues();
-          for (var h = hData.length - 1; h >= 0; h--) {
-            if (String(hData[h][0] || '').trim() === projectName
-              && String(hData[h][1] || '').trim() === PROJECT_MILESTONE_COLS[pd.index].name) {
-              var ov = hData[h][2];
-              oldDate = ov instanceof Date ? Utilities.formatDate(ov, tz, 'yyyy-MM-dd') : String(ov || '');
-              break;
-            }
-          }
-        }
-        rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(PROJECT_MILESTONE_COLS[pd.index].name) + '</td>'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#777;font-family:monospace;">' + escapeHtml(oldDate || 'NA') + '</td>'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#34495e;font-family:monospace;font-weight:600;">' + escapeHtml(pd.planned || 'NA') + '</td>'
-          + '</tr>';
-      }
-    });
-    const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
-      + '<div style="background:#fff0f0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid #E60012;">'
-      + '<h2 style="color:#E60012;text-align:center;margin-bottom:20px;border-bottom:3px solid #E60012;padding-bottom:10px;">'
-      + '【计划日期变更通知】项目跟进<br><span style="font-size:0.8em;">Planned Date Change - Project Tracking</span></h2>'
-      + '<p style="font-size:15px;line-height:1.6;color:#c0392b;">（' + today + '）以下项目的里程碑计划日期已变更：<br>'
-      + '<span style="font-size:0.9em;opacity:0.85;">Milestone planned dates have been updated for the following project:</span></p>'
-      + '</div>'
-      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
-      + '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">'
-      + '<tr><td style="padding:8px 12px;width:140px;font-weight:600;color:#555;">项目 / Project</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(projectName) + '</td></tr>'
-      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">编辑人 / Editor</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(editorName) + '</td></tr>'
-      + '</table>'
-      + '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin-bottom:16px;">变更里程碑计划日期 / Changed Planned Dates</h3>'
-      + '<div style="overflow-x:auto;">'
-      + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
-      + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">原计划 / Old</th>'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">新计划 / New</th>'
-      + '</tr></thead>'
-      + '<tbody>' + rows + '</tbody>'
-      + '</table></div></div>'
-      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:20px;text-align:center;">'
-      + '<p style="margin-bottom:12px;"><a href="' + webPage + '?v=ProjectTracking" style="background:#E60012;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">点击查看项目跟进 / View Project Tracking</a></p>'
-      + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
-      + '</div></div>';
-    GmailApp.sendEmail(adminEmails.join(','), subject, '', { htmlBody: htmlBody });
-    console.log('计划日期变更通知已发送 / Notification sent to: ' + adminEmails.join(','));
-  } catch (e) {
-    console.error('sendPlannedDateChangeNotification error: ' + e);
   }
 }
 
@@ -11016,51 +10925,20 @@ function addProject(dataStr) {
       return { name: ms.name || '', planned: ms.planned || 'NA', actual: '' };
     });
 
-    // Build row: A~C 基本信息, D~Q 已弃用留空, R Status, S 里程碑 JSON（单一数据源）
-    const row = [];
-    row.push(data.projectName || '');   // A(0): 项目名称
-    row.push(data.leader || '');        // B(1): Leader
-    row.push(data.technician || '');    // C(2): 测试责任技术员
-    for (let i = 3; i <= 16; i++) row.push(''); // D~Q(3~16): 弃用的旧固定列，留空
-    row.push(data.status || 'Not start');       // R(17): Status
-    row.push(JSON.stringify(msJsonArr));         // S(18): Milestones_JSON
+    // Build row: A 项目名称 / B Leader / C 技术员 / D 状态 / E 里程碑JSON（单一数据源）
+    const row = [
+      data.projectName || '',
+      data.leader || '',
+      data.technician || '',
+      data.status || 'Not start',
+      JSON.stringify(msJsonArr)
+    ];
 
     ws.appendRow(row);
     return JSON.stringify({ success: true, message: '添加成功 / Project added successfully' });
   } catch (e) {
     return JSON.stringify({ success: false, message: '添加失败 / Add failed: ' + e.toString() });
   }
-}
-
-// ========== ProjectTracking 里程碑迁移：固定列 → JSON 列 ==========
-// 使用方式：在 GAS 编辑器中手动执行一次 migrateProjectMilestonesToJSON()
-function migrateProjectMilestonesToJSON() {
-  const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
-  const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
-  if (!ws) return 'Sheet not found';
-  const data = ws.getDataRange().getValues();
-  // Write header for JSON col if empty
-  if (!data[0][PROJECT_MILESTONES_JSON_COL]) {
-    ws.getRange(1, PROJECT_MILESTONES_JSON_COL + 1).setValue('Milestones_JSON');
-  }
-  let count = 0;
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row[0] || String(row[0]).trim() === '') continue;
-    const existing = row[PROJECT_MILESTONES_JSON_COL];
-    if (existing && String(existing).trim().charAt(0) === '[') continue; // already migrated
-    const msArr = PROJECT_MILESTONE_COLS.map(function(ms) {
-      return {
-        name: ms.name,
-        planned: formatSheetDate_(row[ms.planned]) || 'NA',
-        actual: formatSheetDate_(row[ms.actual]) || ''
-      };
-    });
-    ws.getRange(i + 1, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(msArr));
-    count++;
-  }
-  SpreadsheetApp.flush();
-  return 'Migrated ' + count + ' rows to JSON milestones';
 }
 
 // ========== Inspection2.0 数据迁移：6 Sheet → 1 统一记录表 ==========
