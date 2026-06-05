@@ -10223,6 +10223,19 @@ function formatSheetDate_(val) {
 }
 
 /**
+ * 解析里程碑数组（单一数据源：S 列 Milestones_JSON）
+ * Parse milestones from the JSON column. Returns [] when absent/invalid.
+ * @param {*} raw - cell value of PROJECT_MILESTONES_JSON_COL
+ * @returns {Array<{name:string,planned:string,actual:string}>}
+ */
+function parseMilestonesJSON_(raw) {
+  if (raw && String(raw).trim().charAt(0) === '[') {
+    try { return JSON.parse(String(raw)); } catch (e) {}
+  }
+  return [];
+}
+
+/**
  * 获取项目跟进数据
  * Get project tracking data
  * @returns {string} JSON string
@@ -10240,27 +10253,13 @@ function getProjectTrackingData() {
     });
 
     const projects = rows.map(function(row, index) {
-      var milestones;
-      var jsonRaw = row[PROJECT_MILESTONES_JSON_COL];
-      if (jsonRaw && String(jsonRaw).trim().charAt(0) === '[') {
-        try { milestones = JSON.parse(String(jsonRaw)); } catch(e) { milestones = null; }
-      }
-      if (!milestones) {
-        milestones = PROJECT_MILESTONE_COLS.map(function(ms) {
-          return {
-            name: ms.name,
-            planned: formatSheetDate_(row[ms.planned]),
-            actual: formatSheetDate_(row[ms.actual])
-          };
-        });
-      }
       const project = {
         rowIndex: index + 2,
         projectName: String(row[0] || ''),
         leader: String(row[1] || ''),
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
-        milestones: milestones
+        milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL])
       };
       return project;
     });
@@ -10312,17 +10311,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     // Update milestone actual dates
     if (updates.milestones && Array.isArray(updates.milestones)) {
       const actualChanges = [];
-      // Read current JSON milestones
-      var currentJsonRaw = currentRow[PROJECT_MILESTONES_JSON_COL];
-      var currentMsArr = null;
-      if (currentJsonRaw && String(currentJsonRaw).trim().charAt(0) === '[') {
-        try { currentMsArr = JSON.parse(String(currentJsonRaw)); } catch(e) { currentMsArr = null; }
-      }
-      if (!currentMsArr) {
-        currentMsArr = PROJECT_MILESTONE_COLS.map(function(ms) {
-          return { name: ms.name, planned: formatSheetDate_(currentRow[ms.planned]), actual: formatSheetDate_(currentRow[ms.actual]) };
-        });
-      }
+      var currentMsArr = parseMilestonesJSON_(currentRow[PROJECT_MILESTONES_JSON_COL]);
       updates.milestones.forEach(function(ms) {
         if (ms.index >= 0 && ms.index < currentMsArr.length) {
           const currentActual = String(currentMsArr[ms.index].actual || '').trim();
@@ -10330,10 +10319,6 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
             actualChanges.push({ name: currentMsArr[ms.index].name, old: currentActual, new: ms.actual || '' });
           }
           currentMsArr[ms.index].actual = ms.actual || '';
-          // Also write to legacy fixed cols if within standard range
-          if (ms.index < PROJECT_MILESTONE_COLS.length) {
-            ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[ms.index].actual + 1).setValue(ms.actual || '');
-          }
         }
       });
       ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(currentMsArr));
@@ -10353,12 +10338,6 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
         return { name: String(ms.name || ''), planned: String(ms.planned || 'NA'), actual: String(ms.actual || '') };
       });
       ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(newArr));
-      // Also update legacy fixed cols for compatibility
-      for (var lci = 0; lci < PROJECT_MILESTONE_COLS.length; lci++) {
-        var found2 = newArr.find(function(m) { return m.name === PROJECT_MILESTONE_COLS[lci].name; });
-        ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[lci].planned + 1).setValue(found2 ? (found2.planned || '') : '');
-        ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[lci].actual + 1).setValue(found2 ? (found2.actual || '') : '');
-      }
       changes.milestonesReplace = newArr; // store full array for email
     }
     if (updates.status !== undefined) {
@@ -10372,17 +10351,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     // Update milestone planned dates (admin only)
     if (updates.plannedDates && isAdmin) {
       const plannedChanges = [];
-      // Re-read current JSON milestones for planned update
-      var curJsonRaw2 = currentRow[PROJECT_MILESTONES_JSON_COL];
-      var curMsArr2 = null;
-      if (curJsonRaw2 && String(curJsonRaw2).trim().charAt(0) === '[') {
-        try { curMsArr2 = JSON.parse(String(curJsonRaw2)); } catch(e) { curMsArr2 = null; }
-      }
-      if (!curMsArr2) {
-        curMsArr2 = PROJECT_MILESTONE_COLS.map(function(ms) {
-          return { name: ms.name, planned: formatSheetDate_(currentRow[ms.planned]), actual: formatSheetDate_(currentRow[ms.actual]) };
-        });
-      }
+      var curMsArr2 = parseMilestonesJSON_(currentRow[PROJECT_MILESTONES_JSON_COL]);
       updates.plannedDates.forEach(function(pd) {
         if (pd.index >= 0 && pd.index < curMsArr2.length) {
           const currentPlanned = String(curMsArr2[pd.index].planned || '').trim();
@@ -10391,10 +10360,6 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
             plannedChanges.push({ name: curMsArr2[pd.index].name, old: currentPlanned, new: newPlanned });
           }
           curMsArr2[pd.index].planned = newPlanned;
-          // Also write to legacy fixed cols if within standard range
-          if (pd.index < PROJECT_MILESTONE_COLS.length) {
-            ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[pd.index].planned + 1).setValue(pd.planned || 'NA');
-          }
         }
       });
       ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(curMsArr2));
@@ -10785,27 +10750,26 @@ function getUserList() {
  */
 function requestPlannedDateDelay(projectName, milestoneIndex, newDate, reason, editorName) {
   try {
-    if (milestoneIndex < 0 || milestoneIndex >= PROJECT_MILESTONE_COLS.length) {
-      return JSON.stringify({ success: false, message: '无效的里程碑索引 / Invalid milestone index' });
-    }
-    const msName = PROJECT_MILESTONE_COLS[milestoneIndex].name;
-    const plannedCol = PROJECT_MILESTONE_COLS[milestoneIndex].planned;
-
-    // Get current planned date
+    // Get current planned date from the project's own milestone JSON (single source of truth)
     const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
     const trackWs = trackSs.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
     if (!trackWs) return JSON.stringify({ success: false, message: '数据表未找到 / Sheet not found' });
     const trackData = trackWs.getDataRange().getValues();
     let rowIndex = -1;
-    let oldPlanned = '';
+    let msArr = [];
     for (let i = 1; i < trackData.length; i++) {
       if (String(trackData[i][0] || '').trim() === projectName) {
         rowIndex = i + 1;
-        oldPlanned = String(trackData[i][plannedCol] || '').trim();
+        msArr = parseMilestonesJSON_(trackData[i][PROJECT_MILESTONES_JSON_COL]);
         break;
       }
     }
     if (rowIndex < 0) return JSON.stringify({ success: false, message: '项目未找到 / Project not found' });
+    if (milestoneIndex < 0 || milestoneIndex >= msArr.length) {
+      return JSON.stringify({ success: false, message: '无效的里程碑索引 / Invalid milestone index' });
+    }
+    const msName = String(msArr[milestoneIndex].name || '');
+    const oldPlanned = String(msArr[milestoneIndex].planned || '').trim();
 
     // Get user info (email and supervisor email)
     const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
@@ -10928,13 +10892,15 @@ function handleApprovalAction(action, token) {
         const trackData = trackWs.getDataRange().getValues();
         for (let i = 1; i < trackData.length; i++) {
           if (String(trackData[i][0] || '').trim() === projectName) {
-            // Find the milestone column
-            for (let j = 0; j < PROJECT_MILESTONE_COLS.length; j++) {
-              if (PROJECT_MILESTONE_COLS[j].name === msName) {
-                trackWs.getRange(i + 1, PROJECT_MILESTONE_COLS[j].planned + 1).setValue(newDate);
+            // Update the planned date inside the milestone JSON (single source of truth)
+            var msArr = parseMilestonesJSON_(trackData[i][PROJECT_MILESTONES_JSON_COL]);
+            for (let j = 0; j < msArr.length; j++) {
+              if (msArr[j].name === msName) {
+                msArr[j].planned = newDate;
                 break;
               }
             }
+            trackWs.getRange(i + 1, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(msArr));
             break;
           }
         }
@@ -11050,20 +11016,14 @@ function addProject(dataStr) {
       return { name: ms.name || '', planned: ms.planned || 'NA', actual: '' };
     });
 
-    // Build row: cols A~R = fixed legacy format, col S = JSON
+    // Build row: A~C 基本信息, D~Q 已弃用留空, R Status, S 里程碑 JSON（单一数据源）
     const row = [];
-    row.push(data.projectName || '');   // 0: 项目名称
-    row.push(data.leader || '');        // 1: Leader
-    row.push(data.technician || '');    // 2: 测试责任技术员
-    // Legacy fixed cols D~Q (7 milestones × 2)
-    const STANDARD_MS = ['模具/自动化改造（供应商）/ Tooling & Automation (Supplier)','FAT / FAT','现场安装 / On-site Installation','IQ/OQ / IQ/OQ','工程测试 / Engineering Test','PQ / PQ','Mass Production / Mass Production'];
-    for (let i = 0; i < 7; i++) {
-      const found = msJsonArr.find(function(m) { return m.name === STANDARD_MS[i]; });
-      row.push(found ? (found.planned || '') : '');  // planned
-      row.push('');                                   // actual blank
-    }
-    row.push(data.status || 'Not start');             // 17: Status
-    row.push(JSON.stringify(msJsonArr));               // 18: Milestones_JSON
+    row.push(data.projectName || '');   // A(0): 项目名称
+    row.push(data.leader || '');        // B(1): Leader
+    row.push(data.technician || '');    // C(2): 测试责任技术员
+    for (let i = 3; i <= 16; i++) row.push(''); // D~Q(3~16): 弃用的旧固定列，留空
+    row.push(data.status || 'Not start');       // R(17): Status
+    row.push(JSON.stringify(msJsonArr));         // S(18): Milestones_JSON
 
     ws.appendRow(row);
     return JSON.stringify({ success: true, message: '添加成功 / Project added successfully' });
