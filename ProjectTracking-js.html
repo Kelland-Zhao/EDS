@@ -422,7 +422,7 @@
         '',
         proj.projectName,
         typeBadge(proj),
-        proj.leader || '',
+        (proj.leader || '').replace(/\(.*\)/, '').trim(),
         statusBadge,
         progBar,
         getNextMilestone(proj),
