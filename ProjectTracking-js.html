@@ -1189,7 +1189,7 @@
       dropdownParent: $('#addModal'),
       templateResult: function(item) { return item.display || item.text; },
       templateSelection: function(item) { return item.name || item.text || ''; },
-      placeholder: '请选择 / Select', allowClear: false, width: '100%'
+      placeholder: '请选择 / Select', allowClear: true, width: '100%'
     });
     $('#addModal').modal('show');
   }
