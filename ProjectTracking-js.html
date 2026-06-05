@@ -118,6 +118,17 @@
           .requestPlannedDateDelay(projectName, msIdx, result.value.newDate, result.value.reason, globalName);
       });
     });
+
+    // CI 状态改为"已完成"时自动填充实际完成日期为当天
+    $('#modalMilestones').on('change', '.upd-ms-status', function() {
+      var $row = $(this).closest('.upd-ms-row');
+      var $actual = $row.find('.ms-actual');
+      if ($(this).val() === '已完成') {
+        $actual.val(formatDateYMD(today)).prop('readonly', true).addClass('readonly-field');
+      } else {
+        $actual.val('').prop('readonly', false).removeClass('readonly-field');
+      }
+    });
   });
 
   function checkAdminPermission() {
@@ -1130,6 +1141,12 @@
         templateSelection: function(it) { return it.name || it.text || ''; },
         placeholder: '责任人 / Owner', allowClear: false, width: '100%'
       });
+      // CI 事项已"已完成"时，实际完成日期自动只读（防止手动修改）
+      if (status === '已完成') {
+        var $act = $row.find('.ms-actual');
+        if (!$act.val()) $act.val(formatDateYMD(today));
+        $act.prop('readonly', true).addClass('readonly-field');
+      }
     }
   }
 

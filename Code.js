@@ -10934,7 +10934,7 @@ function addProject(dataStr) {
       return {
         name: ms.name || '',
         planned: ms.planned || 'NA',
-        actual: '',
+        actual: ms.actual || '',
         owner: ms.owner || '',
         ownerEmail: ms.ownerEmail || '',
         status: ms.status || ''
