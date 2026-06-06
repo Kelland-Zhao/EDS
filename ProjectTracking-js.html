@@ -17,7 +17,10 @@
   var dtInstance = null;
   var userListCache = null;
   var currentTypeFilter = 'all';
+  var hideCompleted = false;
+  var showOnlyMine = false;
   var currentUpdateIsCI = false;
+  var currentUpdateLeader = null; // CI 行 owner 为空时默认填项目 Leader
 
   var MS_TEMPLATES = {
     standard: [
@@ -39,19 +42,19 @@
     $('#saveBtn').click(function() { saveUpdates(); });
     $('#addProjectBtn').click(function() { openAddModal(); });
     $('#addSubmitBtn').click(function() { submitAddProject(); });
-    $('#addMsAddBtn').click(function() { addMilestoneRow('', ''); });
-    $('#updateMsAddBtn').click(function() { addUpdateMilestoneRow('', '', ''); });
+    $('#addMsAddBtn').click(function() { addMilestoneRow('', formatDateYMD(today)); });
+    $('#updateMsAddBtn').click(function() { addUpdateMilestoneRow('', formatDateYMD(today), ''); });
 
     $('#addTemplate').on('change', function() {
       var tpl = $(this).val();
       var names = MS_TEMPLATES[tpl] || [];
       $('#addMilestones').empty();
-      names.forEach(function(n) { addMilestoneRow(n, ''); });
+      names.forEach(function(n) { addMilestoneRow(n, formatDateYMD(today)); });
     });
 
     // 项目类型切换：新品/新自动化 ↔ CI
     $('#addType').on('change', function() { toggleAddType($(this).val()); });
-    $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', ''); });
+    $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', formatDateYMD(today), ''); });
 
     // 类型筛选
     $('#typeFilter button').on('click', function() {
@@ -61,12 +64,20 @@
       renderTable();
     });
 
-    // Status editor check
-    var isLyon = (globalName === 'Lyon Zhang');
-    if (isLyon) {
-      $('#modalStatus').prop('disabled', false);
-      $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
-    }
+    // iOS toggle: 显示/隐藏已完成项目
+    $('#toggleCompletedSwitch').on('change', function() {
+      hideCompleted = !this.checked;
+      $('#toggleCompletedLabel').text(this.checked ? '显示已完成' : '已完成已隐藏');
+      renderTable();
+    });
+
+    // 只看我的项目
+    $('#toggleMineSwitch').on('change', function() {
+      showOnlyMine = this.checked;
+      renderTable();
+    });
+
+    // 状态对所有人可编辑
 
     // Request delay button handler (delegated, button is dynamically created in modal)
     $('#modalMilestones').on('click', '.request-delay-btn', function() {
@@ -398,7 +409,8 @@
 
   function renderTable() {
     var projects = (globalData && globalData.projects) ? globalData.projects.filter(function(p) {
-      if (p.status === 'Done') return false;
+      if (hideCompleted && p.status === 'Done') return false;
+      if (showOnlyMine && (!p.leader || p.leader.replace(/\(.*\)/, '').trim() !== globalName)) return false;
       if (currentTypeFilter !== 'all' && projType(p) !== currentTypeFilter) return false;
       return true;
     }) : [];
@@ -420,7 +432,7 @@
       var statusBadge = '<span class="status-badge" style="background:' + stColor + ';">' + stText + '</span>';
       return [
         '',
-        proj.projectName,
+        proj.projectName + (proj.projectId ? '<br><small style="color:#999;font-size:10px;">' + proj.projectId + '</small>' : ''),
         typeBadge(proj),
         (proj.leader || '').replace(/\(.*\)/, '').trim(),
         statusBadge,
@@ -439,7 +451,7 @@
         { title: 'Leader', width: '100px' },
         { title: '状态<br><small>Status</small>', orderable: false, width: '80px' },
         { title: '进度<br><small>Progress</small>', orderable: false },
-        { title: '下一节点<br><small>Next</small>', orderable: false, width: '110px' },
+        { title: '下一节点<br><small>Next</small>', orderable: false, width: '125px' },
         { title: '操作<br><small>Action</small>', orderable: false, searchable: false, width: '72px' }
       ],
       language: {
@@ -643,13 +655,18 @@
           var filtered = history.filter(function(h) { return h.milestone === milestoneName; });
           if (filtered.length === 0) { Swal.fire('提示', '无历史记录', 'info'); return; }
           var html2 = '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#E60012;color:white;">'
-            + '<th style="padding:8px 6px;">原计划日期<br><small>Old</small></th><th style="padding:8px 6px;">新计划日期<br><small>New</small></th><th style="padding:8px 6px;">修改人<br><small>Editor</small></th><th style="padding:8px 6px;">修改时间<br><small>Time</small></th>'
+            + '<th style="padding:8px 6px;">变更类型<br><small>Type</small></th><th style="padding:8px 6px;">原值<br><small>Old</small></th><th style="padding:8px 6px;">新值<br><small>New</small></th><th style="padding:8px 6px;">修改人<br><small>Editor</small></th><th style="padding:8px 6px;">修改时间<br><small>Time</small></th>'
             + '</tr></thead><tbody>';
           filtered.forEach(function(f, h) {
-            html2 += '<tr style="background:' + (h % 2 === 0 ? '#fff5f5' : '#fff') + ';">' + '<td style="padding:6px;font-family:monospace;">' + (f.oldDate || 'NA') + '</td>' + '<td style="padding:6px;font-family:monospace;font-weight:600;">' + (f.newDate || 'NA') + '</td>' + '<td style="padding:6px;">' + (f.editor || '') + '</td>' + '<td style="padding:6px;">' + (f.modifiedTime || '') + '</td></tr>';
+            html2 += '<tr style="background:' + (h % 2 === 0 ? '#fff5f5' : '#fff') + ';">'
+              + '<td style="padding:6px;font-size:10px;color:#888;">' + (f.note || '计划日期变更') + '</td>'
+              + '<td style="padding:6px;font-family:monospace;">' + (f.oldDate || 'NA') + '</td>'
+              + '<td style="padding:6px;font-family:monospace;font-weight:600;">' + (f.newDate || 'NA') + '</td>'
+              + '<td style="padding:6px;">' + (f.editor || '') + '</td>'
+              + '<td style="padding:6px;">' + (f.modifiedTime || '') + '</td></tr>';
           });
           html2 += '</tbody></table>';
-          Swal.fire({ title: milestoneName + '<br><small style="font-weight:normal;">计划日期变更历史</small>', html: html2, width: 600, confirmButtonText: '关闭 / Close' });
+          Swal.fire({ title: milestoneName + '<br><small style="font-weight:normal;">变更历史 / Change History</small>', html: html2, width: 700, confirmButtonText: '关闭 / Close' });
         } catch(e) { Swal.fire('错误', e.message, 'error'); }
       }).getPlannedDateHistory(projectName);
     });
@@ -906,14 +923,16 @@
           }
           var html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
             + '<thead><tr style="background:#E60012;color:white;">'
-            + '<th style="padding:8px 6px;">原计划日期<br><small>Old</small></th>'
-            + '<th style="padding:8px 6px;">新计划日期<br><small>New</small></th>'
+            + '<th style="padding:8px 6px;">变更类型<br><small>Type</small></th>'
+            + '<th style="padding:8px 6px;">原值<br><small>Old</small></th>'
+            + '<th style="padding:8px 6px;">新值<br><small>New</small></th>'
             + '<th style="padding:8px 6px;">修改人<br><small>Editor</small></th>'
             + '<th style="padding:8px 6px;">修改时间<br><small>Time</small></th>'
             + '</tr></thead><tbody>';
           for (var h = 0; h < filtered.length; h++) {
             var f = filtered[h];
             html += '<tr style="background:' + (h % 2 === 0 ? '#fff5f5' : '#fff') + ';">'
+              + '<td style="padding:6px;font-size:10px;color:#888;">' + (f.note || '计划日期变更') + '</td>'
               + '<td style="padding:6px;font-family:monospace;">' + (f.oldDate || 'NA') + '</td>'
               + '<td style="padding:6px;font-family:monospace;font-weight:600;">' + (f.newDate || 'NA') + '</td>'
               + '<td style="padding:6px;">' + (f.editor || '') + '</td>'
@@ -922,7 +941,7 @@
           }
           html += '</tbody></table>';
           Swal.fire({
-            title: milestoneName + '<br><small style="font-weight:normal;">计划日期变更历史 / Planned Date Change History</small>',
+            title: milestoneName + '<br><small style="font-weight:normal;">变更历史 / Change History</small>',
             html: html,
             width: 650,
             confirmButtonText: '关闭 / Close'
@@ -960,14 +979,17 @@
     }
     if (!proj) return;
 
-    $('#modalProjectName').val(proj.projectName);
-    $('#modalStatus').val(proj.status);
+    // 重置为默认编辑模式（避免上次 Done 项目的残留状态）
+    $('#updateModalLabel').html('更新项目 / Update Project');
+    $('#saveBtn').removeClass('d-none');
+    $('#updateMsAddBtn').removeClass('d-none');
 
-    // Init Select2 for leader in update modal
+    // 先销毁旧 Select2，再重建（确保每次都是全新的 enabled 实例）
     if ($('#modalLeader').hasClass('select2-hidden-accessible')) {
       $('#modalLeader').select2('destroy');
     }
-    $('#modalLeader').empty().append('<option value="' + (proj.leader || '') + '" selected>' + (proj.leader ? proj.leader.replace(/\(.*\)/, '').trim() : '') + '</option>');
+    $('#modalLeader').prop('disabled', false).empty()
+      .append('<option value="' + (proj.leader || '') + '" selected>' + (proj.leader ? proj.leader.replace(/\(.*\)/, '').trim() : '') + '</option>');
     $('#modalLeader').select2({
       data: userListCache || [],
       dropdownParent: $('#updateModal'),
@@ -978,16 +1000,30 @@
       width: '100%'
     });
 
-    // Admin can edit status and planned dates
-    $('#modalStatus').prop('disabled', !isAdmin);
-    if (!isAdmin) {
-      $('#statusHelp').text('仅管理员可修改状态 / Only admin can edit status');
-    } else {
-      $('#statusHelp').text('你可以修改状态 / You can edit status').css('color', '#E60012');
-    }
+    $('#modalProjectName').val(proj.projectName);
+    // 项目编号 + 创建/完成时间
+    var metaParts = [];
+    if (proj.projectId) metaParts.push('<strong>编号:</strong> ' + proj.projectId);
+    if (proj.createdAt) metaParts.push('<strong>创建:</strong> ' + proj.createdAt);
+    if (proj.completedAt) metaParts.push('<strong>完成:</strong> ' + proj.completedAt);
+    $('#projectMetaInfo').html(metaParts.join(' &nbsp;|&nbsp; '));
+    $('#modalStatus').val(proj.status);
+
+    // 状态下拉所有人可编辑（标记完成 = 自动填日期）
+    $('#modalStatus').prop('disabled', false);
+    $('#statusHelp').text('选"已完成"后自动记录完成日期 / Done auto-sets completion date').css('color', '#198754');
 
     // Build milestone/follow-up rows — type-aware
     currentUpdateIsCI = (projType(proj) === 'CI');
+    // 解析项目 Leader（"姓名 (邮箱)"），供 CI 行 owner 缺省回退
+    (function() {
+      var L = (proj.leader || '').trim();
+      if (!L) { currentUpdateLeader = null; return; }
+      var m = L.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+      currentUpdateLeader = m
+        ? { name: m[1].trim(), email: m[2].trim(), display: L }
+        : { name: L, email: '', display: L };
+    })();
     $('#modalMilestones').empty();
     $('#updateMsAddBtn').removeClass('d-none');
     $('#modalMilestonesHint').text(currentUpdateIsCI
@@ -996,6 +1032,28 @@
     proj.milestones.forEach(function(ms) {
       addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
     });
+
+    // 已完成项目：全部只读
+    if (proj.status === 'Done') {
+      $('#updateModalLabel').html('查看项目 / View Project <span class="badge bg-success ms-2" style="font-size:11px;">已完成 / Done</span>');
+      $('#modalLeader').prop('disabled', true);
+      if ($('#modalLeader').hasClass('select2-hidden-accessible')) $('#modalLeader').select2('enable', false);
+      $('#modalStatus').prop('disabled', true);
+      $('#statusHelp').text('已完成项目不可编辑 / Completed project is read-only');
+      $('#saveBtn').addClass('d-none');
+      $('#updateMsAddBtn').addClass('d-none');
+      $('#modalMilestones .upd-ms-row').each(function() {
+        $(this).find('input, select').prop('disabled', true);
+        $(this).find('.upd-ms-del-btn').addClass('d-none');
+        if ($(this).find('.upd-ms-owner').hasClass('select2-hidden-accessible')) {
+          $(this).find('.upd-ms-owner').select2('destroy');
+          // replace with readonly text
+          var ownerText = $(this).find('.upd-ms-owner').find('option:selected').text();
+          $(this).find('.upd-ms-owner').replaceWith('<input type="text" class="form-control form-control-sm readonly-field" value="' + ownerText + '" readonly>');
+        }
+      });
+      $('#modalMilestonesHint').text('已完成项目 — 仅可查看 / Completed project — view only');
+    }
 
     // Store current project for save
     $('#updateModal').data('projectName', proj.projectName);
@@ -1139,9 +1197,12 @@
 
     if (isCI) {
       var $sel = $row.find('.upd-ms-owner');
-      if (owner) {
-        var disp = ownerEmail ? (owner + ' (' + ownerEmail + ')') : owner;
-        $sel.append('<option value="' + disp.replace(/"/g,'&quot;') + '" selected>' + owner + '</option>');
+      // owner 为空时默认填项目 Leader，避免回退成列表第一人
+      var oName = owner, oEmail = ownerEmail;
+      if (!oName && currentUpdateLeader) { oName = currentUpdateLeader.name; oEmail = currentUpdateLeader.email; }
+      if (oName) {
+        var disp = oEmail ? (oName + ' (' + oEmail + ')') : oName;
+        $sel.append('<option value="' + disp.replace(/"/g,'&quot;') + '" selected>' + oName + '</option>');
       }
       $sel.select2({
         data: userListCache || [],
@@ -1202,7 +1263,7 @@
       $('#addStandardSection').addClass('d-none');
       $('#addTemplateWrap').addClass('d-none');
       $('#addCISection').removeClass('d-none');
-      if ($('#addFollowups').children().length === 0) addFollowupRow('', '', '', '');
+      if ($('#addFollowups').children().length === 0) addFollowupRow('', '', '', formatDateYMD(today), '');
     } else {
       $('#addCISection').addClass('d-none');
       $('#addTemplateWrap').removeClass('d-none');
@@ -1217,7 +1278,7 @@
     $('#addTemplate').val('standard');
     $('#addMilestones').empty();
     $('#addFollowups').empty();
-    MS_TEMPLATES.standard.forEach(function(n) { addMilestoneRow(n, ''); });
+    MS_TEMPLATES.standard.forEach(function(n) { addMilestoneRow(n, formatDateYMD(today)); });
     toggleAddType('标准');
 
     if ($('.select2-user').hasClass('select2-hidden-accessible')) $('.select2-user').select2('destroy');
