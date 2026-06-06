@@ -10456,9 +10456,11 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
     if (!trackWs) return;
     const trackData = trackWs.getDataRange().getValues();
     let leaderValue = '';
+    let milestonesRaw = '';
     for (let i = 1; i < trackData.length; i++) {
       if (String(trackData[i][0] || '').trim() === projectName) {
         leaderValue = String(trackData[i][1] || '').trim();
+        milestonesRaw = String(trackData[i][PROJECT_MILESTONES_JSON_COL] || '');
         break;
       }
     }
@@ -10487,8 +10489,15 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
       }
     }
 
-    // 3. 构建收件人：To=项目Leader, CC=INJ管理员+直线上级（去重）
-    const ccList = [...new Set([...injAdminEmails, supervisorEmail].filter(Boolean))];
+    // 事项责任人邮箱：取当前项目里程碑 JSON 中各节点的 ownerEmail
+    const ownerEmails = [];
+    parseMilestonesJSON_(milestonesRaw).forEach(function(n) {
+      const e = String((n && n.ownerEmail) || '').trim();
+      if (e) ownerEmails.push(e);
+    });
+
+    // 3. 构建收件人：To=项目Leader, CC=INJ管理员+直线上级+事项责任人（去重）
+    const ccList = [...new Set([...injAdminEmails, supervisorEmail, ...ownerEmails].filter(Boolean))];
     const ccFiltered = leaderEmail ? ccList.filter(function(e) { return e.toLowerCase() !== leaderEmail.toLowerCase(); }) : ccList;
     const toEmail = leaderEmail || ccFiltered.shift() || '';
 
