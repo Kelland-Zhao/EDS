@@ -21,6 +21,7 @@
   var showOnlyMine = false;
   var currentUpdateIsCI = false;
   var currentUpdateLeader = null; // CI 行 owner 为空时默认填项目 Leader
+  var currentUpdateProjectId = ''; // 当前更新弹窗对应项目编号（用于删除精确定位）
 
   var MS_TEMPLATES = {
     standard: [
@@ -40,6 +41,7 @@
 
     $('#refreshBtn').click(function() { loadData(); });
     $('#saveBtn').click(function() { saveUpdates(); });
+    $('#deleteProjectBtn').click(function() { deleteCurrentProject(); });
     $('#addProjectBtn').click(function() { openAddModal(); });
     $('#addSubmitBtn').click(function() { submitAddProject(); });
     $('#addMsAddBtn').click(function() { addMilestoneRow('', formatDateYMD(today)); });
@@ -1001,6 +1003,10 @@
     });
 
     $('#modalProjectName').val(proj.projectName);
+    currentUpdateProjectId = proj.projectId || '';
+    // 删除按钮：仅管理员可见
+    if (isAdmin) $('#deleteProjectBtn').removeClass('d-none');
+    else $('#deleteProjectBtn').addClass('d-none');
     // 项目编号 + 创建/完成时间
     var metaParts = [];
     if (proj.projectId) metaParts.push('<strong>编号:</strong> ' + proj.projectId);
@@ -1165,6 +1171,57 @@
   }
 
   // ==================== Update milestone helper (admin) ====================
+
+  // 删除当前项目（仅管理员）
+  function deleteCurrentProject() {
+    if (!isAdmin) {
+      Swal.fire('提示 / Notice', '仅管理员可删除项目 / Admin only', 'warning');
+      return;
+    }
+    var name = $('#modalProjectName').val();
+    var pid = currentUpdateProjectId || '';
+    Swal.fire({
+      title: '确认删除项目？ / Delete project?',
+      html: '<p>项目「<strong>' + (name || '').replace(/</g, '&lt;') + '</strong>」及其全部里程碑数据将被<strong>永久删除</strong>，不可恢复。</p>'
+        + '<p style="font-size:0.85em;color:#666;">This project and all its milestone data will be permanently deleted and cannot be recovered.</p>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      confirmButtonText: '删除 / Delete',
+      cancelButtonText: '取消 / Cancel'
+    }).then(function(r) {
+      if (!r.isConfirmed) return;
+      Swal.fire({
+        title: swalTitle('正在删除...', 'Deleting...'),
+        html: swalHtml('正在删除项目，请稍候。', 'Deleting project, please wait.'),
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: function() { Swal.showLoading(); }
+      });
+      google.script.run
+        .withSuccessHandler(function(result) {
+          Swal.close();
+          try {
+            var res = typeof result === 'string' ? JSON.parse(result) : result;
+            if (res.success) {
+              Swal.fire('成功 / Success', res.message, 'success').then(function() {
+                $('#updateModal').modal('hide');
+                loadData();
+              });
+            } else {
+              Swal.fire('失败 / Failed', res.message, 'error');
+            }
+          } catch (e) {
+            Swal.fire('错误 / Error', e.message, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          Swal.close();
+          Swal.fire('错误 / Error', '删除失败 / Delete failed: ' + err.message, 'error');
+        })
+        .deleteProject(name, pid, globalName);
+    });
+  }
 
   function addUpdateMilestoneRow(name, planned, actual, owner, ownerEmail, status) {
     var isCI = currentUpdateIsCI;

@@ -10187,12 +10187,14 @@ const PROJECT_TRACKING_SS_ID = '1aoQDjeWU9Xa9clloyTwiXL6WS62tYVbB0-VOavpAgAM';
 const PROJECT_TRACKING_SHEET_NAME = '项目总表';
 // 项目总表列结构（0-indexed）：A 项目名称 / B Leader / C 技术员 / D 状态 / E 里程碑JSON
 const PROJECT_STATUS_COL = 3;          // Col D
-const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
 const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理（用户权限表，不受项目总表列变更影响）
 const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
 const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
 const PROJECT_MILESTONES_JSON_COL = 4;  // Col E — 里程碑 JSON 数组（单一数据源）
 const PROJECT_TYPE_COL = 5;             // Col F — 项目类型：标准 / CI（缺省按 标准）
+const PROJECT_ID_COL = 6;              // Col G — 项目编号
+const PROJECT_CREATED_COL = 7;         // Col H — 创建时间
+const PROJECT_COMPLETED_COL = 8;       // Col I — 完成时间
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10248,12 +10250,15 @@ function getProjectTrackingData() {
     const projects = rows.map(function(row, index) {
       const project = {
         rowIndex: index + 2,
+        projectId: String(row[PROJECT_ID_COL] || ''),
         projectName: String(row[0] || ''),
         leader: String(row[1] || ''),
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
         type: String(row[PROJECT_TYPE_COL] || '').trim() || '标准',
-        milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL])
+        milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL]),
+        createdAt: String(row[PROJECT_CREATED_COL] || ''),
+        completedAt: String(row[PROJECT_COMPLETED_COL] || '')
       };
       return project;
     });
@@ -10319,15 +10324,9 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
       if (actualChanges.length > 0) changes.milestones = actualChanges;
     }
 
-    // Update status, planned dates and milestone structure (only admin)
-    var isAdmin = false;
-    if (updates.status !== undefined || (updates.milestones && updates.hasPlannedChanges)) {
-      const permCheck = JSON.parse(checkProjectPermission(editorName));
-      isAdmin = permCheck.isAdmin;
-    }
-
-    // Full milestone replacement (all users; non-admin triggers email notification)
+    // Full milestone replacement — 同时检测计划日期变更、写History
     if (updates.milestonesReplace !== undefined) {
+      var oldMsArr = parseMilestonesJSON_(currentRow[PROJECT_MILESTONES_JSON_COL]);
       const newArr = updates.milestonesReplace.map(function(ms) {
         return {
           name: String(ms.name || ''),
@@ -10339,43 +10338,100 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
         };
       });
       ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(newArr));
-      changes.milestonesReplace = newArr; // store full array for email
-    }
-    if (updates.status !== undefined) {
-      if (!isAdmin && PROJECT_STATUS_EDITORS.indexOf(editorName) === -1) {
-        return JSON.stringify({ success: false, message: '仅管理员可修改状态 / Only admin can change status' });
-      }
-      const currentStatus = String(currentRow[PROJECT_STATUS_COL] || '').trim();
-      if (updates.status !== currentStatus) changes.status = { old: currentStatus, new: updates.status };
-      ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
-    }
-    // Update milestone planned dates (admin only)
-    if (updates.plannedDates && isAdmin) {
+      changes.milestonesReplace = newArr;
+
+      // 检测计划日期变更 + 全面记录所有变更到 History
       const plannedChanges = [];
-      var curMsArr2 = parseMilestonesJSON_(currentRow[PROJECT_MILESTONES_JSON_COL]);
-      updates.plannedDates.forEach(function(pd) {
-        if (pd.index >= 0 && pd.index < curMsArr2.length) {
-          const currentPlanned = String(curMsArr2[pd.index].planned || '').trim();
-          const newPlanned = pd.planned || 'NA';
-          if (newPlanned !== currentPlanned) {
-            plannedChanges.push({ name: curMsArr2[pd.index].name, old: currentPlanned, new: newPlanned });
+      const historyRows = []; // 通用 History 记录行
+      const maxLen = Math.max(oldMsArr.length, newArr.length);
+      for (let j = 0; j < maxLen; j++) {
+        const oldMs = j < oldMsArr.length ? oldMsArr[j] : null;
+        const newMs = j < newArr.length ? newArr[j] : null;
+        const msLabel = (newMs || oldMs).name || ('#' + (j + 1));
+
+        if (!oldMs && newMs) {
+          historyRows.push({ milestone: '新增: ' + msLabel, note: '新增里程碑/事项' });
+        } else if (oldMs && !newMs) {
+          historyRows.push({ milestone: '删除: ' + msLabel, note: '删除里程碑/事项' });
+        } else if (oldMs && newMs) {
+          // 计划日期
+          const oldP = String(oldMs.planned || '').trim();
+          const newP = String(newMs.planned || 'NA');
+          if (oldP !== newP) {
+            plannedChanges.push({ name: msLabel, old: oldP || 'NA', new: newP });
+            historyRows.push({ milestone: msLabel, plannedOld: oldP || 'NA', plannedNew: newP, note: '计划日期变更' });
           }
-          curMsArr2[pd.index].planned = newPlanned;
+          // 名称
+          if (String(oldMs.name || '').trim() !== String(newMs.name || '').trim()) {
+            historyRows.push({ milestone: msLabel, plannedOld: String(oldMs.name || '').trim(), plannedNew: String(newMs.name || '').trim(), note: '名称变更' });
+          }
+          // 实际完成日期
+          const oldA = String(oldMs.actual || '').trim();
+          const newA = String(newMs.actual || '');
+          if (oldA !== newA) {
+            historyRows.push({ milestone: msLabel, plannedOld: oldA || '无', plannedNew: newA || '无', note: '实际完成日期变更' });
+          }
+          // 责任人 (CI)
+          const oldO = String(oldMs.owner || '').trim();
+          const newO = String(newMs.owner || '');
+          if (oldO !== newO) {
+            historyRows.push({ milestone: msLabel, plannedOld: oldO || '无', plannedNew: newO || '无', note: '责任人变更' });
+          }
+          // 事项状态 (CI)
+          const oldS = String(oldMs.status || '').trim();
+          const newS = String(newMs.status || '');
+          if (oldS !== newS) {
+            historyRows.push({ milestone: msLabel, plannedOld: oldS || '无', plannedNew: newS || '无', note: '事项状态变更' });
+          }
         }
-      });
-      ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(curMsArr2));
-      if (plannedChanges.length > 0) {
-        changes.plannedDates = plannedChanges;
-        // Record planned date change history
+      }
+      if (plannedChanges.length > 0) changes.plannedDates = plannedChanges;
+
+      // 写入 History
+      const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+      if (historyWs) {
+        const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+        const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+        historyRows.forEach(function(hr) {
+          historyWs.appendRow([projectName, hr.milestone, hr.plannedOld || '', hr.plannedNew || '', editorName, now, hr.note || '']);
+        });
+      }
+    }
+    if (updates.leader) {
+      const currentLeader = String(currentRow[1] || '').trim();
+      if (updates.leader !== currentLeader) {
+        // Leader 变更写入 History（changes.leader 已在上方设置）
         const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
         if (historyWs) {
           const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
           const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
-          plannedChanges.forEach(function(pc) {
-            historyWs.appendRow([projectName, pc.name, pc.old, pc.new, editorName, now, '']);
-          });
+          historyWs.appendRow([projectName, 'Leader变更', currentLeader, updates.leader, editorName, now, '项目Leader变更']);
         }
       }
+    }
+    if (updates.status !== undefined) {
+      const currentStatus = String(currentRow[PROJECT_STATUS_COL] || '').trim();
+      if (updates.status !== currentStatus) {
+        changes.status = { old: currentStatus, new: updates.status };
+        // 状态变更写入 History
+        const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+        if (historyWs) {
+          const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+          const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+          historyWs.appendRow([projectName, '状态变更', changes.status.old, changes.status.new, editorName, now, '项目状态变更']);
+        }
+        // 状态改为 Done 时记录完成时间
+        if (updates.status === 'Done') {
+          const tz2 = Session.getScriptTimeZone() || 'Asia/Shanghai';
+          const doneTime = Utilities.formatDate(new Date(), tz2, 'yyyy-MM-dd');
+          ws.getRange(rowIndex, PROJECT_COMPLETED_COL + 1).setValue(doneTime);
+        }
+        // 状态从 Done 改回其他时清除完成时间
+        if (currentStatus === 'Done' && updates.status !== 'Done') {
+          ws.getRange(rowIndex, PROJECT_COMPLETED_COL + 1).setValue('');
+        }
+      }
+      ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
     }
 
     if (Object.keys(changes).length > 0) {
@@ -10394,23 +10450,57 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
  */
 function sendProjectUpdateNotification(projectName, editorName, changes) {
   try {
+    // 1. 获取项目 Leader 邮箱（从项目总表 Col B）
+    const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const trackWs = trackSs.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!trackWs) return;
+    const trackData = trackWs.getDataRange().getValues();
+    let leaderValue = '';
+    for (let i = 1; i < trackData.length; i++) {
+      if (String(trackData[i][0] || '').trim() === projectName) {
+        leaderValue = String(trackData[i][1] || '').trim();
+        break;
+      }
+    }
+    // 从 "姓名 (email)" 格式提取邮箱
+    const leaderEmail = (leaderValue.match(/\(([^)]+)\)/) || [])[1] || '';
+
+    // 2. 项目 Leader 的直线上级（从 userID BI 列查找）
+    const leaderName = leaderValue.replace(/\(.*\)/, '').trim();  // "郭彭 (email)" → "郭彭"
     const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
     const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
     if (!permWs) return;
     const permVals = permWs.getDataRange().getValues();
-    const adminEmails = [];
+    const INJ_ADMIN_COLS = { process: 14, perm: 59, email: 9, name: 1, supervisor: 60 }; // O=工序, BH=权限, J=邮箱, B=姓名, BI=直线上级
+    const injAdminEmails = [];
+    let supervisorEmail = '';
     for (let i = 2; i < permVals.length; i++) {
-      const perm = String(permVals[i][PROJECT_PERMISSION_COL] || '').trim();
-      if (perm === '管理员') {
-        const email = String(permVals[i][9] || '').trim();
-        if (email) adminEmails.push(email);
+      const proc  = String(permVals[i][INJ_ADMIN_COLS.process] || '').trim();    // O: EDS 工序
+      const perm  = String(permVals[i][INJ_ADMIN_COLS.perm] || '').trim();       // BH: 项目跟进权限
+      const email = String(permVals[i][INJ_ADMIN_COLS.email] || '').trim();      // J: GMail
+      if (proc === 'INJ' && perm === '管理员' && email) {
+        injAdminEmails.push(email);
+      }
+      const name  = String(permVals[i][INJ_ADMIN_COLS.name] || '').trim();       // B: NAME
+      if (name === leaderName) {
+        supervisorEmail = String(permVals[i][INJ_ADMIN_COLS.supervisor] || '').trim(); // BI: 直线上级
       }
     }
-    if (adminEmails.length === 0) return;
+
+    // 3. 构建收件人：To=项目Leader, CC=INJ管理员+直线上级（去重）
+    const ccList = [...new Set([...injAdminEmails, supervisorEmail].filter(Boolean))];
+    const ccFiltered = leaderEmail ? ccList.filter(function(e) { return e.toLowerCase() !== leaderEmail.toLowerCase(); }) : ccList;
+    const toEmail = leaderEmail || ccFiltered.shift() || '';
+
+    if (!toEmail) {
+      console.log('No recipients for project update notification: ' + projectName);
+      return;
+    }
+
     const webPage = getReleaseWebPage();
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
     const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-    const subject = '【项目跟进】项目更新通知 / Project Update - ' + projectName;
+    const subject = '【项目跟进】' + escapeHtml(editorName) + ' 更新了项目 / Project Update - ' + projectName;
 
     const fmtDate = function(val) {
       if (!val || val === '空/Empty' || val === 'NA') return val || '空/Empty';
@@ -10533,8 +10623,10 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
       + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
       + '</div></div>';
 
-    GmailApp.sendEmail(adminEmails.join(','), subject, '', { htmlBody: htmlBody });
-    console.log('项目更新通知已发送 / Project update notification sent to: ' + adminEmails.join(','));
+    const mailOptions = { htmlBody: htmlBody };
+    if (ccFiltered.length > 0) mailOptions.cc = ccFiltered.join(',');
+    GmailApp.sendEmail(toEmail, subject, '', mailOptions);
+    console.log('项目更新通知已发送 / Project update notification sent — To: ' + toEmail + (ccFiltered.length > 0 ? ', CC: ' + ccFiltered.join(',') : ''));
   } catch (e) {
     console.error('sendProjectUpdateNotification error: ' + e);
   }
@@ -10943,20 +11035,93 @@ function addProject(dataStr) {
 
     const projType = (data.type === 'CI') ? 'CI' : '标准';
 
-    // Build row: A 项目名称 / B Leader / C 技术员 / D 状态 / E 里程碑JSON / F 类型
+    // 生成唯一项目编号 PRJ-YYYYMMDD-NNN
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const nowDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const allData = ws.getDataRange().getValues();
+    let maxSeq = 0;
+    const todayPrefix = 'PRJ-' + todayStr.split('-').join('') + '-';
+    for (let i = 1; i < allData.length; i++) {
+      const existingId = String(allData[i][PROJECT_ID_COL] || '').trim();
+      if (existingId.indexOf(todayPrefix) === 0) {
+        const seq = parseInt(existingId.split('-').pop(), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    }
+    const projectId = todayPrefix + String(maxSeq + 1).padStart(3, '0');
+
+    // Build row: A-G → 项目名称/Leader/技术员/状态/里程碑JSON/类型/编号/创建时间/完成时间
     const row = [
       data.projectName || '',
       data.leader || '',
       data.technician || '',
       data.status || 'Not start',
       JSON.stringify(msJsonArr),
-      projType
+      projType,
+      projectId,
+      nowDate,
+      ''
     ];
 
     ws.appendRow(row);
-    return JSON.stringify({ success: true, message: '添加成功 / Project added successfully' });
+    return JSON.stringify({ success: true, message: '添加成功 / Project added successfully', projectId: projectId });
   } catch (e) {
     return JSON.stringify({ success: false, message: '添加失败 / Add failed: ' + e.toString() });
+  }
+}
+
+/**
+ * 删除项目（仅管理员）
+ * Delete a project — admin only. Identified by projectId (preferred) or projectName.
+ * @param {string} projectName - 项目名称
+ * @param {string} projectId - 项目编号（优先用于精确定位）
+ * @param {string} editorName - 操作人姓名
+ * @returns {string} JSON string
+ */
+function deleteProject(projectName, projectId, editorName) {
+  try {
+    // 权限校验：仅项目跟进管理员可删除
+    var perm = {};
+    try { perm = JSON.parse(checkProjectPermission(editorName)); } catch (e) {}
+    if (!perm.isAdmin) {
+      return JSON.stringify({ success: false, message: '无权限：仅管理员可删除项目 / Permission denied: admin only' });
+    }
+
+    const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!ws) return JSON.stringify({ success: false, message: 'Sheet 项目总表 not found' });
+
+    const data = ws.getDataRange().getValues();
+    const pid = String(projectId || '').trim();
+    const pname = String(projectName || '').trim();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (pid) {
+        if (String(data[i][PROJECT_ID_COL] || '').trim() === pid) { rowIndex = i + 1; break; }
+      } else if (String(data[i][0] || '').trim() === pname) {
+        rowIndex = i + 1; break;
+      }
+    }
+    if (rowIndex === -1) return JSON.stringify({ success: false, message: '未找到项目 / Project not found' });
+
+    const delName = String(data[rowIndex - 1][0] || '');
+    const delId = String(data[rowIndex - 1][PROJECT_ID_COL] || '');
+    ws.deleteRow(rowIndex);
+
+    // 审计：写入历史表 [项目名, 里程碑, 旧, 新, 编辑人, 时间, 备注]
+    try {
+      const histWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+      if (histWs) {
+        const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+        const nowStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+        histWs.appendRow([delName, '【项目删除 / Deleted】', '', '', editorName || '', nowStr, '删除项目 ' + delId]);
+      }
+    } catch (e) { /* 审计失败不影响删除结果 */ }
+
+    return JSON.stringify({ success: true, message: '项目已删除 / Project deleted: ' + delName });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: '删除失败 / Delete failed: ' + e.toString() });
   }
 }
 
