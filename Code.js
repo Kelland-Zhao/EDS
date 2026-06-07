@@ -5263,10 +5263,10 @@ function savePDFLinkToSheet(data) {
 
     // 合并表模式：直接在 PM_Records 中查找
     if (isMerged) {
-      var ws = getPMSheet(ss);
-      var rowNumber = findRowByPMNo(ws, data.pmSerialNumber);
-      if (rowNumber !== -1) {
-        ws.getRange(rowNumber, 21).setValue(data.pdfLink); // U列（保持不变，索引21）
+      var wsMerged = getPMSheet(ss);
+      var rowNum = findRowByPMNo(wsMerged, data.pmSerialNumber);
+      if (rowNum !== -1) {
+        wsMerged.getRange(rowNum, 21).setValue(data.pdfLink); // U列（保持不变，索引21）
         return true;
       }
       throw new Error("在 PM_Records 中未找到 PM No.: " + data.pmSerialNumber);
