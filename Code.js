@@ -9,6 +9,41 @@ const webIconUrl =
 // Inspection2.0 统一记录表开关（紧急回滚设 false）
 var USE_UNIFIED_INSPECTION_SHEET = true;
 
+// PM 分表合并 - 配置常量
+var USE_MERGED_PM_SHEET = true;  // 紧急回滚设 false
+var PM_RECORDS_SHEET_NAME = "PM_Records";
+var PM_DB_ID = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
+
+// PM 分表合并 - 获取合并表引用
+function getPMSheet(ss) {
+  if (USE_MERGED_PM_SHEET) {
+    return ss.getSheetByName(PM_RECORDS_SHEET_NAME);
+  }
+  return null;  // 返回 null 让调用方回退到旧逻辑
+}
+
+// PM 分表合并 - 在表中按 PM No. 查找行号
+function findRowByPMNo(ws, pmNo) {
+  var lastRow = ws.getLastRow();
+  if (lastRow <= 1) return -1;
+  var values = ws.getRange(1, 1, lastRow, 1).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (values[i][0] === pmNo) return i + 1;
+  }
+  return -1;
+}
+
+// PM 分表合并 - 从合并表获取指定工序+车间的 PM No. 列表
+function getPMNoList(ws, process, workshop) {
+  var lastRow = ws.getLastRow();
+  if (lastRow <= 1) return [];
+  var data = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getDisplayValues();
+  // 列 V(索引21)=工序, 列 W(索引22)=车间
+  return data
+    .filter(function(r) { return r[21] === process && r[22] === workshop; })
+    .map(function(r) { return r[0]; });
+}
+
 var Route = {};
 
 Route.path = function (route, callback) {
@@ -1110,10 +1145,16 @@ function getPlan(info) {
       }); //筛选
     }
 
-    var wss = ss.getSheetByName(process + "-" + workshop);
+    var wss = getPMSheet(ss) || ss.getSheetByName(process + "-" + workshop);
     var datanew = wss
       .getRange(2, 1, wss.getLastRow() - 1, wss.getLastColumn())
       .getDisplayValues();
+    // 合并表模式：筛选当前工序+车间
+    if (USE_MERGED_PM_SHEET && wss.getName() === PM_RECORDS_SHEET_NAME) {
+      datanew = datanew.filter(function(r) {
+        return r[21] === process && r[22] === workshop;
+      });
+    }
 
     filter_data.forEach(function (r) {
       var date2 = r[4];
@@ -1166,32 +1207,43 @@ function getPlan_new() {
       array.push(obj);
     });
 
-    let sheetName = [
-      "INJ-TB1",
-      "INJ-TB2",
-      "TF-TB1",
-      "TF-TB2",
-      "PK-TB1",
-      "PK-TB2",
-    ];
-    let ws_head = ss.getSheetByName("INJ-TB1");
-    let head_record = ws_head
-      .getRange(1, 1, 1, ws_head.getLastColumn())
-      .getValues()[0];
-    console.log("head_record", head_record);
-
-    let record = [];
-    sheetName.forEach((name) => {
-      let wss = ss.getSheetByName(name);
-      let lastRow = wss.getLastRow();
+    // 合并表模式：直接从 PM_Records 读取
+    var ws_records = getPMSheet(ss);
+    var head_record, record;
+    if (USE_MERGED_PM_SHEET && ws_records) {
+      head_record = ws_records
+        .getRange(1, 1, 1, ws_records.getLastColumn())
+        .getValues()[0];
+      var lastRow = ws_records.getLastRow();
       if (lastRow > 1) {
-        // 确保至少有数据行存在
-        let values = wss
-          .getRange(2, 1, lastRow - 1, wss.getLastColumn())
+        record = ws_records
+          .getRange(2, 1, lastRow - 1, ws_records.getLastColumn())
           .getValues();
-        record = record.concat(values);
+      } else {
+        record = [];
       }
-    });
+    } else {
+      // 旧版：遍历六分表
+      var sheetName = [
+        "INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2",
+      ];
+      var ws_head = ss.getSheetByName("INJ-TB1");
+      head_record = ws_head
+        .getRange(1, 1, 1, ws_head.getLastColumn())
+        .getValues()[0];
+      record = [];
+      sheetName.forEach(function(name) {
+        var wss = ss.getSheetByName(name);
+        var lastRow = wss.getLastRow();
+        if (lastRow > 1) {
+          var values = wss
+            .getRange(2, 1, lastRow - 1, wss.getLastColumn())
+            .getValues();
+          record = record.concat(values);
+        }
+      });
+    }
+    console.log("head_record", head_record);
     console.log("RECORD", record[0]);
 
     let record_obj = [];
@@ -1646,22 +1698,36 @@ function get_toPM_data() {
 
 function PMgemerate(workshop, process, info) {
   try {
-    var SheetName = process + "-" + workshop;
     var url =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
-    var ws = ss.getSheetByName(SheetName);
-    var arrWsPmNo = ws
-      .getRange(2, 1, ws.getLastRow() - 1, 1)
-      .getDisplayValues()
-      .map((v) => {
-        return v[0].toString();
-      });
-    let positionPmNo = arrWsPmNo.indexOf(info[0].toString());
+    var ws = getPMSheet(ss) || ss.getSheetByName(process + "-" + workshop);
+
+    var arrWsPmNo;
+    var positionPmNo;
+    if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+      arrWsPmNo = getPMNoList(ws, process, workshop);
+      positionPmNo = arrWsPmNo.indexOf(info[0].toString());
+    } else {
+      arrWsPmNo = ws
+        .getRange(2, 1, ws.getLastRow() - 1, 1)
+        .getDisplayValues()
+        .map(function(v) { return v[0].toString(); });
+      positionPmNo = arrWsPmNo.indexOf(info[0].toString());
+    }
+
     if (positionPmNo == -1) {
-      ws.appendRow(info);
+      if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+        ws.appendRow(info.concat([process, workshop]));
+      } else {
+        ws.appendRow(info);
+      }
     } else {
       ws.getRange(positionPmNo + 2, 1, 1, info.length).setValues([info]);
+      if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+        ws.getRange(positionPmNo + 2, 22).setValue(process);
+        ws.getRange(positionPmNo + 2, 23).setValue(workshop);
+      }
     }
 
     return ["OK", true];
@@ -1675,10 +1741,17 @@ function getPMrecord(PM_Info) {
     var url =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
-    var ws = ss.getSheetByName(PM_Info.process + "-" + PM_Info.workshop);
+    var ws = getPMSheet(ss) || ss.getSheetByName(PM_Info.process + "-" + PM_Info.workshop);
     var allData = ws
       .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
       .getDisplayValues();
+
+    // 合并表模式：仅筛选当前工序+车间
+    if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+      allData = allData.filter(function(r) {
+        return r[21] === PM_Info.process && r[22] === PM_Info.workshop;
+      });
+    }
     
     Logger.log("=== getPMrecord 调试信息 ===");
     Logger.log("查询条件 - Workcenter: " + PM_Info.workcenter + ", Plan_SD: " + PM_Info.Plan_SD);
@@ -1730,18 +1803,30 @@ function PMend_writeback(workshop, process, arrJsonInfo, arrInfo) {
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss_PM = SpreadsheetApp.openByUrl(url_PM);
     var ss_APT = SpreadsheetApp.openByUrl(url_APT);
-    var ws_PM = ss_PM.getSheetByName(SheetName_PM);
+    var ws_PM = getPMSheet(ss_PM) || ss_PM.getSheetByName(SheetName_PM);
     var ws_APT = ss_APT.getSheetByName(SheetName_APT);
+    var isMerged = USE_MERGED_PM_SHEET && ws_PM.getName() === PM_RECORDS_SHEET_NAME;
     var data_APT = ws_APT
       .getRange(2, 1, ws_APT.getLastRow() - 1, 1)
       .getDisplayValues();
     var data_PM = ws_PM
       .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
       .getDisplayValues();
+    if (isMerged) {
+      // 合并表模式：读取全部列 + 过滤工序+车间 by V/W列
+      var allPMData = ws_PM.getRange(2, 1, ws_PM.getLastRow() - 1, ws_PM.getLastColumn()).getDisplayValues();
+    }
     /*-----生成code list-----------------------------*/
-    var codelist = data_PM.map(function (r) {
-      return r[0].toString();
-    });
+    var codelist;
+    if (isMerged) {
+      codelist = allPMData
+        .filter(function(r) { return r[21] === process && r[22] === workshop; })
+        .map(function(r) { return r[0].toString(); });
+    } else {
+      codelist = data_PM.map(function (r) {
+        return r[0].toString();
+      });
+    }
     var taskNolist = data_APT.map(function (r) {
       return r[0].toString();
     });
@@ -1793,11 +1878,19 @@ function PMend_writeback(workshop, process, arrJsonInfo, arrInfo) {
     /*----------------查找开始的保养任务并重写记录-------------------------*/
     var position = codelist.indexOf(arrJsonInfo[0].toString());
     if (position == -1) {
-      ws_PM.appendRow(arrJsonInfo);
+      if (isMerged) {
+        ws_PM.appendRow(arrJsonInfo.concat([process, workshop]));
+      } else {
+        ws_PM.appendRow(arrJsonInfo);
+      }
     } else {
       ws_PM
         .getRange(position + 2, 1, 1, arrJsonInfo.length)
         .setValues([arrJsonInfo]); //写入完成情况和备注
+      if (isMerged) {
+        ws_PM.getRange(position + 2, 22).setValue(process);
+        ws_PM.getRange(position + 2, 23).setValue(workshop);
+      }
     }
     return ["OK", true];
   } catch (e) {
@@ -1815,18 +1908,29 @@ function uploadTableData(workshop, process, arrJsonInfo, arrInfo) {
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss_PM = SpreadsheetApp.openByUrl(url_PM);
     var ss_APT = SpreadsheetApp.openByUrl(url_APT);
-    var ws_PM = ss_PM.getSheetByName(SheetName_PM);
+    var ws_PM = getPMSheet(ss_PM) || ss_PM.getSheetByName(SheetName_PM);
     var ws_APT = ss_APT.getSheetByName(SheetName_APT);
+    var isMerged = USE_MERGED_PM_SHEET && ws_PM.getName() === PM_RECORDS_SHEET_NAME;
     var data_APT = ws_APT
       .getRange(2, 1, ws_APT.getLastRow() - 1, 1)
       .getDisplayValues();
     var data_PM = ws_PM
       .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
       .getDisplayValues();
+    if (isMerged) {
+      var allPMData = ws_PM.getRange(2, 1, ws_PM.getLastRow() - 1, ws_PM.getLastColumn()).getDisplayValues();
+    }
     /*-----生成code list-----------------------------*/
-    var codelist = data_PM.map(function (r) {
-      return r[0].toString();
-    });
+    var codelist;
+    if (isMerged) {
+      codelist = allPMData
+        .filter(function(r) { return r[21] === process && r[22] === workshop; })
+        .map(function(r) { return r[0].toString(); });
+    } else {
+      codelist = data_PM.map(function (r) {
+        return r[0].toString();
+      });
+    }
     var taskNolist = data_APT.map(function (r) {
       return r[0].toString();
     });
@@ -1865,11 +1969,19 @@ function uploadTableData(workshop, process, arrJsonInfo, arrInfo) {
     /*----------------查找开始的保养任务并重写记录-------------------------*/
     var position = codelist.indexOf(arrJsonInfo[0].toString());
     if (position == -1) {
-      ws_PM.appendRow(arrJsonInfo);
+      if (isMerged) {
+        ws_PM.appendRow(arrJsonInfo.concat([process, workshop]));
+      } else {
+        ws_PM.appendRow(arrJsonInfo);
+      }
     } else {
       ws_PM
         .getRange(position + 2, 1, 1, arrJsonInfo.length)
         .setValues([arrJsonInfo]); //写入完成情况和备注
+      if (isMerged) {
+        ws_PM.getRange(position + 2, 22).setValue(process);
+        ws_PM.getRange(position + 2, 23).setValue(workshop);
+      }
     }
     return ["OK", true];
   } catch (e) {
@@ -1883,10 +1995,16 @@ function get_existed_PM_tasklist(PMno, workshop, process) {
     var url =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
-    var ws = ss.getSheetByName(SheetName_1);
+    var ws = getPMSheet(ss) || ss.getSheetByName(SheetName_1);
     var data = ws
       .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
       .getDisplayValues();
+    // 合并表模式：筛选工序+车间
+    if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+      data = data.filter(function (r) {
+        return r[21] === process && r[22] === workshop;
+      });
+    }
     data = data.filter(function (r) {
       return r[0] == PMno;
     });
@@ -1937,13 +2055,17 @@ function upload_addTask(PM_Info, data) {
     var url_PM =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss_PM = SpreadsheetApp.openByUrl(url_PM);
-    var ws_PM = ss_PM.getSheetByName(SheetName_2);
-    var arrWs_PM_No = ws_PM
-      .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
-      .getDisplayValues()
-      .map((v) => {
-        return v[0].toString();
-      });
+    var ws_PM = getPMSheet(ss_PM) || ss_PM.getSheetByName(SheetName_2);
+    // 合并表模式：按工序+车间筛选 PM No. 列表
+    var arrWs_PM_No;
+    if (USE_MERGED_PM_SHEET && ws_PM.getName() === PM_RECORDS_SHEET_NAME) {
+      arrWs_PM_No = getPMNoList(ws_PM, process, workshop);
+    } else {
+      arrWs_PM_No = ws_PM
+        .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
+        .getDisplayValues()
+        .map(function(v) { return v[0].toString(); });
+    }
     let positionWsPmNo = arrWs_PM_No.indexOf(data.PMno.toString());
     if (positionWsPmNo != -1) {
       let exitTaskList = ws_PM
@@ -4286,7 +4408,10 @@ function saveData_tasklist(data, confirmUser) {
     let id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     let ss = SpreadsheetApp.openById(id);
     let sheetName = data["SheetName"];
-    let ws = ss.getSheetByName(sheetName);
+    var process = data["工序"];
+    var workshop = data["车间"];
+    let ws = getPMSheet(ss) || ss.getSheetByName(sheetName);
+    let isMerged = USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME;
     let Status = data["Status"];
     let pmNo = data["PM No."];
     let lastRow = ws.getLastRow();
@@ -4315,7 +4440,7 @@ function saveData_tasklist(data, confirmUser) {
         ws.getRange(rowNumber, 10).setValue(data["Workcenter"]);
         ws.getRange(rowNumber, 11).setValue(data["任务明细"]);
       } else {
-        ws.appendRow([
+        var newRowData = [
           data["PM No."],
           data["PmStatus"],
           data["Notification"],
@@ -4327,7 +4452,11 @@ function saveData_tasklist(data, confirmUser) {
           data["EndTime"],
           data["Workcenter"],
           data["任务明细"],
-        ]);
+        ];
+        if (isMerged) {
+          newRowData.push(process, workshop);
+        }
+        ws.appendRow(newRowData);
       }
     } else if (Status == "End" && rowNumber !== -1) {
       let endDateColumn = 8; // 假设 EndDate 在第8列
@@ -4452,42 +4581,49 @@ function Production_Confirm_Info_Fill(data, PM_Serial_Number, PM_data) {
   try {
     let ID = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
 
-    let sheetName = PM_data["工序"] + "-" + PM_data["车间"];
-
     let ss = SpreadsheetApp.openById(ID);
+    var process = PM_data["工序"];
+    var workshop = PM_data["车间"];
+    let sheetName = process + "-" + workshop;
 
-    let ws = ss.getSheetByName(sheetName);
+    let ws = getPMSheet(ss) || ss.getSheetByName(sheetName);
+    var isMerged = USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME;
 
-    let sheet_Data = ws
-      .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-      .getValues();
+    // 查找 'PM No.' 对应的行号
+    let pmNoPosition;
+    if (isMerged) {
+      pmNoPosition = findRowByPMNo(ws, PM_Serial_Number);
+    } else {
+      let sheet_Data = ws
+        .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
+        .getValues();
 
-    let head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0]; // 获取表头数组
+      let head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0]; // 获取表头数组
 
-    let array = [];
+      let array = [];
 
-    sheet_Data.forEach((r) => {
-      let obj = {};
+      sheet_Data.forEach((r) => {
+        let obj = {};
 
-      head.forEach((h, i) => {
-        obj[h] = r[i]; // 使用表头作为键
+        head.forEach((h, i) => {
+          obj[h] = r[i]; // 使用表头作为键
+        });
+
+        array.push(obj);
       });
 
-      array.push(obj);
-    });
-
-    // 查找 'PM No.' 对应的在 Google Sheet 中的位置
-    let pmNoPosition = -1;
-    for (let i = 0; i < array.length; i++) {
-      if (array[i]["PM No."] === PM_Serial_Number) {
-        pmNoPosition = i + 2; // 因为数组是从0开始的，Google Sheet的行是从1开始的，并且我们从第二行开始读取数据
-        break;
+      pmNoPosition = -1;
+      for (let i = 0; i < array.length; i++) {
+        if (array[i]["PM No."] === PM_Serial_Number) {
+          pmNoPosition = i + 2; // 因为数组是从0开始的，Google Sheet的行是从1开始的，并且我们从第二行开始读取数据
+          break;
+        }
       }
     }
 
-    ws.getRange(pmNoPosition, 17).setValue(data[0]);
+    ws.getRange(pmNoPosition, 17).setValue(data[0]); // 班组交接（列Q，位置不变）
 
-    ws.getRange(pmNoPosition, 18).setValue(data[1]);
+    ws.getRange(pmNoPosition, 18).setValue(data[1]); // 留样问题（列R，位置不变）
 
     let folderID = get_Folder_ID(PM_Serial_Number);
 
@@ -4928,7 +5064,7 @@ function updateStartedPMTask(data) {
     const id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     const ss = SpreadsheetApp.openById(id);
     const sheetName = data["SheetName"];
-    const ws = ss.getSheetByName(sheetName);
+    const ws = getPMSheet(ss) || ss.getSheetByName(sheetName);
     const pmNo = data["PM No."];
 
     if (!ws) {
@@ -4948,7 +5084,7 @@ function updateStartedPMTask(data) {
       throw new Error("在工作表中未找到 PM No.: " + pmNo);
     }
 
-    // 更新指定行中的特定单元格
+    // 更新指定行中的特定单元格（列号不变，工序/车间在末尾V/W列不影响）
     // 表格列: B(2)=PmStatus, C(3)=Notification, D(4)=PM People, F(6)=SatrtDate, G(7)=StartTime, K(11)=任务明细
     ws.getRange(rowNumber, 2).setValue(data["PmStatus"]); // 更新状态
     ws.getRange(rowNumber, 3).setValue(data["Notification"]); // 更新工单号
@@ -4974,7 +5110,16 @@ function updateTasklistForPM(data) {
   try {
     const id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     const ss = SpreadsheetApp.openById(id);
-    const ws = ss.getSheetByName(data.sheetName);
+    const ws = getPMSheet(ss) || ss.getSheetByName(data.sheetName);
+    var isMerged = USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME;
+    // 从 sheetName (格式: "工序-车间") 或 data.process/data.workshop 解析
+    var proc = data.process;
+    var wksp = data.workshop;
+    if ((!proc || !wksp) && data.sheetName && data.sheetName.indexOf("-") !== -1) {
+      var parts = data.sheetName.split("-");
+      proc = parts[0];
+      wksp = parts[1];
+    }
 
     if (!ws) {
       throw new Error("工作表未找到: " + data.sheetName);
@@ -5002,7 +5147,7 @@ function updateTasklistForPM(data) {
         6
       )}-${dateStr.substring(6, 8)}`; // "2025-07-18"
 
-      const newRecord = [
+      var newRecord = [
         pmNo, // PM No.
         "已添加临时任务 / Added Temporary Task", // PmStatus
         "", // Notification
@@ -5015,6 +5160,9 @@ function updateTasklistForPM(data) {
         workcenter, // Workcenter
         data.updatedTasklist, // 任务明细
       ];
+      if (isMerged) {
+        newRecord.push(proc, wksp);
+      }
 
       ws.appendRow(newRecord);
       return "新保养记录已创建，并添加了临时任务！";
@@ -5111,7 +5259,20 @@ function savePDFLinkToSheet(data) {
     // 获取PM系统的主数据表
     const id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     const ss = SpreadsheetApp.openById(id);
+    var isMerged = USE_MERGED_PM_SHEET;
 
+    // 合并表模式：直接在 PM_Records 中查找
+    if (isMerged) {
+      var ws = getPMSheet(ss);
+      var rowNumber = findRowByPMNo(ws, data.pmSerialNumber);
+      if (rowNumber !== -1) {
+        ws.getRange(rowNumber, 21).setValue(data.pdfLink); // U列（保持不变，索引21）
+        return true;
+      }
+      throw new Error("在 PM_Records 中未找到 PM No.: " + data.pmSerialNumber);
+    }
+
+    // --- 以下为旧版六分表逻辑，USE_MERGED_PM_SHEET=false 时使用 ---
     // 从PM_data中获取工序和车间，类似于Production_Confirm_Info_Fill函数
     let sheetName;
     if (data.pmData && data.pmData["工序"] && data.pmData["车间"]) {
@@ -5714,7 +5875,7 @@ function getPMPlannerConfirmation(pmSerialNumber, pmData, sheetName) {
 
         // 使用提供的工作表名称，如果没有提供则默认为'PM Task'
         const targetSheetName = sheetName || "PM Task";
-        const sheet = ss.getSheetByName(targetSheetName);
+        const sheet = getPMSheet(ss) || ss.getSheetByName(targetSheetName);
         if (!sheet) {
           console.error("找不到工作表:", targetSheetName);
           return pmPlannerInfo;
@@ -5856,13 +6017,8 @@ function getCompletePMTaskData(pmSerialNumber, sheetName) {
       "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4"
     );
 
-    // 先列出所有工作表名称进行调试
-    const allSheets = ss.getSheets();
-    const sheetNames = allSheets.map((sheet) => sheet.getName());
-    console.log("Available sheet names:", sheetNames);
-    console.log("Looking for sheet:", sheetName);
-
-    const sheet = ss.getSheetByName(sheetName);
+    // 合并表优先
+    var sheet = getPMSheet(ss) || ss.getSheetByName(sheetName);
     if (!sheet) {
       console.error("找不到工作表:", sheetName);
       console.log("尝试查找包含相似名称的工作表...");
@@ -11214,5 +11370,89 @@ function countInspectionRows() {
   var newRows = newWs && newWs.getLastRow() > 1 ? newWs.getLastRow() - 1 : 0;
   console.log("InspectionRecords: " + newRows + " 行");
   console.log("旧6表合计: " + oldTotal + " | 新表: " + newRows + " | 匹配: " + (oldTotal === newRows));
+  return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
+}
+
+// ========== PM 分表合并：6 Sheet → 1 统一记录表 ==========
+// 使用方式：在 GAS 编辑器中手动执行一次 migrateToPMRecords()
+// 验证方式：执行 validatePMRecordsMigration() 对比新旧行数
+function migrateToPMRecords() {
+  var ss = SpreadsheetApp.openById(PM_DB_ID);
+  var sheetNames = ["INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2"];
+
+  // 1. 创建或清空目标表
+  var target = ss.getSheetByName(PM_RECORDS_SHEET_NAME);
+  if (target) {
+    ss.deleteSheet(target);
+  }
+  target = ss.insertSheet(PM_RECORDS_SHEET_NAME, 0);
+  target.setFrozenRows(1);
+
+  // 2. 获取表头（使用 INJ-TB1 的表头作为模板）
+  var ws_head = ss.getSheetByName("INJ-TB1");
+  var headers = ws_head.getRange(1, 1, 1, ws_head.getLastColumn()).getValues()[0];
+  headers.push("工序", "车间"); // 末尾追加标识列
+  target.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // 3. 逐表迁移数据
+  var totalRows = 0;
+  sheetNames.forEach(function (name) {
+    var ws = ss.getSheetByName(name);
+    var lastRow = ws.getLastRow();
+    if (lastRow <= 1) {
+      console.log(name + ": 无数据，跳过");
+      return;
+    }
+    var data = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getValues();
+    var parts = name.split("-"); // e.g. ["INJ", "TB1"]
+    var proc = parts[0];
+    var wksp = parts[1];
+
+    // 每行末尾追加 工序、车间
+    var enriched = data.map(function (row) {
+      row[21] = proc;  // V列 = 工序
+      row[22] = wksp;  // W列 = 车间
+      return row;
+    });
+
+    // 分批写入
+    var batch = 500;
+    for (var i = 0; i < enriched.length; i += batch) {
+      var chunk = enriched.slice(i, Math.min(i + batch, enriched.length));
+      target.getRange(totalRows + 2 + i, 1, chunk.length, chunk[0].length).setValues(chunk);
+      SpreadsheetApp.flush();
+    }
+    totalRows += enriched.length;
+    console.log(name + ": " + enriched.length + " 行已迁移");
+  });
+
+  console.log("迁移完成！总计 " + totalRows + " 行写入 " + PM_RECORDS_SHEET_NAME);
+  return "OK: " + totalRows + " rows migrated to " + PM_RECORDS_SHEET_NAME;
+}
+
+// 验证迁移结果
+function validatePMRecordsMigration() {
+  var ss = SpreadsheetApp.openById(PM_DB_ID);
+  var sheetNames = ["INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2"];
+  var oldTotal = 0;
+
+  sheetNames.forEach(function (name) {
+    var ws = ss.getSheetByName(name);
+    var rows = ws && ws.getLastRow() > 1 ? ws.getLastRow() - 1 : 0;
+    console.log(name + ": " + rows + " 行");
+    oldTotal += rows;
+  });
+
+  var newWs = ss.getSheetByName(PM_RECORDS_SHEET_NAME);
+  var newRows = newWs && newWs.getLastRow() > 1 ? newWs.getLastRow() - 1 : 0;
+  console.log(PM_RECORDS_SHEET_NAME + ": " + newRows + " 行");
+  console.log("旧6表合计: " + oldTotal + " | 新表: " + newRows + " | 匹配: " + (oldTotal === newRows));
+
+  // 抽检：验证首行数据的工序/车间列
+  if (newWs && newRows > 0) {
+    var sample = newWs.getRange(2, 1, 1, newWs.getLastColumn()).getValues()[0];
+    console.log("抽检首行 - PM No.: " + sample[0] + ", 工序(V): " + sample[21] + ", 车间(W): " + sample[22]);
+  }
+
   return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
 }

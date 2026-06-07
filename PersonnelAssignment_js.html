@@ -304,7 +304,9 @@
 
                     // 其他元数据
                     "SheetName": taskData['工序'] + "-" + taskData['车间'],
-                    "Status": "Start" 
+                    "工序": taskData['工序'],
+                    "车间": taskData['车间'],
+                    "Status": "Start"
                 };
 
                 console.log("最终提交到后端的数据:", submissionData);
