@@ -44,6 +44,52 @@ function getPMNoList(ws, process, workshop) {
     .map(function(r) { return r[0]; });
 }
 
+// 交接班分表合并 - 配置常量
+var USE_MERGED_SHIFT_SHEET = true;  // 紧急回滚设 false
+var SHIFT_RECORDS_SHEET_NAME = "Shift_Records";
+var SHIFT_DB_ID = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
+
+// 交接班分表合并 - 获取合并表引用
+function getShiftSheet(ss) {
+  if (USE_MERGED_SHIFT_SHEET) {
+    return ss.getSheetByName(SHIFT_RECORDS_SHEET_NAME);
+  }
+  return null;
+}
+
+// 交接班分表合并 - 在合并表中按工序+车间过滤数据
+// data: getDisplayValues() 返回的二维数组，末尾两列为 _工序/_车间
+function filterShiftByProcessWorkshop(data, process, workshop) {
+  var lastIdx = data.length > 0 && data[0] ? data[0].length - 1 : -1;
+  if (lastIdx < 1) return data;
+  return data.filter(function(r) {
+    return String(r[lastIdx - 1] || '').trim() === process &&
+           String(r[lastIdx] || '').trim() === workshop;
+  });
+}
+
+// 交接班分表合并 - 在合并表中按编号(code)和工序+车间查找行号
+function findRowByShiftCode(ws, code, process, workshop) {
+  var lastRow = ws.getLastRow();
+  if (lastRow <= 1) return -1;
+  var data = ws.getRange(1, 1, lastRow, ws.getLastColumn()).getDisplayValues();
+  var lastIdx = data.length > 0 && data[0] ? data[0].length - 1 : -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0] || '').trim() === String(code).trim()) {
+      if (lastIdx >= 2) {
+        if (String(data[i][lastIdx - 1] || '').trim() === process &&
+            String(data[i][lastIdx] || '').trim() === workshop) {
+          return i + 1;
+        }
+        // 不匹配则继续查找下一条同编号但不同工序/车间的记录
+        continue;
+      }
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
 var Route = {};
 
 Route.path = function (route, callback) {
@@ -1575,24 +1621,29 @@ function getstdTasklist(info) {
 }
 
 function writeback_task(process, workshop, code) {
-  var SheetName = "Shift_" + process + "_" + workshop;
   var code_update = code + "true";
   var url =
     "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
   var ss = SpreadsheetApp.openByUrl(url);
-  var ws = ss.getSheetByName(SheetName);
+  var ws = getShiftSheet(ss) || ss.getSheetByName("Shift_" + process + "_" + workshop);
+  var isMerged = USE_MERGED_SHIFT_SHEET && ws.getName() === SHIFT_RECORDS_SHEET_NAME;
   var data = ws
     .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
     .getDisplayValues();
-  for (i = 0; i < data.length; i++) {
-    var a = data[i][0].toString() + data[i][12].toString();
-    data[i][0] = a;
+  for (var i = 0; i < data.length; i++) {
+    var combined = data[i][0].toString() + data[i][12].toString();
+    if (combined === code_update) {
+      if (isMerged) {
+        var lastIdx = data[i].length - 1;
+        if (String(data[i][lastIdx - 1] || '').trim() !== process ||
+            String(data[i][lastIdx] || '').trim() !== workshop) {
+          continue;
+        }
+      }
+      ws.getRange(i + 2, 17).setValue("Y");
+      break;
+    }
   }
-  var codelist = data.map(function (r) {
-    return r[0];
-  });
-  var position = codelist.indexOf(code_update);
-  ws.getRange(position + 2, 17).setValue("Y");
   return true;
 }
 
@@ -2196,15 +2247,19 @@ function getData_shift(workshop, process) {
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var wsFromId = ss_database.getSheetByName(
+    var wsFromId = getShiftSheet(ss_database) || ss_database.getSheetByName(
       "Shift_" + processFromId + "_" + workshopFromId
     );
+    var isMerged = USE_MERGED_SHIFT_SHEET && wsFromId.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = wsFromId
       .getRange(2, 1, wsFromId.getLastRow() - 1, wsFromId.getLastColumn())
       .getDisplayValues()
       .filter((v) => {
         return v[21] == "Last";
       });
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var id_database = "1bYKTK5a63yJWRHzM_UPP6b4hwF67eZKEM5dCKLWR59U";
     var saas_database = SpreadsheetApp.openById(id_database);
     var ws_workcenter = saas_database.getSheetByName(
@@ -2245,15 +2300,19 @@ function getData_select(workshop, process) {
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var wsFromId = ss_database.getSheetByName(
+    var wsFromId = getShiftSheet(ss_database) || ss_database.getSheetByName(
       "Shift_" + processFromId + "_" + workshopFromId
     );
+    var isMerged = USE_MERGED_SHIFT_SHEET && wsFromId.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = wsFromId
       .getRange(2, 1, wsFromId.getLastRow() - 1, wsFromId.getLastColumn())
       .getDisplayValues()
       .filter((v) => {
         return v[21] == "Last";
       });
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var id_database = "1bYKTK5a63yJWRHzM_UPP6b4hwF67eZKEM5dCKLWR59U";
     var saas_database = SpreadsheetApp.openById(id_database);
     var ws_workcenter = saas_database.getSheetByName(
@@ -2300,9 +2359,8 @@ function upload_additem_manage(data) {
       "https://docs.google.com/spreadsheets/d/1iBhTmRl1KjtcSO96rfWhQowiZ4E1jqJohC5wEjF_7rQ/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
     var ss_TMP = SpreadsheetApp.openByUrl(url_TMP);
-    var SheetName_shift = "Shift_" + data.process + "_" + data.workshop;
-
-    var ws_shift = ss_database.getSheetByName(SheetName_shift);
+    var ws_shift = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + data.process + "_" + data.workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_shift.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_shift
       .getRange(2, 1, ws_shift.getLastRow() - 1, ws_shift.getLastColumn())
       .getDisplayValues();
@@ -2334,14 +2392,31 @@ function upload_additem_manage(data) {
 
     /*********************database写入[Y]是否转保养清单*************/
     var code = data.code + "true";
-    data_shift.forEach((r) => {
-      r[17] = r[0].toString() + r[12].toString();
-    });
-    var codelist = data_shift.map((r) => {
-      return r[17];
-    });
-    var position = codelist.indexOf(code);
-    ws_shift.getRange(position + 2, 19).setValue("Y");
+    if (isMerged) {
+      var proc = data.process;
+      var wshop = data.workshop;
+      for (var m = 0; m < data_shift.length; m++) {
+        var combined = data_shift[m][0].toString() + data_shift[m][12].toString();
+        if (combined === code) {
+          var lastIdx = data_shift[m].length - 1;
+          if (String(data_shift[m][lastIdx - 1] || '').trim() !== proc ||
+              String(data_shift[m][lastIdx] || '').trim() !== wshop) {
+            continue;
+          }
+          ws_shift.getRange(m + 2, 19).setValue("Y");
+          break;
+        }
+      }
+    } else {
+      data_shift.forEach((r) => {
+        r[17] = r[0].toString() + r[12].toString();
+      });
+      var codelist = data_shift.map((r) => {
+        return r[17];
+      });
+      var position = codelist.indexOf(code);
+      ws_shift.getRange(position + 2, 19).setValue("Y");
+    }
     /************************************************************/
 
     /***********************database APT写入保养清单条目***********/
@@ -2388,9 +2463,9 @@ function upload_shift(obj) {
     });
     obj.workshop = machine_info[0][4];
     obj.process = machine_info[0][5];
-    var SheetName = "Shift_" + obj.process + "_" + obj.workshop;
-    var ws_shift = ss_database.getSheetByName(SheetName);
-    ws_shift.appendRow([
+    var ws_shift = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + obj.process + "_" + obj.workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_shift.getName() === SHIFT_RECORDS_SHEET_NAME;
+    var rowData = [
       obj.code,
       obj.shift,
       obj.workcenter,
@@ -2413,7 +2488,11 @@ function upload_shift(obj) {
       "",
       obj.followStatus,
       "Last",
-    ]);
+    ];
+    if (isMerged) {
+      rowData = rowData.concat([obj.process, obj.workshop]);
+    }
+    ws_shift.appendRow(rowData);
     return ["OK", true];
   } catch (e) {
     return ["NO", "交接班数据保存出错：" + e.toString()];
@@ -2449,16 +2528,23 @@ function upload_shift_modal(obj) {
       obj.process = machine_info[0][5];
     }
     var SheetName = "Shift_" + obj.process + "_" + obj.workshop;
-    var ws_shift = ss_database.getSheetByName(SheetName);
-    var arrIssueNo = ws_shift
-      .getRange(2, 1, ws_shift.getLastRow() - 1, 1)
-      .getValues()
-      .map((v) => {
-        return v[0].toString();
-      });
-    var position = arrIssueNo.indexOf(obj.issueNo.toString());
-    if (position == -1) {
-      ws_shift.appendRow([
+    var ws_shift = getShiftSheet(ss_database) || ss_database.getSheetByName(SheetName);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_shift.getName() === SHIFT_RECORDS_SHEET_NAME;
+    var rowNum;
+    if (isMerged) {
+      rowNum = findRowByShiftCode(ws_shift, obj.issueNo.toString(), obj.process, obj.workshop);
+    } else {
+      var arrIssueNo = ws_shift
+        .getRange(2, 1, ws_shift.getLastRow() - 1, 1)
+        .getValues()
+        .map((v) => {
+          return v[0].toString();
+        });
+      var position = arrIssueNo.indexOf(obj.issueNo.toString());
+      rowNum = position > -1 ? position + 2 : -1;
+    }
+    if (rowNum == -1) {
+      var modalRowData = [
         obj.issueNo,
         obj.shift,
         obj.workcenter,
@@ -2481,10 +2567,14 @@ function upload_shift_modal(obj) {
         "",
         "",
         "Last",
-      ]);
+      ];
+      if (isMerged) {
+        modalRowData = modalRowData.concat([obj.process, obj.workshop]);
+      }
+      ws_shift.appendRow(modalRowData);
     } else {
       var arrIssueNoRecord = ws_shift
-        .getRange(position + 2, 1, 1, ws_shift.getLastColumn())
+        .getRange(rowNum, 1, 1, ws_shift.getLastColumn())
         .getDisplayValues();
       console.log("测试", arrIssueNoRecord);
       if (arrIssueNoRecord[0][4].toString().split("\n").length < 2) {
@@ -2562,8 +2652,11 @@ function upload_shift_modal(obj) {
         "",
         "Last",
       ];
+      if (isMerged) {
+        arrNewRecord = arrNewRecord.concat([obj.process, obj.workshop]);
+      }
       ws_shift
-        .getRange(position + 2, 1, 1, arrNewRecord.length)
+        .getRange(rowNum, 1, 1, arrNewRecord.length)
         .setValues([arrNewRecord]);
     }
     return ["OK", true];
@@ -2581,14 +2674,17 @@ function getData_MaintenanceReport_Manage(workshop, process) {
     var data_userID = ws_userID
       .getRange(3, 1, ws_userID.getLastRow() - 2, 25)
       .getDisplayValues();
-    var SheetName = "Shift_" + process + "_" + workshop;
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var data = {
       user: data_userID,
       shift: data_shift,
@@ -2604,23 +2700,32 @@ function getData_MaintenanceReport_Manage(workshop, process) {
 
 function add_MaintenanceReport(obj) {
   try {
-    var SheetName = "Shift_" + obj.user[0][14] + "_" + obj.user[0][13];
+    var process = obj.user[0][14];
+    var workshop = obj.user[0][13];
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
-    data_shift.forEach((r) => {
-      r[20] = r[0] + r[5];
-    });
-    var codeList = data_shift.map((r) => {
-      return r[20];
-    });
     obj.data.forEach((r) => {
-      var position = codeList.indexOf(r.code + "已解决");
-      ws_database.getRange(position + 2, 20).setValue("待完成");
+      var targetCode = r.code + "已解决";
+      for (var i = 0; i < data_shift.length; i++) {
+        var combined = data_shift[i][0] + data_shift[i][5];
+        if (combined === targetCode) {
+          if (isMerged) {
+            var lastIdx = data_shift[i].length - 1;
+            if (String(data_shift[i][lastIdx - 1] || '').trim() !== process ||
+                String(data_shift[i][lastIdx] || '').trim() !== workshop) {
+              continue;
+            }
+          }
+          ws_database.getRange(i + 2, 20).setValue("待完成");
+          break;
+        }
+      }
     });
     return ["OK", true];
   } catch (e) {
@@ -2630,23 +2735,32 @@ function add_MaintenanceReport(obj) {
 
 function delete_MaintenanceReport(obj) {
   try {
-    var SheetName = "Shift_" + obj.user[0][14] + "_" + obj.user[0][13];
+    var process = obj.user[0][14];
+    var workshop = obj.user[0][13];
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
-    data_shift.forEach((r) => {
-      r[20] = r[0] + r[5];
-    });
-    var codeList = data_shift.map((r) => {
-      return r[20];
-    });
     obj.data.forEach((r) => {
-      var position = codeList.indexOf(r.code + "已解决");
-      ws_database.getRange(position + 2, 20).setValue("无需填写");
+      var targetCode = r.code + "已解决";
+      for (var i = 0; i < data_shift.length; i++) {
+        var combined = data_shift[i][0] + data_shift[i][5];
+        if (combined === targetCode) {
+          if (isMerged) {
+            var lastIdx = data_shift[i].length - 1;
+            if (String(data_shift[i][lastIdx - 1] || '').trim() !== process ||
+                String(data_shift[i][lastIdx] || '').trim() !== workshop) {
+              continue;
+            }
+          }
+          ws_database.getRange(i + 2, 20).setValue("无需填写");
+          break;
+        }
+      }
     });
     return ["OK", true];
   } catch (e) {
@@ -2663,14 +2777,17 @@ function getWaitFaultReport(workshop, process) {
     var data_userID = ws_userID
       .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
       .getDisplayValues();
-    var SheetName = "Shift_" + process + "_" + workshop;
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var data = { user: data_userID, shift: data_shift };
     return ["OK", data];
   } catch (e) {
@@ -2686,15 +2803,17 @@ function getData_PMTask(workshop, process) {
   var data_userID = ws_userID
     .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
     .getDisplayValues();
-  var SheetName = "Shift_" + process + "_" + workshop;
   var url_database =
     "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
   var ss_database = SpreadsheetApp.openByUrl(url_database);
-  var ws_database = ss_database.getSheetByName(SheetName);
+  var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+  var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
   var data_shift = ws_database
     .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
     .getDisplayValues();
-
+  if (isMerged) {
+    data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+  }
   var data = { user: data_userID, shift: data_shift };
   return data;
 }
@@ -2707,14 +2826,17 @@ function getData_TMP_stop_machine(workshop, process) {
   var data_userID = ws_userID
     .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
     .getDisplayValues();
-  var SheetName = "Shift_" + process + "_" + workshop;
   var url_database =
     "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
   var ss_database = SpreadsheetApp.openByUrl(url_database);
-  var ws_database = ss_database.getSheetByName(SheetName);
+  var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+  var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
   var data_shift = ws_database
     .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
     .getDisplayValues();
+  if (isMerged) {
+    data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+  }
   var data = { user: data_userID, shift: data_shift };
   return data;
 }
@@ -4001,30 +4123,45 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 function getAllshiftData() {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let ss = SpreadsheetApp.openById(id);
-  let sheetName = [
-    "Shift_INJ_TB1",
-    "Shift_INJ_TB2",
-    "Shift_TF_TB1",
-    "Shift_TF_TB2",
-    "Shift_PK_TB1",
-    "Shift_PK_TB2",
-  ];
-  let head = ss
-    .getSheetByName(sheetName[0])
-    .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
-    .getValues()[0];
-  let content = [];
-  sheetName.forEach((name) => {
-    let ws = ss.getSheetByName(name);
-    let lastRow = ws.getLastRow();
-    if (lastRow > 1) {
-      // 确保至少有数据行存在
-      let values = ws
-        .getRange(2, 1, lastRow - 1, ws.getLastColumn())
-        .getValues();
-      content = content.concat(values);
+  var head, content;
+  if (USE_MERGED_SHIFT_SHEET) {
+    var wsMerged = getShiftSheet(ss);
+    if (wsMerged && wsMerged.getLastRow() > 1) {
+      var rawHead = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
+      // 去掉末尾的 _工序/_车间 两列
+      head = rawHead.slice(0, rawHead.length - 2);
+      content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, wsMerged.getLastColumn()).getValues();
+      // 去掉每行末尾的工序/车间列
+      content = content.map(function(r) { return r.slice(0, r.length - 2); });
+    } else {
+      head = [];
+      content = [];
     }
-  });
+  } else {
+    var sheetName = [
+      "Shift_INJ_TB1",
+      "Shift_INJ_TB2",
+      "Shift_TF_TB1",
+      "Shift_TF_TB2",
+      "Shift_PK_TB1",
+      "Shift_PK_TB2",
+    ];
+    head = ss
+      .getSheetByName(sheetName[0])
+      .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
+      .getValues()[0];
+    content = [];
+    sheetName.forEach((name) => {
+      var ws = ss.getSheetByName(name);
+      var lastRow = ws.getLastRow();
+      if (lastRow > 1) {
+        var values = ws
+          .getRange(2, 1, lastRow - 1, ws.getLastColumn())
+          .getValues();
+        content = content.concat(values);
+      }
+    });
+  }
 
   let currentDate = new Date();
   let date30DaysAgo = new Date(
@@ -4085,29 +4222,43 @@ function getAllshiftData() {
 function getShiftRowsByPrefix(prefix) {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let ss = SpreadsheetApp.openById(id);
-  let sheetName = [
-    "Shift_INJ_TB1",
-    "Shift_INJ_TB2",
-    "Shift_TF_TB1",
-    "Shift_TF_TB2",
-    "Shift_PK_TB1",
-    "Shift_PK_TB2",
-  ];
-  let head = ss
-    .getSheetByName(sheetName[0])
-    .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
-    .getValues()[0];
-  let content = [];
-  sheetName.forEach((name) => {
-    let ws = ss.getSheetByName(name);
-    let lastRow = ws.getLastRow();
-    if (lastRow > 1) {
-      let values = ws
-        .getRange(2, 1, lastRow - 1, ws.getLastColumn())
-        .getValues();
-      content = content.concat(values);
+  var head, content;
+  if (USE_MERGED_SHIFT_SHEET) {
+    var wsMerged = getShiftSheet(ss);
+    if (wsMerged && wsMerged.getLastRow() > 1) {
+      var rawHead = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
+      head = rawHead.slice(0, rawHead.length - 2);
+      content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, wsMerged.getLastColumn()).getValues();
+      content = content.map(function(r) { return r.slice(0, r.length - 2); });
+    } else {
+      head = [];
+      content = [];
     }
-  });
+  } else {
+    var sheetName = [
+      "Shift_INJ_TB1",
+      "Shift_INJ_TB2",
+      "Shift_TF_TB1",
+      "Shift_TF_TB2",
+      "Shift_PK_TB1",
+      "Shift_PK_TB2",
+    ];
+    head = ss
+      .getSheetByName(sheetName[0])
+      .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
+      .getValues()[0];
+    content = [];
+    sheetName.forEach(function(name) {
+      var ws = ss.getSheetByName(name);
+      var lastRow = ws.getLastRow();
+      if (lastRow > 1) {
+        var values = ws
+          .getRange(2, 1, lastRow - 1, ws.getLastColumn())
+          .getValues();
+        content = content.concat(values);
+      }
+    });
+  }
 
   // 按编号前缀筛选（prefix 如 "20260215"）
   let filtered = content.filter((row) => {
@@ -4263,18 +4414,24 @@ function submitFailure(obj) {
   try {
     let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     let ss = SpreadsheetApp.openById(id);
-    let sheetName = "Shift_" + obj["工序"] + "_" + obj["车间"];
-    let ws = ss.getSheetByName(sheetName);
+    var process = obj["工序"];
+    var workshop = obj["车间"];
+    let ws = getShiftSheet(ss) || ss.getSheetByName("Shift_" + process + "_" + workshop);
+    let isMerged = USE_MERGED_SHIFT_SHEET && ws.getName() === SHIFT_RECORDS_SHEET_NAME;
 
     // console.log("先前编号", obj["先前编号"]);
     if (obj["先前编号"] !== "") {
-      let firstColumnRange = ws.getRange(1, 1, ws.getLastRow(), 1);
-      let firstColumnValues = firstColumnRange.getValues();
-      let matchingRow = -1;
-      for (let i = 0; i < firstColumnValues.length; i++) {
-        if (String(firstColumnValues[i][0]) === String(obj["先前编号"])) {
-          matchingRow = i + 1; // 因为数组索引从0开始，而行号从1开始
-          break;
+      var matchingRow = -1;
+      if (isMerged) {
+        matchingRow = findRowByShiftCode(ws, obj["先前编号"], process, workshop);
+      } else {
+        let firstColumnRange = ws.getRange(1, 1, ws.getLastRow(), 1);
+        let firstColumnValues = firstColumnRange.getValues();
+        for (let i = 0; i < firstColumnValues.length; i++) {
+          if (String(firstColumnValues[i][0]) === String(obj["先前编号"])) {
+            matchingRow = i + 1; // 因为数组索引从0开始，而行号从1开始
+            break;
+          }
         }
       }
       // console.log("先前行号", matchingRow);
@@ -4303,7 +4460,7 @@ function submitFailure(obj) {
       }
     }
 
-    ws.appendRow([
+    var failureRowData = [
       obj["编号"],
       obj["班次"],
       obj["机台号"],
@@ -4328,7 +4485,11 @@ function submitFailure(obj) {
       obj["判断是否最后"],
       obj["直接原因"] || "",
       obj["建议措施"] || "",
-    ]);
+    ];
+    if (isMerged) {
+      failureRowData = failureRowData.concat([process, workshop]);
+    }
+    ws.appendRow(failureRowData);
 
     return ["OK", true];
   } catch (e) {
@@ -6224,50 +6385,30 @@ function updateFailureReportConfirmation(
     }
 
     // 非手动录入行：在对应 Shift Sheet 中更新"是否需要故障报告"列
-    let sheetNames = [];
-    if (process === "IM") {
-      sheetNames = ["Shift_INJ_TB1", "Shift_INJ_TB2"];
-    } else if (process === "TF") {
-      sheetNames = ["Shift_TF_TB1", "Shift_TF_TB2"];
-    } else if (process === "PK") {
-      sheetNames = ["Shift_PK_TB1", "Shift_PK_TB2"];
-    } else {
-      throw new Error("无效的工序参数 / Invalid process parameter: " + process);
-    }
-
     const spreadsheetId = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     let updateSuccess = false;
     let updatedSheetName = "";
 
-    for (let sheetName of sheetNames) {
-      try {
-        const sheet = spreadsheet.getSheetByName(sheetName);
-        if (!sheet) continue;
-
-        const data = sheet.getDataRange().getValues();
-        if (data.length <= 1) continue;
-
-        let rowIndex = -1;
-        for (let i = 1; i < data.length; i++) {
-          if (String(data[i][0]) === String(reportId)) {
-            rowIndex = i;
-            break;
-          }
+    if (USE_MERGED_SHIFT_SHEET) {
+      var shiftProcess = process === "IM" ? "INJ" : process;
+      var wsMerged = getShiftSheet(spreadsheet);
+      var rowNum = -1;
+      var workshops = ["TB1", "TB2"];
+      if (wsMerged) {
+        for (var w = 0; w < workshops.length; w++) {
+          rowNum = findRowByShiftCode(wsMerged, reportId, shiftProcess, workshops[w]);
+          if (rowNum > -1) break;
         }
-
-        if (rowIndex !== -1) {
-          sheet
-            .getRange(rowIndex + 1, 20)
-            .setValue(needReport ? "是" : "否");
-
+        if (rowNum > -1) {
+          wsMerged.getRange(rowNum, 20).setValue(needReport ? "是" : "否");
           if (needReport) {
             if (!responsibleName) {
               throw new Error(
                 "需要故障报告前必须分配责任人 / Please assign a responsible person before requesting a failure report"
               );
             }
-            const rowForProcessing = rowDataFromClient || data[rowIndex];
+            var rowForProcessing = wsMerged.getRange(rowNum, 1, 1, wsMerged.getLastColumn()).getValues()[0];
             try {
               writeToFailureDatabase(rowForProcessing, process, responsibleName);
               sendFailureReportNotification(rowForProcessing, process, responsibleName);
@@ -6278,18 +6419,73 @@ function updateFailureReportConfirmation(
               );
             }
           }
-
           updateSuccess = true;
-          updatedSheetName = sheetName;
-          break;
+          updatedSheetName = SHIFT_RECORDS_SHEET_NAME;
         }
-      } catch (sheetError) {
-        console.error(
-          "处理Sheet时出错 / Error processing sheet:",
-          sheetName,
-          sheetError
-        );
-        continue;
+      }
+    } else {
+      let sheetNames = [];
+      if (process === "IM") {
+        sheetNames = ["Shift_INJ_TB1", "Shift_INJ_TB2"];
+      } else if (process === "TF") {
+        sheetNames = ["Shift_TF_TB1", "Shift_TF_TB2"];
+      } else if (process === "PK") {
+        sheetNames = ["Shift_PK_TB1", "Shift_PK_TB2"];
+      } else {
+        throw new Error("无效的工序参数 / Invalid process parameter: " + process);
+      }
+
+      for (let sheetName of sheetNames) {
+        try {
+          const sheet = spreadsheet.getSheetByName(sheetName);
+          if (!sheet) continue;
+
+          const data = sheet.getDataRange().getValues();
+          if (data.length <= 1) continue;
+
+          let rowIndex = -1;
+          for (let i = 1; i < data.length; i++) {
+            if (String(data[i][0]) === String(reportId)) {
+              rowIndex = i;
+              break;
+            }
+          }
+
+          if (rowIndex !== -1) {
+            sheet
+              .getRange(rowIndex + 1, 20)
+              .setValue(needReport ? "是" : "否");
+
+            if (needReport) {
+              if (!responsibleName) {
+                throw new Error(
+                  "需要故障报告前必须分配责任人 / Please assign a responsible person before requesting a failure report"
+                );
+              }
+              const rowForProcessing = rowDataFromClient || data[rowIndex];
+              try {
+                writeToFailureDatabase(rowForProcessing, process, responsibleName);
+                sendFailureReportNotification(rowForProcessing, process, responsibleName);
+              } catch (e) {
+                console.error(
+                  "写入 Failure_Database 或发送通知失败 / Failed to write or notify:",
+                  e
+                );
+              }
+            }
+
+            updateSuccess = true;
+            updatedSheetName = sheetName;
+            break;
+          }
+        } catch (sheetError) {
+          console.error(
+            "处理Sheet时出错 / Error processing sheet:",
+            sheetName,
+            sheetError
+          );
+          continue;
+        }
       }
     }
 
@@ -6869,18 +7065,11 @@ function getFilteredFailureReportData() {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let spreadsheet = SpreadsheetApp.openById(id);
 
-  // 定义Sheet名称和对应工序
-  let sheets = {
-    IM: ["Shift_INJ_TB1", "Shift_INJ_TB2"],
-    TF: ["Shift_TF_TB1", "Shift_TF_TB2"],
-    PK: ["Shift_PK_TB1", "Shift_PK_TB2"],
-  };
-
-  // 定义筛选条件（维修时间，单位：分钟）- 临时设置为0以显示所有数据
+  // 定义筛选条件（维修时间，单位：分钟）
   let timeThresholds = {
-    IM: 240, // Temporarily set to 0 for debugging
-    TF: 120, // Temporarily set to 0 for debugging
-    PK: 60, // Temporarily set to 0 for debugging
+    IM: 240,
+    TF: 120,
+    PK: 60,
   };
 
   // 存储筛选后的数据
@@ -6890,78 +7079,122 @@ function getFilteredFailureReportData() {
     PK: [],
   };
 
-  // 遍历所有工序和对应Sheet
-  for (let process in sheets) {
-    let sheetNames = sheets[process];
-    let threshold = timeThresholds[process];
+  // 合并表模式：从 Shift_Records 统一读取
+  if (USE_MERGED_SHIFT_SHEET) {
+    var wsMerged = getShiftSheet(spreadsheet);
+    if (wsMerged && wsMerged.getLastRow() > 1) {
+      var allData = wsMerged.getDataRange().getValues();
+      // 末尾两列是 _工序/_车间
+      var lastIdx = allData[0] ? allData[0].length - 1 : -1;
+      for (var i = 1; i < allData.length; i++) {
+        var row = allData[i];
+        // 从末尾列获取工序和车间
+        var rowProcess = lastIdx >= 1 ? String(row[lastIdx - 1] || '').trim() : '';
+        var rowWorkshop = lastIdx >= 0 ? String(row[lastIdx] || '').trim() : '';
+        // INJ → IM 映射
+        var mappedProcess = rowProcess === 'INJ' ? 'IM' : rowProcess;
+        var threshold = timeThresholds[mappedProcess];
+        if (!threshold) continue;
 
-    for (let sheetName of sheetNames) {
-      let sheet = spreadsheet.getSheetByName(sheetName);
-      if (sheet) {
-        let data = sheet.getDataRange().getValues();
-        Logger.log(
-          "Sheet " + sheetName + " 数据行数 / Data rows: " + data.length
-        );
-        // 从第2行开始遍历数据（假设第1行是表头）
-        for (let i = 1; i < data.length; i++) {
-          let row = data[i];
-          // H列（索引7）是维修时间
-          let repairTimeStr = row[7] ? row[7].toString() : "0";
-          // 提取维修时间中的数字（假设格式为"X小时Y分钟"或纯数字）
-          let repairTime = 0;
-          let timeMatch = repairTimeStr.match(/(\d+)/g);
-          if (timeMatch) {
-            if (repairTimeStr.includes("小时")) {
-              repairTime = parseInt(timeMatch[0]) * 60;
-              if (timeMatch.length > 1) {
-                repairTime += parseInt(timeMatch[1]);
-              }
-            } else {
-              repairTime = parseInt(timeMatch[0]);
-            }
-          }
-          // 根据工序筛选 - 临时显示所有数据
-          if (repairTime >= threshold) {
-            // PK工序：仅显示 2026-05-15 之后的数据
-            if (process === 'PK') {
-              const rawSubmitDate = row[11];
-              if (rawSubmitDate) {
-                let submitDateObj;
-                if (rawSubmitDate instanceof Date) {
-                  submitDateObj = rawSubmitDate;
-                } else {
-                  submitDateObj = new Date(rawSubmitDate);
-                }
-                const cutoffDate = new Date('2026-05-15');
-                if (submitDateObj < cutoffDate) {
-                  continue; // 跳过 2026-05-15 之前的数据
-                }
-              }
-            }
-            // PK工序：剔除问题描述中包含"转规格"的记录
-            const problemDesc = String(row[3] || '');
-            if (process === 'PK' && problemDesc.includes('转规格')) {
-              continue;
-            }
-            result[process].push({
-              reportNo: row[0] || "",
-              machineNo: row[2] || "",
-              problemDescription: problemDesc,
-              status: row[5] || "",
-              repairTime: repairTimeStr,
-              submitDate: row[11] ? row[11].toString() : "",
-              shift: row[1] || "",        // B列：班次
-              workshop: row[14] || "",
-              process: row[15] || process,
-              submitter: row[13] || "",   // N列：填写人
-              confirmation: row[18] || "待确认 / Pending Confirmation",
-              needFailureReport: row[19] || "", // 第20列：是否需要填写故障报告
-              responsiblePerson: "",
-            });
+        // 维修时间处理（同旧逻辑）
+        var repairTimeStr = row[7] ? row[7].toString() : "0";
+        var repairTime = 0;
+        var timeMatch = repairTimeStr.match(/(\d+)/g);
+        if (timeMatch) {
+          if (repairTimeStr.includes("小时")) {
+            repairTime = parseInt(timeMatch[0]) * 60;
+            if (timeMatch.length > 1) repairTime += parseInt(timeMatch[1]);
+          } else {
+            repairTime = parseInt(timeMatch[0]);
           }
         }
-      } else {
-        Logger.log("Sheet " + sheetName + " 未找到 / Not found");
+        if (repairTime >= threshold) {
+          if (mappedProcess === 'PK') {
+            var rawSubmitDate = row[11];
+            if (rawSubmitDate) {
+              var submitDateObj = rawSubmitDate instanceof Date ? rawSubmitDate : new Date(rawSubmitDate);
+              if (submitDateObj < new Date('2026-05-15')) continue;
+            }
+            var problemDesc = String(row[3] || '');
+            if (problemDesc.includes('转规格')) continue;
+          }
+          result[mappedProcess].push({
+            reportNo: row[0] || "",
+            machineNo: row[2] || "",
+            problemDescription: String(row[3] || ''),
+            status: row[5] || "",
+            repairTime: repairTimeStr,
+            submitDate: row[11] ? row[11].toString() : "",
+            shift: row[1] || "",
+            workshop: rowWorkshop || "",
+            process: rowProcess || mappedProcess,
+            submitter: row[13] || "",
+            confirmation: row[18] || "待确认 / Pending Confirmation",
+            needFailureReport: row[19] || "",
+            responsiblePerson: "",
+          });
+        }
+      }
+    }
+  } else {
+    // 旧版：遍历6个分表
+    var sheets = {
+      IM: ["Shift_INJ_TB1", "Shift_INJ_TB2"],
+      TF: ["Shift_TF_TB1", "Shift_TF_TB2"],
+      PK: ["Shift_PK_TB1", "Shift_PK_TB2"],
+    };
+    for (var process in sheets) {
+      var sheetNames = sheets[process];
+      var threshold = timeThresholds[process];
+      for (var s = 0; s < sheetNames.length; s++) {
+        var sheetName = sheetNames[s];
+        var sheet = spreadsheet.getSheetByName(sheetName);
+        if (sheet) {
+          var data = sheet.getDataRange().getValues();
+          Logger.log("Sheet " + sheetName + " 数据行数 / Data rows: " + data.length);
+          for (var i = 1; i < data.length; i++) {
+            var row = data[i];
+            var repairTimeStr = row[7] ? row[7].toString() : "0";
+            var repairTime = 0;
+            var timeMatch = repairTimeStr.match(/(\d+)/g);
+            if (timeMatch) {
+              if (repairTimeStr.includes("小时")) {
+                repairTime = parseInt(timeMatch[0]) * 60;
+                if (timeMatch.length > 1) repairTime += parseInt(timeMatch[1]);
+              } else {
+                repairTime = parseInt(timeMatch[0]);
+              }
+            }
+            if (repairTime >= threshold) {
+              if (process === 'PK') {
+                var rawSubmitDate = row[11];
+                if (rawSubmitDate) {
+                  var submitDateObj = rawSubmitDate instanceof Date ? rawSubmitDate : new Date(rawSubmitDate);
+                  if (submitDateObj < new Date('2026-05-15')) continue;
+                }
+                var problemDesc = String(row[3] || '');
+                if (problemDesc.includes('转规格')) continue;
+              }
+              result[process].push({
+                reportNo: row[0] || "",
+                machineNo: row[2] || "",
+                problemDescription: String(row[3] || ''),
+                status: row[5] || "",
+                repairTime: repairTimeStr,
+                submitDate: row[11] ? row[11].toString() : "",
+                shift: row[1] || "",
+                workshop: row[14] || "",
+                process: row[15] || process,
+                submitter: row[13] || "",
+                confirmation: row[18] || "待确认 / Pending Confirmation",
+                needFailureReport: row[19] || "",
+                responsiblePerson: "",
+              });
+            }
+          }
+        } else {
+          Logger.log("Sheet " + sheetName + " 未找到 / Not found");
+        }
       }
     }
   }
@@ -7061,23 +7294,42 @@ function getFailureReportProgressData(userEmail, userName) {
     // 始终构建班次和填写人查找表；仅在需要回补时构建 repairTime 表
     (function buildShiftLookupMaps() {
       const shiftSS = SpreadsheetApp.openById('10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w');
-      ['Shift_INJ_TB1','Shift_INJ_TB2','Shift_TF_TB1','Shift_TF_TB2','Shift_PK_TB1','Shift_PK_TB2'].forEach(function(sn) {
-        const sSheet = shiftSS.getSheetByName(sn);
-        if (!sSheet) return;
-        const sData = sSheet.getDataRange().getValues();
-        for (let j = 1; j < sData.length; j++) {
-          const rNo = String(sData[j][0] || '').trim();
-          if (!rNo) continue;
-          const rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
-          const rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
-          if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
-          if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
-          if (hasEmptyRepairTime) {
-            const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
-            if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+      if (USE_MERGED_SHIFT_SHEET) {
+        var wsMerged = getShiftSheet(shiftSS);
+        if (wsMerged) {
+          var sData = wsMerged.getDataRange().getValues();
+          for (var j = 1; j < sData.length; j++) {
+            var rNo = String(sData[j][0] || '').trim();
+            if (!rNo) continue;
+            var rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
+            var rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
+            if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
+            if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
+            if (hasEmptyRepairTime) {
+              var rTime = sData[j][7] != null ? String(sData[j][7]) : '';
+              if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+            }
           }
         }
-      });
+      } else {
+        ['Shift_INJ_TB1','Shift_INJ_TB2','Shift_TF_TB1','Shift_TF_TB2','Shift_PK_TB1','Shift_PK_TB2'].forEach(function(sn) {
+          const sSheet = shiftSS.getSheetByName(sn);
+          if (!sSheet) return;
+          const sData = sSheet.getDataRange().getValues();
+          for (let j = 1; j < sData.length; j++) {
+            const rNo = String(sData[j][0] || '').trim();
+            if (!rNo) continue;
+            const rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
+            const rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
+            if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
+            if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
+            if (hasEmptyRepairTime) {
+              const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
+              if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+            }
+          }
+        });
+      }
     })();
 
     // 从第2行开始遍历数据（第1行是表头）
@@ -9490,22 +9742,30 @@ function savePMFollowUpAction(recordId, pmData) {
   try {
     let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     let ss = SpreadsheetApp.openById(id);
-    let sheetNames = [
-      "Shift_INJ_TB1",
-      "Shift_INJ_TB2",
-      "Shift_TF_TB1",
-      "Shift_TF_TB2",
-      "Shift_PK_TB1",
-      "Shift_PK_TB2",
-    ];
-    
+
     // 从recordId中提取基础编号（去掉-后的数字）
     let baseId = recordId.split('-')[0];
-    
+
+    // 构建要遍历的sheet列表
+    var sheetsToSearch = [];
+    if (USE_MERGED_SHIFT_SHEET) {
+      var wsMerged = getShiftSheet(ss);
+      if (wsMerged) sheetsToSearch.push(wsMerged);
+    } else {
+      var sheetNames = [
+        "Shift_INJ_TB1", "Shift_INJ_TB2",
+        "Shift_TF_TB1", "Shift_TF_TB2",
+        "Shift_PK_TB1", "Shift_PK_TB2",
+      ];
+      sheetNames.forEach(function(sn) {
+        var s = ss.getSheetByName(sn);
+        if (s) sheetsToSearch.push(s);
+      });
+    }
+
     // 遍历所有sheet查找匹配的记录
-    for (let sheetName of sheetNames) {
-      let ws = ss.getSheetByName(sheetName);
-      if (!ws) continue;
+    for (var sIdx = 0; sIdx < sheetsToSearch.length; sIdx++) {
+      var ws = sheetsToSearch[sIdx];
       
       let lastRow = ws.getLastRow();
       if (lastRow < 2) continue;
@@ -9585,22 +9845,30 @@ function getPMFollowUpAction(recordId) {
   try {
     let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     let ss = SpreadsheetApp.openById(id);
-    let sheetNames = [
-      "Shift_INJ_TB1",
-      "Shift_INJ_TB2",
-      "Shift_TF_TB1",
-      "Shift_TF_TB2",
-      "Shift_PK_TB1",
-      "Shift_PK_TB2",
-    ];
-    
+
     // 从recordId中提取基础编号（去掉-后的数字）
     let baseId = recordId.split('-')[0];
-    
+
+    // 构建要遍历的sheet列表
+    var sheetsToSearch = [];
+    if (USE_MERGED_SHIFT_SHEET) {
+      var wsMerged = getShiftSheet(ss);
+      if (wsMerged) sheetsToSearch.push(wsMerged);
+    } else {
+      var sheetNames = [
+        "Shift_INJ_TB1", "Shift_INJ_TB2",
+        "Shift_TF_TB1", "Shift_TF_TB2",
+        "Shift_PK_TB1", "Shift_PK_TB2",
+      ];
+      sheetNames.forEach(function(sn) {
+        var s = ss.getSheetByName(sn);
+        if (s) sheetsToSearch.push(s);
+      });
+    }
+
     // 遍历所有sheet查找匹配的记录
-    for (let sheetName of sheetNames) {
-      let ws = ss.getSheetByName(sheetName);
-      if (!ws) continue;
+    for (var sIdx = 0; sIdx < sheetsToSearch.length; sIdx++) {
+      var ws = sheetsToSearch[sIdx];
       
       let lastRow = ws.getLastRow();
       if (lastRow < 2) continue;
@@ -11452,6 +11720,116 @@ function validatePMRecordsMigration() {
   if (newWs && newRows > 0) {
     var sample = newWs.getRange(2, 1, 1, newWs.getLastColumn()).getValues()[0];
     console.log("抽检首行 - PM No.: " + sample[0] + ", 工序(V): " + sample[21] + ", 车间(W): " + sample[22]);
+  }
+
+  return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
+}
+
+// ==========================================
+// 交接班分表合并 - 迁移脚本
+// 将旧6张 Shift_XXX_YYY 分表数据迁移到 Shift_Records 统一表
+// ==========================================
+function migrateToShiftRecords() {
+  var ss = SpreadsheetApp.openById(SHIFT_DB_ID);
+  var oldSheetNames = [
+    "Shift_INJ_TB1", "Shift_INJ_TB2",
+    "Shift_TF_TB1", "Shift_TF_TB2",
+    "Shift_PK_TB1", "Shift_PK_TB2",
+  ];
+
+  // 获取最大列宽（submitFailure 写24列，upload_shift 写22列）
+  var maxCols = 0;
+  var head = null;
+  for (var i = 0; i < oldSheetNames.length; i++) {
+    var ws = ss.getSheetByName(oldSheetNames[i]);
+    if (ws && ws.getLastRow() > 0) {
+      var h = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+      if (h.length > maxCols) {
+        head = h;
+        maxCols = h.length;
+      }
+    }
+  }
+  if (!head) return "No data found in any source sheet / 源Sheet无数据";
+
+  // 创建或清空 Shift_Records
+  var wsNew = ss.getSheetByName(SHIFT_RECORDS_SHEET_NAME);
+  if (!wsNew) {
+    wsNew = ss.insertSheet(SHIFT_RECORDS_SHEET_NAME);
+  } else {
+    wsNew.clear();
+  }
+  // 写入新表头：原表头 + _工序 + _车间
+  wsNew.appendRow(head.concat(['_工序', '_车间']));
+
+  var totalRows = 0;
+  for (var j = 0; j < oldSheetNames.length; j++) {
+    var wsSrc = ss.getSheetByName(oldSheetNames[j]);
+    if (!wsSrc || wsSrc.getLastRow() <= 1) continue;
+
+    // 从 sheet name 解析工序和车间
+    // Shift_INJ_TB1 → process=INJ, workshop=TB1
+    var nameParts = oldSheetNames[j].split('_');
+    var process = nameParts[1];
+    var workshop = nameParts[2];
+
+    var data = wsSrc.getRange(2, 1, wsSrc.getLastRow() - 1, wsSrc.getLastColumn()).getValues();
+    for (var k = 0; k < data.length; k++) {
+      if (data[k].some(function(c) { return c !== '' && c !== null && c !== undefined; })) {
+        // 扩展到 maxCols 宽度（补齐空列）
+        while (data[k].length < maxCols) data[k].push('');
+        wsNew.appendRow(data[k].concat([process, workshop]));
+        totalRows++;
+      }
+    }
+  }
+
+  return "Migration complete: " + totalRows + " rows migrated to " + SHIFT_RECORDS_SHEET_NAME +
+    " / 迁移完成：共 " + totalRows + " 行";
+}
+
+// ==========================================
+// 交接班分表合并 - 校验脚本
+// 对比旧6表和新表的数据，确保迁移正确
+// ==========================================
+function validateShiftRecordsMigration() {
+  var ss = SpreadsheetApp.openById(SHIFT_DB_ID);
+  var oldSheetNames = [
+    "Shift_INJ_TB1", "Shift_INJ_TB2",
+    "Shift_TF_TB1", "Shift_TF_TB2",
+    "Shift_PK_TB1", "Shift_PK_TB2",
+  ];
+
+  var oldTotal = 0;
+  oldSheetNames.forEach(function(name) {
+    var ws = ss.getSheetByName(name);
+    if (ws && ws.getLastRow() > 1) oldTotal += ws.getLastRow() - 1;
+    console.log(name + ": " + (ws && ws.getLastRow() > 1 ? ws.getLastRow() - 1 : 0) + " 行");
+  });
+
+  var newWs = ss.getSheetByName(SHIFT_RECORDS_SHEET_NAME);
+  var newRows = newWs && newWs.getLastRow() > 1 ? newWs.getLastRow() - 1 : 0;
+  console.log(SHIFT_RECORDS_SHEET_NAME + ": " + newRows + " 行");
+  console.log("旧6表合计: " + oldTotal + " | 新表: " + newRows + " | 匹配: " + (oldTotal === newRows));
+
+  // 抽检：验证首行和末行数据的工序/车间列
+  if (newWs && newRows > 0) {
+    var lastCol = newWs.getLastColumn();
+    var sampleHead = newWs.getRange(1, 1, 1, lastCol).getValues()[0];
+    console.log("表头(最后3列): " + sampleHead.slice(-3).join(', '));
+
+    var sampleRow = newWs.getRange(2, 1, 1, lastCol).getValues()[0];
+    console.log("首行 - 编号: " + sampleRow[0] + ", _工序: " + sampleRow[lastCol-2] + ", _车间: " + sampleRow[lastCol-1]);
+
+    if (newRows > 1) {
+      var lastSample = newWs.getRange(newRows + 1, 1, 1, lastCol).getValues()[0];
+      console.log("末行 - 编号: " + lastSample[0] + ", _工序: " + lastSample[lastCol-2] + ", _车间: " + lastSample[lastCol-1]);
+    }
+
+    // 检查 "Last" 标记行数
+    var allData = newWs.getRange(2, 1, newRows, lastCol).getDisplayValues();
+    var lastCount = allData.filter(function(r) { return r[21] === 'Last'; }).length;
+    console.log("标记为 'Last' 的行数: " + lastCount);
   }
 
   return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
