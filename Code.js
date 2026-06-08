@@ -6727,38 +6727,38 @@ function sendFailureReportNotification(rowData, process, responsiblePerson) {
       return;
     }
 
-    // 发送邮件 - 使用GmailApp发送HTML邮件，参考您的其他项目实现
-    try {
-      for (let email of recipientEmails) {
-        GmailApp.sendEmail(email, emailSubject, "", {
-          htmlBody: htmlBody,
-        });
-        console.log(
-          "✅ 成功发送HTML邮件到 / Successfully sent HTML email to:",
-          email
-        );
+    // 查询责任人的 Line Manager 邮箱用于 CC
+    let lineManagerEmail = '';
+    if (responsiblePerson) {
+      const nameMatch = String(responsiblePerson).match(/^(.+?)【/);
+      const respName = nameMatch ? nameMatch[1].trim() : String(responsiblePerson).trim();
+      lineManagerEmail = getLineManagerEmail(respName);
+      if (lineManagerEmail) {
+        console.log('已找到责任人Line Manager邮箱 / Found Line Manager email for CC:', lineManagerEmail);
       }
-      console.log(
-        `邮件已成功发送给：${recipientEmails.join(
-          ", "
-        )}，标题为："${emailSubject}"`
-      );
+    }
+
+    // 发送邮件 - 合并收件人一次发送，CC Line Manager
+    try {
+      const sendOptions = { htmlBody: htmlBody };
+      if (lineManagerEmail) sendOptions.cc = lineManagerEmail;
+      GmailApp.sendEmail(recipientEmails.join(','), emailSubject, '', sendOptions);
+      console.log(`✅ 邮件已发送给 / Email sent to: ${recipientEmails.join(', ')}${lineManagerEmail ? '，CC: ' + lineManagerEmail : ''}`);
     } catch (e) {
       console.error(`发送邮件时发生错误：${e.message}`);
       // 如果GmailApp失败，尝试使用MailApp作为备选方案
       try {
-        MailApp.sendEmail({
-          to: recipientEmails.join(","),
+        const mailOptions = {
+          to: recipientEmails.join(','),
           subject: emailSubject,
           body: emailBody,
-        });
-        console.log(
-          "使用MailApp备选方案成功发送邮件到 / Successfully sent email using MailApp fallback to:",
-          recipientEmails.join(", ")
-        );
+        };
+        if (lineManagerEmail) mailOptions.cc = lineManagerEmail;
+        MailApp.sendEmail(mailOptions);
+        console.log('使用MailApp备选方案成功发送邮件 / Successfully sent email using MailApp fallback');
       } catch (mailAppError) {
         console.error(
-          "MailApp备选方案也失败 / MailApp fallback also failed:",
+          'MailApp备选方案也失败 / MailApp fallback also failed:',
           mailAppError
         );
       }
@@ -6913,6 +6913,25 @@ function getNotificationEmails(process, workshop) {
       error
     );
     return [];
+  }
+}
+
+function getLineManagerEmail(personName) {
+  try {
+    if (!personName) return '';
+    const ws = SpreadsheetApp.openById('1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM').getSheetByName('userID');
+    if (!ws) return '';
+    const vals = ws.getDataRange().getValues();
+    const nameTrimmed = String(personName).trim();
+    for (let i = 2; i < vals.length; i++) {
+      if (String(vals[i][1] || '').trim() === nameTrimmed) {
+        return String(vals[i][60] || '').trim();
+      }
+    }
+    return '';
+  } catch (e) {
+    console.error('获取Line Manager邮箱失败 / Failed to get Line Manager email:', e);
+    return '';
   }
 }
 
