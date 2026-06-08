@@ -1999,6 +1999,8 @@
               data["Workcenter"] = global_data["AEM#"];
               data["任务明细"] = JSON.stringify(task);
               data["SheetName"] = global_data["工序"] + "-" + global_data["车间"];
+              data["工序"] = global_data["工序"];
+              data["车间"] = global_data["车间"];
               data["Status"] = "Start";
 
               let data_Submit_Result = await dataSubmit(data);
