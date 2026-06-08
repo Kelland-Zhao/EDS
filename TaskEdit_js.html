@@ -372,9 +372,11 @@
                 const dataToSave = {
                     pmNo: (taskToEditData['开始日期'] || '').replace(/-/g, '') + (taskToEditData['AEM#'] || ''),
                     sheetName: taskToEditData['工序'] + "-" + taskToEditData['车间'],
+                    process: taskToEditData['工序'],
+                    workshop: taskToEditData['车间'],
                     updatedTasklist: JSON.stringify(updatedData),
                     // 将标志位传递给后端
-                    shouldAppendStatus: hasTempTasks 
+                    shouldAppendStatus: hasTempTasks
                 };
 
                 google.script.run

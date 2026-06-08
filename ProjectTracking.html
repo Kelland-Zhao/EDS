@@ -60,9 +60,48 @@
     .add-ms-name { flex:1; font-size:12px; }
     .add-ms-date { width:140px; font-size:12px; }
     .add-ms-del { flex:0 0 28px; }
-    #addModal .select2-container--default .select2-selection--single { font-size:12px; height:auto; padding:4px 8px; }
+    .ci-fu-row { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid #f0f0f0; }
+    .ci-fu-row:last-child { border-bottom:none; }
+    .ci-fu-name { flex:1.4; font-size:12px; }
+    .ci-fu-owner-wrap { flex:1; min-width:0; }
+    .ci-fu-date { width:130px; font-size:12px; }
+    #addModal .select2-container--default .select2-selection--single,
+    #updateModal .select2-container--default .select2-selection--single { font-size:12px; }
     #addModal .select2-container--default .select2-results__option { font-size:12px; }
-    #updateModal .select2-container--default .select2-selection--single { font-size:12px; height:auto; padding:4px 8px; }
+    /* modal 级 select2 高度对齐 form-control */
+    #addModal .select2-user + .select2-container .select2-selection--single,
+    #updateModal .select2-user-update + .select2-container .select2-selection--single { height:31px; padding:0 8px; }
+    #addModal .select2-user + .select2-container .select2-selection__rendered,
+    #updateModal .select2-user-update + .select2-container .select2-selection__rendered { line-height:31px; }
+    #addModal .select2-user + .select2-container .select2-selection__arrow,
+    #updateModal .select2-user-update + .select2-container .select2-selection__arrow { height:29px; }
+    /* 删除按钮 × 红色 */
+    .upd-ms-del-btn .bi-x,
+    .add-ms-del-btn .bi-x,
+    .ci-fu-del-btn .bi-x { color: #dc3545; }
+    /* iOS 风格开关 */
+    .ios-toggle { display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+    .ios-toggle input { display:none; }
+    .ios-toggle .ios-track {
+      width:42px; height:24px; background:#ccc; border-radius:12px;
+      position:relative; transition:background .25s; flex-shrink:0;
+    }
+    .ios-toggle .ios-track::after {
+      content:''; position:absolute; top:2px; left:2px;
+      width:20px; height:20px; background:#fff; border-radius:50%;
+      transition:transform .25s; box-shadow:0 1px 3px rgba(0,0,0,.25);
+    }
+    .ios-toggle input:checked + .ios-track { background:#34c759; }
+    .ios-toggle input:checked + .ios-track::after { transform:translateX(18px); }
+    .ios-toggle .ios-label { font-size:11px; white-space:nowrap; }
+    /* 行内责任人 select2 高度对齐 form-control-sm（31px） */
+    #updateModal .upd-ms-owner + .select2-container .select2-selection--single,
+    #addModal .ci-fu-owner + .select2-container .select2-selection--single { height:31px; padding:0 8px; }
+    #updateModal .upd-ms-owner + .select2-container .select2-selection__rendered,
+    #addModal .ci-fu-owner + .select2-container .select2-selection__rendered { line-height:31px; }
+    #updateModal .upd-ms-owner + .select2-container .select2-selection__arrow,
+    #addModal .ci-fu-owner + .select2-container .select2-selection__arrow { height:29px; }
+    .ci-fu-status { width:120px; font-size:12px; }
   </style>
 </head>
 
@@ -91,9 +130,24 @@
 
     <!-- Controls -->
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <div>
+      <div class="d-flex align-items-center gap-2">
         <button class="btn btn-sm btn-outline-success" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i> 刷新<br><small>Refresh</small></button>
         <button class="btn btn-sm btn-outline-danger" id="addProjectBtn"><i class="bi bi-plus-lg"></i> 添加项目<br><small>Add Project</small></button>
+        <div class="btn-group btn-group-sm ms-2" role="group" id="typeFilter" style="font-size:11px;">
+          <button type="button" class="btn btn-danger" data-type="all">全部<br><small>All</small></button>
+          <button type="button" class="btn btn-outline-danger" data-type="标准">新品/新自动化<br><small>New Prod/Auto</small></button>
+          <button type="button" class="btn btn-outline-danger" data-type="CI">CI<br><small>CI</small></button>
+        </div>
+        <label class="ios-toggle ms-3" title="显示/隐藏已完成项目">
+          <input type="checkbox" id="toggleCompletedSwitch" checked>
+          <span class="ios-track"></span>
+          <span class="ios-label" id="toggleCompletedLabel">显示已完成</span>
+        </label>
+        <label class="ios-toggle ms-2" title="只看我的项目">
+          <input type="checkbox" id="toggleMineSwitch">
+          <span class="ios-track"></span>
+          <span class="ios-label">只看我的</span>
+        </label>
       </div>
       <div class="d-flex align-items-center gap-2" style="font-size:11px;color:#666;">
         <span class="legend-ms" style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:50%;background:#28a745;display:inline-block;"></span>已完成</span>
@@ -110,10 +164,11 @@
           <tr>
             <th style="width:30px;"></th>
             <th>项目名称<br><small>Project Name</small></th>
+            <th>类型<br><small>Type</small></th>
             <th>Leader</th>
             <th>状态<br><small>Status</small></th>
             <th>进度<br><small>Progress</small></th>
-            <th>下一里程碑<br><small>Next Milestone</small></th>
+            <th>下一节点<br><small>Next</small></th>
             <th>操作<br><small>Action</small></th>
           </tr>
         </thead>
@@ -124,7 +179,7 @@
 
   <!-- Update Modal -->
   <div class="modal fade" id="updateModal" tabindex="-1" aria-labelledby="updateModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width:1140px;">
       <div class="modal-content">
         <div class="modal-header" style="background-color:#E60012;color:white;">
           <h5 class="modal-title" id="updateModalLabel">更新项目 / Update Project</h5>
@@ -135,6 +190,7 @@
             <div class="col-6">
               <label class="form-label fw-bold" style="font-size:12px;">项目名称<br><small>Project Name</small></label>
               <input type="text" class="form-control readonly-field" id="modalProjectName" readonly>
+              <div id="projectMetaInfo" style="font-size:10px;color:#888;margin-top:3px;line-height:1.4;"></div>
             </div>
             <div class="col-6">
               <label class="form-label fw-bold" style="font-size:12px;">项目 Leader<br><small>Project Leader</small></label>
@@ -142,9 +198,12 @@
             </div>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-bold" style="font-size:13px;">里程碑节点 / Milestones</label>
-            <div class="text-muted mb-2" style="font-size:11px;">计划日期（只读） / 实际完成日期（可编辑）</div>
-            <div id="modalMilestones"></div>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label fw-bold mb-0" style="font-size:13px;">里程碑节点 / Milestones</label>
+              <button type="button" class="btn btn-sm btn-outline-danger d-none" id="updateMsAddBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加节点<br><small>Add Milestone</small></button>
+            </div>
+            <div class="text-muted mb-1" id="modalMilestonesHint" style="font-size:11px;">计划日期（只读） / 实际完成日期（可编辑）</div>
+            <div style="max-height:300px;overflow-y:auto;"><div id="modalMilestones"></div></div>
           </div>
           <div class="row">
             <div class="col-6">
@@ -160,6 +219,7 @@
           </div>
         </div>
         <div class="modal-footer">
+          <button type="button" class="btn btn-outline-danger d-none me-auto" id="deleteProjectBtn"><i class="bi bi-trash"></i> 删除项目 / Delete</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
           <button type="button" class="btn btn-danger" id="saveBtn">保存 / Save</button>
         </div>
@@ -186,12 +246,12 @@
               <select class="form-select select2-user" id="addLeader" style="width:100%;"></select>
             </div>
             <div class="col-3">
-              <label class="form-label fw-bold" style="font-size:12px;">测试责任技术员<br><small>Test Technician</small></label>
+              <label class="form-label fw-bold" style="font-size:12px;">测试责任技术员 <span style="color:#999;font-weight:normal;">(选填)</span><br><small>Test Technician (Optional)</small></label>
               <select class="form-select select2-user" id="addTechnician" style="width:100%;"></select>
             </div>
           </div>
           <div class="row mb-2">
-            <div class="col-6">
+            <div class="col-4">
               <label class="form-label fw-bold" style="font-size:12px;">状态<br><small>Status</small></label>
               <select class="form-select" id="addStatus">
                 <option value="Ongoing">进行中 / Ongoing</option>
@@ -200,16 +260,24 @@
                 <option value="Not start" selected>未开始 / Not Start</option>
               </select>
             </div>
-            <div class="col-6">
+            <div class="col-4">
+              <label class="form-label fw-bold" style="font-size:12px;">项目类型<br><small>Project Type</small></label>
+              <select class="form-select" id="addType" style="font-size:12px;">
+                <option value="标准" selected>新品/新自动化项目（里程碑）/ New Product & Automation</option>
+                <option value="CI">CI（follow-up）/ CI</option>
+              </select>
+            </div>
+            <div class="col-4" id="addTemplateWrap">
               <label class="form-label fw-bold" style="font-size:12px;">里程碑模板<br><small>Milestone Template</small></label>
               <select class="form-select" id="addTemplate" style="font-size:12px;">
-                <option value="standard">标准设备安装（7节点）/ Standard 7-node</option>
+                <option value="standard">新品/新自动化设备安装（7节点）/ New Prod & Automation 7-node</option>
                 <option value="simple">精简版（3节点）/ Simplified 3-node</option>
                 <option value="custom">空白自定义 / Custom</option>
               </select>
             </div>
           </div>
-          <div class="mb-2">
+          <!-- 新品/新自动化类型：里程碑计划日期 -->
+          <div class="mb-2" id="addStandardSection">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <label class="form-label fw-bold mb-0" style="font-size:12px;">里程碑计划日期<br><small>Milestone Planned Dates</small></label>
               <button type="button" class="btn btn-sm btn-outline-danger" id="addMsAddBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加节点<br><small>Add Milestone</small></button>
@@ -217,6 +285,17 @@
             <div class="text-muted mb-1" style="font-size:11px;">留空表示 NA / Blank = NA</div>
             <div style="max-height:260px;overflow-y:auto;">
               <div id="addMilestones"></div>
+            </div>
+          </div>
+          <!-- CI 类型：follow-up 事项（事项 + 责任人 + 计划完成） -->
+          <div class="mb-2 d-none" id="addCISection">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label fw-bold mb-0" style="font-size:12px;">Follow-up 事项<br><small>Follow-up Items</small></label>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="addFollowupBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加事项<br><small>Add Item</small></button>
+            </div>
+            <div class="text-muted mb-1" style="font-size:11px;">每条需填：事项 + 责任人 + 计划完成日期 / Item + Owner + Due</div>
+            <div style="max-height:280px;overflow-y:auto;">
+              <div id="addFollowups"></div>
             </div>
           </div>
         </div>
