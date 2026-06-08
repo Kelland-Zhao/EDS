@@ -9,6 +9,90 @@ const webIconUrl =
 // Inspection2.0 统一记录表开关（紧急回滚设 false）
 var USE_UNIFIED_INSPECTION_SHEET = true;
 
+// PM 分表合并 - 配置常量
+var USE_MERGED_PM_SHEET = true;  // 紧急回滚设 false
+var PM_RECORDS_SHEET_NAME = "PM_Records";
+var PM_DB_ID = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
+
+// PM 分表合并 - 获取合并表引用
+function getPMSheet(ss) {
+  if (USE_MERGED_PM_SHEET) {
+    return ss.getSheetByName(PM_RECORDS_SHEET_NAME);
+  }
+  return null;  // 返回 null 让调用方回退到旧逻辑
+}
+
+// PM 分表合并 - 在表中按 PM No. 查找行号
+function findRowByPMNo(ws, pmNo) {
+  var lastRow = ws.getLastRow();
+  if (lastRow <= 1) return -1;
+  var values = ws.getRange(1, 1, lastRow, 1).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (values[i][0] === pmNo) return i + 1;
+  }
+  return -1;
+}
+
+// PM 分表合并 - 从合并表获取指定工序+车间的 PM No. 列表
+function getPMNoList(ws, process, workshop) {
+  var lastRow = ws.getLastRow();
+  if (lastRow <= 1) return [];
+  var data = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getDisplayValues();
+  // 列 V(索引21)=工序, 列 W(索引22)=车间
+  return data
+    .filter(function(r) { return r[21] === process && r[22] === workshop; })
+    .map(function(r) { return r[0]; });
+}
+
+// 交接班分表合并 - 配置常量
+var USE_MERGED_SHIFT_SHEET = true;  // 紧急回滚设 false
+var SHIFT_RECORDS_SHEET_NAME = "Shift_Records";
+var SHIFT_DB_ID = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
+
+// 交接班分表合并 - 获取合并表引用
+function getShiftSheet(ss) {
+  if (USE_MERGED_SHIFT_SHEET) {
+    return ss.getSheetByName(SHIFT_RECORDS_SHEET_NAME);
+  }
+  return null;
+}
+
+// 交接班分表合并 - 在合并表中按工序+车间过滤数据
+// data: getDisplayValues() 返回的二维数组
+// 利用原表已有列：col O(14)=车间, col P(15)=工序
+function filterShiftByProcessWorkshop(data, process, workshop) {
+  return data.filter(function(r) {
+    var rowWorkshop = String(r[14] || '').trim();
+    var rowProcess = String(r[15] || '').trim();
+    // INJ 和 IM 视为等价
+    var processMatch = (rowProcess === process) ||
+      (rowProcess === 'INJ' && process === 'IM') ||
+      (rowProcess === 'IM' && process === 'INJ');
+    return processMatch && rowWorkshop === workshop;
+  });
+}
+
+// 交接班分表合并 - 在合并表中按编号(code)和工序+车间查找行号
+// 利用原表已有列：col O(14)=车间, col P(15)=工序
+function findRowByShiftCode(ws, code, process, workshop) {
+  var lastRow = ws.getLastRow();
+  if (lastRow <= 1) return -1;
+  var data = ws.getRange(1, 1, lastRow, ws.getLastColumn()).getDisplayValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0] || '').trim() === String(code).trim()) {
+      var rowWorkshop = String(data[i][14] || '').trim();
+      var rowProcess = String(data[i][15] || '').trim();
+      var processMatch = (rowProcess === process) ||
+        (rowProcess === 'INJ' && process === 'IM') ||
+        (rowProcess === 'IM' && process === 'INJ');
+      if (processMatch && rowWorkshop === workshop) {
+        return i + 1;
+      }
+    }
+  }
+  return -1;
+}
+
 var Route = {};
 
 Route.path = function (route, callback) {
@@ -1110,10 +1194,16 @@ function getPlan(info) {
       }); //筛选
     }
 
-    var wss = ss.getSheetByName(process + "-" + workshop);
+    var wss = getPMSheet(ss) || ss.getSheetByName(process + "-" + workshop);
     var datanew = wss
       .getRange(2, 1, wss.getLastRow() - 1, wss.getLastColumn())
       .getDisplayValues();
+    // 合并表模式：筛选当前工序+车间
+    if (USE_MERGED_PM_SHEET && wss.getName() === PM_RECORDS_SHEET_NAME) {
+      datanew = datanew.filter(function(r) {
+        return r[21] === process && r[22] === workshop;
+      });
+    }
 
     filter_data.forEach(function (r) {
       var date2 = r[4];
@@ -1166,32 +1256,43 @@ function getPlan_new() {
       array.push(obj);
     });
 
-    let sheetName = [
-      "INJ-TB1",
-      "INJ-TB2",
-      "TF-TB1",
-      "TF-TB2",
-      "PK-TB1",
-      "PK-TB2",
-    ];
-    let ws_head = ss.getSheetByName("INJ-TB1");
-    let head_record = ws_head
-      .getRange(1, 1, 1, ws_head.getLastColumn())
-      .getValues()[0];
-    console.log("head_record", head_record);
-
-    let record = [];
-    sheetName.forEach((name) => {
-      let wss = ss.getSheetByName(name);
-      let lastRow = wss.getLastRow();
+    // 合并表模式：直接从 PM_Records 读取
+    var ws_records = getPMSheet(ss);
+    var head_record, record;
+    if (USE_MERGED_PM_SHEET && ws_records) {
+      head_record = ws_records
+        .getRange(1, 1, 1, ws_records.getLastColumn())
+        .getValues()[0];
+      var lastRow = ws_records.getLastRow();
       if (lastRow > 1) {
-        // 确保至少有数据行存在
-        let values = wss
-          .getRange(2, 1, lastRow - 1, wss.getLastColumn())
+        record = ws_records
+          .getRange(2, 1, lastRow - 1, ws_records.getLastColumn())
           .getValues();
-        record = record.concat(values);
+      } else {
+        record = [];
       }
-    });
+    } else {
+      // 旧版：遍历六分表
+      var sheetName = [
+        "INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2",
+      ];
+      var ws_head = ss.getSheetByName("INJ-TB1");
+      head_record = ws_head
+        .getRange(1, 1, 1, ws_head.getLastColumn())
+        .getValues()[0];
+      record = [];
+      sheetName.forEach(function(name) {
+        var wss = ss.getSheetByName(name);
+        var lastRow = wss.getLastRow();
+        if (lastRow > 1) {
+          var values = wss
+            .getRange(2, 1, lastRow - 1, wss.getLastColumn())
+            .getValues();
+          record = record.concat(values);
+        }
+      });
+    }
+    console.log("head_record", head_record);
     console.log("RECORD", record[0]);
 
     let record_obj = [];
@@ -1355,13 +1456,13 @@ function getPlan_weekly() {
       array.push(obj);
     });
 
-    // 获取状态数据（优化：直接读Master_PM_Data合并表，替代6个分表循环，减少10次API调用）
+    // 获取状态数据（从PM_Records读取）
     const STATUS_SHEET_DATE_COL = 5; // Plan PM Date 列
     let record_obj = [];
-    let wsMaster = ss.getSheetByName("Master_PM_Data");
-    let lastRowMaster = wsMaster.getLastRow();
-    if (lastRowMaster > 1) {
-      let masterDates = wsMaster.getRange(2, STATUS_SHEET_DATE_COL, lastRowMaster - 1, 1).getValues();
+    let wsRecords = ss.getSheetByName("PM_Records");
+    let lastRowRecords = wsRecords.getLastRow();
+    if (lastRowRecords > 1) {
+      let masterDates = wsRecords.getRange(2, STATUS_SHEET_DATE_COL, lastRowRecords - 1, 1).getValues();
       let matchedStatusRows = [];
 
       masterDates.forEach((row, idx) => {
@@ -1384,7 +1485,7 @@ function getPlan_weekly() {
         let maxStatusRow = Math.max.apply(null, matchedStatusRows);
         let statusRowsToFetch = maxStatusRow - minStatusRow + 1;
         // 只读B-J列（9列）：PmStatus[0], Plan PM Date[3], Workcenter[8]
-        let rowValues = wsMaster
+        let rowValues = wsRecords
           .getRange(minStatusRow, 2, statusRowsToFetch, 9)
           .getValues();
         let statusRowSet = new Set(matchedStatusRows);
@@ -1523,24 +1624,32 @@ function getstdTasklist(info) {
 }
 
 function writeback_task(process, workshop, code) {
-  var SheetName = "Shift_" + process + "_" + workshop;
   var code_update = code + "true";
   var url =
     "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
   var ss = SpreadsheetApp.openByUrl(url);
-  var ws = ss.getSheetByName(SheetName);
+  var ws = getShiftSheet(ss) || ss.getSheetByName("Shift_" + process + "_" + workshop);
+  var isMerged = USE_MERGED_SHIFT_SHEET && ws.getName() === SHIFT_RECORDS_SHEET_NAME;
   var data = ws
     .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
     .getDisplayValues();
-  for (i = 0; i < data.length; i++) {
-    var a = data[i][0].toString() + data[i][12].toString();
-    data[i][0] = a;
+  for (var i = 0; i < data.length; i++) {
+    var combined = data[i][0].toString() + data[i][12].toString();
+    if (combined === code_update) {
+      if (isMerged) {
+        var rowWorkshop = String(data[i][14] || '').trim();
+        var rowProcess = String(data[i][15] || '').trim();
+        var processMatch2 = (rowProcess === process) ||
+          (rowProcess === 'INJ' && process === 'IM') ||
+          (rowProcess === 'IM' && process === 'INJ');
+        if (!processMatch2 || rowWorkshop !== workshop) {
+          continue;
+        }
+      }
+      ws.getRange(i + 2, 17).setValue("Y");
+      break;
+    }
   }
-  var codelist = data.map(function (r) {
-    return r[0];
-  });
-  var position = codelist.indexOf(code_update);
-  ws.getRange(position + 2, 17).setValue("Y");
   return true;
 }
 
@@ -1646,22 +1755,36 @@ function get_toPM_data() {
 
 function PMgemerate(workshop, process, info) {
   try {
-    var SheetName = process + "-" + workshop;
     var url =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
-    var ws = ss.getSheetByName(SheetName);
-    var arrWsPmNo = ws
-      .getRange(2, 1, ws.getLastRow() - 1, 1)
-      .getDisplayValues()
-      .map((v) => {
-        return v[0].toString();
-      });
-    let positionPmNo = arrWsPmNo.indexOf(info[0].toString());
+    var ws = getPMSheet(ss) || ss.getSheetByName(process + "-" + workshop);
+
+    var arrWsPmNo;
+    var positionPmNo;
+    if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+      arrWsPmNo = getPMNoList(ws, process, workshop);
+      positionPmNo = arrWsPmNo.indexOf(info[0].toString());
+    } else {
+      arrWsPmNo = ws
+        .getRange(2, 1, ws.getLastRow() - 1, 1)
+        .getDisplayValues()
+        .map(function(v) { return v[0].toString(); });
+      positionPmNo = arrWsPmNo.indexOf(info[0].toString());
+    }
+
     if (positionPmNo == -1) {
-      ws.appendRow(info);
+      if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+        ws.appendRow(info.concat([process, workshop]));
+      } else {
+        ws.appendRow(info);
+      }
     } else {
       ws.getRange(positionPmNo + 2, 1, 1, info.length).setValues([info]);
+      if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+        ws.getRange(positionPmNo + 2, 22).setValue(process);
+        ws.getRange(positionPmNo + 2, 23).setValue(workshop);
+      }
     }
 
     return ["OK", true];
@@ -1675,10 +1798,17 @@ function getPMrecord(PM_Info) {
     var url =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
-    var ws = ss.getSheetByName(PM_Info.process + "-" + PM_Info.workshop);
+    var ws = getPMSheet(ss) || ss.getSheetByName(PM_Info.process + "-" + PM_Info.workshop);
     var allData = ws
       .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
       .getDisplayValues();
+
+    // 合并表模式：仅筛选当前工序+车间
+    if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+      allData = allData.filter(function(r) {
+        return r[21] === PM_Info.process && r[22] === PM_Info.workshop;
+      });
+    }
     
     Logger.log("=== getPMrecord 调试信息 ===");
     Logger.log("查询条件 - Workcenter: " + PM_Info.workcenter + ", Plan_SD: " + PM_Info.Plan_SD);
@@ -1730,18 +1860,30 @@ function PMend_writeback(workshop, process, arrJsonInfo, arrInfo) {
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss_PM = SpreadsheetApp.openByUrl(url_PM);
     var ss_APT = SpreadsheetApp.openByUrl(url_APT);
-    var ws_PM = ss_PM.getSheetByName(SheetName_PM);
+    var ws_PM = getPMSheet(ss_PM) || ss_PM.getSheetByName(SheetName_PM);
     var ws_APT = ss_APT.getSheetByName(SheetName_APT);
+    var isMerged = USE_MERGED_PM_SHEET && ws_PM.getName() === PM_RECORDS_SHEET_NAME;
     var data_APT = ws_APT
       .getRange(2, 1, ws_APT.getLastRow() - 1, 1)
       .getDisplayValues();
     var data_PM = ws_PM
       .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
       .getDisplayValues();
+    if (isMerged) {
+      // 合并表模式：读取全部列 + 过滤工序+车间 by V/W列
+      var allPMData = ws_PM.getRange(2, 1, ws_PM.getLastRow() - 1, ws_PM.getLastColumn()).getDisplayValues();
+    }
     /*-----生成code list-----------------------------*/
-    var codelist = data_PM.map(function (r) {
-      return r[0].toString();
-    });
+    var codelist;
+    if (isMerged) {
+      codelist = allPMData
+        .filter(function(r) { return r[21] === process && r[22] === workshop; })
+        .map(function(r) { return r[0].toString(); });
+    } else {
+      codelist = data_PM.map(function (r) {
+        return r[0].toString();
+      });
+    }
     var taskNolist = data_APT.map(function (r) {
       return r[0].toString();
     });
@@ -1793,11 +1935,19 @@ function PMend_writeback(workshop, process, arrJsonInfo, arrInfo) {
     /*----------------查找开始的保养任务并重写记录-------------------------*/
     var position = codelist.indexOf(arrJsonInfo[0].toString());
     if (position == -1) {
-      ws_PM.appendRow(arrJsonInfo);
+      if (isMerged) {
+        ws_PM.appendRow(arrJsonInfo.concat([process, workshop]));
+      } else {
+        ws_PM.appendRow(arrJsonInfo);
+      }
     } else {
       ws_PM
         .getRange(position + 2, 1, 1, arrJsonInfo.length)
         .setValues([arrJsonInfo]); //写入完成情况和备注
+      if (isMerged) {
+        ws_PM.getRange(position + 2, 22).setValue(process);
+        ws_PM.getRange(position + 2, 23).setValue(workshop);
+      }
     }
     return ["OK", true];
   } catch (e) {
@@ -1815,18 +1965,29 @@ function uploadTableData(workshop, process, arrJsonInfo, arrInfo) {
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss_PM = SpreadsheetApp.openByUrl(url_PM);
     var ss_APT = SpreadsheetApp.openByUrl(url_APT);
-    var ws_PM = ss_PM.getSheetByName(SheetName_PM);
+    var ws_PM = getPMSheet(ss_PM) || ss_PM.getSheetByName(SheetName_PM);
     var ws_APT = ss_APT.getSheetByName(SheetName_APT);
+    var isMerged = USE_MERGED_PM_SHEET && ws_PM.getName() === PM_RECORDS_SHEET_NAME;
     var data_APT = ws_APT
       .getRange(2, 1, ws_APT.getLastRow() - 1, 1)
       .getDisplayValues();
     var data_PM = ws_PM
       .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
       .getDisplayValues();
+    if (isMerged) {
+      var allPMData = ws_PM.getRange(2, 1, ws_PM.getLastRow() - 1, ws_PM.getLastColumn()).getDisplayValues();
+    }
     /*-----生成code list-----------------------------*/
-    var codelist = data_PM.map(function (r) {
-      return r[0].toString();
-    });
+    var codelist;
+    if (isMerged) {
+      codelist = allPMData
+        .filter(function(r) { return r[21] === process && r[22] === workshop; })
+        .map(function(r) { return r[0].toString(); });
+    } else {
+      codelist = data_PM.map(function (r) {
+        return r[0].toString();
+      });
+    }
     var taskNolist = data_APT.map(function (r) {
       return r[0].toString();
     });
@@ -1865,11 +2026,19 @@ function uploadTableData(workshop, process, arrJsonInfo, arrInfo) {
     /*----------------查找开始的保养任务并重写记录-------------------------*/
     var position = codelist.indexOf(arrJsonInfo[0].toString());
     if (position == -1) {
-      ws_PM.appendRow(arrJsonInfo);
+      if (isMerged) {
+        ws_PM.appendRow(arrJsonInfo.concat([process, workshop]));
+      } else {
+        ws_PM.appendRow(arrJsonInfo);
+      }
     } else {
       ws_PM
         .getRange(position + 2, 1, 1, arrJsonInfo.length)
         .setValues([arrJsonInfo]); //写入完成情况和备注
+      if (isMerged) {
+        ws_PM.getRange(position + 2, 22).setValue(process);
+        ws_PM.getRange(position + 2, 23).setValue(workshop);
+      }
     }
     return ["OK", true];
   } catch (e) {
@@ -1883,10 +2052,16 @@ function get_existed_PM_tasklist(PMno, workshop, process) {
     var url =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
-    var ws = ss.getSheetByName(SheetName_1);
+    var ws = getPMSheet(ss) || ss.getSheetByName(SheetName_1);
     var data = ws
       .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
       .getDisplayValues();
+    // 合并表模式：筛选工序+车间
+    if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
+      data = data.filter(function (r) {
+        return r[21] === process && r[22] === workshop;
+      });
+    }
     data = data.filter(function (r) {
       return r[0] == PMno;
     });
@@ -1937,13 +2112,17 @@ function upload_addTask(PM_Info, data) {
     var url_PM =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss_PM = SpreadsheetApp.openByUrl(url_PM);
-    var ws_PM = ss_PM.getSheetByName(SheetName_2);
-    var arrWs_PM_No = ws_PM
-      .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
-      .getDisplayValues()
-      .map((v) => {
-        return v[0].toString();
-      });
+    var ws_PM = getPMSheet(ss_PM) || ss_PM.getSheetByName(SheetName_2);
+    // 合并表模式：按工序+车间筛选 PM No. 列表
+    var arrWs_PM_No;
+    if (USE_MERGED_PM_SHEET && ws_PM.getName() === PM_RECORDS_SHEET_NAME) {
+      arrWs_PM_No = getPMNoList(ws_PM, process, workshop);
+    } else {
+      arrWs_PM_No = ws_PM
+        .getRange(2, 1, ws_PM.getLastRow() - 1, 1)
+        .getDisplayValues()
+        .map(function(v) { return v[0].toString(); });
+    }
     let positionWsPmNo = arrWs_PM_No.indexOf(data.PMno.toString());
     if (positionWsPmNo != -1) {
       let exitTaskList = ws_PM
@@ -2074,15 +2253,19 @@ function getData_shift(workshop, process) {
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var wsFromId = ss_database.getSheetByName(
+    var wsFromId = getShiftSheet(ss_database) || ss_database.getSheetByName(
       "Shift_" + processFromId + "_" + workshopFromId
     );
+    var isMerged = USE_MERGED_SHIFT_SHEET && wsFromId.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = wsFromId
       .getRange(2, 1, wsFromId.getLastRow() - 1, wsFromId.getLastColumn())
       .getDisplayValues()
       .filter((v) => {
         return v[21] == "Last";
       });
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var id_database = "1bYKTK5a63yJWRHzM_UPP6b4hwF67eZKEM5dCKLWR59U";
     var saas_database = SpreadsheetApp.openById(id_database);
     var ws_workcenter = saas_database.getSheetByName(
@@ -2123,15 +2306,19 @@ function getData_select(workshop, process) {
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var wsFromId = ss_database.getSheetByName(
+    var wsFromId = getShiftSheet(ss_database) || ss_database.getSheetByName(
       "Shift_" + processFromId + "_" + workshopFromId
     );
+    var isMerged = USE_MERGED_SHIFT_SHEET && wsFromId.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = wsFromId
       .getRange(2, 1, wsFromId.getLastRow() - 1, wsFromId.getLastColumn())
       .getDisplayValues()
       .filter((v) => {
         return v[21] == "Last";
       });
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var id_database = "1bYKTK5a63yJWRHzM_UPP6b4hwF67eZKEM5dCKLWR59U";
     var saas_database = SpreadsheetApp.openById(id_database);
     var ws_workcenter = saas_database.getSheetByName(
@@ -2178,9 +2365,8 @@ function upload_additem_manage(data) {
       "https://docs.google.com/spreadsheets/d/1iBhTmRl1KjtcSO96rfWhQowiZ4E1jqJohC5wEjF_7rQ/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
     var ss_TMP = SpreadsheetApp.openByUrl(url_TMP);
-    var SheetName_shift = "Shift_" + data.process + "_" + data.workshop;
-
-    var ws_shift = ss_database.getSheetByName(SheetName_shift);
+    var ws_shift = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + data.process + "_" + data.workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_shift.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_shift
       .getRange(2, 1, ws_shift.getLastRow() - 1, ws_shift.getLastColumn())
       .getDisplayValues();
@@ -2212,14 +2398,34 @@ function upload_additem_manage(data) {
 
     /*********************database写入[Y]是否转保养清单*************/
     var code = data.code + "true";
-    data_shift.forEach((r) => {
-      r[17] = r[0].toString() + r[12].toString();
-    });
-    var codelist = data_shift.map((r) => {
-      return r[17];
-    });
-    var position = codelist.indexOf(code);
-    ws_shift.getRange(position + 2, 19).setValue("Y");
+    if (isMerged) {
+      var proc = data.process;
+      var wshop = data.workshop;
+      for (var m = 0; m < data_shift.length; m++) {
+        var combined = data_shift[m][0].toString() + data_shift[m][12].toString();
+        if (combined === code) {
+          var rowWorkshop3 = String(data_shift[m][14] || '').trim();
+          var rowProcess3 = String(data_shift[m][15] || '').trim();
+          var processMatch3 = (rowProcess3 === proc) ||
+            (rowProcess3 === 'INJ' && proc === 'IM') ||
+            (rowProcess3 === 'IM' && proc === 'INJ');
+          if (!processMatch3 || rowWorkshop3 !== wshop) {
+            continue;
+          }
+          ws_shift.getRange(m + 2, 19).setValue("Y");
+          break;
+        }
+      }
+    } else {
+      data_shift.forEach((r) => {
+        r[17] = r[0].toString() + r[12].toString();
+      });
+      var codelist = data_shift.map((r) => {
+        return r[17];
+      });
+      var position = codelist.indexOf(code);
+      ws_shift.getRange(position + 2, 19).setValue("Y");
+    }
     /************************************************************/
 
     /***********************database APT写入保养清单条目***********/
@@ -2266,8 +2472,8 @@ function upload_shift(obj) {
     });
     obj.workshop = machine_info[0][4];
     obj.process = machine_info[0][5];
-    var SheetName = "Shift_" + obj.process + "_" + obj.workshop;
-    var ws_shift = ss_database.getSheetByName(SheetName);
+    var ws_shift = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + obj.process + "_" + obj.workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_shift.getName() === SHIFT_RECORDS_SHEET_NAME;
     ws_shift.appendRow([
       obj.code,
       obj.shift,
@@ -2327,16 +2533,23 @@ function upload_shift_modal(obj) {
       obj.process = machine_info[0][5];
     }
     var SheetName = "Shift_" + obj.process + "_" + obj.workshop;
-    var ws_shift = ss_database.getSheetByName(SheetName);
-    var arrIssueNo = ws_shift
-      .getRange(2, 1, ws_shift.getLastRow() - 1, 1)
-      .getValues()
-      .map((v) => {
-        return v[0].toString();
-      });
-    var position = arrIssueNo.indexOf(obj.issueNo.toString());
-    if (position == -1) {
-      ws_shift.appendRow([
+    var ws_shift = getShiftSheet(ss_database) || ss_database.getSheetByName(SheetName);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_shift.getName() === SHIFT_RECORDS_SHEET_NAME;
+    var rowNum;
+    if (isMerged) {
+      rowNum = findRowByShiftCode(ws_shift, obj.issueNo.toString(), obj.process, obj.workshop);
+    } else {
+      var arrIssueNo = ws_shift
+        .getRange(2, 1, ws_shift.getLastRow() - 1, 1)
+        .getValues()
+        .map((v) => {
+          return v[0].toString();
+        });
+      var position = arrIssueNo.indexOf(obj.issueNo.toString());
+      rowNum = position > -1 ? position + 2 : -1;
+    }
+    if (rowNum == -1) {
+      var modalRowData = [
         obj.issueNo,
         obj.shift,
         obj.workcenter,
@@ -2359,10 +2572,11 @@ function upload_shift_modal(obj) {
         "",
         "",
         "Last",
-      ]);
+      ];
+      ws_shift.appendRow(modalRowData);
     } else {
       var arrIssueNoRecord = ws_shift
-        .getRange(position + 2, 1, 1, ws_shift.getLastColumn())
+        .getRange(rowNum, 1, 1, ws_shift.getLastColumn())
         .getDisplayValues();
       console.log("测试", arrIssueNoRecord);
       if (arrIssueNoRecord[0][4].toString().split("\n").length < 2) {
@@ -2441,7 +2655,7 @@ function upload_shift_modal(obj) {
         "Last",
       ];
       ws_shift
-        .getRange(position + 2, 1, 1, arrNewRecord.length)
+        .getRange(rowNum, 1, 1, arrNewRecord.length)
         .setValues([arrNewRecord]);
     }
     return ["OK", true];
@@ -2459,14 +2673,17 @@ function getData_MaintenanceReport_Manage(workshop, process) {
     var data_userID = ws_userID
       .getRange(3, 1, ws_userID.getLastRow() - 2, 25)
       .getDisplayValues();
-    var SheetName = "Shift_" + process + "_" + workshop;
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var data = {
       user: data_userID,
       shift: data_shift,
@@ -2482,23 +2699,35 @@ function getData_MaintenanceReport_Manage(workshop, process) {
 
 function add_MaintenanceReport(obj) {
   try {
-    var SheetName = "Shift_" + obj.user[0][14] + "_" + obj.user[0][13];
+    var process = obj.user[0][14];
+    var workshop = obj.user[0][13];
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
-    data_shift.forEach((r) => {
-      r[20] = r[0] + r[5];
-    });
-    var codeList = data_shift.map((r) => {
-      return r[20];
-    });
     obj.data.forEach((r) => {
-      var position = codeList.indexOf(r.code + "已解决");
-      ws_database.getRange(position + 2, 20).setValue("待完成");
+      var targetCode = r.code + "已解决";
+      for (var i = 0; i < data_shift.length; i++) {
+        var combined = data_shift[i][0] + data_shift[i][5];
+        if (combined === targetCode) {
+          if (isMerged) {
+            var rowWorkshop4 = String(data_shift[i][14] || '').trim();
+            var rowProcess4 = String(data_shift[i][15] || '').trim();
+            var processMatch4 = (rowProcess4 === process) ||
+              (rowProcess4 === 'INJ' && process === 'IM') ||
+              (rowProcess4 === 'IM' && process === 'INJ');
+            if (!processMatch4 || rowWorkshop4 !== workshop) {
+              continue;
+            }
+          }
+          ws_database.getRange(i + 2, 20).setValue("待完成");
+          break;
+        }
+      }
     });
     return ["OK", true];
   } catch (e) {
@@ -2508,23 +2737,35 @@ function add_MaintenanceReport(obj) {
 
 function delete_MaintenanceReport(obj) {
   try {
-    var SheetName = "Shift_" + obj.user[0][14] + "_" + obj.user[0][13];
+    var process = obj.user[0][14];
+    var workshop = obj.user[0][13];
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
-    data_shift.forEach((r) => {
-      r[20] = r[0] + r[5];
-    });
-    var codeList = data_shift.map((r) => {
-      return r[20];
-    });
     obj.data.forEach((r) => {
-      var position = codeList.indexOf(r.code + "已解决");
-      ws_database.getRange(position + 2, 20).setValue("无需填写");
+      var targetCode = r.code + "已解决";
+      for (var i = 0; i < data_shift.length; i++) {
+        var combined = data_shift[i][0] + data_shift[i][5];
+        if (combined === targetCode) {
+          if (isMerged) {
+            var rowWorkshop4 = String(data_shift[i][14] || '').trim();
+            var rowProcess4 = String(data_shift[i][15] || '').trim();
+            var processMatch4 = (rowProcess4 === process) ||
+              (rowProcess4 === 'INJ' && process === 'IM') ||
+              (rowProcess4 === 'IM' && process === 'INJ');
+            if (!processMatch4 || rowWorkshop4 !== workshop) {
+              continue;
+            }
+          }
+          ws_database.getRange(i + 2, 20).setValue("无需填写");
+          break;
+        }
+      }
     });
     return ["OK", true];
   } catch (e) {
@@ -2541,14 +2782,17 @@ function getWaitFaultReport(workshop, process) {
     var data_userID = ws_userID
       .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
       .getDisplayValues();
-    var SheetName = "Shift_" + process + "_" + workshop;
     var url_database =
       "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
     var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = ss_database.getSheetByName(SheetName);
+    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
     var data_shift = ws_database
       .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
       .getDisplayValues();
+    if (isMerged) {
+      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+    }
     var data = { user: data_userID, shift: data_shift };
     return ["OK", data];
   } catch (e) {
@@ -2564,15 +2808,17 @@ function getData_PMTask(workshop, process) {
   var data_userID = ws_userID
     .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
     .getDisplayValues();
-  var SheetName = "Shift_" + process + "_" + workshop;
   var url_database =
     "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
   var ss_database = SpreadsheetApp.openByUrl(url_database);
-  var ws_database = ss_database.getSheetByName(SheetName);
+  var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+  var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
   var data_shift = ws_database
     .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
     .getDisplayValues();
-
+  if (isMerged) {
+    data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+  }
   var data = { user: data_userID, shift: data_shift };
   return data;
 }
@@ -2585,14 +2831,17 @@ function getData_TMP_stop_machine(workshop, process) {
   var data_userID = ws_userID
     .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
     .getDisplayValues();
-  var SheetName = "Shift_" + process + "_" + workshop;
   var url_database =
     "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
   var ss_database = SpreadsheetApp.openByUrl(url_database);
-  var ws_database = ss_database.getSheetByName(SheetName);
+  var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
+  var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
   var data_shift = ws_database
     .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
     .getDisplayValues();
+  if (isMerged) {
+    data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
+  }
   var data = { user: data_userID, shift: data_shift };
   return data;
 }
@@ -3879,30 +4128,41 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 function getAllshiftData() {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let ss = SpreadsheetApp.openById(id);
-  let sheetName = [
-    "Shift_INJ_TB1",
-    "Shift_INJ_TB2",
-    "Shift_TF_TB1",
-    "Shift_TF_TB2",
-    "Shift_PK_TB1",
-    "Shift_PK_TB2",
-  ];
-  let head = ss
-    .getSheetByName(sheetName[0])
-    .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
-    .getValues()[0];
-  let content = [];
-  sheetName.forEach((name) => {
-    let ws = ss.getSheetByName(name);
-    let lastRow = ws.getLastRow();
-    if (lastRow > 1) {
-      // 确保至少有数据行存在
-      let values = ws
-        .getRange(2, 1, lastRow - 1, ws.getLastColumn())
-        .getValues();
-      content = content.concat(values);
+  var head, content;
+  if (USE_MERGED_SHIFT_SHEET) {
+    var wsMerged = getShiftSheet(ss);
+    if (wsMerged && wsMerged.getLastRow() > 1) {
+      head = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
+      content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, wsMerged.getLastColumn()).getValues();
+    } else {
+      head = [];
+      content = [];
     }
-  });
+  } else {
+    var sheetName = [
+      "Shift_INJ_TB1",
+      "Shift_INJ_TB2",
+      "Shift_TF_TB1",
+      "Shift_TF_TB2",
+      "Shift_PK_TB1",
+      "Shift_PK_TB2",
+    ];
+    head = ss
+      .getSheetByName(sheetName[0])
+      .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
+      .getValues()[0];
+    content = [];
+    sheetName.forEach((name) => {
+      var ws = ss.getSheetByName(name);
+      var lastRow = ws.getLastRow();
+      if (lastRow > 1) {
+        var values = ws
+          .getRange(2, 1, lastRow - 1, ws.getLastColumn())
+          .getValues();
+        content = content.concat(values);
+      }
+    });
+  }
 
   let currentDate = new Date();
   let date30DaysAgo = new Date(
@@ -3963,29 +4223,41 @@ function getAllshiftData() {
 function getShiftRowsByPrefix(prefix) {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let ss = SpreadsheetApp.openById(id);
-  let sheetName = [
-    "Shift_INJ_TB1",
-    "Shift_INJ_TB2",
-    "Shift_TF_TB1",
-    "Shift_TF_TB2",
-    "Shift_PK_TB1",
-    "Shift_PK_TB2",
-  ];
-  let head = ss
-    .getSheetByName(sheetName[0])
-    .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
-    .getValues()[0];
-  let content = [];
-  sheetName.forEach((name) => {
-    let ws = ss.getSheetByName(name);
-    let lastRow = ws.getLastRow();
-    if (lastRow > 1) {
-      let values = ws
-        .getRange(2, 1, lastRow - 1, ws.getLastColumn())
-        .getValues();
-      content = content.concat(values);
+  var head, content;
+  if (USE_MERGED_SHIFT_SHEET) {
+    var wsMerged = getShiftSheet(ss);
+    if (wsMerged && wsMerged.getLastRow() > 1) {
+      head = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
+      content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, wsMerged.getLastColumn()).getValues();
+    } else {
+      head = [];
+      content = [];
     }
-  });
+  } else {
+    var sheetName = [
+      "Shift_INJ_TB1",
+      "Shift_INJ_TB2",
+      "Shift_TF_TB1",
+      "Shift_TF_TB2",
+      "Shift_PK_TB1",
+      "Shift_PK_TB2",
+    ];
+    head = ss
+      .getSheetByName(sheetName[0])
+      .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
+      .getValues()[0];
+    content = [];
+    sheetName.forEach(function(name) {
+      var ws = ss.getSheetByName(name);
+      var lastRow = ws.getLastRow();
+      if (lastRow > 1) {
+        var values = ws
+          .getRange(2, 1, lastRow - 1, ws.getLastColumn())
+          .getValues();
+        content = content.concat(values);
+      }
+    });
+  }
 
   // 按编号前缀筛选（prefix 如 "20260215"）
   let filtered = content.filter((row) => {
@@ -4141,18 +4413,24 @@ function submitFailure(obj) {
   try {
     let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     let ss = SpreadsheetApp.openById(id);
-    let sheetName = "Shift_" + obj["工序"] + "_" + obj["车间"];
-    let ws = ss.getSheetByName(sheetName);
+    var process = obj["工序"];
+    var workshop = obj["车间"];
+    let ws = getShiftSheet(ss) || ss.getSheetByName("Shift_" + process + "_" + workshop);
+    let isMerged = USE_MERGED_SHIFT_SHEET && ws.getName() === SHIFT_RECORDS_SHEET_NAME;
 
     // console.log("先前编号", obj["先前编号"]);
     if (obj["先前编号"] !== "") {
-      let firstColumnRange = ws.getRange(1, 1, ws.getLastRow(), 1);
-      let firstColumnValues = firstColumnRange.getValues();
-      let matchingRow = -1;
-      for (let i = 0; i < firstColumnValues.length; i++) {
-        if (String(firstColumnValues[i][0]) === String(obj["先前编号"])) {
-          matchingRow = i + 1; // 因为数组索引从0开始，而行号从1开始
-          break;
+      var matchingRow = -1;
+      if (isMerged) {
+        matchingRow = findRowByShiftCode(ws, obj["先前编号"], process, workshop);
+      } else {
+        let firstColumnRange = ws.getRange(1, 1, ws.getLastRow(), 1);
+        let firstColumnValues = firstColumnRange.getValues();
+        for (let i = 0; i < firstColumnValues.length; i++) {
+          if (String(firstColumnValues[i][0]) === String(obj["先前编号"])) {
+            matchingRow = i + 1; // 因为数组索引从0开始，而行号从1开始
+            break;
+          }
         }
       }
       // console.log("先前行号", matchingRow);
@@ -4181,7 +4459,7 @@ function submitFailure(obj) {
       }
     }
 
-    ws.appendRow([
+    var failureRowData = [
       obj["编号"],
       obj["班次"],
       obj["机台号"],
@@ -4206,7 +4484,8 @@ function submitFailure(obj) {
       obj["判断是否最后"],
       obj["直接原因"] || "",
       obj["建议措施"] || "",
-    ]);
+    ];
+    ws.appendRow(failureRowData);
 
     return ["OK", true];
   } catch (e) {
@@ -4286,7 +4565,10 @@ function saveData_tasklist(data, confirmUser) {
     let id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     let ss = SpreadsheetApp.openById(id);
     let sheetName = data["SheetName"];
-    let ws = ss.getSheetByName(sheetName);
+    var process = data["工序"];
+    var workshop = data["车间"];
+    let ws = getPMSheet(ss) || ss.getSheetByName(sheetName);
+    let isMerged = USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME;
     let Status = data["Status"];
     let pmNo = data["PM No."];
     let lastRow = ws.getLastRow();
@@ -4315,7 +4597,7 @@ function saveData_tasklist(data, confirmUser) {
         ws.getRange(rowNumber, 10).setValue(data["Workcenter"]);
         ws.getRange(rowNumber, 11).setValue(data["任务明细"]);
       } else {
-        ws.appendRow([
+        var newRowData = [
           data["PM No."],
           data["PmStatus"],
           data["Notification"],
@@ -4327,7 +4609,11 @@ function saveData_tasklist(data, confirmUser) {
           data["EndTime"],
           data["Workcenter"],
           data["任务明细"],
-        ]);
+        ];
+        if (isMerged) {
+          newRowData.push(process, workshop);
+        }
+        ws.appendRow(newRowData);
       }
     } else if (Status == "End" && rowNumber !== -1) {
       let endDateColumn = 8; // 假设 EndDate 在第8列
@@ -4452,42 +4738,49 @@ function Production_Confirm_Info_Fill(data, PM_Serial_Number, PM_data) {
   try {
     let ID = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
 
-    let sheetName = PM_data["工序"] + "-" + PM_data["车间"];
-
     let ss = SpreadsheetApp.openById(ID);
+    var process = PM_data["工序"];
+    var workshop = PM_data["车间"];
+    let sheetName = process + "-" + workshop;
 
-    let ws = ss.getSheetByName(sheetName);
+    let ws = getPMSheet(ss) || ss.getSheetByName(sheetName);
+    var isMerged = USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME;
 
-    let sheet_Data = ws
-      .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-      .getValues();
+    // 查找 'PM No.' 对应的行号
+    let pmNoPosition;
+    if (isMerged) {
+      pmNoPosition = findRowByPMNo(ws, PM_Serial_Number);
+    } else {
+      let sheet_Data = ws
+        .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
+        .getValues();
 
-    let head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0]; // 获取表头数组
+      let head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0]; // 获取表头数组
 
-    let array = [];
+      let array = [];
 
-    sheet_Data.forEach((r) => {
-      let obj = {};
+      sheet_Data.forEach((r) => {
+        let obj = {};
 
-      head.forEach((h, i) => {
-        obj[h] = r[i]; // 使用表头作为键
+        head.forEach((h, i) => {
+          obj[h] = r[i]; // 使用表头作为键
+        });
+
+        array.push(obj);
       });
 
-      array.push(obj);
-    });
-
-    // 查找 'PM No.' 对应的在 Google Sheet 中的位置
-    let pmNoPosition = -1;
-    for (let i = 0; i < array.length; i++) {
-      if (array[i]["PM No."] === PM_Serial_Number) {
-        pmNoPosition = i + 2; // 因为数组是从0开始的，Google Sheet的行是从1开始的，并且我们从第二行开始读取数据
-        break;
+      pmNoPosition = -1;
+      for (let i = 0; i < array.length; i++) {
+        if (array[i]["PM No."] === PM_Serial_Number) {
+          pmNoPosition = i + 2; // 因为数组是从0开始的，Google Sheet的行是从1开始的，并且我们从第二行开始读取数据
+          break;
+        }
       }
     }
 
-    ws.getRange(pmNoPosition, 17).setValue(data[0]);
+    ws.getRange(pmNoPosition, 17).setValue(data[0]); // 班组交接（列Q，位置不变）
 
-    ws.getRange(pmNoPosition, 18).setValue(data[1]);
+    ws.getRange(pmNoPosition, 18).setValue(data[1]); // 留样问题（列R，位置不变）
 
     let folderID = get_Folder_ID(PM_Serial_Number);
 
@@ -4928,7 +5221,7 @@ function updateStartedPMTask(data) {
     const id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     const ss = SpreadsheetApp.openById(id);
     const sheetName = data["SheetName"];
-    const ws = ss.getSheetByName(sheetName);
+    const ws = getPMSheet(ss) || ss.getSheetByName(sheetName);
     const pmNo = data["PM No."];
 
     if (!ws) {
@@ -4948,7 +5241,7 @@ function updateStartedPMTask(data) {
       throw new Error("在工作表中未找到 PM No.: " + pmNo);
     }
 
-    // 更新指定行中的特定单元格
+    // 更新指定行中的特定单元格（列号不变，工序/车间在末尾V/W列不影响）
     // 表格列: B(2)=PmStatus, C(3)=Notification, D(4)=PM People, F(6)=SatrtDate, G(7)=StartTime, K(11)=任务明细
     ws.getRange(rowNumber, 2).setValue(data["PmStatus"]); // 更新状态
     ws.getRange(rowNumber, 3).setValue(data["Notification"]); // 更新工单号
@@ -4974,7 +5267,16 @@ function updateTasklistForPM(data) {
   try {
     const id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     const ss = SpreadsheetApp.openById(id);
-    const ws = ss.getSheetByName(data.sheetName);
+    const ws = getPMSheet(ss) || ss.getSheetByName(data.sheetName);
+    var isMerged = USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME;
+    // 从 sheetName (格式: "工序-车间") 或 data.process/data.workshop 解析
+    var proc = data.process;
+    var wksp = data.workshop;
+    if ((!proc || !wksp) && data.sheetName && data.sheetName.indexOf("-") !== -1) {
+      var parts = data.sheetName.split("-");
+      proc = parts[0];
+      wksp = parts[1];
+    }
 
     if (!ws) {
       throw new Error("工作表未找到: " + data.sheetName);
@@ -5002,7 +5304,7 @@ function updateTasklistForPM(data) {
         6
       )}-${dateStr.substring(6, 8)}`; // "2025-07-18"
 
-      const newRecord = [
+      var newRecord = [
         pmNo, // PM No.
         "已添加临时任务 / Added Temporary Task", // PmStatus
         "", // Notification
@@ -5015,6 +5317,9 @@ function updateTasklistForPM(data) {
         workcenter, // Workcenter
         data.updatedTasklist, // 任务明细
       ];
+      if (isMerged) {
+        newRecord.push(proc, wksp);
+      }
 
       ws.appendRow(newRecord);
       return "新保养记录已创建，并添加了临时任务！";
@@ -5111,7 +5416,20 @@ function savePDFLinkToSheet(data) {
     // 获取PM系统的主数据表
     const id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
     const ss = SpreadsheetApp.openById(id);
+    var isMerged = USE_MERGED_PM_SHEET;
 
+    // 合并表模式：直接在 PM_Records 中查找
+    if (isMerged) {
+      var wsMerged = getPMSheet(ss);
+      var rowNum = findRowByPMNo(wsMerged, data.pmSerialNumber);
+      if (rowNum !== -1) {
+        wsMerged.getRange(rowNum, 21).setValue(data.pdfLink); // U列（保持不变，索引21）
+        return true;
+      }
+      throw new Error("在 PM_Records 中未找到 PM No.: " + data.pmSerialNumber);
+    }
+
+    // --- 以下为旧版六分表逻辑，USE_MERGED_PM_SHEET=false 时使用 ---
     // 从PM_data中获取工序和车间，类似于Production_Confirm_Info_Fill函数
     let sheetName;
     if (data.pmData && data.pmData["工序"] && data.pmData["车间"]) {
@@ -5714,7 +6032,7 @@ function getPMPlannerConfirmation(pmSerialNumber, pmData, sheetName) {
 
         // 使用提供的工作表名称，如果没有提供则默认为'PM Task'
         const targetSheetName = sheetName || "PM Task";
-        const sheet = ss.getSheetByName(targetSheetName);
+        const sheet = getPMSheet(ss) || ss.getSheetByName(targetSheetName);
         if (!sheet) {
           console.error("找不到工作表:", targetSheetName);
           return pmPlannerInfo;
@@ -5856,13 +6174,8 @@ function getCompletePMTaskData(pmSerialNumber, sheetName) {
       "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4"
     );
 
-    // 先列出所有工作表名称进行调试
-    const allSheets = ss.getSheets();
-    const sheetNames = allSheets.map((sheet) => sheet.getName());
-    console.log("Available sheet names:", sheetNames);
-    console.log("Looking for sheet:", sheetName);
-
-    const sheet = ss.getSheetByName(sheetName);
+    // 合并表优先
+    var sheet = getPMSheet(ss) || ss.getSheetByName(sheetName);
     if (!sheet) {
       console.error("找不到工作表:", sheetName);
       console.log("尝试查找包含相似名称的工作表...");
@@ -6068,50 +6381,30 @@ function updateFailureReportConfirmation(
     }
 
     // 非手动录入行：在对应 Shift Sheet 中更新"是否需要故障报告"列
-    let sheetNames = [];
-    if (process === "IM") {
-      sheetNames = ["Shift_INJ_TB1", "Shift_INJ_TB2"];
-    } else if (process === "TF") {
-      sheetNames = ["Shift_TF_TB1", "Shift_TF_TB2"];
-    } else if (process === "PK") {
-      sheetNames = ["Shift_PK_TB1", "Shift_PK_TB2"];
-    } else {
-      throw new Error("无效的工序参数 / Invalid process parameter: " + process);
-    }
-
     const spreadsheetId = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
     let updateSuccess = false;
     let updatedSheetName = "";
 
-    for (let sheetName of sheetNames) {
-      try {
-        const sheet = spreadsheet.getSheetByName(sheetName);
-        if (!sheet) continue;
-
-        const data = sheet.getDataRange().getValues();
-        if (data.length <= 1) continue;
-
-        let rowIndex = -1;
-        for (let i = 1; i < data.length; i++) {
-          if (String(data[i][0]) === String(reportId)) {
-            rowIndex = i;
-            break;
-          }
+    if (USE_MERGED_SHIFT_SHEET) {
+      var shiftProcess = process === "IM" ? "INJ" : process;
+      var wsMerged = getShiftSheet(spreadsheet);
+      var rowNum = -1;
+      var workshops = ["TB1", "TB2"];
+      if (wsMerged) {
+        for (var w = 0; w < workshops.length; w++) {
+          rowNum = findRowByShiftCode(wsMerged, reportId, shiftProcess, workshops[w]);
+          if (rowNum > -1) break;
         }
-
-        if (rowIndex !== -1) {
-          sheet
-            .getRange(rowIndex + 1, 20)
-            .setValue(needReport ? "是" : "否");
-
+        if (rowNum > -1) {
+          wsMerged.getRange(rowNum, 20).setValue(needReport ? "是" : "否");
           if (needReport) {
             if (!responsibleName) {
               throw new Error(
                 "需要故障报告前必须分配责任人 / Please assign a responsible person before requesting a failure report"
               );
             }
-            const rowForProcessing = rowDataFromClient || data[rowIndex];
+            var rowForProcessing = wsMerged.getRange(rowNum, 1, 1, wsMerged.getLastColumn()).getValues()[0];
             try {
               writeToFailureDatabase(rowForProcessing, process, responsibleName);
               sendFailureReportNotification(rowForProcessing, process, responsibleName);
@@ -6122,18 +6415,73 @@ function updateFailureReportConfirmation(
               );
             }
           }
-
           updateSuccess = true;
-          updatedSheetName = sheetName;
-          break;
+          updatedSheetName = SHIFT_RECORDS_SHEET_NAME;
         }
-      } catch (sheetError) {
-        console.error(
-          "处理Sheet时出错 / Error processing sheet:",
-          sheetName,
-          sheetError
-        );
-        continue;
+      }
+    } else {
+      let sheetNames = [];
+      if (process === "IM") {
+        sheetNames = ["Shift_INJ_TB1", "Shift_INJ_TB2"];
+      } else if (process === "TF") {
+        sheetNames = ["Shift_TF_TB1", "Shift_TF_TB2"];
+      } else if (process === "PK") {
+        sheetNames = ["Shift_PK_TB1", "Shift_PK_TB2"];
+      } else {
+        throw new Error("无效的工序参数 / Invalid process parameter: " + process);
+      }
+
+      for (let sheetName of sheetNames) {
+        try {
+          const sheet = spreadsheet.getSheetByName(sheetName);
+          if (!sheet) continue;
+
+          const data = sheet.getDataRange().getValues();
+          if (data.length <= 1) continue;
+
+          let rowIndex = -1;
+          for (let i = 1; i < data.length; i++) {
+            if (String(data[i][0]) === String(reportId)) {
+              rowIndex = i;
+              break;
+            }
+          }
+
+          if (rowIndex !== -1) {
+            sheet
+              .getRange(rowIndex + 1, 20)
+              .setValue(needReport ? "是" : "否");
+
+            if (needReport) {
+              if (!responsibleName) {
+                throw new Error(
+                  "需要故障报告前必须分配责任人 / Please assign a responsible person before requesting a failure report"
+                );
+              }
+              const rowForProcessing = rowDataFromClient || data[rowIndex];
+              try {
+                writeToFailureDatabase(rowForProcessing, process, responsibleName);
+                sendFailureReportNotification(rowForProcessing, process, responsibleName);
+              } catch (e) {
+                console.error(
+                  "写入 Failure_Database 或发送通知失败 / Failed to write or notify:",
+                  e
+                );
+              }
+            }
+
+            updateSuccess = true;
+            updatedSheetName = sheetName;
+            break;
+          }
+        } catch (sheetError) {
+          console.error(
+            "处理Sheet时出错 / Error processing sheet:",
+            sheetName,
+            sheetError
+          );
+          continue;
+        }
       }
     }
 
@@ -6713,18 +7061,11 @@ function getFilteredFailureReportData() {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let spreadsheet = SpreadsheetApp.openById(id);
 
-  // 定义Sheet名称和对应工序
-  let sheets = {
-    IM: ["Shift_INJ_TB1", "Shift_INJ_TB2"],
-    TF: ["Shift_TF_TB1", "Shift_TF_TB2"],
-    PK: ["Shift_PK_TB1", "Shift_PK_TB2"],
-  };
-
-  // 定义筛选条件（维修时间，单位：分钟）- 临时设置为0以显示所有数据
+  // 定义筛选条件（维修时间，单位：分钟）
   let timeThresholds = {
-    IM: 240, // Temporarily set to 0 for debugging
-    TF: 120, // Temporarily set to 0 for debugging
-    PK: 60, // Temporarily set to 0 for debugging
+    IM: 240,
+    TF: 120,
+    PK: 60,
   };
 
   // 存储筛选后的数据
@@ -6734,78 +7075,120 @@ function getFilteredFailureReportData() {
     PK: [],
   };
 
-  // 遍历所有工序和对应Sheet
-  for (let process in sheets) {
-    let sheetNames = sheets[process];
-    let threshold = timeThresholds[process];
+  // 合并表模式：从 Shift_Records 统一读取
+  if (USE_MERGED_SHIFT_SHEET) {
+    var wsMerged = getShiftSheet(spreadsheet);
+    if (wsMerged && wsMerged.getLastRow() > 1) {
+      var allData = wsMerged.getDataRange().getValues();
+      for (var i = 1; i < allData.length; i++) {
+        var row = allData[i];
+        // 利用原表已有列：col O(14)=车间, col P(15)=工序
+        var rowWorkshop = String(row[14] || '').trim();
+        var rowProcess = String(row[15] || '').trim();
+        // INJ → IM 映射
+        var mappedProcess = rowProcess === 'INJ' ? 'IM' : rowProcess;
+        var threshold = timeThresholds[mappedProcess];
+        if (!threshold) continue;
 
-    for (let sheetName of sheetNames) {
-      let sheet = spreadsheet.getSheetByName(sheetName);
-      if (sheet) {
-        let data = sheet.getDataRange().getValues();
-        Logger.log(
-          "Sheet " + sheetName + " 数据行数 / Data rows: " + data.length
-        );
-        // 从第2行开始遍历数据（假设第1行是表头）
-        for (let i = 1; i < data.length; i++) {
-          let row = data[i];
-          // H列（索引7）是维修时间
-          let repairTimeStr = row[7] ? row[7].toString() : "0";
-          // 提取维修时间中的数字（假设格式为"X小时Y分钟"或纯数字）
-          let repairTime = 0;
-          let timeMatch = repairTimeStr.match(/(\d+)/g);
-          if (timeMatch) {
-            if (repairTimeStr.includes("小时")) {
-              repairTime = parseInt(timeMatch[0]) * 60;
-              if (timeMatch.length > 1) {
-                repairTime += parseInt(timeMatch[1]);
-              }
-            } else {
-              repairTime = parseInt(timeMatch[0]);
-            }
-          }
-          // 根据工序筛选 - 临时显示所有数据
-          if (repairTime >= threshold) {
-            // PK工序：仅显示 2026-05-15 之后的数据
-            if (process === 'PK') {
-              const rawSubmitDate = row[11];
-              if (rawSubmitDate) {
-                let submitDateObj;
-                if (rawSubmitDate instanceof Date) {
-                  submitDateObj = rawSubmitDate;
-                } else {
-                  submitDateObj = new Date(rawSubmitDate);
-                }
-                const cutoffDate = new Date('2026-05-15');
-                if (submitDateObj < cutoffDate) {
-                  continue; // 跳过 2026-05-15 之前的数据
-                }
-              }
-            }
-            // PK工序：剔除问题描述中包含"转规格"的记录
-            const problemDesc = String(row[3] || '');
-            if (process === 'PK' && problemDesc.includes('转规格')) {
-              continue;
-            }
-            result[process].push({
-              reportNo: row[0] || "",
-              machineNo: row[2] || "",
-              problemDescription: problemDesc,
-              status: row[5] || "",
-              repairTime: repairTimeStr,
-              submitDate: row[11] ? row[11].toString() : "",
-              shift: row[1] || "",        // B列：班次
-              workshop: row[14] || "",
-              process: row[15] || process,
-              submitter: row[13] || "",   // N列：填写人
-              confirmation: row[18] || "待确认 / Pending Confirmation",
-              needFailureReport: row[19] || "", // 第20列：是否需要填写故障报告
-              responsiblePerson: "",
-            });
+        // 维修时间处理（同旧逻辑）
+        var repairTimeStr = row[7] ? row[7].toString() : "0";
+        var repairTime = 0;
+        var timeMatch = repairTimeStr.match(/(\d+)/g);
+        if (timeMatch) {
+          if (repairTimeStr.includes("小时")) {
+            repairTime = parseInt(timeMatch[0]) * 60;
+            if (timeMatch.length > 1) repairTime += parseInt(timeMatch[1]);
+          } else {
+            repairTime = parseInt(timeMatch[0]);
           }
         }
-      } else {
-        Logger.log("Sheet " + sheetName + " 未找到 / Not found");
+        if (repairTime >= threshold) {
+          if (mappedProcess === 'PK') {
+            var rawSubmitDate = row[11];
+            if (rawSubmitDate) {
+              var submitDateObj = rawSubmitDate instanceof Date ? rawSubmitDate : new Date(rawSubmitDate);
+              if (submitDateObj < new Date('2026-05-15')) continue;
+            }
+            var problemDesc = String(row[3] || '');
+            if (problemDesc.includes('转规格')) continue;
+          }
+          result[mappedProcess].push({
+            reportNo: row[0] || "",
+            machineNo: row[2] || "",
+            problemDescription: String(row[3] || ''),
+            status: row[5] || "",
+            repairTime: repairTimeStr,
+            submitDate: row[11] ? row[11].toString() : "",
+            shift: row[1] || "",
+            workshop: rowWorkshop || "",
+            process: rowProcess || mappedProcess,
+            submitter: row[13] || "",
+            confirmation: row[18] || "待确认 / Pending Confirmation",
+            needFailureReport: row[19] || "",
+            responsiblePerson: "",
+          });
+        }
+      }
+    }
+  } else {
+    // 旧版：遍历6个分表
+    var sheets = {
+      IM: ["Shift_INJ_TB1", "Shift_INJ_TB2"],
+      TF: ["Shift_TF_TB1", "Shift_TF_TB2"],
+      PK: ["Shift_PK_TB1", "Shift_PK_TB2"],
+    };
+    for (var process in sheets) {
+      var sheetNames = sheets[process];
+      var threshold = timeThresholds[process];
+      for (var s = 0; s < sheetNames.length; s++) {
+        var sheetName = sheetNames[s];
+        var sheet = spreadsheet.getSheetByName(sheetName);
+        if (sheet) {
+          var data = sheet.getDataRange().getValues();
+          Logger.log("Sheet " + sheetName + " 数据行数 / Data rows: " + data.length);
+          for (var i = 1; i < data.length; i++) {
+            var row = data[i];
+            var repairTimeStr = row[7] ? row[7].toString() : "0";
+            var repairTime = 0;
+            var timeMatch = repairTimeStr.match(/(\d+)/g);
+            if (timeMatch) {
+              if (repairTimeStr.includes("小时")) {
+                repairTime = parseInt(timeMatch[0]) * 60;
+                if (timeMatch.length > 1) repairTime += parseInt(timeMatch[1]);
+              } else {
+                repairTime = parseInt(timeMatch[0]);
+              }
+            }
+            if (repairTime >= threshold) {
+              if (process === 'PK') {
+                var rawSubmitDate = row[11];
+                if (rawSubmitDate) {
+                  var submitDateObj = rawSubmitDate instanceof Date ? rawSubmitDate : new Date(rawSubmitDate);
+                  if (submitDateObj < new Date('2026-05-15')) continue;
+                }
+                var problemDesc = String(row[3] || '');
+                if (problemDesc.includes('转规格')) continue;
+              }
+              result[process].push({
+                reportNo: row[0] || "",
+                machineNo: row[2] || "",
+                problemDescription: String(row[3] || ''),
+                status: row[5] || "",
+                repairTime: repairTimeStr,
+                submitDate: row[11] ? row[11].toString() : "",
+                shift: row[1] || "",
+                workshop: row[14] || "",
+                process: row[15] || process,
+                submitter: row[13] || "",
+                confirmation: row[18] || "待确认 / Pending Confirmation",
+                needFailureReport: row[19] || "",
+                responsiblePerson: "",
+              });
+            }
+          }
+        } else {
+          Logger.log("Sheet " + sheetName + " 未找到 / Not found");
+        }
       }
     }
   }
@@ -6905,23 +7288,42 @@ function getFailureReportProgressData(userEmail, userName) {
     // 始终构建班次和填写人查找表；仅在需要回补时构建 repairTime 表
     (function buildShiftLookupMaps() {
       const shiftSS = SpreadsheetApp.openById('10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w');
-      ['Shift_INJ_TB1','Shift_INJ_TB2','Shift_TF_TB1','Shift_TF_TB2','Shift_PK_TB1','Shift_PK_TB2'].forEach(function(sn) {
-        const sSheet = shiftSS.getSheetByName(sn);
-        if (!sSheet) return;
-        const sData = sSheet.getDataRange().getValues();
-        for (let j = 1; j < sData.length; j++) {
-          const rNo = String(sData[j][0] || '').trim();
-          if (!rNo) continue;
-          const rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
-          const rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
-          if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
-          if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
-          if (hasEmptyRepairTime) {
-            const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
-            if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+      if (USE_MERGED_SHIFT_SHEET) {
+        var wsMerged = getShiftSheet(shiftSS);
+        if (wsMerged) {
+          var sData = wsMerged.getDataRange().getValues();
+          for (var j = 1; j < sData.length; j++) {
+            var rNo = String(sData[j][0] || '').trim();
+            if (!rNo) continue;
+            var rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
+            var rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
+            if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
+            if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
+            if (hasEmptyRepairTime) {
+              var rTime = sData[j][7] != null ? String(sData[j][7]) : '';
+              if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+            }
           }
         }
-      });
+      } else {
+        ['Shift_INJ_TB1','Shift_INJ_TB2','Shift_TF_TB1','Shift_TF_TB2','Shift_PK_TB1','Shift_PK_TB2'].forEach(function(sn) {
+          const sSheet = shiftSS.getSheetByName(sn);
+          if (!sSheet) return;
+          const sData = sSheet.getDataRange().getValues();
+          for (let j = 1; j < sData.length; j++) {
+            const rNo = String(sData[j][0] || '').trim();
+            if (!rNo) continue;
+            const rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
+            const rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
+            if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
+            if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
+            if (hasEmptyRepairTime) {
+              const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
+              if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
+            }
+          }
+        });
+      }
     })();
 
     // 从第2行开始遍历数据（第1行是表头）
@@ -9334,22 +9736,30 @@ function savePMFollowUpAction(recordId, pmData) {
   try {
     let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     let ss = SpreadsheetApp.openById(id);
-    let sheetNames = [
-      "Shift_INJ_TB1",
-      "Shift_INJ_TB2",
-      "Shift_TF_TB1",
-      "Shift_TF_TB2",
-      "Shift_PK_TB1",
-      "Shift_PK_TB2",
-    ];
-    
+
     // 从recordId中提取基础编号（去掉-后的数字）
     let baseId = recordId.split('-')[0];
-    
+
+    // 构建要遍历的sheet列表
+    var sheetsToSearch = [];
+    if (USE_MERGED_SHIFT_SHEET) {
+      var wsMerged = getShiftSheet(ss);
+      if (wsMerged) sheetsToSearch.push(wsMerged);
+    } else {
+      var sheetNames = [
+        "Shift_INJ_TB1", "Shift_INJ_TB2",
+        "Shift_TF_TB1", "Shift_TF_TB2",
+        "Shift_PK_TB1", "Shift_PK_TB2",
+      ];
+      sheetNames.forEach(function(sn) {
+        var s = ss.getSheetByName(sn);
+        if (s) sheetsToSearch.push(s);
+      });
+    }
+
     // 遍历所有sheet查找匹配的记录
-    for (let sheetName of sheetNames) {
-      let ws = ss.getSheetByName(sheetName);
-      if (!ws) continue;
+    for (var sIdx = 0; sIdx < sheetsToSearch.length; sIdx++) {
+      var ws = sheetsToSearch[sIdx];
       
       let lastRow = ws.getLastRow();
       if (lastRow < 2) continue;
@@ -9429,22 +9839,30 @@ function getPMFollowUpAction(recordId) {
   try {
     let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
     let ss = SpreadsheetApp.openById(id);
-    let sheetNames = [
-      "Shift_INJ_TB1",
-      "Shift_INJ_TB2",
-      "Shift_TF_TB1",
-      "Shift_TF_TB2",
-      "Shift_PK_TB1",
-      "Shift_PK_TB2",
-    ];
-    
+
     // 从recordId中提取基础编号（去掉-后的数字）
     let baseId = recordId.split('-')[0];
-    
+
+    // 构建要遍历的sheet列表
+    var sheetsToSearch = [];
+    if (USE_MERGED_SHIFT_SHEET) {
+      var wsMerged = getShiftSheet(ss);
+      if (wsMerged) sheetsToSearch.push(wsMerged);
+    } else {
+      var sheetNames = [
+        "Shift_INJ_TB1", "Shift_INJ_TB2",
+        "Shift_TF_TB1", "Shift_TF_TB2",
+        "Shift_PK_TB1", "Shift_PK_TB2",
+      ];
+      sheetNames.forEach(function(sn) {
+        var s = ss.getSheetByName(sn);
+        if (s) sheetsToSearch.push(s);
+      });
+    }
+
     // 遍历所有sheet查找匹配的记录
-    for (let sheetName of sheetNames) {
-      let ws = ss.getSheetByName(sheetName);
-      if (!ws) continue;
+    for (var sIdx = 0; sIdx < sheetsToSearch.length; sIdx++) {
+      var ws = sheetsToSearch[sIdx];
       
       let lastRow = ws.getLastRow();
       if (lastRow < 2) continue;
@@ -10185,21 +10603,16 @@ function deleteMessageBoardMessage(messageId) {
 // ==========================================
 const PROJECT_TRACKING_SS_ID = '1aoQDjeWU9Xa9clloyTwiXL6WS62tYVbB0-VOavpAgAM';
 const PROJECT_TRACKING_SHEET_NAME = '项目总表';
-const PROJECT_MILESTONE_COLS = [
-  { name: '模具/自动化改造（供应商）/ Tooling & Automation (Supplier)', planned: 3, actual: 4 },
-  { name: 'FAT / FAT', planned: 5, actual: 6 },
-  { name: '现场安装 / On-site Installation', planned: 7, actual: 8 },
-  { name: 'IQ/OQ / IQ/OQ', planned: 9, actual: 10 },
-  { name: '工程测试 / Engineering Test', planned: 11, actual: 12 },
-  { name: 'PQ / PQ', planned: 13, actual: 14 },
-  { name: 'Mass Production / Mass Production', planned: 15, actual: 16 }
-];
-const PROJECT_STATUS_COL = 17;
-const PROJECT_STATUS_EDITORS = ['Lyon Zhang'];
-const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理
+// 项目总表列结构（0-indexed）：A 项目名称 / B Leader / C 技术员 / D 状态 / E 里程碑JSON
+const PROJECT_STATUS_COL = 3;          // Col D
+const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理（用户权限表，不受项目总表列变更影响）
 const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
 const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
-const PROJECT_MILESTONES_JSON_COL = 18; // Col S (0-indexed) — 存储里程碑 JSON 数组
+const PROJECT_MILESTONES_JSON_COL = 4;  // Col E — 里程碑 JSON 数组（单一数据源）
+const PROJECT_TYPE_COL = 5;             // Col F — 项目类型：标准 / CI（缺省按 标准）
+const PROJECT_ID_COL = 6;              // Col G — 项目编号
+const PROJECT_CREATED_COL = 7;         // Col H — 创建时间
+const PROJECT_COMPLETED_COL = 8;       // Col I — 完成时间
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10223,6 +10636,19 @@ function formatSheetDate_(val) {
 }
 
 /**
+ * 解析里程碑数组（单一数据源：S 列 Milestones_JSON）
+ * Parse milestones from the JSON column. Returns [] when absent/invalid.
+ * @param {*} raw - cell value of PROJECT_MILESTONES_JSON_COL
+ * @returns {Array<{name:string,planned:string,actual:string}>}
+ */
+function parseMilestonesJSON_(raw) {
+  if (raw && String(raw).trim().charAt(0) === '[') {
+    try { return JSON.parse(String(raw)); } catch (e) {}
+  }
+  return [];
+}
+
+/**
  * 获取项目跟进数据
  * Get project tracking data
  * @returns {string} JSON string
@@ -10240,27 +10666,17 @@ function getProjectTrackingData() {
     });
 
     const projects = rows.map(function(row, index) {
-      var milestones;
-      var jsonRaw = row[PROJECT_MILESTONES_JSON_COL];
-      if (jsonRaw && String(jsonRaw).trim().charAt(0) === '[') {
-        try { milestones = JSON.parse(String(jsonRaw)); } catch(e) { milestones = null; }
-      }
-      if (!milestones) {
-        milestones = PROJECT_MILESTONE_COLS.map(function(ms) {
-          return {
-            name: ms.name,
-            planned: formatSheetDate_(row[ms.planned]),
-            actual: formatSheetDate_(row[ms.actual])
-          };
-        });
-      }
       const project = {
         rowIndex: index + 2,
+        projectId: String(row[PROJECT_ID_COL] || ''),
         projectName: String(row[0] || ''),
         leader: String(row[1] || ''),
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
-        milestones: milestones
+        type: String(row[PROJECT_TYPE_COL] || '').trim() || '标准',
+        milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL]),
+        createdAt: String(row[PROJECT_CREATED_COL] || ''),
+        completedAt: String(row[PROJECT_COMPLETED_COL] || '')
       };
       return project;
     });
@@ -10312,17 +10728,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     // Update milestone actual dates
     if (updates.milestones && Array.isArray(updates.milestones)) {
       const actualChanges = [];
-      // Read current JSON milestones
-      var currentJsonRaw = currentRow[PROJECT_MILESTONES_JSON_COL];
-      var currentMsArr = null;
-      if (currentJsonRaw && String(currentJsonRaw).trim().charAt(0) === '[') {
-        try { currentMsArr = JSON.parse(String(currentJsonRaw)); } catch(e) { currentMsArr = null; }
-      }
-      if (!currentMsArr) {
-        currentMsArr = PROJECT_MILESTONE_COLS.map(function(ms) {
-          return { name: ms.name, planned: formatSheetDate_(currentRow[ms.planned]), actual: formatSheetDate_(currentRow[ms.actual]) };
-        });
-      }
+      var currentMsArr = parseMilestonesJSON_(currentRow[PROJECT_MILESTONES_JSON_COL]);
       updates.milestones.forEach(function(ms) {
         if (ms.index >= 0 && ms.index < currentMsArr.length) {
           const currentActual = String(currentMsArr[ms.index].actual || '').trim();
@@ -10330,71 +10736,120 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
             actualChanges.push({ name: currentMsArr[ms.index].name, old: currentActual, new: ms.actual || '' });
           }
           currentMsArr[ms.index].actual = ms.actual || '';
-          // Also write to legacy fixed cols if within standard range
-          if (ms.index < PROJECT_MILESTONE_COLS.length) {
-            ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[ms.index].actual + 1).setValue(ms.actual || '');
-          }
         }
       });
       ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(currentMsArr));
       if (actualChanges.length > 0) changes.milestones = actualChanges;
     }
 
-    // Update status and planned dates (only admin)
-    var isAdmin = false;
-    if (updates.status !== undefined || (updates.milestones && updates.hasPlannedChanges)) {
-      const permCheck = JSON.parse(checkProjectPermission(editorName));
-      isAdmin = permCheck.isAdmin;
-    }
-    if (updates.status !== undefined) {
-      if (!isAdmin && PROJECT_STATUS_EDITORS.indexOf(editorName) === -1) {
-        return JSON.stringify({ success: false, message: '仅管理员可修改状态 / Only admin can change status' });
-      }
-      const currentStatus = String(currentRow[PROJECT_STATUS_COL] || '').trim();
-      if (updates.status !== currentStatus) changes.status = { old: currentStatus, new: updates.status };
-      ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
-    }
-    // Update milestone planned dates (admin only)
-    if (updates.plannedDates && isAdmin) {
+    // Full milestone replacement — 同时检测计划日期变更、写History
+    if (updates.milestonesReplace !== undefined) {
+      var oldMsArr = parseMilestonesJSON_(currentRow[PROJECT_MILESTONES_JSON_COL]);
+      const newArr = updates.milestonesReplace.map(function(ms) {
+        return {
+          name: String(ms.name || ''),
+          planned: String(ms.planned || 'NA'),
+          actual: String(ms.actual || ''),
+          owner: String(ms.owner || ''),
+          ownerEmail: String(ms.ownerEmail || ''),
+          status: String(ms.status || '')
+        };
+      });
+      ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(newArr));
+      changes.milestonesReplace = newArr;
+
+      // 检测计划日期变更 + 全面记录所有变更到 History
       const plannedChanges = [];
-      // Re-read current JSON milestones for planned update
-      var curJsonRaw2 = currentRow[PROJECT_MILESTONES_JSON_COL];
-      var curMsArr2 = null;
-      if (curJsonRaw2 && String(curJsonRaw2).trim().charAt(0) === '[') {
-        try { curMsArr2 = JSON.parse(String(curJsonRaw2)); } catch(e) { curMsArr2 = null; }
-      }
-      if (!curMsArr2) {
-        curMsArr2 = PROJECT_MILESTONE_COLS.map(function(ms) {
-          return { name: ms.name, planned: formatSheetDate_(currentRow[ms.planned]), actual: formatSheetDate_(currentRow[ms.actual]) };
-        });
-      }
-      updates.plannedDates.forEach(function(pd) {
-        if (pd.index >= 0 && pd.index < curMsArr2.length) {
-          const currentPlanned = String(curMsArr2[pd.index].planned || '').trim();
-          const newPlanned = pd.planned || 'NA';
-          if (newPlanned !== currentPlanned) {
-            plannedChanges.push({ name: curMsArr2[pd.index].name, old: currentPlanned, new: newPlanned });
+      const historyRows = []; // 通用 History 记录行
+      const maxLen = Math.max(oldMsArr.length, newArr.length);
+      for (let j = 0; j < maxLen; j++) {
+        const oldMs = j < oldMsArr.length ? oldMsArr[j] : null;
+        const newMs = j < newArr.length ? newArr[j] : null;
+        const msLabel = (newMs || oldMs).name || ('#' + (j + 1));
+
+        if (!oldMs && newMs) {
+          historyRows.push({ milestone: '新增: ' + msLabel, note: '新增里程碑/事项' });
+        } else if (oldMs && !newMs) {
+          historyRows.push({ milestone: '删除: ' + msLabel, note: '删除里程碑/事项' });
+        } else if (oldMs && newMs) {
+          // 计划日期
+          const oldP = String(oldMs.planned || '').trim();
+          const newP = String(newMs.planned || 'NA');
+          if (oldP !== newP) {
+            plannedChanges.push({ name: msLabel, old: oldP || 'NA', new: newP });
+            historyRows.push({ milestone: msLabel, plannedOld: oldP || 'NA', plannedNew: newP, note: '计划日期变更' });
           }
-          curMsArr2[pd.index].planned = newPlanned;
-          // Also write to legacy fixed cols if within standard range
-          if (pd.index < PROJECT_MILESTONE_COLS.length) {
-            ws.getRange(rowIndex, PROJECT_MILESTONE_COLS[pd.index].planned + 1).setValue(pd.planned || 'NA');
+          // 名称
+          if (String(oldMs.name || '').trim() !== String(newMs.name || '').trim()) {
+            historyRows.push({ milestone: msLabel, plannedOld: String(oldMs.name || '').trim(), plannedNew: String(newMs.name || '').trim(), note: '名称变更' });
+          }
+          // 实际完成日期
+          const oldA = String(oldMs.actual || '').trim();
+          const newA = String(newMs.actual || '');
+          if (oldA !== newA) {
+            historyRows.push({ milestone: msLabel, plannedOld: oldA || '无', plannedNew: newA || '无', note: '实际完成日期变更' });
+          }
+          // 责任人 (CI)
+          const oldO = String(oldMs.owner || '').trim();
+          const newO = String(newMs.owner || '');
+          if (oldO !== newO) {
+            historyRows.push({ milestone: msLabel, plannedOld: oldO || '无', plannedNew: newO || '无', note: '责任人变更' });
+          }
+          // 事项状态 (CI)
+          const oldS = String(oldMs.status || '').trim();
+          const newS = String(newMs.status || '');
+          if (oldS !== newS) {
+            historyRows.push({ milestone: msLabel, plannedOld: oldS || '无', plannedNew: newS || '无', note: '事项状态变更' });
           }
         }
-      });
-      ws.getRange(rowIndex, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(curMsArr2));
-      if (plannedChanges.length > 0) {
-        changes.plannedDates = plannedChanges;
-        // Record planned date change history
+      }
+      if (plannedChanges.length > 0) changes.plannedDates = plannedChanges;
+
+      // 写入 History
+      const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+      if (historyWs) {
+        const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+        const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+        historyRows.forEach(function(hr) {
+          historyWs.appendRow([projectName, hr.milestone, hr.plannedOld || '', hr.plannedNew || '', editorName, now, hr.note || '']);
+        });
+      }
+    }
+    if (updates.leader) {
+      const currentLeader = String(currentRow[1] || '').trim();
+      if (updates.leader !== currentLeader) {
+        // Leader 变更写入 History（changes.leader 已在上方设置）
         const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
         if (historyWs) {
           const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
           const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
-          plannedChanges.forEach(function(pc) {
-            historyWs.appendRow([projectName, pc.name, pc.old, pc.new, editorName, now, '']);
-          });
+          historyWs.appendRow([projectName, 'Leader变更', currentLeader, updates.leader, editorName, now, '项目Leader变更']);
         }
       }
+    }
+    if (updates.status !== undefined) {
+      const currentStatus = String(currentRow[PROJECT_STATUS_COL] || '').trim();
+      if (updates.status !== currentStatus) {
+        changes.status = { old: currentStatus, new: updates.status };
+        // 状态变更写入 History
+        const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+        if (historyWs) {
+          const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+          const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+          historyWs.appendRow([projectName, '状态变更', changes.status.old, changes.status.new, editorName, now, '项目状态变更']);
+        }
+        // 状态改为 Done 时记录完成时间
+        if (updates.status === 'Done') {
+          const tz2 = Session.getScriptTimeZone() || 'Asia/Shanghai';
+          const doneTime = Utilities.formatDate(new Date(), tz2, 'yyyy-MM-dd');
+          ws.getRange(rowIndex, PROJECT_COMPLETED_COL + 1).setValue(doneTime);
+        }
+        // 状态从 Done 改回其他时清除完成时间
+        if (currentStatus === 'Done' && updates.status !== 'Done') {
+          ws.getRange(rowIndex, PROJECT_COMPLETED_COL + 1).setValue('');
+        }
+      }
+      ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
     }
 
     if (Object.keys(changes).length > 0) {
@@ -10408,111 +10863,71 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
 }
 
 /**
- * 发送计划日期变更通知给所有"管理员"权限用户
- * @param {string} projectName
- * @param {string} editorName
- * @param {Array} plannedDates
- */
-function sendPlannedDateChangeNotification(projectName, editorName, plannedDates) {
-  try {
-    const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
-    const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
-    if (!permWs) return;
-    const permVals = permWs.getDataRange().getValues();
-    const adminEmails = [];
-    for (let i = 2; i < permVals.length; i++) {
-      const perm = String(permVals[i][PROJECT_PERMISSION_COL] || '').trim();
-      if (perm === '管理员') {
-        const email = String(permVals[i][9] || '').trim();
-        if (email) adminEmails.push(email);
-      }
-    }
-    if (adminEmails.length === 0) return;
-    const webPage = getReleaseWebPage();
-    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
-    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-    const subject = '【项目跟进】计划日期变更通知 / Planned Date Change - ' + projectName;
-    let rows = '';
-    // Read tracking sheet to get old planned dates from history
-    const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
-    const historyWs = trackSs.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
-    plannedDates.forEach(function(pd, i) {
-      if (pd.index >= 0 && pd.index < PROJECT_MILESTONE_COLS.length) {
-        var oldDate = '';
-        if (historyWs) {
-          var hData = historyWs.getDataRange().getValues();
-          for (var h = hData.length - 1; h >= 0; h--) {
-            if (String(hData[h][0] || '').trim() === projectName
-              && String(hData[h][1] || '').trim() === PROJECT_MILESTONE_COLS[pd.index].name) {
-              var ov = hData[h][2];
-              oldDate = ov instanceof Date ? Utilities.formatDate(ov, tz, 'yyyy-MM-dd') : String(ov || '');
-              break;
-            }
-          }
-        }
-        rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(PROJECT_MILESTONE_COLS[pd.index].name) + '</td>'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#777;font-family:monospace;">' + escapeHtml(oldDate || 'NA') + '</td>'
-          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#34495e;font-family:monospace;font-weight:600;">' + escapeHtml(pd.planned || 'NA') + '</td>'
-          + '</tr>';
-      }
-    });
-    const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
-      + '<div style="background:#fff0f0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid #E60012;">'
-      + '<h2 style="color:#E60012;text-align:center;margin-bottom:20px;border-bottom:3px solid #E60012;padding-bottom:10px;">'
-      + '【计划日期变更通知】项目跟进<br><span style="font-size:0.8em;">Planned Date Change - Project Tracking</span></h2>'
-      + '<p style="font-size:15px;line-height:1.6;color:#c0392b;">（' + today + '）以下项目的里程碑计划日期已变更：<br>'
-      + '<span style="font-size:0.9em;opacity:0.85;">Milestone planned dates have been updated for the following project:</span></p>'
-      + '</div>'
-      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
-      + '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">'
-      + '<tr><td style="padding:8px 12px;width:140px;font-weight:600;color:#555;">项目 / Project</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(projectName) + '</td></tr>'
-      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">编辑人 / Editor</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(editorName) + '</td></tr>'
-      + '</table>'
-      + '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin-bottom:16px;">变更里程碑计划日期 / Changed Planned Dates</h3>'
-      + '<div style="overflow-x:auto;">'
-      + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
-      + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">原计划 / Old</th>'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">新计划 / New</th>'
-      + '</tr></thead>'
-      + '<tbody>' + rows + '</tbody>'
-      + '</table></div></div>'
-      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:20px;text-align:center;">'
-      + '<p style="margin-bottom:12px;"><a href="' + webPage + '?v=ProjectTracking" style="background:#E60012;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">点击查看项目跟进 / View Project Tracking</a></p>'
-      + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
-      + '</div></div>';
-    GmailApp.sendEmail(adminEmails.join(','), subject, '', { htmlBody: htmlBody });
-    console.log('计划日期变更通知已发送 / Notification sent to: ' + adminEmails.join(','));
-  } catch (e) {
-    console.error('sendPlannedDateChangeNotification error: ' + e);
-  }
-}
-
-/**
  * 发送项目更新通知给所有管理员（含任何字段变更）
  * Send project update notification to all admin users on any change
  */
 function sendProjectUpdateNotification(projectName, editorName, changes) {
   try {
+    // 1. 获取项目 Leader 邮箱（从项目总表 Col B）
+    const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const trackWs = trackSs.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!trackWs) return;
+    const trackData = trackWs.getDataRange().getValues();
+    let leaderValue = '';
+    let milestonesRaw = '';
+    for (let i = 1; i < trackData.length; i++) {
+      if (String(trackData[i][0] || '').trim() === projectName) {
+        leaderValue = String(trackData[i][1] || '').trim();
+        milestonesRaw = String(trackData[i][PROJECT_MILESTONES_JSON_COL] || '');
+        break;
+      }
+    }
+    // 从 "姓名 (email)" 格式提取邮箱
+    const leaderEmail = (leaderValue.match(/\(([^)]+)\)/) || [])[1] || '';
+
+    // 2. 项目 Leader 的直线上级（从 userID BI 列查找）
+    const leaderName = leaderValue.replace(/\(.*\)/, '').trim();  // "郭彭 (email)" → "郭彭"
     const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
     const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
     if (!permWs) return;
     const permVals = permWs.getDataRange().getValues();
-    const adminEmails = [];
+    const INJ_ADMIN_COLS = { process: 14, perm: 59, email: 9, name: 1, supervisor: 60 }; // O=工序, BH=权限, J=邮箱, B=姓名, BI=直线上级
+    const injAdminEmails = [];
+    let supervisorEmail = '';
     for (let i = 2; i < permVals.length; i++) {
-      const perm = String(permVals[i][PROJECT_PERMISSION_COL] || '').trim();
-      if (perm === '管理员') {
-        const email = String(permVals[i][9] || '').trim();
-        if (email) adminEmails.push(email);
+      const proc  = String(permVals[i][INJ_ADMIN_COLS.process] || '').trim();    // O: EDS 工序
+      const perm  = String(permVals[i][INJ_ADMIN_COLS.perm] || '').trim();       // BH: 项目跟进权限
+      const email = String(permVals[i][INJ_ADMIN_COLS.email] || '').trim();      // J: GMail
+      if (proc === 'INJ' && perm === '管理员' && email) {
+        injAdminEmails.push(email);
+      }
+      const name  = String(permVals[i][INJ_ADMIN_COLS.name] || '').trim();       // B: NAME
+      if (name === leaderName) {
+        supervisorEmail = String(permVals[i][INJ_ADMIN_COLS.supervisor] || '').trim(); // BI: 直线上级
       }
     }
-    if (adminEmails.length === 0) return;
+
+    // 事项责任人邮箱：取当前项目里程碑 JSON 中各节点的 ownerEmail
+    const ownerEmails = [];
+    parseMilestonesJSON_(milestonesRaw).forEach(function(n) {
+      const e = String((n && n.ownerEmail) || '').trim();
+      if (e) ownerEmails.push(e);
+    });
+
+    // 3. 构建收件人：To=项目Leader, CC=INJ管理员+直线上级+事项责任人（去重）
+    const ccList = [...new Set([...injAdminEmails, supervisorEmail, ...ownerEmails].filter(Boolean))];
+    const ccFiltered = leaderEmail ? ccList.filter(function(e) { return e.toLowerCase() !== leaderEmail.toLowerCase(); }) : ccList;
+    const toEmail = leaderEmail || ccFiltered.shift() || '';
+
+    if (!toEmail) {
+      console.log('No recipients for project update notification: ' + projectName);
+      return;
+    }
+
     const webPage = getReleaseWebPage();
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
     const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-    const subject = '【项目跟进】项目更新通知 / Project Update - ' + projectName;
+    const subject = '【项目跟进】' + escapeHtml(editorName) + ' 更新了项目 / Project Update - ' + projectName;
 
     const fmtDate = function(val) {
       if (!val || val === '空/Empty' || val === 'NA') return val || '空/Empty';
@@ -10539,6 +10954,25 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
         + ' <span style="color:#999;font-size:1.1em;">→</span> '
         + '<span style="color:#2c3e50;font-weight:600;">' + escapeHtml(changes.status.new) + '</span>'
         + '</div>';
+    }
+
+    if (changes.milestonesReplace && Array.isArray(changes.milestonesReplace)) {
+      let rows = '';
+      changes.milestonesReplace.forEach(function(ms, i) {
+        rows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">';
+        rows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-weight:500;color:#2c3e50;">' + escapeHtml(ms.name) + '</td>';
+        rows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-family:monospace;color:#555;">' + escapeHtml(ms.planned || 'NA') + '</td>';
+        rows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-family:monospace;color:#555;">' + escapeHtml(fmtDate(ms.actual) || '未完成/Pending') + '</td>';
+        rows += '</tr>';
+      });
+      sectionsHtml += '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">里程碑结构已更新 / Milestone Structure Updated</h3>'
+        + '<div style="overflow-x:auto;">'
+        + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+        + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+        + '<th style="padding:12px;text-align:left;">里程碑 / Milestone</th>'
+        + '<th style="padding:12px;text-align:left;">计划日期 / Planned</th>'
+        + '<th style="padding:12px;text-align:left;">实际完成 / Actual</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
 
     if (changes.milestones && changes.milestones.length > 0) {
@@ -10616,8 +11050,10 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
       + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
       + '</div></div>';
 
-    GmailApp.sendEmail(adminEmails.join(','), subject, '', { htmlBody: htmlBody });
-    console.log('项目更新通知已发送 / Project update notification sent to: ' + adminEmails.join(','));
+    const mailOptions = { htmlBody: htmlBody };
+    if (ccFiltered.length > 0) mailOptions.cc = ccFiltered.join(',');
+    GmailApp.sendEmail(toEmail, subject, '', mailOptions);
+    console.log('项目更新通知已发送 / Project update notification sent — To: ' + toEmail + (ccFiltered.length > 0 ? ', CC: ' + ccFiltered.join(',') : ''));
   } catch (e) {
     console.error('sendProjectUpdateNotification error: ' + e);
   }
@@ -10751,27 +11187,26 @@ function getUserList() {
  */
 function requestPlannedDateDelay(projectName, milestoneIndex, newDate, reason, editorName) {
   try {
-    if (milestoneIndex < 0 || milestoneIndex >= PROJECT_MILESTONE_COLS.length) {
-      return JSON.stringify({ success: false, message: '无效的里程碑索引 / Invalid milestone index' });
-    }
-    const msName = PROJECT_MILESTONE_COLS[milestoneIndex].name;
-    const plannedCol = PROJECT_MILESTONE_COLS[milestoneIndex].planned;
-
-    // Get current planned date
+    // Get current planned date from the project's own milestone JSON (single source of truth)
     const trackSs = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
     const trackWs = trackSs.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
     if (!trackWs) return JSON.stringify({ success: false, message: '数据表未找到 / Sheet not found' });
     const trackData = trackWs.getDataRange().getValues();
     let rowIndex = -1;
-    let oldPlanned = '';
+    let msArr = [];
     for (let i = 1; i < trackData.length; i++) {
       if (String(trackData[i][0] || '').trim() === projectName) {
         rowIndex = i + 1;
-        oldPlanned = String(trackData[i][plannedCol] || '').trim();
+        msArr = parseMilestonesJSON_(trackData[i][PROJECT_MILESTONES_JSON_COL]);
         break;
       }
     }
     if (rowIndex < 0) return JSON.stringify({ success: false, message: '项目未找到 / Project not found' });
+    if (milestoneIndex < 0 || milestoneIndex >= msArr.length) {
+      return JSON.stringify({ success: false, message: '无效的里程碑索引 / Invalid milestone index' });
+    }
+    const msName = String(msArr[milestoneIndex].name || '');
+    const oldPlanned = String(msArr[milestoneIndex].planned || '').trim();
 
     // Get user info (email and supervisor email)
     const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
@@ -10894,13 +11329,15 @@ function handleApprovalAction(action, token) {
         const trackData = trackWs.getDataRange().getValues();
         for (let i = 1; i < trackData.length; i++) {
           if (String(trackData[i][0] || '').trim() === projectName) {
-            // Find the milestone column
-            for (let j = 0; j < PROJECT_MILESTONE_COLS.length; j++) {
-              if (PROJECT_MILESTONE_COLS[j].name === msName) {
-                trackWs.getRange(i + 1, PROJECT_MILESTONE_COLS[j].planned + 1).setValue(newDate);
+            // Update the planned date inside the milestone JSON (single source of truth)
+            var msArr = parseMilestonesJSON_(trackData[i][PROJECT_MILESTONES_JSON_COL]);
+            for (let j = 0; j < msArr.length; j++) {
+              if (msArr[j].name === msName) {
+                msArr[j].planned = newDate;
                 break;
               }
             }
+            trackWs.getRange(i + 1, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(msArr));
             break;
           }
         }
@@ -11009,64 +11446,110 @@ function addProject(dataStr) {
     const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
     if (!ws) return JSON.stringify({ success: false, message: 'Sheet 项目总表 not found' });
 
-    // milestones: array of {name, planned} from frontend
+    // milestones: array of {name, planned, owner?, ownerEmail?} from frontend
     const msData = Array.isArray(data.milestones) ? data.milestones : [];
     const msJsonArr = msData.map(function(ms) {
-      if (typeof ms === 'string') return { name: ms, planned: ms || 'NA', actual: '' };
-      return { name: ms.name || '', planned: ms.planned || 'NA', actual: '' };
+      if (typeof ms === 'string') return { name: ms, planned: ms || 'NA', actual: '', owner: '', ownerEmail: '' };
+      return {
+        name: ms.name || '',
+        planned: ms.planned || 'NA',
+        actual: ms.actual || '',
+        owner: ms.owner || '',
+        ownerEmail: ms.ownerEmail || '',
+        status: ms.status || ''
+      };
     });
 
-    // Build row: cols A~R = fixed legacy format, col S = JSON
-    const row = [];
-    row.push(data.projectName || '');   // 0: 项目名称
-    row.push(data.leader || '');        // 1: Leader
-    row.push(data.technician || '');    // 2: 测试责任技术员
-    // Legacy fixed cols D~Q (7 milestones × 2)
-    const STANDARD_MS = ['模具/自动化改造（供应商）/ Tooling & Automation (Supplier)','FAT / FAT','现场安装 / On-site Installation','IQ/OQ / IQ/OQ','工程测试 / Engineering Test','PQ / PQ','Mass Production / Mass Production'];
-    for (let i = 0; i < 7; i++) {
-      const found = msJsonArr.find(function(m) { return m.name === STANDARD_MS[i]; });
-      row.push(found ? (found.planned || '') : '');  // planned
-      row.push('');                                   // actual blank
+    const projType = (data.type === 'CI') ? 'CI' : '标准';
+
+    // 生成唯一项目编号 PRJ-YYYYMMDD-NNN
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const nowDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const allData = ws.getDataRange().getValues();
+    let maxSeq = 0;
+    const todayPrefix = 'PRJ-' + todayStr.split('-').join('') + '-';
+    for (let i = 1; i < allData.length; i++) {
+      const existingId = String(allData[i][PROJECT_ID_COL] || '').trim();
+      if (existingId.indexOf(todayPrefix) === 0) {
+        const seq = parseInt(existingId.split('-').pop(), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
     }
-    row.push(data.status || 'Not start');             // 17: Status
-    row.push(JSON.stringify(msJsonArr));               // 18: Milestones_JSON
+    const projectId = todayPrefix + String(maxSeq + 1).padStart(3, '0');
+
+    // Build row: A-G → 项目名称/Leader/技术员/状态/里程碑JSON/类型/编号/创建时间/完成时间
+    const row = [
+      data.projectName || '',
+      data.leader || '',
+      data.technician || '',
+      data.status || 'Not start',
+      JSON.stringify(msJsonArr),
+      projType,
+      projectId,
+      nowDate,
+      ''
+    ];
 
     ws.appendRow(row);
-    return JSON.stringify({ success: true, message: '添加成功 / Project added successfully' });
+    return JSON.stringify({ success: true, message: '添加成功 / Project added successfully', projectId: projectId });
   } catch (e) {
     return JSON.stringify({ success: false, message: '添加失败 / Add failed: ' + e.toString() });
   }
 }
 
-// ========== ProjectTracking 里程碑迁移：固定列 → JSON 列 ==========
-// 使用方式：在 GAS 编辑器中手动执行一次 migrateProjectMilestonesToJSON()
-function migrateProjectMilestonesToJSON() {
-  const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
-  const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
-  if (!ws) return 'Sheet not found';
-  const data = ws.getDataRange().getValues();
-  // Write header for JSON col if empty
-  if (!data[0][PROJECT_MILESTONES_JSON_COL]) {
-    ws.getRange(1, PROJECT_MILESTONES_JSON_COL + 1).setValue('Milestones_JSON');
+/**
+ * 删除项目（仅管理员）
+ * Delete a project — admin only. Identified by projectId (preferred) or projectName.
+ * @param {string} projectName - 项目名称
+ * @param {string} projectId - 项目编号（优先用于精确定位）
+ * @param {string} editorName - 操作人姓名
+ * @returns {string} JSON string
+ */
+function deleteProject(projectName, projectId, editorName) {
+  try {
+    // 权限校验：仅项目跟进管理员可删除
+    var perm = {};
+    try { perm = JSON.parse(checkProjectPermission(editorName)); } catch (e) {}
+    if (!perm.isAdmin) {
+      return JSON.stringify({ success: false, message: '无权限：仅管理员可删除项目 / Permission denied: admin only' });
+    }
+
+    const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+    const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+    if (!ws) return JSON.stringify({ success: false, message: 'Sheet 项目总表 not found' });
+
+    const data = ws.getDataRange().getValues();
+    const pid = String(projectId || '').trim();
+    const pname = String(projectName || '').trim();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (pid) {
+        if (String(data[i][PROJECT_ID_COL] || '').trim() === pid) { rowIndex = i + 1; break; }
+      } else if (String(data[i][0] || '').trim() === pname) {
+        rowIndex = i + 1; break;
+      }
+    }
+    if (rowIndex === -1) return JSON.stringify({ success: false, message: '未找到项目 / Project not found' });
+
+    const delName = String(data[rowIndex - 1][0] || '');
+    const delId = String(data[rowIndex - 1][PROJECT_ID_COL] || '');
+    ws.deleteRow(rowIndex);
+
+    // 审计：写入历史表 [项目名, 里程碑, 旧, 新, 编辑人, 时间, 备注]
+    try {
+      const histWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+      if (histWs) {
+        const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+        const nowStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+        histWs.appendRow([delName, '【项目删除 / Deleted】', '', '', editorName || '', nowStr, '删除项目 ' + delId]);
+      }
+    } catch (e) { /* 审计失败不影响删除结果 */ }
+
+    return JSON.stringify({ success: true, message: '项目已删除 / Project deleted: ' + delName });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: '删除失败 / Delete failed: ' + e.toString() });
   }
-  let count = 0;
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row[0] || String(row[0]).trim() === '') continue;
-    const existing = row[PROJECT_MILESTONES_JSON_COL];
-    if (existing && String(existing).trim().charAt(0) === '[') continue; // already migrated
-    const msArr = PROJECT_MILESTONE_COLS.map(function(ms) {
-      return {
-        name: ms.name,
-        planned: formatSheetDate_(row[ms.planned]) || 'NA',
-        actual: formatSheetDate_(row[ms.actual]) || ''
-      };
-    });
-    ws.getRange(i + 1, PROJECT_MILESTONES_JSON_COL + 1).setValue(JSON.stringify(msArr));
-    count++;
-  }
-  SpreadsheetApp.flush();
-  return 'Migrated ' + count + ' rows to JSON milestones';
 }
 
 // ========== Inspection2.0 数据迁移：6 Sheet → 1 统一记录表 ==========
@@ -11149,5 +11632,195 @@ function countInspectionRows() {
   var newRows = newWs && newWs.getLastRow() > 1 ? newWs.getLastRow() - 1 : 0;
   console.log("InspectionRecords: " + newRows + " 行");
   console.log("旧6表合计: " + oldTotal + " | 新表: " + newRows + " | 匹配: " + (oldTotal === newRows));
+  return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
+}
+
+// ========== PM 分表合并：6 Sheet → 1 统一记录表 ==========
+// 使用方式：在 GAS 编辑器中手动执行一次 migrateToPMRecords()
+// 验证方式：执行 validatePMRecordsMigration() 对比新旧行数
+function migrateToPMRecords() {
+  var ss = SpreadsheetApp.openById(PM_DB_ID);
+  var sheetNames = ["INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2"];
+
+  // 1. 创建或清空目标表
+  var target = ss.getSheetByName(PM_RECORDS_SHEET_NAME);
+  if (target) {
+    ss.deleteSheet(target);
+  }
+  target = ss.insertSheet(PM_RECORDS_SHEET_NAME, 0);
+  target.setFrozenRows(1);
+
+  // 2. 获取表头（使用 INJ-TB1 的表头作为模板）
+  var ws_head = ss.getSheetByName("INJ-TB1");
+  var headers = ws_head.getRange(1, 1, 1, ws_head.getLastColumn()).getValues()[0];
+  headers.push("工序", "车间"); // 末尾追加标识列
+  target.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // 3. 逐表迁移数据
+  var totalRows = 0;
+  sheetNames.forEach(function (name) {
+    var ws = ss.getSheetByName(name);
+    var lastRow = ws.getLastRow();
+    if (lastRow <= 1) {
+      console.log(name + ": 无数据，跳过");
+      return;
+    }
+    var data = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getValues();
+    var parts = name.split("-"); // e.g. ["INJ", "TB1"]
+    var proc = parts[0];
+    var wksp = parts[1];
+
+    // 每行末尾追加 工序、车间
+    var enriched = data.map(function (row) {
+      row[21] = proc;  // V列 = 工序
+      row[22] = wksp;  // W列 = 车间
+      return row;
+    });
+
+    // 分批写入
+    var batch = 500;
+    for (var i = 0; i < enriched.length; i += batch) {
+      var chunk = enriched.slice(i, Math.min(i + batch, enriched.length));
+      target.getRange(totalRows + 2 + i, 1, chunk.length, chunk[0].length).setValues(chunk);
+      SpreadsheetApp.flush();
+    }
+    totalRows += enriched.length;
+    console.log(name + ": " + enriched.length + " 行已迁移");
+  });
+
+  console.log("迁移完成！总计 " + totalRows + " 行写入 " + PM_RECORDS_SHEET_NAME);
+  return "OK: " + totalRows + " rows migrated to " + PM_RECORDS_SHEET_NAME;
+}
+
+// 验证迁移结果
+function validatePMRecordsMigration() {
+  var ss = SpreadsheetApp.openById(PM_DB_ID);
+  var sheetNames = ["INJ-TB1", "INJ-TB2", "TF-TB1", "TF-TB2", "PK-TB1", "PK-TB2"];
+  var oldTotal = 0;
+
+  sheetNames.forEach(function (name) {
+    var ws = ss.getSheetByName(name);
+    var rows = ws && ws.getLastRow() > 1 ? ws.getLastRow() - 1 : 0;
+    console.log(name + ": " + rows + " 行");
+    oldTotal += rows;
+  });
+
+  var newWs = ss.getSheetByName(PM_RECORDS_SHEET_NAME);
+  var newRows = newWs && newWs.getLastRow() > 1 ? newWs.getLastRow() - 1 : 0;
+  console.log(PM_RECORDS_SHEET_NAME + ": " + newRows + " 行");
+  console.log("旧6表合计: " + oldTotal + " | 新表: " + newRows + " | 匹配: " + (oldTotal === newRows));
+
+  // 抽检：验证首行数据的工序/车间列
+  if (newWs && newRows > 0) {
+    var sample = newWs.getRange(2, 1, 1, newWs.getLastColumn()).getValues()[0];
+    console.log("抽检首行 - PM No.: " + sample[0] + ", 工序(V): " + sample[21] + ", 车间(W): " + sample[22]);
+  }
+
+  return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
+}
+
+// ==========================================
+// 交接班分表合并 - 迁移脚本
+// 将旧6张 Shift_XXX_YYY 分表数据迁移到 Shift_Records 统一表
+// ==========================================
+function migrateToShiftRecords() {
+  var ss = SpreadsheetApp.openById(SHIFT_DB_ID);
+  var oldSheetNames = [
+    "Shift_INJ_TB1", "Shift_INJ_TB2",
+    "Shift_TF_TB1", "Shift_TF_TB2",
+    "Shift_PK_TB1", "Shift_PK_TB2",
+  ];
+
+  // 获取最大列宽（submitFailure 写24列，upload_shift 写22列）
+  var maxCols = 0;
+  var head = null;
+  for (var i = 0; i < oldSheetNames.length; i++) {
+    var ws = ss.getSheetByName(oldSheetNames[i]);
+    if (ws && ws.getLastRow() > 0) {
+      var h = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+      if (h.length > maxCols) {
+        head = h;
+        maxCols = h.length;
+      }
+    }
+  }
+  if (!head) return "No data found in any source sheet / 源Sheet无数据";
+
+  // 创建或清空 Shift_Records
+  var wsNew = ss.getSheetByName(SHIFT_RECORDS_SHEET_NAME);
+  if (!wsNew) {
+    wsNew = ss.insertSheet(SHIFT_RECORDS_SHEET_NAME);
+  } else {
+    wsNew.clear();
+  }
+  // 写入新表头（原表头即可，车间/工序已在 O/P 列）
+  var allRows = [head];
+
+  var totalRows = 0;
+  for (var j = 0; j < oldSheetNames.length; j++) {
+    var wsSrc = ss.getSheetByName(oldSheetNames[j]);
+    if (!wsSrc || wsSrc.getLastRow() <= 1) continue;
+
+    var data = wsSrc.getRange(2, 1, wsSrc.getLastRow() - 1, wsSrc.getLastColumn()).getValues();
+    for (var k = 0; k < data.length; k++) {
+      if (data[k].some(function(c) { return c !== '' && c !== null && c !== undefined; })) {
+        // 扩展到 maxCols 宽度（补齐空列）
+        while (data[k].length < maxCols) data[k].push('');
+        allRows.push(data[k]);
+        totalRows++;
+      }
+    }
+  }
+
+  // 批量写入（一次性，避免逐行 appendRow 的性能问题）
+  if (allRows.length > 0) {
+    wsNew.getRange(1, 1, allRows.length, allRows[0].length).setValues(allRows);
+  }
+
+  return "Migration complete: " + totalRows + " rows migrated to " + SHIFT_RECORDS_SHEET_NAME +
+    " / 迁移完成：共 " + totalRows + " 行";
+}
+
+// ==========================================
+// 交接班分表合并 - 校验脚本
+// 对比旧6表和新表的数据，确保迁移正确
+// ==========================================
+function validateShiftRecordsMigration() {
+  var ss = SpreadsheetApp.openById(SHIFT_DB_ID);
+  var oldSheetNames = [
+    "Shift_INJ_TB1", "Shift_INJ_TB2",
+    "Shift_TF_TB1", "Shift_TF_TB2",
+    "Shift_PK_TB1", "Shift_PK_TB2",
+  ];
+
+  var oldTotal = 0;
+  oldSheetNames.forEach(function(name) {
+    var ws = ss.getSheetByName(name);
+    if (ws && ws.getLastRow() > 1) oldTotal += ws.getLastRow() - 1;
+    console.log(name + ": " + (ws && ws.getLastRow() > 1 ? ws.getLastRow() - 1 : 0) + " 行");
+  });
+
+  var newWs = ss.getSheetByName(SHIFT_RECORDS_SHEET_NAME);
+  var newRows = newWs && newWs.getLastRow() > 1 ? newWs.getLastRow() - 1 : 0;
+  console.log(SHIFT_RECORDS_SHEET_NAME + ": " + newRows + " 行");
+  console.log("旧6表合计: " + oldTotal + " | 新表: " + newRows + " | 匹配: " + (oldTotal === newRows));
+
+  // 抽检：验证首行和末行数据的工序/车间列（O列=车间, P列=工序）
+  if (newWs && newRows > 0) {
+    var lastCol = newWs.getLastColumn();
+    var sampleRow = newWs.getRange(2, 1, 1, lastCol).getValues()[0];
+    console.log("首行 - 编号: " + sampleRow[0] + ", 车间(O): " + sampleRow[14] + ", 工序(P): " + sampleRow[15]);
+
+    if (newRows > 1) {
+      var lastSample = newWs.getRange(newRows + 1, 1, 1, lastCol).getValues()[0];
+      console.log("末行 - 编号: " + lastSample[0] + ", 车间(O): " + lastSample[14] + ", 工序(P): " + lastSample[15]);
+    }
+
+    // 检查 "Last" 标记行数
+    var allData = newWs.getRange(2, 1, newRows, lastCol).getDisplayValues();
+    var lastCount = allData.filter(function(r) { return r[21] === 'Last'; }).length;
+    console.log("标记为 'Last' 的行数: " + lastCount);
+  }
+
   return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
 }
