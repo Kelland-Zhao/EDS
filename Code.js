@@ -1803,9 +1803,10 @@ function getPMrecord(PM_Info) {
       .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
       .getDisplayValues();
 
-    // 合并表模式：仅筛选当前工序+车间
+    // 合并表模式：仅筛选当前工序+车间（V/W为空时不过滤，兼容旧记录）
     if (USE_MERGED_PM_SHEET && ws.getName() === PM_RECORDS_SHEET_NAME) {
       allData = allData.filter(function(r) {
+        if (r[21] === '' && r[22] === '') return true;
         return r[21] === PM_Info.process && r[22] === PM_Info.workshop;
       });
     }
@@ -4596,6 +4597,10 @@ function saveData_tasklist(data, confirmUser) {
         ws.getRange(rowNumber, 9).setValue(data["EndTime"]);
         ws.getRange(rowNumber, 10).setValue(data["Workcenter"]);
         ws.getRange(rowNumber, 11).setValue(data["任务明细"]);
+        if (isMerged) {
+          ws.getRange(rowNumber, 22).setValue(process);
+          ws.getRange(rowNumber, 23).setValue(workshop);
+        }
       } else {
         var newRowData = [
           data["PM No."],
@@ -4610,10 +4615,12 @@ function saveData_tasklist(data, confirmUser) {
           data["Workcenter"],
           data["任务明细"],
         ];
-        if (isMerged) {
-          newRowData.push(process, workshop);
-        }
         ws.appendRow(newRowData);
+        if (isMerged) {
+          var newRow = ws.getLastRow();
+          ws.getRange(newRow, 22).setValue(process);
+          ws.getRange(newRow, 23).setValue(workshop);
+        }
       }
     } else if (Status == "End" && rowNumber !== -1) {
       let endDateColumn = 8; // 假设 EndDate 在第8列
