@@ -10878,6 +10878,20 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
       ws.getRange(rowIndex, PROJECT_STATUS_COL + 1).setValue(updates.status);
     }
 
+    if (updates.type !== undefined) {
+      const currentType = String(currentRow[PROJECT_TYPE_COL] || '').trim() || '标准';
+      if (updates.type !== currentType) {
+        changes.type = { old: currentType, new: updates.type };
+        const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+        if (historyWs) {
+          const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+          const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+          historyWs.appendRow([projectName, '类型变更', changes.type.old, changes.type.new, editorName, now, '项目类型变更']);
+        }
+      }
+      ws.getRange(rowIndex, PROJECT_TYPE_COL + 1).setValue(updates.type);
+    }
+
     if (Object.keys(changes).length > 0) {
       sendProjectUpdateNotification(projectName, editorName, changes);
     }

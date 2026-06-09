@@ -1021,6 +1021,16 @@
 
     // Build milestone/follow-up rows — type-aware
     currentUpdateIsCI = (projType(proj) === 'CI' || projType(proj) === '小组Kaizen');
+    // 类型下拉：仅 CI / 小组Kaizen 可切换，标准项目禁用
+    var pType = proj.type || '标准';
+    $('#modalType').empty();
+    if (pType === '标准') {
+      $('#modalType').append('<option value="标准">新品/新自动化 / New Product & Automation</option>').val('标准').prop('disabled', true);
+      $('#typeHelp').text('新品/新自动化项目不支持类型转换 / Not convertible');
+    } else {
+      $('#modalType').append('<option value="CI">CI（follow-up）/ CI</option><option value="小组Kaizen">小组Kaizen（follow-up）/ Team Kaizen</option>').val(pType).prop('disabled', false);
+      $('#typeHelp').text('可切换 CI ↔ 小组Kaizen / Switch between CI and Team Kaizen');
+    }
     // 解析项目 Leader（"姓名 (邮箱)"），供 CI 行 owner 缺省回退
     (function() {
       var L = (proj.leader || '').trim();
@@ -1048,6 +1058,7 @@
       $('#statusHelp').text('已完成项目不可编辑 / Completed project is read-only');
       $('#saveBtn').addClass('d-none');
       $('#updateMsAddBtn').addClass('d-none');
+      $('#modalType').prop('disabled', true);
       $('#modalMilestones .upd-ms-row').each(function() {
         $(this).find('input, select').prop('disabled', true);
         $(this).find('.upd-ms-del-btn').addClass('d-none');
@@ -1113,6 +1124,8 @@
     if (ciMissingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
     updates.milestonesReplace = newMsArr;
 
+    var newType = $('#modalType').val();
+    if (proj && newType && newType !== (proj.type || '标准') && newType !== '标准') updates.type = newType;
     if (isStatusChanged) updates.status = newStatus;
 
     function executeSave(pn, upd) {
