@@ -17,7 +17,8 @@
   var dtInstance = null;
   var userListCache = null;
   var currentTypeFilter = 'all';
-  var hideCompleted = false;
+  var currentLeaderFilter = '';
+  var hideCompleted = true;
   var showOnlyMine = false;
   var currentUpdateIsCI = false;
   var currentUpdateLeader = null; // CI 行 owner 为空时默认填项目 Leader
@@ -38,6 +39,12 @@
     loadData();
     preloadUserList();
     checkAdminPermission();
+
+    // Leader 筛选 change 事件（一次性绑定）
+    $('#leaderFilter').on('change', function() {
+      currentLeaderFilter = $(this).val() || '';
+      renderTable();
+    });
 
     $('#refreshBtn').click(function() { loadData(); });
     $('#saveBtn').click(function() { saveUpdates(); });
@@ -178,6 +185,48 @@
     }).getUserList();
   }
 
+  function updateLeaderFilter() {
+    var $sel = $('#leaderFilter');
+    if (!$sel.length) return;
+
+    // 从现有项目提取唯一 Leader
+    var leaders = [], seen = {};
+    if (globalData && globalData.projects) {
+      globalData.projects.forEach(function(p) {
+        var leader = (p.leader || '').trim();
+        if (!leader || seen[leader]) return;
+        seen[leader] = true;
+        var m = leader.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+        leaders.push({
+          id: leader,
+          text: leader,
+          name: m ? m[1].trim() : leader,
+          display: leader
+        });
+      });
+    }
+    leaders.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+    // 保存当前选中值
+    var prevVal = $sel.val();
+
+    if ($sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
+    $sel.empty().append('<option value=""></option>');
+    $sel.select2({
+      data: leaders,
+      templateResult: function(item) { return item.display || item.text; },
+      templateSelection: function(item) { return item.name || item.text || ''; },
+      placeholder: '请选择 / Select',
+      allowClear: true,
+      width: '100%'
+    });
+
+    // 恢复之前的选中值（若仍存在）
+    if (prevVal && seen[prevVal]) {
+      $sel.val(prevVal).trigger('change');
+    }
+  }
+
   function loadData() {
     Swal.fire({
       title: swalTitle('加载数据中...', 'Loading Data...'),
@@ -194,6 +243,7 @@
           if (data.error) { Swal.fire('错误 / Error', data.error, 'error'); return; }
           globalData = data;
           renderTable();
+          updateLeaderFilter();
           loadHistorySummary();
         } catch(e) {
           Swal.fire('错误 / Error', '数据解析失败 / Data parse error: ' + e.message, 'error');
@@ -414,6 +464,7 @@
       if (hideCompleted && p.status === 'Done') return false;
       if (showOnlyMine && (!p.leader || p.leader.replace(/\(.*\)/, '').trim() !== globalName)) return false;
       if (currentTypeFilter !== 'all' && projType(p) !== currentTypeFilter) return false;
+      if (currentLeaderFilter && (!p.leader || p.leader !== currentLeaderFilter)) return false;
       return true;
     }) : [];
 

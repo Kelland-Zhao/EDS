@@ -75,6 +75,11 @@
     #updateModal .select2-user-update + .select2-container .select2-selection__rendered { line-height:31px; }
     #addModal .select2-user + .select2-container .select2-selection__arrow,
     #updateModal .select2-user-update + .select2-container .select2-selection__arrow { height:29px; }
+    /* Leader 筛选框对齐 btn-sm */
+    #leaderFilter + .select2-container .select2-selection--single { height:29px; padding:0 8px; }
+    #leaderFilter + .select2-container .select2-selection__rendered { line-height:29px; font-size:12px; color:#dc3545; }
+    #leaderFilter + .select2-container .select2-selection__arrow { height:27px; }
+    #leaderFilter + .select2-container .select2-results__option { font-size:12px; }
     /* 删除按钮 × 红色 */
     .upd-ms-del-btn .bi-x,
     .add-ms-del-btn .bi-x,
@@ -139,10 +144,11 @@
           <button type="button" class="btn btn-outline-danger" data-type="CI">CI<br><small>CI</small></button>
           <button type="button" class="btn btn-outline-danger" data-type="小组Kaizen">小组Kaizen<br><small>Team Kaizen</small></button>
         </div>
+        <select id="leaderFilter" class="ms-2" style="width:180px;font-size:12px;"></select>
         <label class="ios-toggle ms-3" title="显示/隐藏已完成项目">
-          <input type="checkbox" id="toggleCompletedSwitch" checked>
+          <input type="checkbox" id="toggleCompletedSwitch">
           <span class="ios-track"></span>
-          <span class="ios-label" id="toggleCompletedLabel">显示已完成</span>
+          <span class="ios-label" id="toggleCompletedLabel">已完成已隐藏</span>
         </label>
         <label class="ios-toggle ms-2" title="只看我的项目">
           <input type="checkbox" id="toggleMineSwitch">
