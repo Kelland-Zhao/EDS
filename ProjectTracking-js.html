@@ -400,12 +400,12 @@
 
   // ==================== Main table render ====================
 
-  function projType(p) { return (p.type === 'CI') ? 'CI' : '标准'; }
+  function projType(p) { return (p.type === 'CI') ? 'CI' : (p.type === '小组Kaizen') ? '小组Kaizen' : '标准'; }
 
   function typeBadge(p) {
-    var isCI = projType(p) === 'CI';
-    var bg = isCI ? '#6f42c1' : '#0d6efd';
-    var txt = isCI ? 'CI' : '新品/新自动化';
+    var t = projType(p);
+    var bg = (t === 'CI') ? '#6f42c1' : (t === '小组Kaizen') ? '#0a8a5c' : '#0d6efd';
+    var txt = (t === 'CI') ? 'CI' : (t === '小组Kaizen') ? '小组Kaizen' : '新品/新自动化';
     return '<span class="status-badge" style="background:' + bg + ';">' + txt + '</span>';
   }
 
@@ -493,7 +493,7 @@
         row.child('<div id="' + ganttId + '" class="p-2" style="background:#fafafa;"></div>').show();
         $btn.text('▼');
         if (proj) {
-          if (projType(proj) === 'CI') renderCIChecklist(ganttId, proj);
+          if (projType(proj) === 'CI' || projType(proj) === '小组Kaizen') renderCIChecklist(ganttId, proj);
           else renderSingleProjectGantt(ganttId, proj);
         }
       }
@@ -1020,7 +1020,7 @@
     $('#statusHelp').text('选"已完成"后自动记录完成日期 / Done auto-sets completion date').css('color', '#198754');
 
     // Build milestone/follow-up rows — type-aware
-    currentUpdateIsCI = (projType(proj) === 'CI');
+    currentUpdateIsCI = (projType(proj) === 'CI' || projType(proj) === '小组Kaizen');
     // 解析项目 Leader（"姓名 (邮箱)"），供 CI 行 owner 缺省回退
     (function() {
       var L = (proj.leader || '').trim();
@@ -1314,9 +1314,9 @@
     });
   }
 
-  // 切换录入表单：新品/新自动化（里程碑）↔ CI（follow-up）
+  // 切换录入表单：新品/新自动化（里程碑）↔ CI / 小组Kaizen（follow-up）
   function toggleAddType(type) {
-    if (type === 'CI') {
+    if (type === 'CI' || type === '小组Kaizen') {
       $('#addStandardSection').addClass('d-none');
       $('#addTemplateWrap').addClass('d-none');
       $('#addCISection').removeClass('d-none');
