@@ -678,7 +678,7 @@
                             });
                         });
                         const filteredIM = (parsedData.IM || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决'));
-                        const filteredTF = (parsedData.TF || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决'));
+                        const filteredTF = (parsedData.TF || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决') && String(item.submitDate || '') > '2026-05-31' && !String(item.problemDescription || '').includes('转规格'));
                         const filteredPK = (parsedData.PK || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决'));
                         if (imTable) {
                             imTable.clear().rows.add(filteredIM).draw();
