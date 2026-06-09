@@ -46,6 +46,11 @@
       renderTable();
     });
 
+    // 事项/里程碑名称 textarea 输入时自动撑高，长文本换行可见（事件委托）
+    $(document).on('input', 'textarea.autogrow-name', function() {
+      autoGrowTextarea(this);
+    });
+
     $('#refreshBtn').click(function() { loadData(); });
     $('#saveBtn').click(function() { saveUpdates(); });
     $('#deleteProjectBtn').click(function() { deleteCurrentProject(); });
@@ -64,6 +69,9 @@
     // 项目类型切换：新品/新自动化 ↔ CI
     $('#addType').on('change', function() { toggleAddType($(this).val()); });
     $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', formatDateYMD(today), ''); });
+
+    // 弹窗显示后撑高已填内容的事项/里程碑文本框（隐藏时 scrollHeight 不准，须等显示）
+    $('#updateModal, #addModal').on('shown.bs.modal', function() { autoGrowAll($(this)); });
 
     // 类型筛选
     $('#typeFilter button').on('click', function() {
@@ -214,11 +222,11 @@
     $sel.empty().append('<option value=""></option>');
     $sel.select2({
       data: leaders,
-      templateResult: function(item) { return item.display || item.text; },
+      templateResult: function(item) { return item.name || item.text || ''; },
       templateSelection: function(item) { return item.name || item.text || ''; },
-      placeholder: '请选择 / Select',
+      placeholder: '全部 Leader / All',
       allowClear: true,
-      width: '100%'
+      width: '140px'
     });
 
     // 恢复之前的选中值（若仍存在）
@@ -294,6 +302,23 @@
     var m = ('0' + (d.getMonth() + 1)).slice(-2);
     var day = ('0' + d.getDate()).slice(-2);
     return y + '-' + m + '-' + day;
+  }
+
+  // textarea 内容转义（用于放进 <textarea>...</textarea> 之间）
+  function escapeTextarea(s) {
+    return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // 根据内容自动调整 textarea 高度，长文本换行全部可见
+  function autoGrowTextarea(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight) + 'px';
+  }
+
+  // 对容器内所有 .autogrow-name 执行一次自动撑高
+  function autoGrowAll($scope) {
+    ($scope || $(document)).find('textarea.autogrow-name').each(function() { autoGrowTextarea(this); });
   }
 
   function normalizeDateInput(val) {
@@ -1296,7 +1321,7 @@
       : '';
     var statusCol = '<div style="flex:0 0 110px;"><label style="font-size:10px;color:#666;">状态<br><small>Status</small></label>' + ciStatusSelectHtml('upd-ms-status', status) + '</div>';
     var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;">'
-      + '<div class="flex-fill"><label style="font-size:10px;color:#666;">' + nameLabel + '</label><input type="text" class="form-control form-control-sm upd-ms-name" placeholder="名称 / Name" value="' + (name || '').replace(/"/g,'&quot;') + '"></div>'
+      + '<div class="flex-fill"><label style="font-size:10px;color:#666;">' + nameLabel + '</label><textarea rows="1" class="form-control form-control-sm upd-ms-name autogrow-name" placeholder="名称 / Name">' + escapeTextarea(name || '') + '</textarea></div>'
       + ownerCol
       + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">' + plannedLabel + '</label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
       + '<div style="flex:0 0 120px;display:none;"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></div>'
@@ -1339,7 +1364,7 @@
 
   function addMilestoneRow(name, planned) {
     var $row = $('<div class="add-ms-row">'
-      + '<input type="text" class="form-control form-control-sm add-ms-name" placeholder="里程碑名称 / Milestone Name" value="' + (name || '').replace(/"/g, '&quot;') + '">'
+      + '<textarea rows="1" class="form-control form-control-sm add-ms-name autogrow-name" placeholder="里程碑名称 / Milestone Name">' + escapeTextarea(name || '') + '</textarea>'
       + '<input type="date" class="form-control form-control-sm add-ms-date" value="' + (planned || '') + '">'
       + '<button type="button" class="btn btn-sm btn-outline-secondary add-ms-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
@@ -1359,7 +1384,7 @@
   // CI follow-up 录入行（事项 + 责任人select2 + 计划完成 + 状态）
   function addFollowupRow(name, ownerDisplay, ownerName, due, status) {
     var $row = $('<div class="ci-fu-row">'
-      + '<input type="text" class="form-control form-control-sm ci-fu-name" placeholder="事项 / Item" value="' + (name || '').replace(/"/g, '&quot;') + '">'
+      + '<textarea rows="1" class="form-control form-control-sm ci-fu-name autogrow-name" placeholder="事项 / Item">' + escapeTextarea(name || '') + '</textarea>'
       + '<div class="ci-fu-owner-wrap"><select class="form-select form-select-sm ci-fu-owner" style="width:100%;"></select></div>'
       + '<input type="date" class="form-control form-control-sm ci-fu-date" value="' + (due || '') + '">'
       + ciStatusSelectHtml('ci-fu-status', status)

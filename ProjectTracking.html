@@ -65,6 +65,11 @@
     .ci-fu-name { flex:1.4; font-size:12px; }
     .ci-fu-owner-wrap { flex:1; min-width:0; }
     .ci-fu-date { width:130px; font-size:12px; }
+    /* 事项/里程碑名称自动撑高文本框：换行可见、禁止手动拉伸 */
+    textarea.autogrow-name {
+      resize:none; overflow:hidden; white-space:pre-wrap; word-break:break-word;
+      line-height:1.4; min-height:31px; font-size:12px;
+    }
     #addModal .select2-container--default .select2-selection--single,
     #updateModal .select2-container--default .select2-selection--single { font-size:12px; }
     #addModal .select2-container--default .select2-results__option { font-size:12px; }
@@ -75,10 +80,21 @@
     #updateModal .select2-user-update + .select2-container .select2-selection__rendered { line-height:31px; }
     #addModal .select2-user + .select2-container .select2-selection__arrow,
     #updateModal .select2-user-update + .select2-container .select2-selection__arrow { height:29px; }
-    /* Leader 筛选框对齐 btn-sm */
-    #leaderFilter + .select2-container .select2-selection--single { height:29px; padding:0 8px; }
-    #leaderFilter + .select2-container .select2-selection__rendered { line-height:29px; font-size:12px; color:#dc3545; }
-    #leaderFilter + .select2-container .select2-selection__arrow { height:27px; }
+    /* Leader 筛选：与两行按钮协调（图标 + 统一边框 + 常规文字色 + 等高） */
+    .leader-filter-wrap { display:inline-flex; align-items:center; gap:5px; align-self:stretch; }
+    .leader-filter-wrap .leader-filter-icon { color:#E60012; font-size:15px; line-height:1; }
+    #leaderFilter + .select2-container { vertical-align:middle; }
+    #leaderFilter + .select2-container .select2-selection--single {
+      height:42px; padding:0 8px; border:1px solid #ced4da; border-radius:4px; background:#fff; box-sizing:border-box;
+    }
+    #leaderFilter + .select2-container.select2-container--focus .select2-selection--single,
+    #leaderFilter + .select2-container--open .select2-selection--single {
+      border-color:#E60012; box-shadow:0 0 0 .15rem rgba(230,0,18,.15);
+    }
+    #leaderFilter + .select2-container .select2-selection__rendered { line-height:42px; font-size:12px; color:#333; padding-left:0; padding-right:24px; }
+    #leaderFilter + .select2-container .select2-selection__placeholder { color:#6c757d; }
+    #leaderFilter + .select2-container .select2-selection__arrow { height:40px; }
+    #leaderFilter + .select2-container .select2-selection__clear { line-height:38px; margin-right:18px; color:#adb5bd; font-weight:normal; }
     #leaderFilter + .select2-container .select2-results__option { font-size:12px; }
     /* 删除按钮 × 红色 */
     .upd-ms-del-btn .bi-x,
@@ -144,7 +160,10 @@
           <button type="button" class="btn btn-outline-danger" data-type="CI">CI<br><small>CI</small></button>
           <button type="button" class="btn btn-outline-danger" data-type="小组Kaizen">小组Kaizen<br><small>Team Kaizen</small></button>
         </div>
-        <select id="leaderFilter" class="ms-2" style="width:180px;font-size:12px;"></select>
+        <span class="leader-filter-wrap ms-2" title="按 Leader 筛选 / Filter by Leader">
+          <i class="bi bi-person-badge leader-filter-icon"></i>
+          <select id="leaderFilter" style="width:140px;font-size:12px;"></select>
+        </span>
         <label class="ios-toggle ms-3" title="显示/隐藏已完成项目">
           <input type="checkbox" id="toggleCompletedSwitch">
           <span class="ios-track"></span>
