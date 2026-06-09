@@ -1325,6 +1325,7 @@
       templateSelection: function(item) { return item.name || item.text || ''; },
       placeholder: '责任人 / Owner', allowClear: false, width: '100%'
     });
+    if (!ownerDisplay) $sel.val(null).trigger('change');
   }
 
   // 切换录入表单：新品/新自动化（里程碑）↔ CI / 小组Kaizen（follow-up）
