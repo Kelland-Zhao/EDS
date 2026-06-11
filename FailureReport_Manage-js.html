@@ -262,7 +262,7 @@
                     $el.val(currentValue);
                 }
                 $el.select2({
-                    width: '120px',
+                    width: '200px',
                     theme: 'bootstrap',
                     dropdownParent: DROPDOWN_PARENT,
                     placeholder: '请输入或选择责任人 / Type or Select',
@@ -270,6 +270,9 @@
                     allowClear: false,
                     templateSelection: function (data) {
                         const parsed = parseResponsibleDisplay(data.text);
+                        if (parsed.email) {
+                            return $('<span>' + parsed.name + ' <small style="color:#666">' + parsed.email + '</small></span>');
+                        }
                         return parsed.name || data.text;
                     },
                     templateResult: function (data) {
@@ -510,6 +513,7 @@
                 {
                     data: 'responsiblePerson',
                     title: buildBilingualTitle('责任人', 'Responsible'),
+                    className: 'text-center',
                     orderable: false,
                     render: renderResponsibleSelect(processKey)
                 },

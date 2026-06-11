@@ -69,7 +69,7 @@ const enhanceResponsibleSelects = (scope) => {
             $el.val(currentValue);
         }
         $el.select2({
-            width: '130px',
+            width: '200px',
             theme: 'bootstrap',
             dropdownParent: $('body'),
             placeholder: '\u8bf7\u8f93\u5165\u6216\u9009\u62e9\u8d23\u4efb\u4eba / Type or Select',
@@ -77,6 +77,9 @@ const enhanceResponsibleSelects = (scope) => {
             allowClear: false,
             templateSelection: function(data) {
                 const parsed = parseResponsibleDisplay(data.text);
+                if (parsed.email) {
+                    return $('<span>' + parsed.name + ' <small style="color:#666">' + parsed.email + '</small></span>');
+                }
                 return parsed.name || data.text;
             },
             templateResult: function(data) {
@@ -230,7 +233,7 @@ function initializeTables() {
         columns: [
             { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
             { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
-            { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+            { data: 'process', title: buildBilingualTitle('工序', 'Process'), visible: false },
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
@@ -241,6 +244,7 @@ function initializeTables() {
             {
                 data: 'responsiblePerson',
                 title: buildBilingualTitle('责任人', 'Responsible'),
+                className: 'text-center',
                 orderable: false,
                 render: renderResponsibleSelect('IM')
             },
@@ -262,7 +266,7 @@ function initializeTables() {
                 render: function(data, type, row) {
                     let btns = '';
                     if (row.attachments && row.attachments !== '') {
-                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'IM') + '" style="display:block;width:120px;margin:2px auto;"><i class="bi bi-eye"></i><br>查看<br>View</button>';
+                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'IM') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
                     }
                     btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
                     return btns;
@@ -288,7 +292,7 @@ function initializeTables() {
         columns: [
             { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
             { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
-            { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+            { data: 'process', title: buildBilingualTitle('工序', 'Process'), visible: false },
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
@@ -299,6 +303,7 @@ function initializeTables() {
             {
                 data: 'responsiblePerson',
                 title: buildBilingualTitle('责任人', 'Responsible'),
+                className: 'text-center',
                 orderable: false,
                 render: renderResponsibleSelect('TF')
             },
@@ -320,7 +325,7 @@ function initializeTables() {
                 render: function(data, type, row) {
                     let btns = '';
                     if (row.attachments && row.attachments !== '') {
-                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'TF') + '" style="display:block;width:120px;margin:2px auto;"><i class="bi bi-eye"></i><br>查看<br>View</button>';
+                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'TF') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
                     }
                     btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
                     return btns;
@@ -346,7 +351,7 @@ function initializeTables() {
         columns: [
             { data: 'failureReportNumber', title: buildBilingualTitle('故障报告编号', 'Failure Report No.') },
             { data: 'workshop', title: buildBilingualTitle('车间', 'Workshop') },
-            { data: 'process', title: buildBilingualTitle('工序', 'Process') },
+            { data: 'process', title: buildBilingualTitle('工序', 'Process'), visible: false },
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
@@ -357,6 +362,7 @@ function initializeTables() {
             {
                 data: 'responsiblePerson',
                 title: buildBilingualTitle('责任人', 'Responsible'),
+                className: 'text-center',
                 orderable: false,
                 render: renderResponsibleSelect('PK')
             },
@@ -378,7 +384,7 @@ function initializeTables() {
                 render: function(data, type, row) {
                     let btns = '';
                     if (row.attachments && row.attachments !== '') {
-                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'PK') + '" style="display:block;width:120px;margin:2px auto;"><i class="bi bi-eye"></i><br>查看<br>View</button>';
+                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'PK') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
                     }
                     btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
                     return btns;
@@ -589,11 +595,32 @@ $(document).on('click', '.fill-template-btn', function() {
 
 $(document).on('click', '.view-btn', function() {
     const reportId = $(this).data('id');
-    const process = $(this).data('process');
-    console.log('点击查看按钮:', { reportId, process });
-    
-    // 显示附件查看对话框
-    showAttachmentViewDialog(reportId, process);
+    const row = $(this).closest('tr');
+    const table = $(this).closest('table').DataTable();
+    const rowData = table.row(row).data();
+    const attachments = rowData ? (rowData.attachments || '') : '';
+
+    // 从 HYPERLINK 公式或纯 URL 中提取 PDF 链接
+    let pdfUrl = '';
+    if (attachments) {
+        const match = attachments.match(/=HYPERLINK\("([^"]+)"/i);
+        if (match) {
+            pdfUrl = match[1];
+        } else if (/^https?:\/\//i.test(attachments)) {
+            pdfUrl = attachments;
+        }
+    }
+
+    if (pdfUrl) {
+        window.open(pdfUrl);
+    } else {
+        Swal.fire({
+            title: '暂无报告 / No Report',
+            text: '该记录尚未上传故障报告PDF / No failure report PDF uploaded yet.',
+            icon: 'info',
+            confirmButtonText: '确定 / OK'
+        });
+    }
 });
 
 $(document).on('change', '.responsible-select', function() {
