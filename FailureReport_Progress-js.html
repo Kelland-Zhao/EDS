@@ -142,28 +142,27 @@ function initializeTables() {
                 }
             },
             {
-                data: 'attachments',
-                title: buildBilingualTitle('附件', 'Attachments'),
-                className: 'text-center align-middle',
-                orderable: false,
-                render: function(data, type) {
-                    if (type !== 'display') return data || '';
-                    if (!data) return '<span class="badge bg-secondary">-</span>';
-                    var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
-                    if (m) return '<a href="' + m[1] + '" target="_blank"><span class="badge bg-info">附件</span></a>';
-                    return '<span class="badge bg-secondary">-</span>';
-                }
-            },
-            {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
                 orderable: false,
                 render: function(data, type, row) {
-                    if (row.hasFormData) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                    var buttons = '';
+                    // 查看PDF按钮
+                    var pdfUrl = '';
+                    if (row.attachments) {
+                        var m = String(row.attachments).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
+                        if (m) pdfUrl = m[1];
+                        else if (/^https?:\/\//.test(String(row.attachments))) pdfUrl = String(row.attachments);
                     }
-                    return '';
+                    if (pdfUrl) {
+                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" title="查看PDF View PDF">查看PDF<br>View PDF</button> ';
+                    }
+                    // 编辑按钮
+                    if (row.hasFormData) {
+                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                    }
+                    return buttons || '';
                 }
             }
         ],
@@ -224,28 +223,27 @@ function initializeTables() {
                 }
             },
             {
-                data: 'attachments',
-                title: buildBilingualTitle('附件', 'Attachments'),
-                className: 'text-center align-middle',
-                orderable: false,
-                render: function(data, type) {
-                    if (type !== 'display') return data || '';
-                    if (!data) return '<span class="badge bg-secondary">-</span>';
-                    var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
-                    if (m) return '<a href="' + m[1] + '" target="_blank"><span class="badge bg-info">附件</span></a>';
-                    return '<span class="badge bg-secondary">-</span>';
-                }
-            },
-            {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
                 orderable: false,
                 render: function(data, type, row) {
-                    if (row.hasFormData) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                    var buttons = '';
+                    // 查看PDF按钮
+                    var pdfUrl = '';
+                    if (row.attachments) {
+                        var m = String(row.attachments).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
+                        if (m) pdfUrl = m[1];
+                        else if (/^https?:\/\//.test(String(row.attachments))) pdfUrl = String(row.attachments);
                     }
-                    return '';
+                    if (pdfUrl) {
+                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" title="查看PDF View PDF">查看PDF<br>View PDF</button> ';
+                    }
+                    // 编辑按钮
+                    if (row.hasFormData) {
+                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                    }
+                    return buttons || '';
                 }
             }
         ],
@@ -306,28 +304,27 @@ function initializeTables() {
                 }
             },
             {
-                data: 'attachments',
-                title: buildBilingualTitle('附件', 'Attachments'),
-                className: 'text-center align-middle',
-                orderable: false,
-                render: function(data, type) {
-                    if (type !== 'display') return data || '';
-                    if (!data) return '<span class="badge bg-secondary">-</span>';
-                    var m = String(data).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
-                    if (m) return '<a href="' + m[1] + '" target="_blank"><span class="badge bg-info">附件</span></a>';
-                    return '<span class="badge bg-secondary">-</span>';
-                }
-            },
-            {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
                 orderable: false,
                 render: function(data, type, row) {
-                    if (row.hasFormData) {
-                        return '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                    var buttons = '';
+                    // 查看PDF按钮
+                    var pdfUrl = '';
+                    if (row.attachments) {
+                        var m = String(row.attachments).match(/=HYPERLINK\("([^"]+)","([^"]+)"\)/);
+                        if (m) pdfUrl = m[1];
+                        else if (/^https?:\/\//.test(String(row.attachments))) pdfUrl = String(row.attachments);
                     }
-                    return '';
+                    if (pdfUrl) {
+                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" title="查看PDF View PDF">查看PDF<br>View PDF</button> ';
+                    }
+                    // 编辑按钮
+                    if (row.hasFormData) {
+                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                    }
+                    return buttons || '';
                 }
             }
         ],
@@ -507,6 +504,21 @@ $(document).on('click', '.edit-progress-btn', function() {
         + '&desc=' + encodeURIComponent(desc);
     if (responsible) url += '&responsible=' + encodeURIComponent(responsible);
     window.open(url);
+});
+
+// 查看PDF按钮点击事件
+$(document).on('click', '.view-pdf-btn', function() {
+    const pdfUrl = $(this).data('pdf');
+    if (pdfUrl) {
+        window.open(pdfUrl, '_blank');
+    } else {
+        Swal.fire({
+            title: '提示 / Info',
+            text: 'PDF链接无效 / Invalid PDF link',
+            icon: 'warning',
+            confirmButtonText: '确定 / OK'
+        });
+    }
 });
 
 // 显示错误信息
