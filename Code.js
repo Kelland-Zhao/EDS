@@ -428,7 +428,9 @@ function submitFailureReport(dataStr) {
 
     // 当前审核状态（O 列，索引14）：决定走"审核路径"还是"已通过报告的再次编辑"
     const currentReviewStatus = String(values[rowIndex - 1][14] || '').trim();
-    const isApprovedEdit = isEditMode && currentReviewStatus === '已通过';
+    // 已落地附件（J 列）：兼容历史迁移前的老报告（空状态+有附件视同已通过）
+    const hadAttachment = String(values[rowIndex - 1][9] || '').trim() !== '';
+    const isApprovedEdit = isEditMode && (currentReviewStatus === '已通过' || (!currentReviewStatus && hadAttachment));
 
     // 读取旧 JSON 中的 reviewHistory（追加而非覆盖）与暂存 PDF 信息
     let reviewHistory = [];
