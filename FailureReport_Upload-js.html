@@ -3,6 +3,7 @@
 let imTable, tfTable, pkTable;
 let responsibleOptions = [];
 let responsibleOptionsLoaded = false;
+let isSaving = false; // 全局保存锁，防止跨行并发操作
 
 const buildBilingualTitle = (cn, en) => `<span class="label-cn">${cn}</span><span class="label-en">${en}</span>`;
 const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
@@ -250,7 +251,7 @@ function initializeTables() {
             },
             { 
                 data: 'attachments', 
-                title: buildBilingualTitle('附件', 'Attachments'),
+                title: buildBilingualTitle('状态', 'Status'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
                         return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
@@ -269,6 +270,7 @@ function initializeTables() {
                         btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'IM') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
                     }
                     btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
+                    btns += '<button class="btn btn-sm btn-success save-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'IM') + '" style="display:block;width:120px;margin:2px auto;">保存<br>Save</button>';
                     return btns;
                 }
             }
@@ -309,7 +311,7 @@ function initializeTables() {
             },
             { 
                 data: 'attachments', 
-                title: buildBilingualTitle('附件', 'Attachments'),
+                title: buildBilingualTitle('状态', 'Status'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
                         return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
@@ -328,6 +330,7 @@ function initializeTables() {
                         btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'TF') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
                     }
                     btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
+                    btns += '<button class="btn btn-sm btn-success save-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'TF') + '" style="display:block;width:120px;margin:2px auto;">保存<br>Save</button>';
                     return btns;
                 }
             }
@@ -368,7 +371,7 @@ function initializeTables() {
             },
             { 
                 data: 'attachments', 
-                title: buildBilingualTitle('附件', 'Attachments'),
+                title: buildBilingualTitle('状态', 'Status'),
                 render: function(data, type, row) {
                     if (data && data !== '') {
                         return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
@@ -387,6 +390,7 @@ function initializeTables() {
                         btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'PK') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
                     }
                     btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
+                    btns += '<button class="btn btn-sm btn-success save-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'PK') + '" style="display:block;width:120px;margin:2px auto;">保存<br>Save</button>';
                     return btns;
                 }
             }
@@ -623,14 +627,98 @@ $(document).on('click', '.view-btn', function() {
     }
 });
 
-$(document).on('change', '.responsible-select', function() {
-    const reportId = $(this).data('id');
-    const process = $(this).data('process');
-    const value = $(this).val();
+// 保存按钮点击事件：保存责任人并发送邮件通知
+$(document).on('click', '.save-btn', function() {
+    // 全局锁：同一时间只允许一个保存操作
+    if (isSaving) {
+        Swal.fire({
+            icon: 'warning',
+            title: '正在保存中 / Saving in Progress',
+            text: '请等待当前保存完成后再操作 / Please wait for the current save to complete.',
+            confirmButtonText: '确定 / OK',
+            timer: 2000
+        });
+        return;
+    }
+
+    const $btn = $(this);
+    const reportId = $btn.data('id');
+    const process = $btn.data('process');
+    const $row = $btn.closest('tr');
+    const $select = $row.find('.responsible-select');
+    const value = $select.val() || '';
+
+    if (!value) {
+        Swal.fire({
+            icon: 'warning',
+            title: '请选择责任人 / Select Responsible',
+            text: '请先在责任人列选择或输入责任人后再保存 / Please select a responsible person first.',
+            confirmButtonText: '确定 / OK'
+        });
+        return;
+    }
+
+    // 全局锁定：禁用所有按钮 + 所有 Select2 下拉框
+    isSaving = true;
+    $('.btn').prop('disabled', true).addClass('save-locked');
+    $('.responsible-select').each(function() {
+        if ($(this).hasClass('select2-hidden-accessible')) {
+            $(this).prop('disabled', true).trigger('change');
+        } else {
+            $(this).prop('disabled', true);
+        }
+    });
+    $btn.text('保存中... / Saving...');
+
+    // 结束后恢复可编辑状态
+    function restoreAll() {
+        isSaving = false;
+        $('.btn.save-locked').prop('disabled', false).removeClass('save-locked');
+        $btn.html('保存<br>Save');
+        $('.responsible-select').each(function() {
+            if ($(this).hasClass('select2-hidden-accessible')) {
+                $(this).prop('disabled', false).trigger('change');
+            } else {
+                $(this).prop('disabled', false);
+            }
+        });
+    }
+
     if (typeof google !== 'undefined' && google.script && google.script.run) {
         google.script.run
-            .withSuccessHandler(function() {})
+            .withSuccessHandler(function(result) {
+                restoreAll();
+                try {
+                    const res = typeof result === 'string' ? JSON.parse(result) : result;
+                    if (res.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '保存成功 / Saved',
+                            html: swalHtml(res.message || '责任人已更新 / Responsible person updated.',
+                                (res.respEmail ? '通知已发送至 / Notification sent to: ' + res.respEmail
+                                    + (res.supervisorEmail ? '<br>CC: ' + res.supervisorEmail : '') : '')),
+                            confirmButtonText: '确定 / OK',
+                            timer: 3000
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '保存失败 / Save Failed',
+                            text: res.message || '未知错误 / Unknown error',
+                            confirmButtonText: '确定 / OK'
+                        });
+                    }
+                } catch (e) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '保存失败 / Save Failed',
+                        text: '返回数据异常 / Invalid response',
+                        confirmButtonText: '确定 / OK'
+                    });
+                }
+            })
             .withFailureHandler(function(err) {
+                restoreAll();
                 Swal.fire({
                     icon: 'error',
                     title: '保存失败 / Save Failed',
@@ -638,7 +726,7 @@ $(document).on('change', '.responsible-select', function() {
                     confirmButtonText: '确定 / OK'
                 });
             })
-            .updateFailureReportResponsible(reportId, process, value);
+            .saveResponsibleAndNotify(reportId, process, value);
     }
 });
 

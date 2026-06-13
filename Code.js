@@ -6537,6 +6537,151 @@ function updateFailureReportResponsible(failureReportNumber, process, responsibl
   }
 }
 
+/**
+ * 保存责任人并发送邮件通知
+ * Save responsible person and send email notification to responsible person + supervisor
+ * @param {string} failureReportNumber - 故障报告编号
+ * @param {string} process - 工序 (IM/TF/PK)
+ * @param {string} responsiblePerson - 责任人 (format: Name【email】)
+ * @returns {string} JSON result
+ */
+function saveResponsibleAndNotify(failureReportNumber, process, responsiblePerson) {
+  try {
+    // 1. 更新 Failure_Database 第12列责任人
+    const spreadsheetId = "1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU";
+    const sheet = SpreadsheetApp.openById(spreadsheetId).getSheetByName("Failure_Database");
+    if (!sheet) throw new Error("Failure_Database sheet not found");
+    const data = sheet.getDataRange().getValues();
+    let rowData = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][6]).trim() === String(failureReportNumber).trim()) {
+        sheet.getRange(i + 1, 12).setValue(String(responsiblePerson || "").trim());
+        rowData = data[i];
+        break;
+      }
+    }
+    if (!rowData) throw new Error("Record not found: " + failureReportNumber);
+
+    // 2. 从显示格式 "Name【email】" 提取姓名和邮箱
+    const respName = extractName(responsiblePerson);
+    const respEmail = extractEmail(responsiblePerson);
+
+    if (!respEmail) {
+      return JSON.stringify({
+        success: true,
+        message: "责任人已保存，但未找到邮箱，无法发送通知 / Saved but no email found for notification",
+        noEmail: true
+      });
+    }
+
+    // 3. 从 userID 表查找直线上级邮箱
+    const userIDSS = SpreadsheetApp.openById("1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM");
+    const userIDWs = userIDSS.getSheetByName("userID");
+    let supervisorEmail = "";
+    if (userIDWs) {
+      const userVals = userIDWs.getDataRange().getValues();
+      for (let i = 2; i < userVals.length; i++) {
+        if (String(userVals[i][1] || "").trim() === respName) {
+          supervisorEmail = String(userVals[i][60] || "").trim(); // BI列：直线上级邮箱
+          break;
+        }
+      }
+    }
+
+    // 4. 获取故障报告详情用于邮件
+    const reportNo = String(rowData[0] || "");
+    const machineNo = String(rowData[1] || "");
+    const problemDescription = String(rowData[2] || "");
+    var submitDate = "";
+    if (rowData[3]) {
+      try {
+        var d = new Date(rowData[3]);
+        if (!isNaN(d.getTime())) {
+          submitDate = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        } else { submitDate = String(rowData[3]); }
+      } catch (e) { submitDate = String(rowData[3]); }
+    }
+    const workshop = String(rowData[4] || "");
+    const processName = String(rowData[5] || process || "");
+
+    // 5. 构建并发送邮件
+    const tz = Session.getScriptTimeZone() || "Asia/Hong_Kong";
+    const now = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+    const subject = "【故障报告责任人通知】" + reportNo + " - " + machineNo + " / Failure Report Assignment - " + now;
+
+    var htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);overflow:hidden;">'
+      + '<div style="background-color:#E60012;color:white;padding:20px;text-align:center;">'
+      + '<h1 style="margin:0;font-size:22px;">故障报告责任人通知</h1>'
+      + '<p style="margin:8px 0 0;font-size:14px;opacity:0.9;">Failure Report Assignment Notification</p>'
+      + '</div>'
+      + '<div style="padding:30px;">'
+      + '<p style="font-size:15px;line-height:1.6;color:#333;">' + escapeHtml(respName) + '，您好 / Hello，</p>'
+      + '<p style="font-size:15px;line-height:1.6;color:#333;">您已被指定为以下故障报告的责任人，请及时处理：</p>'
+      + '<p style="font-size:15px;line-height:1.6;color:#333;">You have been assigned as the responsible person for the following failure report:</p>'
+      + '<table style="width:100%;border-collapse:collapse;margin:20px 0;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+      + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+      + '<th style="padding:10px 12px;text-align:left;width:30%;">项目 / Item</th>'
+      + '<th style="padding:10px 12px;text-align:left;">详情 / Details</th>'
+      + '</tr></thead><tbody>'
+      + '<tr><td style="padding:10px 12px;background:#fff5f5;font-weight:600;">故障报告编号<br>Failure Report No.</td>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(reportNo) + '</td></tr>'
+      + '<tr><td style="padding:10px 12px;background:#fff5f5;font-weight:600;">车间 / Workshop</td>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(workshop) + '</td></tr>'
+      + '<tr><td style="padding:10px 12px;background:#fff5f5;font-weight:600;">工序 / Process</td>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(processName) + '</td></tr>'
+      + '<tr><td style="padding:10px 12px;background:#fff5f5;font-weight:600;">机台号 / Machine No.</td>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(machineNo) + '</td></tr>'
+      + '<tr><td style="padding:10px 12px;background:#fff5f5;font-weight:600;">提交日期 / Submit Date</td>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(submitDate) + '</td></tr>'
+      + '<tr><td style="padding:10px 12px;background:#fff5f5;font-weight:600;">问题描述<br>Problem Description</td>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(problemDescription) + '</td></tr>'
+      + '</tbody></table>'
+      + '<p style="font-size:13px;color:#888;font-style:italic;">此邮件由 EDS 系统自动发送 / This email is auto-generated by EDS system.</p>'
+      + '</div></div></div>';
+
+    GmailApp.sendEmail(respEmail, subject, "", {
+      htmlBody: htmlBody,
+      cc: supervisorEmail || undefined
+    });
+
+    console.log("责任人通知邮件已发送至 / Notification sent to: " + respEmail
+      + (supervisorEmail ? ", CC: " + supervisorEmail : ""));
+
+    return JSON.stringify({
+      success: true,
+      message: "责任人已保存，通知已发送 / Saved and notification sent",
+      respEmail: respEmail,
+      supervisorEmail: supervisorEmail || ""
+    });
+  } catch (e) {
+    return JSON.stringify({
+      success: false,
+      message: "保存失败 / Save failed: " + e.toString()
+    });
+  }
+}
+
+/**
+ * 从显示格式 "Name【email】" 提取姓名
+ */
+function extractName(display) {
+  if (!display) return "";
+  var s = String(display).trim();
+  var match = s.match(/^(.+?)【(.+?)】$/);
+  return match ? match[1].trim() : s;
+}
+
+/**
+ * 从显示格式 "Name【email】" 提取邮箱
+ */
+function extractEmail(display) {
+  if (!display) return "";
+  var s = String(display).trim();
+  var match = s.match(/^(.+?)【(.+?)】$/);
+  return match ? match[2].trim() : "";
+}
+
 function sendFailureReportNotification(rowData, process, responsiblePerson) {
   try {
     console.log(
