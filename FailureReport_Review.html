@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <base target="_top">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <?!=include("Kez_Bootstrap@5.3.1_css");?>
+    <?!=include("Kez_datatables@1.11.5_css");?>
+    <?!=include("kez_Datatables_css");?>
+    <?!=include("CSS");?>
+    <?!=include("Kez_sweetalert2_js");?>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <style>
+        html, body { margin: 0; padding: 0; }
+        body { background: #f5f6f8; }
+
+        .welcome-bar {
+            background: #fff;
+            border-left: 4px solid #E60012;
+            padding: 10px 18px;
+            margin: 12px 0 14px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .welcome-bar .greet { color: #333; font-size: 16px; }
+        .welcome-bar .greet #name { color: #E60012; font-weight: 600; }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #6c757d;
+            letter-spacing: 1px;
+            margin: 18px 0 10px;
+            border-left: 3px solid #E60012;
+            padding-left: 10px;
+        }
+
+        .filter-bar { margin: 10px 0 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .filter-bar .btn { font-size: 13px; }
+
+        .table-wrapper { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+
+        table.bilingual-table thead th {
+            background-color: #E60012 !important;
+            color: #fff !important;
+            font-size: 13px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        table.bilingual-table tbody td { font-size: 13px; vertical-align: middle; }
+
+        .status-badge { font-size: 12px; padding: 5px 8px; border-radius: 4px; color: #fff; display: inline-block; }
+        .status-review { background: #f0ad4e; color: #5b3b00; }   /* 主管审核中 - 黄 */
+        .status-approved { background: #28a745; }                  /* 已通过 - 绿 */
+        .status-returned { background: #dc3545; }                  /* 已退回 - 红 */
+
+        .op-btn { display: block; width: 120px; margin: 2px auto; }
+
+        #noPermPanel {
+            display: none;
+            background: #fff;
+            border-radius: 8px;
+            padding: 60px 20px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            margin-top: 30px;
+        }
+        #noPermPanel i { font-size: 48px; color: #adb5bd; }
+        #noPermPanel .msg { margin-top: 14px; color: #6c757d; font-size: 16px; }
+
+        .detail-section { margin-bottom: 16px; }
+        .detail-section h6 { color: #E60012; font-weight: 700; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+        .detail-kv { font-size: 13px; line-height: 1.7; }
+        .detail-kv b { color: #555; display: inline-block; min-width: 110px; }
+        .pa-table { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 6px; }
+        .pa-table th, .pa-table td { border: 1px solid #e0e0e0; padding: 5px 8px; text-align: left; }
+        .pa-table th { background: #fafafa; }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg bg-nav">
+        <div class="container-fluid">
+            <a class="navbar-brand" style="display:flex;align-items:center;gap:12px;text-decoration:none;">
+                <span style="color:white;font-family:Arial,Helvetica,sans-serif;line-height:1.2;">
+                    <span style="font-size:xx-large;font-weight:bold;">故障报告审核</span><br>
+                    <span style="font-size:14px;font-weight:400;opacity:0.85;">Failure Report Review</span>
+                </span>
+            </a>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-3">
+        <div class="welcome-bar">
+            <div class="greet">
+                <span id="name"></span>，欢迎进入故障报告审核 / Welcome to Failure Report Review
+            </div>
+            <div class="perm-info">
+                <span id="roleBadge" class="badge bg-secondary">加载中... / Loading...</span>
+            </div>
+        </div>
+
+        <!-- 无权限提示 -->
+        <div id="noPermPanel">
+            <i class="bi bi-shield-lock"></i>
+            <div class="msg">您暂无审核权限 / No review permission</div>
+        </div>
+
+        <!-- 审核内容 -->
+        <div id="reviewContent" style="display:none;">
+            <div class="section-title">待审核故障报告 / PENDING REVIEW REPORTS</div>
+
+            <div class="filter-bar">
+                <button class="btn btn-sm btn-outline-danger active" data-proc="ALL">全部 / All</button>
+                <button class="btn btn-sm btn-outline-danger" data-proc="IM">注塑 IM</button>
+                <button class="btn btn-sm btn-outline-danger" data-proc="TF">植磨毛 TF</button>
+                <button class="btn btn-sm btn-outline-danger" data-proc="PK">包装 PK</button>
+            </div>
+
+            <div class="table-wrapper">
+                <div class="table-responsive">
+                    <table id="reviewTable" class="display bilingual-table" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>故障报告编号<br>Failure Report No.</th>
+                                <th>机台号<br>Machine No.</th>
+                                <th>问题描述<br>Problem Description</th>
+                                <th>工序<br>Process</th>
+                                <th>责任人<br>Responsible</th>
+                                <th>提交日期<br>Submit Date</th>
+                                <th>审核状态<br>Review Status</th>
+                                <th>操作<br>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header" style="background:#E60012;color:#fff;">
+                    <h5 class="modal-title">报告详情 / Report Detail</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="detailBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭 / Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_datatables@1.13.6_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("FailureReport_Review-js") ?>
+</body>
+</html>

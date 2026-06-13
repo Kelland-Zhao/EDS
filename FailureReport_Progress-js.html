@@ -421,7 +421,17 @@ function processFailureReportProgressData(data) {
             console.warn('数据格式不正确或为空');
             return;
         }
-        
+
+        // 主管审核：排除"主管审核中 / 已退回"（未通过审核的不进 Progress；空/已通过/已上传/已完成 照常显示）
+        ['IM', 'TF', 'PK'].forEach(function(k) {
+            if (Array.isArray(data[k])) {
+                data[k] = data[k].filter(function(it) {
+                    var rs = String((it && it.reviewStatus) || '').trim();
+                    return rs !== '主管审核中' && rs !== '已退回';
+                });
+            }
+        });
+
         // 处理IM工序数据
         if (data.IM && data.IM.length > 0) {
             console.log('处理IM工序数据，共', data.IM.length, '条');

@@ -17,6 +17,42 @@ const escapeHtml = (value) => {
     });
 };
 
+// ===== 主管审核：Upload 状态/操作按改造后审核状态驱动（不再看 attachments） =====
+// Upload 仅展示：未提交(空) / 已退回 / 主管审核中（已通过及之后去 Progress）
+function isUploadVisible(item) {
+    const rs = String((item && item.reviewStatus) || '').trim();
+    if (rs === '已通过') return false;
+    if (item && item.attachments && String(item.attachments).trim() !== '') return false; // 已最终上传
+    return true; // 空 / 已退回 / 主管审核中
+}
+
+function renderUploadStatus(data, type, row) {
+    const rs = String((row && row.reviewStatus) || '').trim();
+    if (rs === '已退回') {
+        const reason = row.returnReason ? '<br><small class="text-danger">退回原因: ' + escapeHtml(row.returnReason) + '</small>' : '';
+        return '<span class="badge bg-danger">已退回<br>Returned</span>' + reason;
+    }
+    if (rs === '主管审核中') {
+        return '<span class="badge bg-warning text-dark">审核中<br>Under Review</span>';
+    }
+    return '<span class="badge bg-secondary">未提交<br>Not Submitted</span>';
+}
+
+function renderUploadActions(row, proc) {
+    const rs = String((row && row.reviewStatus) || '').trim();
+    const id = row.failureReportNumber;
+    const p = row.process || proc;
+    const saveBtn = '<button class="btn btn-sm btn-success save-btn" data-id="' + id + '" data-process="' + p + '" style="display:block;width:120px;margin:2px auto;">保存<br>Save</button>';
+    if (rs === '主管审核中') {
+        return '<button class="btn btn-sm btn-secondary" disabled style="display:block;width:120px;margin:2px auto;">审核中<br>Under Review</button>' + saveBtn;
+    }
+    if (rs === '已退回') {
+        return '<button class="btn btn-sm btn-warning edit-template-btn" data-id="' + id + '" style="display:block;width:120px;margin:2px auto;">修改<br>Edit</button>' + saveBtn;
+    }
+    // 未提交
+    return '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + id + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>' + saveBtn;
+}
+
 const normalizeResponsibleDisplay = (user) => {
     if (!user) return '';
     if (typeof user === 'string') return user.trim();
@@ -252,27 +288,13 @@ function initializeTables() {
             { 
                 data: 'attachments', 
                 title: buildBilingualTitle('状态', 'Status'),
-                render: function(data, type, row) {
-                    if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
-                    } else {
-                        return `<span class="badge bg-warning text-dark">未上传<br>Not Uploaded</span>`;
-                    }
-                }
+                render: renderUploadStatus
             },
             {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
-                render: function(data, type, row) {
-                    let btns = '';
-                    if (row.attachments && row.attachments !== '') {
-                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'IM') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
-                    }
-                    btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
-                    btns += '<button class="btn btn-sm btn-success save-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'IM') + '" style="display:block;width:120px;margin:2px auto;">保存<br>Save</button>';
-                    return btns;
-                }
+                render: function(data, type, row) { return renderUploadActions(row, 'IM'); }
             }
         ],
         dom: '<"top"lf>rt<"bottom"ip><"clear">',
@@ -312,27 +334,13 @@ function initializeTables() {
             { 
                 data: 'attachments', 
                 title: buildBilingualTitle('状态', 'Status'),
-                render: function(data, type, row) {
-                    if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
-                    } else {
-                        return `<span class="badge bg-warning text-dark">未上传<br>Not Uploaded</span>`;
-                    }
-                }
+                render: renderUploadStatus
             },
             {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
-                render: function(data, type, row) {
-                    let btns = '';
-                    if (row.attachments && row.attachments !== '') {
-                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'TF') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
-                    }
-                    btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
-                    btns += '<button class="btn btn-sm btn-success save-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'TF') + '" style="display:block;width:120px;margin:2px auto;">保存<br>Save</button>';
-                    return btns;
-                }
+                render: function(data, type, row) { return renderUploadActions(row, 'TF'); }
             }
         ],
         dom: '<"top"lf>rt<"bottom"ip><"clear">',
@@ -372,27 +380,13 @@ function initializeTables() {
             { 
                 data: 'attachments', 
                 title: buildBilingualTitle('状态', 'Status'),
-                render: function(data, type, row) {
-                    if (data && data !== '') {
-                        return `<span class="badge bg-success">已上传<br>Uploaded</span>`;
-                    } else {
-                        return `<span class="badge bg-warning text-dark">未上传<br>Not Uploaded</span>`;
-                    }
-                }
+                render: renderUploadStatus
             },
             {
                 data: null,
                 title: buildBilingualTitle('操作', 'Actions'),
                 className: 'text-center align-middle',
-                render: function(data, type, row) {
-                    let btns = '';
-                    if (row.attachments && row.attachments !== '') {
-                        btns += '<button class="btn btn-sm btn-info view-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'PK') + '" style="display:block;width:120px;margin:2px auto;">查看<br>View</button>';
-                    }
-                    btns += '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + row.failureReportNumber + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>';
-                    btns += '<button class="btn btn-sm btn-success save-btn" data-id="' + row.failureReportNumber + '" data-process="' + (row.process || 'PK') + '" style="display:block;width:120px;margin:2px auto;">保存<br>Save</button>';
-                    return btns;
-                }
+                render: function(data, type, row) { return renderUploadActions(row, 'PK'); }
             }
         ],
         dom: '<"top"lf>rt<"bottom"ip><"clear">',
@@ -478,7 +472,7 @@ function processFailureReportData(data) {
         if (data.IM && data.IM.length > 0) {
             console.log('处理IM工序数据，共', data.IM.length, '条');
             console.log('IM数据示例:', data.IM[0]); // 调试：查看数据结构
-            const imData = data.IM.map(item => ({
+            const imData = data.IM.filter(isUploadVisible).map(item => ({
                 failureReportNumber: item.failureReportNumber || '',
                 workshop: item.workshop || '',
                 process: item.process || 'IM',
@@ -491,7 +485,9 @@ function processFailureReportData(data) {
                 submitter: item.submitter || '',
                 responsiblePerson: item.responsiblePerson || '',
                 repairTime: item.repairTime || '',
-                attachments: item.attachments || ''
+                attachments: item.attachments || '',
+                reviewStatus: item.reviewStatus || '',
+                returnReason: item.returnReason || ''
             }));
             console.log('IM数据映射后示例:', imData[0]); // 调试：查看映射结果
             imTable.rows.add(imData).draw();
@@ -501,7 +497,7 @@ function processFailureReportData(data) {
         if (data.TF && data.TF.length > 0) {
             console.log('处理TF工序数据，共', data.TF.length, '条');
             console.log('TF数据示例:', data.TF[0]); // 调试：查看数据结构
-            const tfData = data.TF.map(item => ({
+            const tfData = data.TF.filter(isUploadVisible).map(item => ({
                 failureReportNumber: item.failureReportNumber || '',
                 workshop: item.workshop || '',
                 process: item.process || 'TF',
@@ -514,7 +510,9 @@ function processFailureReportData(data) {
                 submitter: item.submitter || '',
                 responsiblePerson: item.responsiblePerson || '',
                 repairTime: item.repairTime || '',
-                attachments: item.attachments || ''
+                attachments: item.attachments || '',
+                reviewStatus: item.reviewStatus || '',
+                returnReason: item.returnReason || ''
             }));
             console.log('TF数据映射后示例:', tfData[0]); // 调试：查看映射结果
             tfTable.rows.add(tfData).draw();
@@ -524,7 +522,7 @@ function processFailureReportData(data) {
         if (data.PK && data.PK.length > 0) {
             console.log('处理PK工序数据，共', data.PK.length, '条');
             console.log('PK数据示例:', data.PK[0]); // 调试：查看数据结构
-            const pkData = data.PK.map(item => ({
+            const pkData = data.PK.filter(isUploadVisible).map(item => ({
                 failureReportNumber: item.failureReportNumber || '',
                 workshop: item.workshop || '',
                 process: item.process || 'PK',
@@ -537,7 +535,9 @@ function processFailureReportData(data) {
                 submitter: item.submitter || '',
                 responsiblePerson: item.responsiblePerson || '',
                 repairTime: item.repairTime || '',
-                attachments: item.attachments || ''
+                attachments: item.attachments || '',
+                reviewStatus: item.reviewStatus || '',
+                returnReason: item.returnReason || ''
             }));
             console.log('PK数据映射后示例:', pkData[0]); // 调试：查看映射结果
             pkTable.rows.add(pkData).draw();
@@ -589,6 +589,26 @@ $(document).on('click', '.fill-template-btn', function() {
     const mdt = rowData ? (rowData.repairTime || '') : '';
     const base = sessionStorage.getItem('siWebPage') || '';
     let url = base + '?v=FailureReport_Template'
+        + '&reportId=' + encodeURIComponent(reportId)
+        + '&machineNo=' + encodeURIComponent(machineNo)
+        + '&desc=' + encodeURIComponent(desc);
+    if (responsible) url += '&responsible=' + encodeURIComponent(responsible);
+    if (mdt) url += '&mdt=' + encodeURIComponent(mdt);
+    window.open(url);
+});
+
+// 退回-修改：进入 Template 编辑模式（回填 JSON），重新提交后走"仅保存+主管审核中"路径
+$(document).on('click', '.edit-template-btn', function() {
+    const reportId = $(this).data('id');
+    const row = $(this).closest('tr');
+    const table = $(this).closest('table').DataTable();
+    const rowData = table.row(row).data();
+    const machineNo = rowData ? (rowData.machineNo || '') : '';
+    const desc = rowData ? (rowData.problemDescription || '') : '';
+    const responsible = rowData ? (rowData.responsiblePerson || '') : '';
+    const mdt = rowData ? (rowData.repairTime || '') : '';
+    const base = sessionStorage.getItem('siWebPage') || '';
+    let url = base + '?v=FailureReport_Template&editMode=1'
         + '&reportId=' + encodeURIComponent(reportId)
         + '&machineNo=' + encodeURIComponent(machineNo)
         + '&desc=' + encodeURIComponent(desc);

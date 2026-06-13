@@ -1,0 +1,271 @@
+<script>
+(function () {
+    var reviewTable = null;
+    var allReports = [];
+    var currentProc = 'ALL';
+
+    var currentUser = {
+        name: sessionStorage.getItem('Name') || '',
+        email: sessionStorage.getItem('Email') || ''
+    };
+
+    function statusBadge(status) {
+        if (status === '主管审核中') return '<span class="status-badge status-review">主管审核中<br>Under Review</span>';
+        if (status === '已通过') return '<span class="status-badge status-approved">已通过<br>Approved</span>';
+        if (status === '已退回') return '<span class="status-badge status-returned">已退回<br>Returned</span>';
+        return '<span class="status-badge bg-secondary">' + (status || '-') + '</span>';
+    }
+
+    // 工序归一显示：IM/INJ → IM
+    function dispProc(p) {
+        var s = String(p || '').trim().toUpperCase();
+        if (s === 'INJ') return 'IM';
+        return s;
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function loadReports() {
+        Swal.fire({ title: '加载中... / Loading...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+        google.script.run
+            .withSuccessHandler(function (resultStr) {
+                Swal.close();
+                var res;
+                try { res = JSON.parse(resultStr); } catch (e) { res = { success: false, message: '返回数据异常' }; }
+                if (!res.success) {
+                    Swal.fire('加载失败 / Failed', res.message || '', 'error');
+                    return;
+                }
+                if (!res.hasPermission) {
+                    document.getElementById('noPermPanel').style.display = 'block';
+                    document.getElementById('reviewContent').style.display = 'none';
+                    document.getElementById('roleBadge').className = 'badge bg-secondary';
+                    document.getElementById('roleBadge').textContent = '无审核权限 / No permission';
+                    return;
+                }
+                // 角色徽章
+                var roles = [];
+                if (res.isAdmin) roles.push('管理员 / Admin');
+                if (res.isSupervisor) roles.push('主管 / Supervisor');
+                var badge = document.getElementById('roleBadge');
+                badge.className = 'badge bg-danger';
+                badge.textContent = roles.join(' · ') || '审核人 / Reviewer';
+
+                document.getElementById('noPermPanel').style.display = 'none';
+                document.getElementById('reviewContent').style.display = 'block';
+
+                allReports = res.reports || [];
+                renderTable();
+            })
+            .withFailureHandler(function (err) {
+                Swal.close();
+                Swal.fire('加载失败 / Failed', (err && err.message) || String(err), 'error');
+            })
+            .getPendingReviewReports(currentUser.email, currentUser.name);
+    }
+
+    function renderTable() {
+        var rows = allReports.filter(function (r) {
+            if (currentProc === 'ALL') return true;
+            return dispProc(r.process) === currentProc;
+        });
+
+        if (reviewTable) { reviewTable.destroy(); }
+        var tbody = $('#reviewTable tbody');
+        tbody.empty();
+
+        rows.forEach(function (r, idx) {
+            var ops =
+                '<button class="btn btn-sm btn-info op-btn" data-act="detail" data-idx="' + idx + '">查看详情<br>Detail</button>' +
+                '<button class="btn btn-sm btn-success op-btn" data-act="approve" data-id="' + escapeHtml(r.failureReportNumber) + '">通过<br>Approve</button>' +
+                '<button class="btn btn-sm btn-danger op-btn" data-act="return" data-id="' + escapeHtml(r.failureReportNumber) + '">退回<br>Return</button>';
+            var reason = r.reviewStatus === '已退回' && r.returnReason
+                ? '<br><small class="text-danger">退回原因: ' + escapeHtml(r.returnReason) + '</small>' : '';
+            var tr = '<tr>' +
+                '<td>' + escapeHtml(r.failureReportNumber) + '</td>' +
+                '<td>' + escapeHtml(r.machineNo) + '</td>' +
+                '<td style="max-width:240px;">' + escapeHtml(r.problemDescription) + '</td>' +
+                '<td class="text-center">' + escapeHtml(dispProc(r.process)) + '</td>' +
+                '<td>' + escapeHtml(extractNameJs(r.responsiblePerson)) + '</td>' +
+                '<td class="text-center">' + escapeHtml(r.submitDate) + '</td>' +
+                '<td class="text-center">' + statusBadge(r.reviewStatus) + reason + '</td>' +
+                '<td class="text-center">' + ops + '</td>' +
+                '</tr>';
+            tbody.append(tr);
+        });
+
+        // 缓存当前筛选后的列表供详情使用
+        renderTable._rows = rows;
+
+        reviewTable = $('#reviewTable').DataTable({
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+            order: [[0, 'desc']],
+            language: {
+                emptyTable: '暂无待审核报告 / No pending reports',
+                info: '显示 _START_ - _END_ 共 _TOTAL_ 条',
+                paginate: { previous: '上一页', next: '下一页' },
+                search: '搜索:', lengthMenu: '每页 _MENU_ 条'
+            }
+        });
+    }
+
+    function extractNameJs(display) {
+        var m = String(display || '').match(/^(.+?)【(.+?)】$/);
+        return m ? m[1].trim() : String(display || '').trim();
+    }
+
+    function showDetail(idx) {
+        var r = (renderTable._rows || [])[idx];
+        if (!r) return;
+        var data = {};
+        try { data = JSON.parse(r.content || '{}'); } catch (e) { data = {}; }
+
+        var html = '';
+        html += '<div class="detail-section"><h6>基本信息 / Basic Info</h6><div class="detail-kv">';
+        html += '<div><b>报告编号:</b> ' + escapeHtml(r.failureReportNumber) + '</div>';
+        html += '<div><b>机台号:</b> ' + escapeHtml(r.machineNo) + '</div>';
+        html += '<div><b>工序:</b> ' + escapeHtml(dispProc(r.process)) + '</div>';
+        html += '<div><b>责任人:</b> ' + escapeHtml(extractNameJs(r.responsiblePerson)) + '</div>';
+        html += '<div><b>提交日期:</b> ' + escapeHtml(r.submitDate) + '</div>';
+        html += '<div><b>问题描述:</b> ' + escapeHtml(r.problemDescription) + '</div>';
+        html += '</div></div>';
+
+        // RCA
+        if (data.rca_json) {
+            var rcaTxt = '';
+            try {
+                var rca = typeof data.rca_json === 'string' ? JSON.parse(data.rca_json) : data.rca_json;
+                rcaTxt = JSON.stringify(rca, null, 2);
+            } catch (e) { rcaTxt = String(data.rca_json); }
+            html += '<div class="detail-section"><h6>根因分析 / RCA</h6>' +
+                '<pre style="font-size:12px;white-space:pre-wrap;background:#fafafa;padding:8px;border-radius:4px;">' +
+                escapeHtml(rcaTxt) + '</pre></div>';
+        }
+
+        // PA 措施
+        if (Array.isArray(data.pa) && data.pa.length) {
+            html += '<div class="detail-section"><h6>对策措施 / CAPA</h6><table class="pa-table"><thead><tr>' +
+                '<th>措施类型</th><th>措施描述</th><th>责任人</th><th>计划完成</th><th>验证人</th><th>验证日期</th></tr></thead><tbody>';
+            data.pa.forEach(function (p) {
+                if (!p) return;
+                var filled = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when']
+                    .some(function (k) { return String(p[k] || '').trim(); });
+                if (!filled) return;
+                html += '<tr>' +
+                    '<td>' + escapeHtml(p.type) + '</td>' +
+                    '<td>' + escapeHtml(p.pa_plan) + '</td>' +
+                    '<td>' + escapeHtml(p.pa_who) + '</td>' +
+                    '<td>' + escapeHtml(p.pa_when) + '</td>' +
+                    '<td>' + escapeHtml(p.pa_verifier) + '</td>' +
+                    '<td>' + escapeHtml(p.pa_verifier_when) + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+
+        // 完整 PDF（含照片）
+        if (data._pdfUrl) {
+            html += '<div class="detail-section"><a href="' + escapeHtml(data._pdfUrl) + '" target="_blank" ' +
+                'class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf"></i> 打开完整报告 PDF（含照片） / Open full PDF</a></div>';
+        }
+
+        // 审核历史
+        if (Array.isArray(data.reviewHistory) && data.reviewHistory.length) {
+            html += '<div class="detail-section"><h6>审核历史 / History</h6><div class="detail-kv">';
+            data.reviewHistory.forEach(function (h) {
+                var actMap = { submitted: '提交', returned: '退回', approved: '通过', edited: '编辑' };
+                html += '<div>' + escapeHtml(h.timestamp || '') + ' · ' + escapeHtml(actMap[h.action] || h.action) +
+                    ' · ' + escapeHtml(h.operator || '') + (h.reason ? ' · ' + escapeHtml(h.reason) : '') + '</div>';
+            });
+            html += '</div></div>';
+        }
+
+        document.getElementById('detailBody').innerHTML = html;
+        var modal = new bootstrap.Modal(document.getElementById('detailModal'));
+        modal.show();
+    }
+
+    function doApprove(reportNo) {
+        Swal.fire({
+            title: '确认通过此报告？',
+            text: '通过后将生成跟进任务并通知责任人 / Approve and create follow-ups?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '确认通过 / Approve',
+            cancelButtonText: '取消 / Cancel',
+            confirmButtonColor: '#28a745'
+        }).then(function (rs) {
+            if (!rs.isConfirmed) return;
+            Swal.fire({ title: '处理中... / Processing...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+            google.script.run
+                .withSuccessHandler(function (str) {
+                    var res; try { res = JSON.parse(str); } catch (e) { res = { success: false, message: '返回异常' }; }
+                    if (res.success) {
+                        Swal.fire({ title: '已通过 / Approved', icon: 'success', timer: 1400, showConfirmButton: false });
+                        loadReports();
+                    } else {
+                        Swal.fire('操作失败 / Failed', res.message || '', 'error');
+                    }
+                })
+                .withFailureHandler(function (err) { Swal.fire('操作失败 / Failed', (err && err.message) || String(err), 'error'); })
+                .approveReport(reportNo, currentUser.email, currentUser.name);
+        });
+    }
+
+    function doReturn(reportNo) {
+        Swal.fire({
+            title: '退回报告 / Return Report',
+            input: 'textarea',
+            inputLabel: '退回原因（可选） / Return reason (optional)',
+            inputPlaceholder: '请说明需要修改的内容...',
+            showCancelButton: true,
+            confirmButtonText: '确认退回 / Return',
+            cancelButtonText: '取消 / Cancel',
+            confirmButtonColor: '#dc3545'
+        }).then(function (rs) {
+            if (!rs.isConfirmed) return;
+            var reason = rs.value || '';
+            Swal.fire({ title: '处理中... / Processing...', allowOutsideClick: false, didOpen: function () { Swal.showLoading(); } });
+            google.script.run
+                .withSuccessHandler(function (str) {
+                    var res; try { res = JSON.parse(str); } catch (e) { res = { success: false, message: '返回异常' }; }
+                    if (res.success) {
+                        Swal.fire({ title: '已退回 / Returned', icon: 'success', timer: 1400, showConfirmButton: false });
+                        loadReports();
+                    } else {
+                        Swal.fire('操作失败 / Failed', res.message || '', 'error');
+                    }
+                })
+                .withFailureHandler(function (err) { Swal.fire('操作失败 / Failed', (err && err.message) || String(err), 'error'); })
+                .returnReport(reportNo, currentUser.email, currentUser.name, reason);
+        });
+    }
+
+    $(function () {
+        $('#name').text(currentUser.name || '用户');
+
+        // 工序筛选
+        $('.filter-bar .btn').on('click', function () {
+            $('.filter-bar .btn').removeClass('active');
+            $(this).addClass('active');
+            currentProc = $(this).data('proc');
+            renderTable();
+        });
+
+        // 操作按钮（事件委托）
+        $('#reviewTable tbody').on('click', 'button[data-act]', function () {
+            var act = $(this).data('act');
+            if (act === 'detail') showDetail($(this).data('idx'));
+            else if (act === 'approve') doApprove($(this).data('id'));
+            else if (act === 'return') doReturn($(this).data('id'));
+        });
+
+        loadReports();
+    });
+})();
+</script>

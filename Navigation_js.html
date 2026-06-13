@@ -153,6 +153,17 @@
         $('#failureReportModal').modal('hide');
     });
 
+    // 故障报告审核
+    $('#FailureReport_Review').click(() => {
+        let url = siWebPage + '?v=FailureReport_Review'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#failureReportModal').modal('hide');
+    });
+
     // 故障报告跟进验证 - 弹出选择对话框
     $('#FailureReport_Followup').click(() => {
         Swal.fire({

@@ -136,6 +136,7 @@ function doGet(e) {
   Route.path("Handover_1.0", loadHandover_1_0); // 新增交接班页面路由
   Route.path("Fault_Record_1.0", loadFault_Record_1_0); // 新增故障记录页面路由
   Route.path("FailureReport_Template", loadFailureReport_Template);
+  Route.path("FailureReport_Review", loadFailureReport_Review);
   Route.path("ProjectTracking", loadProjectTracking);
 
   if (Route[e.parameters.v]) {
@@ -424,6 +425,27 @@ function submitFailureReport(dataStr) {
     }
     if (rowIndex === -1) throw new Error('未找到故障报告编号 / Report ID not found: ' + data.case_code);
     const machineNo = String(values[rowIndex - 1][1] || '').trim();
+
+    // 当前审核状态（O 列，索引14）：决定走"审核路径"还是"已通过报告的再次编辑"
+    const currentReviewStatus = String(values[rowIndex - 1][14] || '').trim();
+    const isApprovedEdit = isEditMode && currentReviewStatus === '已通过';
+
+    // 读取旧 JSON 中的 reviewHistory（追加而非覆盖）与暂存 PDF 信息
+    let reviewHistory = [];
+    let oldPdfUrl = '';
+    let oldPdfName = '';
+    try {
+      const oldJson = JSON.parse(String(values[rowIndex - 1][10] || '{}'));
+      if (Array.isArray(oldJson.reviewHistory)) reviewHistory = oldJson.reviewHistory;
+      oldPdfUrl = String(oldJson._pdfUrl || '');
+      oldPdfName = String(oldJson._pdfFileName || '');
+    } catch (e) { /* 旧 JSON 不存在/非法则忽略 */ }
+    // 已通过报告的 PDF 在 J 列（HYPERLINK），不在 JSON
+    if (!oldPdfUrl) {
+      const mJ = String(values[rowIndex - 1][9] || '').match(/HYPERLINK\("([^"]+)","([^"]*)"\)/);
+      if (mJ) { oldPdfUrl = mJ[1]; oldPdfName = mJ[2]; }
+    }
+
     const dataForSheet = Object.assign({}, data);
     delete dataForSheet.photo;
     delete dataForSheet.fault_category;
@@ -431,29 +453,21 @@ function submitFailureReport(dataStr) {
     delete dataForSheet._editMode;
     // 移除旧 rca 数组（新报告改用 rca_json）
     if (dataForSheet.rca_json) delete dataForSheet.rca;
-    ws.getRange(rowIndex, 11).setValue(JSON.stringify(dataForSheet));
 
-    // 编辑模式：删除旧 PDF + 版本化文件名
+    // 删除旧 PDF（编辑/退回重提）并计算版本号
     let pdfVersionSuffix = '';
-    if (isEditMode) {
-      const oldCellJ = values[rowIndex - 1][9];
-      if (oldCellJ) {
-        const oldMatch = String(oldCellJ).match(/HYPERLINK\("([^"]+)","([^"]*)"\)/);
-        if (oldMatch) {
-          try {
-            const oldUrl = oldMatch[1];
-            const idMatch = oldUrl.match(/\/d\/([^\/]+)/);
-            if (idMatch) DriveApp.getFileById(idMatch[1]).setTrashed(true);
-          } catch (e) { /* 旧文件不存在则忽略 */ }
-          const oldName = oldMatch[2] || '';
-          const vMatch = oldName.match(/_v(\d+)\.pdf$/);
-          const newVer = vMatch ? parseInt(vMatch[1]) + 1 : 2;
-          pdfVersionSuffix = '_v' + newVer;
-        }
-      }
+    if (oldPdfUrl) {
+      try {
+        const idMatch = oldPdfUrl.match(/\/d\/([^\/]+)/);
+        if (idMatch) DriveApp.getFileById(idMatch[1]).setTrashed(true);
+      } catch (e) { /* 旧文件不存在则忽略 */ }
+      const vMatch = String(oldPdfName).match(/_v(\d+)\.pdf$/);
+      const newVer = vMatch ? parseInt(vMatch[1]) + 1 : 2;
+      pdfVersionSuffix = '_v' + newVer;
     }
 
-    // 生成 PDF 并写入 J 列
+    // 生成 PDF（提交时即生成，照片此刻在手）
+    // 审核路径下先暂存（URL 记入 JSON，不写 J 列）；已通过再编辑则直接落地 J 列
     const pdfBlob = generateFailureReportPDF_(data);
     const reportNo = String(data.case_code || '').trim();
     const workshop = String(values[rowIndex - 1][4] || '').trim();
@@ -463,123 +477,121 @@ function submitFailureReport(dataStr) {
     const folder = DriveApp.getFolderById('1mMKiMFOzbpqB_V2iIQcIqF2o4ZyRRcNL');
     const pdfFile = folder.createFile(pdfBlob);
     const fileUrl = pdfFile.getUrl();
-    ws.getRange(rowIndex, 10).setFormula('=HYPERLINK("' + fileUrl + '","' + fileName + '")');
 
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
     const now = new Date();
     const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
-    ws.getRange(rowIndex, 9).setValue(nowYmd);
+    const nowTs = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss');
+
+    // 暂存 PDF 信息 + 追加 reviewHistory，写入 K 列
+    dataForSheet._pdfUrl = fileUrl;
+    dataForSheet._pdfFileName = fileName;
+    const responsibleDisplay = String(values[rowIndex - 1][11] || '').trim();
+    const operatorName = extractName(responsibleDisplay) || responsibleDisplay || '';
+    reviewHistory.push({
+      action: isApprovedEdit ? 'edited' : 'submitted',
+      timestamp: nowTs,
+      operator: operatorName
+    });
+    dataForSheet.reviewHistory = reviewHistory;
+    ws.getRange(rowIndex, 11).setValue(JSON.stringify(dataForSheet));
+
+    // PA 行校验（两条路径都需至少一条完整 PA）
     const requiredPa = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
     const PA_INDEX_COL = 13;
-    // 确保 paIndex 列有表头
-    const paIndexHeader = wsFollow.getRange(1, PA_INDEX_COL + 1);
-    if (!paIndexHeader.getValue()) paIndexHeader.setValue('paIndex');
-
     function isPaRowFilled(row) {
       const missing = requiredPa.filter(function(fid) { return !String((row && row[fid]) || '').trim(); });
       return missing.length < requiredPa.length;
     }
-
     const filledCount = (data.pa || []).filter(isPaRowFilled).length;
     if (filledCount === 0) {
       throw new Error('请至少完整填写1条预防对策后再提交 / Please complete at least one PA row');
     }
 
+    if (!isApprovedEdit) {
+      // ===== 审核路径：新建提交 / 退回重提 =====
+      // 仅保存数据 + 置审核状态=主管审核中 + 清空退回原因；不写 J/I 列、不建跟进
+      ws.getRange(rowIndex, 15).setValue('主管审核中'); // O: 审核状态
+      ws.getRange(rowIndex, 18).setValue('');           // R: 清空退回原因
+      try {
+        notifyReviewSubmission_(values[rowIndex - 1], processFromRow, responsibleDisplay);
+      } catch (mailErr) {
+        console.error('提交审核通知邮件失败 / Failed to send review submission notification:', mailErr);
+      }
+      return JSON.stringify({ success: true, reviewStatus: '主管审核中', fileUrl: fileUrl, fileName: fileName });
+    }
+
+    // ===== 已通过报告的再次编辑：保持原有"落地"行为（写 J/I 列 + 同步跟进 + 邮件） =====
+    ws.getRange(rowIndex, 10).setFormula('=HYPERLINK("' + fileUrl + '","' + fileName + '")');
+    ws.getRange(rowIndex, 9).setValue(nowYmd);
+    // 确保 paIndex 列有表头
+    const paIndexHeader = wsFollow.getRange(1, PA_INDEX_COL + 1);
+    if (!paIndexHeader.getValue()) paIndexHeader.setValue('paIndex');
+
     const followupRowsForEmail = [];
+    // 按 paIndex 精确匹配，同步更新已有跟进记录
+    const followData = wsFollow.getDataRange().getValues();
+    const existingMap = {};
+    const compatIndices = [];
 
-    if (isEditMode) {
-      // 编辑模式：按 paIndex 精确匹配，同步更新已有跟进记录
-      const followData = wsFollow.getDataRange().getValues();
-      const existingMap = {};
-      const compatIndices = [];
-
-      for (let i = 1; i < followData.length; i++) {
-        if (String(followData[i][1]).trim() === String(data.case_code).trim()) {
-          const storedIdx = followData[i][PA_INDEX_COL];
-          if (storedIdx !== undefined && String(storedIdx).trim() !== '') {
-            existingMap[parseInt(storedIdx)] = { rowIndex: i + 1, data: followData[i] };
-          } else {
-            compatIndices.push({ rowIndex: i + 1, data: followData[i] });
-          }
+    for (let i = 1; i < followData.length; i++) {
+      if (String(followData[i][1]).trim() === String(data.case_code).trim()) {
+        const storedIdx = followData[i][PA_INDEX_COL];
+        if (storedIdx !== undefined && String(storedIdx).trim() !== '') {
+          existingMap[parseInt(storedIdx)] = { rowIndex: i + 1, data: followData[i] };
+        } else {
+          compatIndices.push({ rowIndex: i + 1, data: followData[i] });
         }
       }
-      let compatCursor = 0;
-      compatIndices.forEach(function(item) {
-        while (existingMap[compatCursor] !== undefined) compatCursor++;
-        existingMap[compatCursor] = item;
-        compatCursor++;
-      });
-
-      const usedExisting = new Set();
-      (data.pa || []).forEach(function(row, paIdx) {
-        if (!isPaRowFilled(row)) return;
-
-        const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
-        const newRow = [
-          followId,
-          String(data.case_code || '').trim(),
-          String((row && row.type) || '').trim(),
-          String((row && row.pa_plan) || '').trim(),
-          String((row && row.pa_who) || '').trim(),
-          String((row && row.pa_when) || '').trim(),
-          String((row && row.pa_verifier) || '').trim(),
-          String((row && row.pa_verifier_when) || '').trim(),
-          '待验证',
-          nowYmd,
-          nowYmd,
-          fileUrl,
-          paIdx,
-          ''
-        ];
-
-        if (existingMap[paIdx] !== undefined) {
-          const existing = existingMap[paIdx].data;
-          newRow[8] = String(existing[8] || '待验证').trim();
-          newRow[9] = String(existing[9] || nowYmd).trim();
-          newRow[10] = nowYmd;
-          usedExisting.add(paIdx);
-          wsFollow.getRange(existingMap[paIdx].rowIndex, 1, 1, newRow.length).setValues([newRow]);
-        } else {
-          wsFollow.getRange(wsFollow.getLastRow() + 1, 1, 1, newRow.length).setValues([newRow]);
-        }
-        followupRowsForEmail.push(newRow);
-      });
-
-      const existingIndices = Object.keys(existingMap).map(Number);
-      const toDelete = existingIndices
-        .filter(function(idx) { return !usedExisting.has(idx); })
-        .map(function(idx) { return existingMap[idx].rowIndex; })
-        .sort(function(a, b) { return b - a; });
-      toDelete.forEach(function(rowIdx) { wsFollow.deleteRow(rowIdx); });
-
-    } else {
-      // 新建模式：创建新跟进记录（含 paIndex 列）
-      const followRows = [];
-      data.pa.forEach(function(row, paIdx) {
-        const missing = requiredPa.filter(function(fid) { return !String((row && row[fid]) || '').trim(); });
-        if (missing.length === requiredPa.length) return;
-        const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
-        const newRow = [
-          followId,
-          String(data.case_code || '').trim(),
-          String((row && row.type) || '').trim(),
-          String((row && row.pa_plan) || '').trim(),
-          String((row && row.pa_who) || '').trim(),
-          String((row && row.pa_when) || '').trim(),
-          String((row && row.pa_verifier) || '').trim(),
-          String((row && row.pa_verifier_when) || '').trim(),
-          '待验证',
-          nowYmd,
-          nowYmd,
-          fileUrl,
-          paIdx,
-          ''
-        ];
-        followRows.push(newRow);
-        followupRowsForEmail.push(newRow);
-      });
-      wsFollow.getRange(wsFollow.getLastRow() + 1, 1, followRows.length, followRows[0].length).setValues(followRows);
     }
+    let compatCursor = 0;
+    compatIndices.forEach(function(item) {
+      while (existingMap[compatCursor] !== undefined) compatCursor++;
+      existingMap[compatCursor] = item;
+      compatCursor++;
+    });
+
+    const usedExisting = new Set();
+    (data.pa || []).forEach(function(row, paIdx) {
+      if (!isPaRowFilled(row)) return;
+
+      const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
+      const newRow = [
+        followId,
+        String(data.case_code || '').trim(),
+        String((row && row.type) || '').trim(),
+        String((row && row.pa_plan) || '').trim(),
+        String((row && row.pa_who) || '').trim(),
+        String((row && row.pa_when) || '').trim(),
+        String((row && row.pa_verifier) || '').trim(),
+        String((row && row.pa_verifier_when) || '').trim(),
+        '待验证',
+        nowYmd,
+        nowYmd,
+        fileUrl,
+        paIdx,
+        ''
+      ];
+
+      if (existingMap[paIdx] !== undefined) {
+        const existing = existingMap[paIdx].data;
+        newRow[8] = String(existing[8] || '待验证').trim();
+        newRow[9] = String(existing[9] || nowYmd).trim();
+        newRow[10] = nowYmd;
+        usedExisting.add(paIdx);
+        wsFollow.getRange(existingMap[paIdx].rowIndex, 1, 1, newRow.length).setValues([newRow]);
+      } else {
+        wsFollow.getRange(wsFollow.getLastRow() + 1, 1, 1, newRow.length).setValues([newRow]);
+      }
+      followupRowsForEmail.push(newRow);
+    });
+
+    const existingIndices = Object.keys(existingMap).map(Number);
+    const toDelete = existingIndices
+      .filter(function(idx) { return !usedExisting.has(idx); })
+      .map(function(idx) { return existingMap[idx].rowIndex; })
+      .sort(function(a, b) { return b - a; });
+    toDelete.forEach(function(rowIdx) { wsFollow.deleteRow(rowIdx); });
 
     if (followupRowsForEmail.length > 0) {
       try {
@@ -592,6 +604,413 @@ function submitFailureReport(dataStr) {
     return JSON.stringify({ success: true, fileUrl: fileUrl, fileName: fileName });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// ============================================================
+// 故障报告主管审核（Supervisor Review）
+// ============================================================
+
+const FR_SS_ID = '1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU';
+const FR_SYSTEM_ADMIN_EMAIL = 'kelland_zhao@colpal.com';
+
+/** 工序代码归一：IM/INJ→INJ，PK/PKG→PK，TF→TF */
+function normalizeProcessCanonical_(p) {
+  const s = String(p || '').trim().toUpperCase();
+  if (s === 'IM' || s === 'INJ') return 'INJ';
+  if (s === 'PK' || s === 'PKG') return 'PK';
+  if (s === 'TF') return 'TF';
+  return s;
+}
+
+/** 单元格日期 → yyyy-MM-dd 字符串 */
+function formatCellDate_(val) {
+  if (!val) return '';
+  try {
+    var d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      var tz = Session.getScriptTimeZone() || 'Asia/Hong_Kong';
+      return Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    }
+  } catch (e) {}
+  return String(val);
+}
+
+/** 按工序查管理员（O列==工序归一 且 BF列(57)==Y）；零个则回退系统管理员 */
+function getReportProcessAdmins_(processRaw) {
+  const target = normalizeProcessCanonical_(processRaw);
+  const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+  const emails = [], names = [];
+  if (ws) {
+    const v = ws.getDataRange().getValues();
+    for (let i = 2; i < v.length; i++) {
+      if (String(v[i][57] || '').trim() === 'Y' && normalizeProcessCanonical_(v[i][14]) === target) {
+        const em = String(v[i][9] || '').trim();
+        if (em) { emails.push(em); names.push(String(v[i][1] || '').trim()); }
+      }
+    }
+  }
+  if (emails.length === 0) {
+    console.warn('工序 ' + target + ' 未配置故障报告管理员（BF列），回退系统管理员');
+    return { emails: [FR_SYSTEM_ADMIN_EMAIL], names: ['系统管理员 / System Admin'], fallback: true };
+  }
+  return { emails: emails, names: names, fallback: false };
+}
+
+/** 查责任人直线上级邮箱（userID NAME==respName → BI列(60)） */
+function getReportSupervisor_(respName) {
+  if (!respName) return '';
+  const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+  if (!ws) return '';
+  const v = ws.getDataRange().getValues();
+  for (let i = 2; i < v.length; i++) {
+    if (String(v[i][1] || '').trim() === String(respName).trim()) {
+      return String(v[i][60] || '').trim();
+    }
+  }
+  return '';
+}
+
+/**
+ * 审核页门控：管理员(BF=Y) OR 主管(邮箱出现在任一 BI 列)
+ * 登录只存 Name 不存 Email，故先按 Name 反查用户邮箱(J列)，再用该邮箱匹配 BI。
+ * @returns {Object} { hasPermission, isAdmin, adminProcess, isSupervisor, resolvedEmail }
+ */
+function checkReportReviewPermission(userEmail, userName) {
+  const res = { hasPermission: false, isAdmin: false, adminProcess: '', isSupervisor: false, resolvedEmail: '' };
+  try {
+    const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return res;
+    const v = ws.getDataRange().getValues();
+    const emailLower = String(userEmail || '').trim().toLowerCase();
+    const nameTrim = String(userName || '').trim();
+    // Pass 1：定位用户本人行 → 解析邮箱 + 判定管理员
+    let myEmail = emailLower;
+    for (let i = 2; i < v.length; i++) {
+      const rowName = String(v[i][1] || '').trim();
+      const rowEmail = String(v[i][9] || '').trim().toLowerCase();
+      const matchUser = (emailLower && rowEmail === emailLower) || (nameTrim && rowName === nameTrim);
+      if (!matchUser) continue;
+      if (!myEmail) myEmail = rowEmail;
+      if (String(v[i][57] || '').trim() === 'Y') {
+        res.isAdmin = true;
+        res.adminProcess = normalizeProcessCanonical_(v[i][14]);
+      }
+    }
+    res.resolvedEmail = myEmail || '';
+    // Pass 2：主管 = 用户邮箱出现在任一行 BI 列
+    if (myEmail) {
+      for (let i = 2; i < v.length; i++) {
+        if (String(v[i][60] || '').trim().toLowerCase() === myEmail) { res.isSupervisor = true; break; }
+      }
+    }
+    res.hasPermission = res.isAdmin || res.isSupervisor;
+  } catch (e) {
+    console.error('checkReportReviewPermission error:', e);
+  }
+  return res;
+}
+
+/**
+ * 待审报告列表：管理员看本工序、主管看下属，两者并集去重
+ * @returns {string} JSON
+ */
+function getPendingReviewReports(userEmail, userName) {
+  try {
+    const perm = checkReportReviewPermission(userEmail, userName);
+    if (!perm.hasPermission) {
+      return JSON.stringify({ success: true, hasPermission: false, reports: [] });
+    }
+    // 主管的下属姓名集合（BI==当前邮箱 → 该行 NAME）
+    const subordinateNames = {};
+    const emailLower = String(perm.resolvedEmail || userEmail || '').trim().toLowerCase();
+    if (perm.isSupervisor) {
+      const permWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+      if (permWs) {
+        const pv = permWs.getDataRange().getValues();
+        for (let i = 2; i < pv.length; i++) {
+          if (String(pv[i][60] || '').trim().toLowerCase() === emailLower) {
+            const nm = String(pv[i][1] || '').trim();
+            if (nm) subordinateNames[nm] = true;
+          }
+        }
+      }
+    }
+    const ws = SpreadsheetApp.openById(FR_SS_ID).getSheetByName('Failure_Database');
+    const data = ws.getDataRange().getValues();
+    const reports = [];
+    for (let i = 1; i < data.length; i++) {
+      const status = String(data[i][14] || '').trim();
+      if (status !== '主管审核中' && status !== '已退回') continue;
+      const reportProcess = String(data[i][5] || '').trim();
+      const respDisplay = String(data[i][11] || '').trim();
+      const respName = extractName(respDisplay);
+      let include = false;
+      if (perm.isAdmin && perm.adminProcess && normalizeProcessCanonical_(reportProcess) === perm.adminProcess) include = true;
+      if (!include && perm.isSupervisor && respName && subordinateNames[respName]) include = true;
+      if (!include) continue;
+      reports.push({
+        failureReportNumber: String(data[i][6] || '').trim(),
+        machineNo: String(data[i][1] || '').trim(),
+        problemDescription: String(data[i][2] || '').trim(),
+        process: reportProcess,
+        responsiblePerson: respDisplay,
+        submitDate: formatCellDate_(data[i][3]),
+        reviewStatus: status,
+        returnReason: String(data[i][17] || '').trim(),
+        content: String(data[i][10] || '')
+      });
+    }
+    return JSON.stringify({ success: true, hasPermission: true, isAdmin: perm.isAdmin, isSupervisor: perm.isSupervisor, reports: reports });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+/**
+ * 审核通过：落地暂存 PDF（写 J/I）+ 创建 PA 跟进 + 置已通过；可重入幂等
+ */
+function approveReport(reportNo, reviewerEmail, reviewerName) {
+  try {
+    const ss = SpreadsheetApp.openById(FR_SS_ID);
+    const ws = ss.getSheetByName('Failure_Database');
+    const wsFollow = ss.getSheetByName('Failure_Report_followup');
+    const data = ws.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][6]).trim() === String(reportNo).trim()) { rowIndex = i + 1; break; }
+    }
+    if (rowIndex === -1) return JSON.stringify({ success: false, message: '未找到报告 / Report not found' });
+    // 并发校验
+    const status = String(data[rowIndex - 1][14] || '').trim();
+    if (status !== '主管审核中') {
+      return JSON.stringify({ success: false, message: '该报告已被处理（当前：' + (status || '空') + '）/ Already processed' });
+    }
+    // 审核人邮箱缺失时按姓名反查
+    if (!String(reviewerEmail || '').trim()) {
+      reviewerEmail = checkReportReviewPermission(reviewerEmail, reviewerName).resolvedEmail || '';
+    }
+    let json;
+    try { json = JSON.parse(String(data[rowIndex - 1][10] || '{}')); } catch (e) { json = {}; }
+    const fileUrl = String(json._pdfUrl || '');
+    const fileName = String(json._pdfFileName || (reportNo + '.pdf'));
+    if (!fileUrl) {
+      return JSON.stringify({ success: false, message: '缺少暂存 PDF，请责任人重新提交 / Staged PDF missing' });
+    }
+    const tz = Session.getScriptTimeZone() || 'Asia/Hong_Kong';
+    const now = new Date();
+    const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    const nowTs = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss');
+
+    // 幂等：先删除本报告已有跟进（防重试重复），再重建
+    const followAll = wsFollow.getDataRange().getValues();
+    const delRows = [];
+    for (let i = 1; i < followAll.length; i++) {
+      if (String(followAll[i][1]).trim() === String(reportNo).trim()) delRows.push(i + 1);
+    }
+    delRows.sort(function(a, b) { return b - a; }).forEach(function(r) { wsFollow.deleteRow(r); });
+
+    // 落地附件(J)+上传日期(I)
+    ws.getRange(rowIndex, 10).setFormula('=HYPERLINK("' + fileUrl + '","' + fileName + '")');
+    ws.getRange(rowIndex, 9).setValue(nowYmd);
+
+    // 创建 PA 跟进
+    const requiredPa = ['pa_plan', 'pa_who', 'pa_when', 'pa_verifier', 'pa_verifier_when'];
+    const PA_INDEX_COL = 13;
+    const paIndexHeader = wsFollow.getRange(1, PA_INDEX_COL + 1);
+    if (!paIndexHeader.getValue()) paIndexHeader.setValue('paIndex');
+    const followRows = [];
+    (json.pa || []).forEach(function(row, paIdx) {
+      const missing = requiredPa.filter(function(fid) { return !String((row && row[fid]) || '').trim(); });
+      if (missing.length === requiredPa.length) return;
+      const followId = 'FU' + Utilities.formatDate(now, tz, 'yyyyMMddHHmmssSSS') + Math.floor(100 + Math.random() * 900);
+      followRows.push([
+        followId, String(reportNo).trim(), String((row && row.type) || '').trim(),
+        String((row && row.pa_plan) || '').trim(), String((row && row.pa_who) || '').trim(),
+        String((row && row.pa_when) || '').trim(), String((row && row.pa_verifier) || '').trim(),
+        String((row && row.pa_verifier_when) || '').trim(), '待验证', nowYmd, nowYmd, fileUrl, paIdx, ''
+      ]);
+    });
+    if (followRows.length > 0) {
+      wsFollow.getRange(wsFollow.getLastRow() + 1, 1, followRows.length, followRows[0].length).setValues(followRows);
+    }
+
+    // 审核状态/审核人/审核日期 + reviewHistory
+    ws.getRange(rowIndex, 15).setValue('已通过');
+    ws.getRange(rowIndex, 16).setValue(String(reviewerName || '') + '【' + String(reviewerEmail || '') + '】');
+    ws.getRange(rowIndex, 17).setValue(nowYmd);
+    json.reviewHistory = Array.isArray(json.reviewHistory) ? json.reviewHistory : [];
+    json.reviewHistory.push({ action: 'approved', timestamp: nowTs, operator: String(reviewerName || '') });
+    ws.getRange(rowIndex, 11).setValue(JSON.stringify(json));
+
+    // 通知 PA 责任人（复用现有跟进创建提醒）
+    if (followRows.length > 0) {
+      try {
+        sendFollowupCreationReminderEmails(
+          { failureReportNo: String(reportNo).trim(), machineNo: String(data[rowIndex - 1][1] || '').trim() },
+          followRows
+        );
+      } catch (mailErr) {
+        console.error('审核通过通知邮件失败:', mailErr);
+      }
+    }
+    return JSON.stringify({ success: true, message: '审核通过 / Approved' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+/**
+ * 审核退回：置已退回 + 写退回原因 + 通知责任人（抄送主管）
+ */
+function returnReport(reportNo, reviewerEmail, reviewerName, reason) {
+  try {
+    const ss = SpreadsheetApp.openById(FR_SS_ID);
+    const ws = ss.getSheetByName('Failure_Database');
+    const data = ws.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][6]).trim() === String(reportNo).trim()) { rowIndex = i + 1; break; }
+    }
+    if (rowIndex === -1) return JSON.stringify({ success: false, message: '未找到报告 / Report not found' });
+    const status = String(data[rowIndex - 1][14] || '').trim();
+    if (status !== '主管审核中') {
+      return JSON.stringify({ success: false, message: '该报告已被处理（当前：' + (status || '空') + '）/ Already processed' });
+    }
+    if (!String(reviewerEmail || '').trim()) {
+      reviewerEmail = checkReportReviewPermission(reviewerEmail, reviewerName).resolvedEmail || '';
+    }
+    const tz = Session.getScriptTimeZone() || 'Asia/Hong_Kong';
+    const now = new Date();
+    const nowYmd = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    const nowTs = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss');
+    const reasonStr = String(reason || '').trim();
+
+    ws.getRange(rowIndex, 15).setValue('已退回');
+    ws.getRange(rowIndex, 16).setValue(String(reviewerName || '') + '【' + String(reviewerEmail || '') + '】');
+    ws.getRange(rowIndex, 17).setValue(nowYmd);
+    ws.getRange(rowIndex, 18).setValue(reasonStr);
+
+    let json;
+    try { json = JSON.parse(String(data[rowIndex - 1][10] || '{}')); } catch (e) { json = {}; }
+    json.reviewHistory = Array.isArray(json.reviewHistory) ? json.reviewHistory : [];
+    json.reviewHistory.push({ action: 'returned', timestamp: nowTs, operator: String(reviewerName || ''), reason: reasonStr });
+    ws.getRange(rowIndex, 11).setValue(JSON.stringify(json));
+
+    try { notifyReturn_(data[rowIndex - 1], reasonStr); }
+    catch (mailErr) { console.error('退回通知邮件失败:', mailErr); }
+
+    return JSON.stringify({ success: true, message: '已退回 / Returned' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+/** 通用故障报告邮件 HTML（红色表头风格，与现有系统一致） */
+function buildFrEmailHtml_(title, subtitle, intro, rows) {
+  var body = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+    + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);overflow:hidden;">'
+    + '<div style="background-color:#E60012;color:white;padding:20px;text-align:center;">'
+    + '<h1 style="margin:0;font-size:22px;">' + escapeHtml(title) + '</h1>'
+    + '<p style="margin:8px 0 0;font-size:14px;opacity:0.9;">' + escapeHtml(subtitle) + '</p>'
+    + '</div><div style="padding:30px;">'
+    + '<p style="font-size:15px;line-height:1.6;color:#333;">' + escapeHtml(intro) + '</p>'
+    + '<table style="width:100%;border-collapse:collapse;margin:20px 0;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+    + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+    + '<th style="padding:10px 12px;text-align:left;width:30%;">项目 / Item</th>'
+    + '<th style="padding:10px 12px;text-align:left;">详情 / Details</th></tr></thead><tbody>';
+  (rows || []).forEach(function(r) {
+    body += '<tr><td style="padding:10px 12px;background:#fff5f5;font-weight:600;">' + r[0] + '</td>'
+      + '<td style="padding:10px 12px;">' + escapeHtml(String(r[1] || '')) + '</td></tr>';
+  });
+  body += '</tbody></table>'
+    + '<p style="font-size:13px;color:#888;font-style:italic;">此邮件由 EDS 系统自动发送 / This email is auto-generated by EDS system.</p>'
+    + '</div></div></div>';
+  return body;
+}
+
+/** 提交审核通知：有主管→通知主管(抄送责任人)；无主管→通知工序管理员 */
+function notifyReviewSubmission_(rowData, process, responsibleDisplay) {
+  const respName = extractName(responsibleDisplay);
+  const respEmail = extractEmail(responsibleDisplay);
+  const supervisorEmail = getReportSupervisor_(respName);
+  const reportNo = String(rowData[6] || '');
+  const machineNo = String(rowData[1] || '');
+  const problem = String(rowData[2] || '');
+  const workshop = String(rowData[4] || '');
+  const submitDate = formatCellDate_(rowData[3]);
+
+  let toEmail, subject, intro, ccEmail;
+  if (supervisorEmail) {
+    toEmail = supervisorEmail;
+    ccEmail = respEmail || undefined;
+    subject = '【故障报告主管审核中】' + reportNo;
+    intro = '以下故障报告已提交，等待您审核（请登录 EDS 系统进入「故障报告审核」处理）：';
+  } else {
+    const admins = getReportProcessAdmins_(process);
+    toEmail = admins.emails.join(',');
+    ccEmail = undefined;
+    subject = '【责任人无直线上级】' + reportNo;
+    intro = '以下故障报告的责任人未配置直线上级，请作为工序管理员登录 EDS 系统处理审核：';
+  }
+  const rows = [
+    ['故障报告编号<br>Failure Report No.', reportNo],
+    ['车间 / Workshop', workshop],
+    ['工序 / Process', String(process || '')],
+    ['机台号 / Machine No.', machineNo],
+    ['责任人 / Responsible', respName],
+    ['提交日期 / Submit Date', submitDate],
+    ['问题描述<br>Problem Description', problem]
+  ];
+  const html = buildFrEmailHtml_('故障报告主管审核', 'Report Pending Supervisor Review', intro, rows);
+  GmailApp.sendEmail(toEmail, subject, '', { htmlBody: html, cc: ccEmail });
+}
+
+/** 退回通知：通知责任人(抄送主管) */
+function notifyReturn_(rowData, reason) {
+  const responsibleDisplay = String(rowData[11] || '').trim();
+  const respName = extractName(responsibleDisplay);
+  const respEmail = extractEmail(responsibleDisplay);
+  if (!respEmail) return;
+  const supervisorEmail = getReportSupervisor_(respName);
+  const reportNo = String(rowData[6] || '');
+  const machineNo = String(rowData[1] || '');
+  const rows = [
+    ['故障报告编号<br>Failure Report No.', reportNo],
+    ['机台号 / Machine No.', machineNo],
+    ['退回原因<br>Return Reason', reason || '（未填写 / not specified）']
+  ];
+  const html = buildFrEmailHtml_('故障报告审核未通过', 'Report Returned for Revision',
+    '您的故障报告未通过主管审核，请登录 EDS 系统进入「故障报告上传」修改后重新提交：', rows);
+  GmailApp.sendEmail(respEmail, '【故障报告审核未通过】' + reportNo, '', { htmlBody: html, cc: supervisorEmail || undefined });
+}
+
+/**
+ * 一次性：新增 Failure_Database O-R 表头 + 历史数据迁移
+ * 有附件(J列非空)且无审核状态的报告 → 已通过、审核日期=上传日期、审核人=责任人
+ * 在 GAS 编辑器手动运行一次
+ */
+function setupFailureReviewColumns() {
+  try {
+    const ws = SpreadsheetApp.openById(FR_SS_ID).getSheetByName('Failure_Database');
+    if (!ws) return 'Failure_Database not found';
+    ws.getRange(1, 15, 1, 4).setValues([[
+      '审核状态 / Review Status', '审核人 / Reviewed By', '审核日期 / Review Date', '退回原因 / Return Reason'
+    ]]);
+    const data = ws.getDataRange().getValues();
+    let migrated = 0;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][14] || '').trim()) continue;               // 已有状态则跳过
+      if (String(data[i][9] || '').trim() === '') continue;         // 无附件=未提交，跳过
+      const uploadDate = data[i][8] ? formatCellDate_(data[i][8]) : '';
+      ws.getRange(i + 1, 15).setValue('已通过');
+      ws.getRange(i + 1, 16).setValue(String(data[i][11] || '').trim()); // 审核人=责任人兜底
+      ws.getRange(i + 1, 17).setValue(uploadDate);
+      migrated++;
+    }
+    return '完成：O-R 表头已写入，历史迁移 ' + migrated + ' 条 / Done. Headers set, migrated ' + migrated + ' rows.';
+  } catch (e) {
+    return 'Error: ' + e.message;
   }
 }
 
@@ -919,6 +1338,14 @@ function loadFailureReport_Progress() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Progress", { webPage: webPage })
     .setTitle("故障报告进度 | Failure Report Progress")
+    .setFaviconUrl(webIconUrl);
+}
+
+// 新增：故障报告审核页面加载函数
+function loadFailureReport_Review() {
+  let webPage = getReleaseWebPage();
+  return render("FailureReport_Review", { webPage: webPage })
+    .setTitle("故障报告审核 | Failure Report Review")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -7642,6 +8069,11 @@ function getFailureReportProgressData(userEmail, userName) {
         verifyPassed: verifyPassed,
         progressStatus: progressStatus,
         hasFormData: !!(row[10] && String(row[10]).trim().startsWith('{')),
+        // 主管审核新增列 O-R（索引 14-17）
+        reviewStatus: String(row[14] || '').trim(),   // O: 审核状态
+        reviewedBy: String(row[15] || '').trim(),     // P: 审核人
+        reviewDate: String(row[16] || '').trim(),     // Q: 审核日期
+        returnReason: String(row[17] || '').trim(),   // R: 退回原因
       };
       if (process === "IM" || process === "INJ") {
         result.IM.push(Object.assign({ process: "IM" }, baseItem));
