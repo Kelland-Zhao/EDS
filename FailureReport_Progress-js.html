@@ -156,11 +156,11 @@ function initializeTables() {
                         else if (/^https?:\/\//.test(String(row.attachments))) pdfUrl = String(row.attachments);
                     }
                     if (pdfUrl) {
-                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" title="查看PDF View PDF">查看PDF<br>View PDF</button> ';
+                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" style="display:block;width:120px;margin:2px auto;">查看PDF<br>View PDF</button>';
                     }
                     // 编辑按钮
                     if (row.hasFormData) {
-                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '" style="display:block;width:120px;margin:2px auto;">编辑<br>Edit</button>';
                     }
                     return buttons || '';
                 }
@@ -237,11 +237,11 @@ function initializeTables() {
                         else if (/^https?:\/\//.test(String(row.attachments))) pdfUrl = String(row.attachments);
                     }
                     if (pdfUrl) {
-                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" title="查看PDF View PDF">查看PDF<br>View PDF</button> ';
+                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" style="display:block;width:120px;margin:2px auto;">查看PDF<br>View PDF</button>';
                     }
                     // 编辑按钮
                     if (row.hasFormData) {
-                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '" style="display:block;width:120px;margin:2px auto;">编辑<br>Edit</button>';
                     }
                     return buttons || '';
                 }
@@ -318,11 +318,11 @@ function initializeTables() {
                         else if (/^https?:\/\//.test(String(row.attachments))) pdfUrl = String(row.attachments);
                     }
                     if (pdfUrl) {
-                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" title="查看PDF View PDF">查看PDF<br>View PDF</button> ';
+                        buttons += '<button class="btn btn-sm btn-info view-pdf-btn" data-pdf="' + pdfUrl + '" style="display:block;width:120px;margin:2px auto;">查看PDF<br>View PDF</button>';
                     }
                     // 编辑按钮
                     if (row.hasFormData) {
-                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '">编辑<br>Edit</button>';
+                        buttons += '<button class="btn btn-sm btn-warning edit-progress-btn" data-id="' + row.failureReportNumber + '" data-machine="' + row.machineNo + '" data-desc="' + row.problemDescription + '" data-responsible="' + encodeURIComponent(row.responsiblePerson || '') + '" style="display:block;width:120px;margin:2px auto;">编辑<br>Edit</button>';
                     }
                     return buttons || '';
                 }
