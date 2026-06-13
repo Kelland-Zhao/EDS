@@ -9051,7 +9051,7 @@ function sendFollowupCreationReminderEmails(reportInfo, followupRows) {
       + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
       + '<thead><tr style="background:' + headerGrad + ';color:white;">'
       + '<th style="padding:12px;text-align:left;font-weight:600;">故障报告编号<br><span style="font-size:0.8em;opacity:0.9;">Report No.</span></th>'
-      + '<th style="padding:12px;text-align:left;font-weight:600;">预防行动<br><span style="font-size:0.8em;opacity:0.9;">Action Plan</span></th>'
+      + '<th style="padding:12px;text-align:left;font-weight:600;">行动描述<br><span style="font-size:0.8em;opacity:0.9;">Action Description</span></th>'
       + '<th style="padding:12px;text-align:left;font-weight:600;">责任人<br><span style="font-size:0.8em;opacity:0.9;">Owner</span></th>'
       + '<th style="padding:12px;text-align:left;font-weight:600;">期限<br><span style="font-size:0.8em;opacity:0.9;">Due Date</span></th>'
       + '<th style="padding:12px;text-align:left;font-weight:600;">状态<br><span style="font-size:0.8em;opacity:0.9;">Status</span></th>'

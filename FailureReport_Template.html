@@ -17,7 +17,8 @@
     .field-label { font-size: 0.82rem; font-weight: 600; color: #333; margin-bottom: 2px; display: block; }
     .tbl-report th { background: #E60012; color: white; font-size: 0.82rem; text-align: center; vertical-align: middle; }
     .tbl-report td { font-size: 0.82rem; vertical-align: middle; padding: 3px 4px; }
-    .tbl-report input, .tbl-report select, .tbl-report textarea { border: none; background: transparent; font-size: 0.82rem; width: 100%; resize: none; padding: 2px; }
+    .tbl-report input, .tbl-report select { border: none; background: transparent; font-size: 0.82rem; width: 100%; padding: 2px; }
+    .tbl-report textarea { border: none; background: transparent; font-size: 0.82rem; width: 100%; resize: vertical; padding: 2px; }
     .tbl-report input:focus, .tbl-report select:focus, .tbl-report textarea:focus { outline: 1px solid #0d6efd; background: #f0f7ff; border-radius: 2px; }
     .checkbox-group label { font-size: 0.82rem; margin-right: 12px; cursor: pointer; }
     .checkbox-group input[type="checkbox"] { margin-right: 4px; }
@@ -100,6 +101,7 @@
 
         <!-- RCA (动态列：管理系统 / 技术系统) -->
         <div class="section-header">根本原因分析 / RCA Analysis</div>
+        <div id="rcaToolbar" class="d-flex gap-2 mb-2"></div>
         <table class="table table-bordered table-sm tbl-report mb-2" id="rcaTable">
           <thead id="rcaTableHead"></thead>
           <tbody id="rcaTableBody"></tbody>
