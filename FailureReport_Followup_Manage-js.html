@@ -42,9 +42,9 @@
     }
 
     const FIELD_LABELS = {
-        paPlan: '预防性措施 / PA Action',
+        paPlan: '措施描述 / Action Desc',
         status: '状态 / Status',
-        followupContent: '跟进内容 / Follow-up Content'
+        followupContent: '备注 / Remarks'
     };
 
     const loadingSpinner = {
@@ -283,7 +283,7 @@
                         if (isLocked) {
                             return '<div style="min-width:180px;font-size:0.875rem;color:#555;white-space:pre-wrap;word-break:break-word;">' + (safe || '<span class="text-muted">-</span>') + '</div>';
                         }
-                        return '<textarea class="form-control followup-content-textarea" rows="2" style="min-width:180px;font-size:0.875rem;" placeholder="输入跟进内容...">' + safe + '</textarea>';
+                        return '<textarea class="form-control followup-content-textarea" rows="2" style="min-width:180px;font-size:0.875rem;" placeholder="输入备注...">' + safe + '</textarea>';
                     }
                 },
                 {
@@ -315,19 +315,16 @@
                     orderable: false,
                     render: function(data, type, row) {
                         if (type !== 'display') return '';
-                        const btnStyle = 'font-size:0.7rem;width:52px;padding:3px 2px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.3;white-space:normal;';
+                        const btnStyle = 'display:block;width:120px;margin:2px auto;';
                         const sLocked = String(row.status || '');
                         const isLocked = sLocked.includes('已完成') || sLocked.includes('已通过') || sLocked.includes('已取消');
-                        let actions = '<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:stretch;justify-content:center;">';
+                        let actions = '';
                         if (!isLocked) {
-                            actions += '<button class="btn btn-sm btn-primary save-content-btn" data-id="' + row.followupId + '" style="' + btnStyle + '" title="保存 Save"><i class="bi bi-save"></i><br>保存</button>';
+                            actions += '<button class="btn btn-sm btn-primary save-content-btn" data-id="' + row.followupId + '" style="' + btnStyle + '">保存<br>Save</button>';
                         }
                         if (row.pdfUrl) {
-                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '" title="查看PDF View PDF">';
-                            actions += '<i class="bi bi-file-pdf"></i><br>PDF';
-                            actions += '</button>';
+                            actions += '<button class="btn btn-sm btn-info view-pdf-btn" data-id="' + row.followupId + '" data-pdf="' + row.pdfUrl + '" data-report="' + row.failureReportNo + '" style="' + btnStyle + '">查看PDF<br>View PDF</button>';
                         }
-                        actions += '</div>';
                         return actions;
                     }
                 }
@@ -421,7 +418,7 @@
             .updateFollowupFieldValue(followupId, fieldKey, value);
     }
 
-    // 保存跟进内容按钮点击事件
+    // 保存备注按钮点击事件
     $(document).on('click', '.save-content-btn', function() {
         if (!followupTable) return;
         const followupId = $(this).data('id');
@@ -431,7 +428,7 @@
         const newValue = String($textarea.val() || '').trim();
 
         if (!newValue) {
-            showToast('请先输入跟进内容 / Please enter follow-up content first', 'warning');
+            showToast('请先输入备注 / Please enter remarks first', 'warning');
             return;
         }
 
@@ -480,7 +477,7 @@
             setTimeout(function() { $savedTr.removeClass('row-saved-flash'); }, 2000);
             const index = followupData.findIndex(function(r) { return r.followupId === followupId; });
             if (index !== -1) { followupData[index] = updatedRow; }
-            showToast('跟进内容已保存，状态已更新为未验证 / Follow-up content saved, status updated to Not Verified', 'success');
+            showToast('备注已保存，状态已更新为未验证 / Remarks saved, status updated to Not Verified', 'success');
             // 自动通知验证人
             const autoEmailData = [{
                 followupId: updatedRow.followupId,

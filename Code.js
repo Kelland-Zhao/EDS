@@ -524,7 +524,7 @@ function submitFailureReport(dataStr) {
           String((row && row.pa_when) || '').trim(),
           String((row && row.pa_verifier) || '').trim(),
           String((row && row.pa_verifier_when) || '').trim(),
-          'NA',
+          '待验证',
           nowYmd,
           nowYmd,
           fileUrl,
@@ -534,7 +534,7 @@ function submitFailureReport(dataStr) {
 
         if (existingMap[paIdx] !== undefined) {
           const existing = existingMap[paIdx].data;
-          newRow[8] = String(existing[8] || 'NA').trim();
+          newRow[8] = String(existing[8] || '待验证').trim();
           newRow[9] = String(existing[9] || nowYmd).trim();
           newRow[10] = nowYmd;
           usedExisting.add(paIdx);
@@ -568,7 +568,7 @@ function submitFailureReport(dataStr) {
           String((row && row.pa_when) || '').trim(),
           String((row && row.pa_verifier) || '').trim(),
           String((row && row.pa_verifier_when) || '').trim(),
-          'NA',
+          '待验证',
           nowYmd,
           nowYmd,
           fileUrl,
@@ -8115,7 +8115,7 @@ function getFollowupRecords() {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[13] || ''),  // Column N - 跟进内容
+        String(row[13] || ''),  // Column N - 备注
         String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
 
@@ -8274,7 +8274,7 @@ function updateFollowupFieldValue(followupId, fieldKey, value) {
 
     wsFollow.getRange(rowIndex, fieldMap[fieldKey]).setValue(normalizedValue);
 
-    // 跟进内容保存后，自动将状态改为"未验证"
+    // 备注保存后，自动将状态改为"未验证"
     if (fieldKey === 'followupContent' && normalizedValue) {
       wsFollow.getRange(rowIndex, 9).setValue('未验证 / Not Verified');
     }
@@ -8404,14 +8404,14 @@ function sendReturnNotificationToResponsible(rowData, reason, newDate, verifierN
   html += '<tr style="background:#E60012;color:white;"><th>字段/Field</th><th>内容/Content</th></tr>';
   html += '<tr><td>跟进ID / Follow-up ID</td><td>' + escapeHtml(followupId) + '</td></tr>';
   html += '<tr><td>故障报告编号 / Failure Report No.</td><td>' + escapeHtml(failureReportNo) + '</td></tr>';
-  html += '<tr><td>PA类型 / PA Type</td><td>' + escapeHtml(paType) + '</td></tr>';
-  html += '<tr><td>预防性措施 / PA Action</td><td>' + escapeHtml(paPlan).replace(/\n/g, '<br>') + '</td></tr>';
+  html += '<tr><td>措施类型 / Action Type</td><td>' + escapeHtml(paType) + '</td></tr>';
+  html += '<tr><td>措施描述 / Action Desc</td><td>' + escapeHtml(paPlan).replace(/\n/g, '<br>') + '</td></tr>';
   html += '<tr style="background:#fff3cd;"><td><strong>退回原因 / Return Reason</strong></td><td>' + escapeHtml(reason || '-').replace(/\n/g, '<br>') + '</td></tr>';
   html += '<tr style="background:#cce5ff;"><td><strong>新完成日期 / New Completion Date</strong></td><td>' + escapeHtml(newDate || '-') + '</td></tr>';
   html += '<tr><td>退回人 / Returned By</td><td>' + escapeHtml(verifierName || '-') + '</td></tr>';
   html += '<tr><td>退回时间 / Return Time</td><td>' + escapeHtml(nowStr || '-') + '</td></tr>';
   html += '</table>';
-  html += '<p style="margin-top:16px;">请尽快登录系统更新跟进内容 / Please log in to update your follow-up content as soon as possible.</p>';
+  html += '<p style="margin-top:16px;">请尽快登录系统更新备注 / Please log in to update your remarks as soon as possible.</p>';
   html += '<p>此邮件由系统自动发送 / This email is sent automatically by the system.</p>';
   GmailApp.sendEmail(email, subject, '', { htmlBody: html });
 }
@@ -8461,7 +8461,7 @@ function sendCancelNotificationToAll(rowData, reason, verifierName, nowStr) {
   html += '<tr style="background:#E60012;color:white;"><th>字段/Field</th><th>内容/Content</th></tr>';
   html += '<tr><td>跟进ID / Follow-up ID</td><td>' + escapeHtml(followupId) + '</td></tr>';
   html += '<tr><td>故障报告编号 / Failure Report No.</td><td>' + escapeHtml(failureReportNo) + '</td></tr>';
-  html += '<tr><td>PA类型 / PA Type</td><td>' + escapeHtml(paType) + '</td></tr>';
+  html += '<tr><td>措施类型 / Action Type</td><td>' + escapeHtml(paType) + '</td></tr>';
   html += '<tr style="background:#f8d7da;"><td><strong>取消原因 / Cancel Reason</strong></td><td>' + escapeHtml(reason || '-').replace(/\n/g, '<br>') + '</td></tr>';
   html += '<tr><td>操作人 / Cancelled By</td><td>' + escapeHtml(verifierName || '-') + '</td></tr>';
   html += '<tr><td>操作时间 / Time</td><td>' + escapeHtml(nowStr || '-') + '</td></tr>';
@@ -8533,8 +8533,8 @@ function sendVerifyReplyNotification(followupId, newStatus, verifyReply, verifie
       + '<table style="width:100%;border-collapse:collapse;margin-bottom:8px;">'
       + '<tr><td style="padding:8px 12px;width:160px;font-weight:600;color:#555;">故障报告编号 / Report No.</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(failureReportNo) + '</td></tr>'
       + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">跟进ID / Follow-up ID</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(followupId) + '</td></tr>'
-      + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">PA类型 / PA Type</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(paType) + '</td></tr>'
-      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;vertical-align:top;">预防性措施 / PA Action</td><td style="padding:8px 12px;color:#2c3e50;white-space:pre-wrap;">' + escapeHtml(paPlan) + '</td></tr>'
+      + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">措施类型 / Action Type</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(paType) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;vertical-align:top;">措施描述 / Action Desc</td><td style="padding:8px 12px;color:#2c3e50;white-space:pre-wrap;">' + escapeHtml(paPlan) + '</td></tr>'
       + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">验证状态 / Status</td><td style="padding:8px 12px;"><span style="display:inline-block;padding:4px 12px;border-radius:14px;color:#fff;font-weight:600;background:' + statusColor + ';">' + escapeHtml(newStatus) + '</span></td></tr>'
       + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;vertical-align:top;">验证回复 / Verification Reply</td><td style="padding:8px 12px;color:#2c3e50;white-space:pre-wrap;">' + escapeHtml(replyText) + '</td></tr>'
       + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">验证人 / Verifier</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(verifierName || extractName(paVerifier)) + '</td></tr>'
@@ -8644,8 +8644,8 @@ function sendFollowupEmailReminder(type) {
     htmlBody += '<table border="1" cellpadding="5" style="border-collapse: collapse;">';
     htmlBody += '<tr style="background-color: #E60012; color: white;">';
     htmlBody += '<th>故障报告编号<br>Failure Report No.</th>';
-    htmlBody += '<th>PA类型<br>PA Type</th>';
-    htmlBody += '<th>预防性措施<br>PA Action</th>';
+    htmlBody += '<th>措施类型<br>Action Type</th>';
+    htmlBody += '<th>措施描述<br>Action Desc</th>';
     htmlBody += '<th>计划日期<br>Plan Date</th>';
     htmlBody += '</tr>';
 
@@ -8764,9 +8764,9 @@ function sendVerificationReminderToVerifiers(records) {
         htmlBody += '<tr style="background-color: #E60012; color: white;">';
         htmlBody += '<th>跟进ID<br>Follow-up ID</th>';
         htmlBody += '<th>故障报告编号<br>Failure Report No.</th>';
-        htmlBody += '<th>PA类型<br>PA Type</th>';
-        htmlBody += '<th>预防性措施<br>PA Action</th>';
-        htmlBody += '<th>跟进内容<br>Follow-up Content</th>';
+        htmlBody += '<th>措施类型<br>Action Type</th>';
+        htmlBody += '<th>措施描述<br>Action Desc</th>';
+        htmlBody += '<th>备注<br>Remarks</th>';
         htmlBody += '<th>跟进人<br>Updated By</th>';
         htmlBody += '<th>计划完成日期<br>Planned Completion Date</th>';
         htmlBody += '<th>状态<br>Status</th>';
@@ -8886,8 +8886,8 @@ function sendReminderToResponsiblePersons(records) {
         htmlBody += '<tr style="background-color: #E60012; color: white;">';
         htmlBody += '<th>跟进ID<br>Follow-up ID</th>';
         htmlBody += '<th>故障报告编号<br>Failure Report No.</th>';
-        htmlBody += '<th>PA类型<br>PA Type</th>';
-        htmlBody += '<th>预防性措施<br>PA Action</th>';
+        htmlBody += '<th>措施类型<br>Action Type</th>';
+        htmlBody += '<th>措施描述<br>Action Desc</th>';
         htmlBody += '<th>计划完成日期<br>Planned Completion Date</th>';
         htmlBody += '<th>状态<br>Status</th>';
         htmlBody += '<th>验证状态<br>Verification Status</th>';
@@ -8997,7 +8997,7 @@ function sendFollowupCreationReminderEmails(reportInfo, followupRows) {
       paPlan:   String(row[3] || ''),
       owner:    String(row[4] || ''),
       dueDate:  formatDateYmd(row[5]),
-      status:   String(row[8] || 'NA'),
+      status:   String(row[8] || '待验证'),
       days:     calcDays(row[5])
     });
   });
@@ -9148,7 +9148,7 @@ function getFollowupRecordsForResponsiblePerson(userName) {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[13] || ''),  // Column N - 跟进内容
+        String(row[13] || ''),  // Column N - 备注
         String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
 
@@ -9233,7 +9233,7 @@ function getFollowupRecordsForVerifier(userName) {
         formatDate(row[9]),
         formatDate(row[10]),
         String(row[11] || ''),
-        String(row[13] || ''),  // Column N - 跟进内容
+        String(row[13] || ''),  // Column N - 备注
         String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
 

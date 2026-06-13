@@ -127,7 +127,7 @@
         #followupTable tbody tr.odd > td { background-color: #f5f5f5; }
         #followupTable tbody tr.even > td { background-color: #ffffff; }
 
-        /* 长文本列左对齐 + 限宽换行（预防性措施 第4列、跟进内容 第9列、验证回复 第10列） */
+        /* 长文本列左对齐 + 限宽换行（措施描述 第4列、备注 第9列、验证回复 第10列） */
         #followupTable td:nth-child(4),
         #followupTable td:nth-child(9),
         #followupTable td:nth-child(10) {
@@ -265,13 +265,13 @@
                         <tr>
                             <th>跟进ID<br>Follow-up ID</th>
                             <th>故障报告编号<br>Failure Report No.</th>
-                            <th>PA类型<br>PA Type</th>
-                            <th>预防性措施<br>PA Action</th>
+                            <th>措施类型<br>Action Type</th>
+                            <th>措施描述<br>Action Desc</th>
                             <th>责任人<br>Responsible Person</th>
                             <th>计划完成日期<br>Planned Completion Date</th>
                             <th>验证人<br>Verifier</th>
                             <th>状态<br>Status</th>
-                            <th>跟进内容<br>Follow-up Content</th>
+                            <th>备注<br>Remarks</th>
                             <th>验证回复<br>Verification Reply</th>
                             <th>创建日期<br>Created Date</th>
                             <th>更新日期<br>Updated Date</th>
@@ -307,12 +307,12 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">PA类型 / PA Type</label>
+                            <label class="form-label">措施类型 / Action Type</label>
                             <input type="text" class="form-control" id="verifyPaType" readonly>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">预防性措施 / PA Action</label>
+                            <label class="form-label">措施描述 / Action Desc</label>
                             <textarea class="form-control" id="verifyPaPlan" rows="3" readonly></textarea>
                         </div>
 
