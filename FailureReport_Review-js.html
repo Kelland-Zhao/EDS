@@ -119,6 +119,36 @@
         return m ? m[1].trim() : String(display || '').trim();
     }
 
+    // RCA 还原为表格（层/Why × 系统列 + 根本原因），与 Template 显示一致
+    function renderRcaHtml(rcaRaw) {
+        var obj;
+        try { obj = typeof rcaRaw === 'string' ? JSON.parse(rcaRaw) : rcaRaw; } catch (e) { return ''; }
+        if (!obj || !Array.isArray(obj.columns) || !obj.columns.length) return '';
+        var cols = obj.columns;
+        var rows = Array.isArray(obj.rows) ? obj.rows : [];
+        var circ = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+        var typeCount = {};
+        var headers = cols.map(function (c) {
+            var t = c.type || '';
+            typeCount[t] = (typeCount[t] || 0) + 1;
+            return t + (circ[typeCount[t] - 1] || '');
+        });
+        var html = '<table class="rca-detail-table"><thead><tr><th>层<br>Level</th>';
+        headers.forEach(function (h) { html += '<th>' + escapeHtml(h) + '</th>'; });
+        html += '</tr></thead><tbody>';
+        for (var r = 0; r < rows.length; r++) {
+            html += '<tr><td class="rca-lvl">Why' + (r + 1) + '</td>';
+            for (var c = 0; c < cols.length; c++) {
+                html += '<td>' + escapeHtml((rows[r] && rows[r][c]) || '') + '</td>';
+            }
+            html += '</tr>';
+        }
+        html += '</tbody><tfoot><tr><td class="rca-lvl">根本原因<br>Root Cause</td>';
+        cols.forEach(function (c) { html += '<td><b>' + escapeHtml(c.rootCause || '') + '</b></td>'; });
+        html += '</tr></tfoot></table>';
+        return html;
+    }
+
     function showDetail(idx) {
         var r = (renderTable._rows || [])[idx];
         if (!r) return;
@@ -135,16 +165,13 @@
         html += '<div><b>问题描述:</b> ' + escapeHtml(r.problemDescription) + '</div>';
         html += '</div></div>';
 
-        // RCA
+        // RCA（还原成表格）
         if (data.rca_json) {
-            var rcaTxt = '';
-            try {
-                var rca = typeof data.rca_json === 'string' ? JSON.parse(data.rca_json) : data.rca_json;
-                rcaTxt = JSON.stringify(rca, null, 2);
-            } catch (e) { rcaTxt = String(data.rca_json); }
-            html += '<div class="detail-section"><h6>根因分析 / RCA</h6>' +
-                '<pre style="font-size:12px;white-space:pre-wrap;background:#fafafa;padding:8px;border-radius:4px;">' +
-                escapeHtml(rcaTxt) + '</pre></div>';
+            var rcaHtml = renderRcaHtml(data.rca_json);
+            if (rcaHtml) {
+                html += '<div class="detail-section"><h6>根因分析 / RCA</h6>' +
+                    '<div class="table-responsive">' + rcaHtml + '</div></div>';
+            }
         }
 
         // PA 措施
