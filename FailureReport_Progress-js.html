@@ -106,10 +106,10 @@ function initializeTables() {
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
+            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
-            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
                 data: null,
@@ -124,6 +124,15 @@ function initializeTables() {
                     }
                     var color = (passed === total && total > 0) ? '#28a745' : '#0d6efd';
                     return '<span class="badge" style="background:' + color + ';color:#fff;font-size:0.78rem;">' + passed + ' / ' + total + '</span>';
+                }
+            },
+            {
+                data: 'responsiblePerson',
+                title: buildBilingualTitle('责任人', 'Responsible Person'),
+                className: 'text-center align-middle',
+                render: function(data, type) {
+                    if (type !== 'display') return data || '';
+                    return data || '';
                 }
             },
             {
@@ -187,10 +196,10 @@ function initializeTables() {
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
+            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
-            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
                 data: null,
@@ -205,6 +214,15 @@ function initializeTables() {
                     }
                     var color = (passed === total && total > 0) ? '#28a745' : '#0d6efd';
                     return '<span class="badge" style="background:' + color + ';color:#fff;font-size:0.78rem;">' + passed + ' / ' + total + '</span>';
+                }
+            },
+            {
+                data: 'responsiblePerson',
+                title: buildBilingualTitle('责任人', 'Responsible Person'),
+                className: 'text-center align-middle',
+                render: function(data, type) {
+                    if (type !== 'display') return data || '';
+                    return data || '';
                 }
             },
             {
@@ -268,10 +286,10 @@ function initializeTables() {
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
+            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
-            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
             { data: 'completionDays', title: buildBilingualTitle('完成天数', 'Completion Days'), createdCell: function(td, cellData) { $(td).css('text-align', 'center'); const val = parseInt(cellData); if (!isNaN(val) && val > 7) { $(td).css('background-color', '#ffcccc').css('font-weight', 'bold'); } } },
             {
                 data: null,
@@ -286,6 +304,15 @@ function initializeTables() {
                     }
                     var color = (passed === total && total > 0) ? '#28a745' : '#0d6efd';
                     return '<span class="badge" style="background:' + color + ';color:#fff;font-size:0.78rem;">' + passed + ' / ' + total + '</span>';
+                }
+            },
+            {
+                data: 'responsiblePerson',
+                title: buildBilingualTitle('责任人', 'Responsible Person'),
+                className: 'text-center align-middle',
+                render: function(data, type) {
+                    if (type !== 'display') return data || '';
+                    return data || '';
                 }
             },
             {
