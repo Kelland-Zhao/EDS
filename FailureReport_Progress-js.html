@@ -106,7 +106,7 @@ function initializeTables() {
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
-            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
+            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter'), className: 'text-center align-middle' },
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
@@ -132,7 +132,9 @@ function initializeTables() {
                 className: 'text-center align-middle',
                 render: function(data, type) {
                     if (type !== 'display') return data || '';
-                    return data || '';
+                    var s = String(data || '');
+                    var m = s.match(/^(.+?)【/);
+                    return m ? m[1] : s;
                 }
             },
             {
@@ -196,7 +198,7 @@ function initializeTables() {
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
-            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
+            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter'), className: 'text-center align-middle' },
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
@@ -222,7 +224,9 @@ function initializeTables() {
                 className: 'text-center align-middle',
                 render: function(data, type) {
                     if (type !== 'display') return data || '';
-                    return data || '';
+                    var s = String(data || '');
+                    var m = s.match(/^(.+?)【/);
+                    return m ? m[1] : s;
                 }
             },
             {
@@ -286,7 +290,7 @@ function initializeTables() {
             { data: 'machineNo', title: buildBilingualTitle('机台号', 'Machine No.') },
             { data: 'submitDate', title: buildBilingualTitle('提交日期', 'Submit Date') },
             { data: 'shift', title: buildBilingualTitle('班次', 'Shift') },
-            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter') },
+            { data: 'submitter', title: buildBilingualTitle('填写人', 'Submitter'), className: 'text-center align-middle' },
             { data: 'problemDescription', title: buildBilingualTitle('问题描述', 'Problem Description') },
             { data: 'assignmentDate', title: buildBilingualTitle('分配日期', 'Assignment Date') },
             { data: 'uploadDate', title: buildBilingualTitle('上传日期', 'Upload Date') },
@@ -312,7 +316,9 @@ function initializeTables() {
                 className: 'text-center align-middle',
                 render: function(data, type) {
                     if (type !== 'display') return data || '';
-                    return data || '';
+                    var s = String(data || '');
+                    var m = s.match(/^(.+?)【/);
+                    return m ? m[1] : s;
                 }
             },
             {
