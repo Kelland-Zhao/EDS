@@ -12,6 +12,7 @@
   <?!=include("Kez_Select2@4.0.13_css") ?>
   <?!=include("Kez_Select2-bootstrap_css") ?>
   <?!=include("CSS") ?>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     #pmFollowUpTable thead th,
     #tfTable thead th,
@@ -64,23 +65,55 @@
             三班转保养跟进 / PM Shift Follow-up
         </div>
         <div class="card-body">
-            <!-- 使用说明区域 -->
-            <div class="alert alert-info">
-                <h5>使用说明 / Instructions</h5>
-                <p><strong>工序切换 / Process Switching:</strong> 点击上方Tab切换不同工序的数据（IM/TF/PK）/ Click the tabs above to switch between different process data (IM/TF/PK)</p>
-                <p><strong>状态编辑 / Status Editing:</strong> 单击状态列可选择Done或Ongoing状态 / Click on the Status column to select Done or Ongoing status</p>
-                <p><strong>反馈编辑 / Feedback Editing:</strong> 双击"后续措施 - 保养（反馈）"列可输入跟进信息 / Double-click on the "Follow-up Action - PM (Feedback)" column to enter follow-up information</p>
-                <p><strong>批量提交 / Batch Submission:</strong> 编辑完成后点击右上角"提交修改"按钮保存所有更改 / After editing, click the "Submit Changes" button in the top-right corner to save all changes</p>
-            </div>
-            
-            <!-- 数据源说明区域 -->
-            <div class="alert alert-warning">
-                <h5>数据源说明 / Data Source Information</h5>
-                <p><strong>数据来源 / Data Source:</strong> 数据来源于MasterData表格，包含所有工序的保养跟进记录 / Data comes from the MasterData sheet, containing PM follow-up records for all processes</p>
-                <p><strong>更新机制 / Update Mechanism:</strong> 修改数据后需要点击提交按钮才能保存到MasterData / After modifying data, click the submit button to save to MasterData</p>
-                <p><strong>实时同步 / Real-time Sync:</strong> 提交成功后会自动刷新数据，确保显示最新信息 / After successful submission, data will be automatically refreshed to ensure the latest information is displayed</p>
-                <p><strong>状态说明 / Status Description:</strong> Done表示已完成，Ongoing表示进行中 / Done indicates completed, Ongoing indicates in progress</p>
-            </div>
+            <!-- 使用说明（折叠） -->
+            <details class="manual-add-hint">
+                <summary>
+                    <i class="bi bi-info-circle"></i>
+                    <span>使用说明 / Instructions</span>
+                    <i class="bi bi-chevron-down"></i>
+                </summary>
+                <div class="hint-body">
+                    <ol>
+                        <li>工序切换：点击上方Tab切换不同工序的数据（IM/TF/PK）
+                            <span class="en">Process Switching: Click the tabs above to switch between different process data (IM/TF/PK)</span>
+                        </li>
+                        <li>状态编辑：单击状态列可选择Done或Ongoing状态
+                            <span class="en">Status Editing: Click on the Status column to select Done or Ongoing status</span>
+                        </li>
+                        <li>反馈编辑：双击"后续措施 - 保养（反馈）"列可输入跟进信息
+                            <span class="en">Feedback Editing: Double-click on the "Follow-up Action - PM (Feedback)" column to enter follow-up information</span>
+                        </li>
+                        <li>批量提交：编辑完成后点击"提交修改"按钮保存所有更改
+                            <span class="en">Batch Submission: After editing, click the "Submit Changes" button to save all changes</span>
+                        </li>
+                    </ol>
+                </div>
+            </details>
+
+            <!-- 数据源说明（折叠） -->
+            <details class="manual-add-hint">
+                <summary>
+                    <i class="bi bi-info-circle"></i>
+                    <span>数据源说明 / Data Source Information</span>
+                    <i class="bi bi-chevron-down"></i>
+                </summary>
+                <div class="hint-body">
+                    <ol>
+                        <li>数据来源：数据来源于MasterData表格，包含所有工序的保养跟进记录
+                            <span class="en">Data Source: Data comes from the MasterData sheet, containing PM follow-up records for all processes</span>
+                        </li>
+                        <li>更新机制：修改数据后需要点击提交按钮才能保存到MasterData
+                            <span class="en">Update Mechanism: After modifying data, click the submit button to save to MasterData</span>
+                        </li>
+                        <li>实时同步：提交成功后会自动刷新数据，确保显示最新信息
+                            <span class="en">Real-time Sync: After successful submission, data will be automatically refreshed to ensure the latest information is displayed</span>
+                        </li>
+                        <li>状态说明：Done表示已完成，Ongoing表示进行中
+                            <span class="en">Status Description: Done indicates completed, Ongoing indicates in progress</span>
+                        </li>
+                    </ol>
+                </div>
+            </details>
 
             <!-- 表格操作区域 -->
             <div class="d-flex justify-content-between align-items-center mb-3">

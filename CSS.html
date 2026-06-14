@@ -209,4 +209,44 @@
     margin-left: auto !important;
     margin-right: auto !important;
   }
+
+  /* 折叠提示 (manual-add-hint) — §4.9 */
+  .manual-add-hint {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .manual-add-hint > summary {
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    list-style: none;
+  }
+  .manual-add-hint > summary::-webkit-details-marker { display: none; }
+  .manual-add-hint > summary i.bi-info-circle { color: #0d6efd; }
+  .manual-add-hint > summary .bi-chevron-down {
+    margin-left: auto;
+    transition: transform .15s;
+  }
+  .manual-add-hint[open] > summary .bi-chevron-down { transform: rotate(180deg); }
+  .manual-add-hint .hint-body {
+    padding: 10px 14px 12px;
+    font-size: 12px;
+    color: #6c757d;
+    border-top: 1px solid #e9ecef;
+  }
+  .manual-add-hint .hint-body ol { padding-left: 18px; margin: 0; }
+  .manual-add-hint .hint-body ol li { margin-bottom: 4px; line-height: 1.5; }
+  .manual-add-hint .hint-body .en {
+    color: #adb5bd;
+    display: block;
+    font-size: 11px;
+  }
 </style>
