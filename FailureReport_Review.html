@@ -173,6 +173,13 @@
 <?!=include("Kez_datatables@1.13.6_js") ?>
 <?!=include("Kez_bootstrap@5.3.1_js") ?>
 <?!=include("Kez_sweetalert2_js") ?>
+    <!-- 加载提示 -->
+    <div id="loadingSpinner" class="position-fixed start-50 translate-middle-x" style="display: none; z-index: 9999; top: 60%;">
+        <div class="spinner-border" style="color: #E60012;" role="status">
+            <span class="visually-hidden">加载中... / Loading...</span>
+        </div>
+    </div>
+
 <?!=include("FailureReport_Review-js") ?>
 </body>
 </html>
