@@ -246,28 +246,6 @@
         window.open(url);
     });
 
-    $('#ProcessSamplingInspection').click(() => {
-        $('#processInspectionModal').modal('show');
-    });
-
-    // 工艺抽检执行
-    $('#ProcessInspection_Execute').click(() => {
-        let url = siWebPage + '?v=ProcessSamplingInspection'
-            + '&ID=' + encodeURIComponent(id || '') 
-            + '&Name=' + encodeURIComponent(name || '') 
-            + '&Process=' + encodeURIComponent(process || '')
-            + '&Workshop=' + encodeURIComponent(workshop || '');
-        window.open(url);
-        $('#processInspectionModal').modal('hide');
-    });
-
-    // 工艺抽检报告
-    $('#ProcessInspection_Report').click(() => {
-        let url = 'https://colpal.domo.com/page/1572710259';
-        window.open(url);
-        $('#processInspectionModal').modal('hide');
-    });
-
     $('#FailureReport_Template').click(() => {
         let url = siWebPage + '?v=FailureReport_Template';
         window.open(url);

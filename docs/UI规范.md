@@ -784,7 +784,6 @@ table.bilingual-table td .select2-container { vertical-align: middle; }
 | 保养 PM | `bi-tools` |
 | 交接班 Handover | `bi-arrow-left-right` |
 | 点检 Inspection | `bi-clipboard-check` |
-| 工艺抽检 Process Sampling | `bi-rulers` |
 | 工艺参数 PPMS | `bi-sliders` |
 | 模面清理 Mold Surface Clean | `bi-brush` |
 | 故障报告 Failure Report | `bi-exclamation-triangle` |
@@ -811,8 +810,6 @@ table.bilingual-table td .select2-container { vertical-align: middle; }
 | 故障报告进度 Failure Report Progress | `bi-bar-chart-line` | 故障报告 |
 | 故障报告跟进验证 Follow-up Verification | `bi-check2-square` | 故障报告 |
 | 点检执行 Execute Inspection | `bi-clipboard-check` | 点检 |
-| 工艺抽检执行 Process Inspection Execution | `bi-rulers` | 工艺抽检 |
-| 工艺抽检报告 Process Inspection Report | `bi-file-earmark-bar-graph` | 工艺抽检 |
 
 新增模块/子功能时先来这两张表查，没有再去 [icons.getbootstrap.com](https://icons.getbootstrap.com/) 选。
 
