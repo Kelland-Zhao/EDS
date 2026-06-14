@@ -1,12 +1,17 @@
 <script>
+// 双语 Toast 规范
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
 $(document).ready(() => {
   let global_UserID = []; // 用于存储所有用户ID和姓名
 
   // --- 页面加载时显示一个提示框 ---
   Swal.fire({
-    title: '加载数据中...',
-    text: '正在从服务器获取任务列表，请稍候。',
+    title: swalTitle('加载数据中...', 'Loading Data...'),
+    html: swalHtml('正在从服务器获取任务列表，请稍候。', 'Fetching task list from server, please wait.'),
     allowOutsideClick: false,
+    showConfirmButton: false,
     didOpen: () => {
       Swal.showLoading();
     }
@@ -100,20 +105,6 @@ $(document).ready(() => {
       });
       // --- 筛选结束 ---
 
-      // 获取所有唯一工序并填充筛选器
-      const processes = [...new Set(filteredContent.map(item => item['工序']))].sort();
-      const processFilter = $('#processFilter');
-      
-      // 清空现有选项（保留"所有工序"选项）
-      processFilter.find('option:not(:first)').remove();
-      
-      // 添加工序选项
-      processes.forEach(process => {
-        if (process && process.trim()) { // 确保工序不为空
-          processFilter.append(`<option value="${process}">${process}</option>`);
-        }
-      });
-
       // 初始化DataTables表格
       const table = $('#taskManagementTable').DataTable({
         data: filteredContent, // 使用筛选后的数据
@@ -168,19 +159,16 @@ $(document).ready(() => {
       // 添加 badges 样式
       $('<style>').prop('type', 'text/css').html("\n  .badge {\n    font-size: 0.75rem;\n    padding: 0.375rem 0.75rem;\n    border-radius: 0.375rem;\n  }\n  .bg-secondary { background-color: #6c757d !important; }\n  .bg-primary { background-color: #0d6efd !important; }\n  .bg-warning { background-color: #ffc107 !important; color: #000 !important; }\n  .bg-success { background-color: #198754 !important; }\n").appendTo('head');
 
-      // 添加工序筛选事件处理
-      $('#processFilter').on('change', function() {
-        const selectedProcess = $(this).val();
-        console.log('选择的工序:', selectedProcess); // 调试信息
-        
-        if (selectedProcess === '') {
-          // 显示所有工序
+      // 工序筛选按钮事件
+      let currentProc = 'ALL';
+      $('.filter-bar .btn').on('click', function() {
+        $('.filter-bar .btn').removeClass('active');
+        $(this).addClass('active');
+        currentProc = $(this).data('proc');
+        if (currentProc === 'ALL') {
           table.search('').columns().search('').draw();
-          console.log('显示所有工序');
         } else {
-          // 筛选特定工序 - 使用更可靠的方法
-          table.search('').columns().search('').column(1).search(selectedProcess).draw();
-          console.log('筛选工序:', selectedProcess);
+          table.search('').columns().search('').column(1).search(currentProc).draw();
         }
       });
 
@@ -201,15 +189,27 @@ $(document).ready(() => {
             let url = siWebPage + '?v=TaskEdit';
             window.open(url, '_blank'); // 在新标签页中打开任务编辑页面
         } else {
-            alert('无法找到应用地址！');
+            Swal.fire({
+              icon: 'error',
+              title: swalTitle('错误', 'Error'),
+              html: swalHtml('无法找到应用地址！', 'Unable to find application URL!')
+            });
         }
       });
 
     } else {
-      Swal.fire('加载失败', '未能从服务器获取有效数据。', 'error');
+      Swal.fire({
+        icon: 'error',
+        title: swalTitle('加载失败', 'Load Failed'),
+        html: swalHtml('未能从服务器获取有效数据。', 'Unable to retrieve valid data from server.')
+      });
     }
   }).withFailureHandler(function(error) {
-    Swal.fire('加载失败', error.message, 'error');
+    Swal.fire({
+      icon: 'error',
+      title: swalTitle('加载失败', 'Load Failed'),
+      html: swalHtml(error.message, error.message)
+    });
   }).getPlan_new();
 
   function openPersonnelAssignmentModal(taskData) {
@@ -236,7 +236,7 @@ $(document).ready(() => {
       </div>`;
 
     Swal.fire({
-      title: '本次保养人员选择',
+      title: swalTitle('本次保养人员选择', 'PM Personnel Selection'),
       html: htmlContent,
       width: '80%',
       showConfirmButton: true,

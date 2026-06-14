@@ -21,6 +21,20 @@
     font-size: 12px;
     vertical-align: middle;
   }
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .filter-bar .btn-outline-danger {
+    --bs-btn-color: #E60012;
+    --bs-btn-border-color: #E60012;
+    --bs-btn-hover-bg: #E60012;
+    --bs-btn-hover-border-color: #E60012;
+    --bs-btn-active-bg: #E60012;
+    --bs-btn-active-border-color: #E60012;
+  }
 </style>
 </head>
 
@@ -42,15 +56,12 @@
   <div class="container mt-3">
     <div class="row mt-5">
       <div class="col-12">
-        <!-- 添加工序筛选器 -->
-        <div class="row mb-3">
-          <div class="col-md-4">
-            <label for="processFilter" class="form-label">工序筛选 / Process Filter</label>
-            <select id="processFilter" class="form-select">
-              <option value="">所有工序 / All Processes</option>
-              <!-- 工序选项将由JavaScript动态生成 -->
-            </select>
-          </div>
+        <!-- 工序筛选 -->
+        <div class="filter-bar">
+          <button class="btn btn-sm btn-outline-danger active" data-proc="ALL">全部 / All</button>
+          <button class="btn btn-sm btn-outline-danger" data-proc="IM">注塑 IM</button>
+          <button class="btn btn-sm btn-outline-danger" data-proc="TF">植磨毛 TF</button>
+          <button class="btn btn-sm btn-outline-danger" data-proc="PK">包装 PK</button>
         </div>
         <div class="table-responsive">
           <!-- 用于显示任务管理的表格 -->

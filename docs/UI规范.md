@@ -750,6 +750,112 @@ table.bilingual-table td .select2-container { vertical-align: middle; }
 - 焦点/下拉边框用品牌红 `#E60012`，高亮选项红底白字
 - 表格单元格内的 Select2 用 `vertical-align: middle` 对齐
 
+### 4.11 Toast 通知 (SweetAlert2)
+
+所有 toast / 弹窗通知统一使用 SweetAlert2，**严禁 `alert()` / `confirm()`**。每个 `-js.html` 文件开头必须定义双语 helper。
+
+#### 4.11.1 双语 Helper（强制）
+
+```js
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+```
+
+- `swalTitle(cn, en)` — 用于 `title` 字段：中文在上，英文在下（灰色小字 0.65em）
+- `swalHtml(cn, en)` — 用于 `html` 字段：中文在上，英文在下（灰色小字 0.85em）
+- 两个 helper 必须放在 `<script>` 标签内最顶部，紧跟 `$(document).ready()` 之前
+
+#### 4.11.2 Toast 类型目录
+
+**加载中 Loading**
+
+```js
+Swal.fire({
+  title: swalTitle('加载数据中...', 'Loading Data...'),
+  html: swalHtml('正在获取数据，请稍候。', 'Fetching data, please wait.'),
+  allowOutsideClick: false,
+  showConfirmButton: false,
+  didOpen: () => { Swal.showLoading(); }
+});
+```
+
+**操作成功 Success**
+
+```js
+Swal.fire({
+  icon: 'success',
+  title: swalTitle('成功', 'Success'),
+  html: swalHtml('操作完成。', 'Operation completed.'),
+  timer: 1500
+});
+```
+
+**操作失败 Error**
+
+```js
+Swal.fire({
+  icon: 'error',
+  title: swalTitle('错误', 'Error'),
+  html: swalHtml('具体错误描述', 'Error description')
+});
+```
+
+**警告确认 Warning**
+
+```js
+Swal.fire({
+  title: swalTitle('警告', 'Warning'),
+  html: swalHtml('操作说明及后果。是否继续？', 'Description and consequences. Continue?'),
+  icon: 'warning',
+  showCancelButton: true,
+  confirmButtonText: '继续 / Continue',
+  cancelButtonText: '取消 / Cancel'
+});
+```
+
+**纯提示 Info**
+
+```js
+Swal.fire({
+  icon: 'info',
+  title: swalTitle('提示', 'Info'),
+  html: swalHtml('提示信息内容', 'Information content')
+});
+```
+
+#### 4.11.3 配置对照表
+
+| 场景 | icon | showConfirmButton | showCancelButton | timer | allowOutsideClick |
+|---|---|---|---|---|---|
+| 数据加载 | — | **false** | — | — | **false** |
+| 操作成功 | `'success'` | 默认 | — | **1500** | 默认 |
+| 操作失败 | `'error'` | 默认 | — | — | 默认 |
+| 警告确认 | `'warning'` | 默认 | **true** | — | 默认 |
+| 纯提示 | `'info'` | 默认 | — | — | 默认 |
+
+#### 4.11.4 强制规则
+
+- ✅ 所有 `-js.html` 文件 `<script>` 开头必须有 `swalTitle` / `swalHtml` 定义
+- ✅ 所有 `title` 使用 `swalTitle(cn, en)`，所有 `html`/`text` 使用 `swalHtml(cn, en)`
+- ✅ 加载 toast 必须 `showConfirmButton: false` + `allowOutsideClick: false` + `didOpen`
+- ✅ 成功 toast 必须 `timer: 1500` 自动关闭
+- ✅ 确认按钮文字双语：`'确认 / Confirm'`、`'继续 / Continue'`
+- ✅ 取消按钮文字双语：`'取消 / Cancel'`
+- ❌ 严禁 `alert()` / `confirm()`
+- ❌ 严禁 `Swal.fire('中文标题', '中文内容', 'success')` 纯中文三参数简写
+- ❌ 严禁加载 toast 不设 `showConfirmButton: false`（会显示 OK 按钮）
+- ❌ 严禁遗漏 `swalTitle` / `swalHtml` 定义
+
+#### 4.11.5 常见错误对照
+
+| ❌ 旧写法 | ✅ 新写法 |
+|---|---|
+| `Swal.fire('提示', '没有数据', 'info')` | `Swal.fire({ icon:'info', title:swalTitle('提示','Info'), html:swalHtml('没有数据','No data') })` |
+| `Swal.fire('成功', '提交成功！', 'success')` | `Swal.fire({ icon:'success', title:swalTitle('成功','Success'), html:swalHtml('提交成功！','Submitted!'), timer:1500 })` |
+| `Swal.fire('错误', '失败: ' + err, 'error')` | `Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('失败: '+err, 'Failed: '+err) })` |
+| `alert('加载失败：' + e)` | `Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('加载失败：'+e, 'Load failed: '+e) })` |
+| 无 `showConfirmButton` 的加载 toast | 必须加 `showConfirmButton: false` |
+
 ---
 
 ## 5. 响应式断点
@@ -840,23 +946,16 @@ table.bilingual-table td .select2-container { vertical-align: middle; }
 
 | 场景 | 实现 |
 |---|---|
-| 操作成功 | `Swal.fire({icon:'success', title:'...', timer:1500})` |
-| 操作失败 | `Swal.fire({icon:'error', title:'...', text:错误详情})` |
-| 危险操作前 | `Swal.fire({icon:'warning', showCancelButton:true, ...})` 二次确认 |
-| 数据加载 | `Swal.fire({title:swalTitle('加载数据中...','Loading Data...'), html:swalHtml('正在获取数据，请稍候。','Fetching data, please wait.'), allowOutsideClick:false, showConfirmButton:false, didOpen:()=>Swal.showLoading()})` |
+| 操作成功 | `Swal.fire({icon:'success', title:swalTitle(...), html:swalHtml(...), timer:1500})` — 详见 [§4.11.2](#4112-toast-类型目录) |
+| 操作失败 | `Swal.fire({icon:'error', title:swalTitle(...), html:swalHtml(...)})` — 详见 [§4.11.2](#4112-toast-类型目录) |
+| 危险操作前 | `Swal.fire({icon:'warning', showCancelButton:true, ...})` 二次确认 — 详见 [§4.11.2](#4112-toast-类型目录) |
+| 数据加载 | `Swal.fire({title:swalTitle(...), html:swalHtml(...), allowOutsideClick:false, showConfirmButton:false, didOpen:()=>Swal.showLoading()})` — 详见 [§4.11.2](#4112-toast-类型目录) |
+| 提示信息 | `Swal.fire({icon:'info', title:swalTitle(...), html:swalHtml(...)})` — 详见 [§4.11.2](#4112-toast-类型目录) |
 | 卡片 hover | 上浮 2px + 红色边框 + 阴影（`.nav-card:hover` 已定义） |
 | 表格行点击 | 整行高亮 / 跳转 / 弹出详情，二选一不要混 |
 | 禁用状态 | `opacity: .5; cursor: not-allowed;` + 显式标签（如 `即将上线`） |
 
-**双语 Toast 规范**：
-- 所有页面的 `-js.html` 文件开头必须定义双语 helper：
-  ```js
-  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
-  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
-  ```
-- `swalTitle` — toast 标题（中文在上、英文在下小字灰色）
-- `swalHtml` — toast 正文（中文在上、英文在下小字灰色）
-- 加载 toast 必须配置 `allowOutsideClick: false` + `showConfirmButton: false` + `didOpen: () => Swal.showLoading()`
+**Toast 通知**：完整规范（helper 定义、类型目录、配置对照、反例）见 [§4.11 Toast 通知](#411-toast-通知-sweetalert2)。
 
 ---
 
@@ -876,7 +975,11 @@ table.bilingual-table td .select2-container { vertical-align: middle; }
 [ ] 模态框标题/子按钮文字用 "中文 / English"
 [ ] 响应式：col-6 col-md-4 col-lg-3
 [ ] 禁用按钮有 "即将上线" / "权限不足" 等显式标签
-[ ] 操作反馈用 SweetAlert，不用 alert()
+[ ] 操作反馈用 SweetAlert，不用 alert()（详见 §4.11）
+[ ] `-js.html` 文件开头已定义 swalTitle / swalHtml 双语 helper（§4.11.1）
+[ ] 所有 Swal.fire 的 title 用 swalTitle()、html 用 swalHtml()（§4.11.4）
+[ ] 加载 toast 已设 showConfirmButton: false + allowOutsideClick: false（§4.11.3）
+[ ] 成功 toast 已设 timer: 1500（§4.11.3）
 [ ] 危险操作有二次确认
 [ ] 图标从 §6 已用图标表选，没有再去官网选
 [ ] 内联 `<style>` 仅放页面特有样式，通用样式放 CSS.html
