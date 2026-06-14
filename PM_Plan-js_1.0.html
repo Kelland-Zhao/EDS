@@ -95,39 +95,55 @@
   Swal.close();
   let htmlContent = `
   <div class="container mt-2">
-    <div class="row mb-2">
+    <div class="row mb-3">
       <div class="col text-center">
         <div class="btn-group" role="group">
-          <button type="button" class="btn btn-sm btn-primary" id="modeDate">按日期查询<br><small>By Date</small></button>
-          <button type="button" class="btn btn-sm btn-outline-primary" id="modeWeek">按周次查询<br><small>By Week</small></button>
+          <button type="button" class="btn btn-sm btn-danger" id="modeDate">
+            <i class="bi bi-calendar3"></i> 按日期查询<br><span style="font-size:10px;opacity:0.8;">By Date</span>
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-danger" id="modeWeek">
+            <i class="bi bi-calendar-week"></i> 按周次查询<br><span style="font-size:10px;opacity:0.8;">By Week</span>
+          </button>
         </div>
       </div>
     </div>
     <div class="row">
-      <div class="col mb-2" id="dateSection">
-        <input id="date" type="text" class="form-control datepicker" placeholder="保养日期/ PM Date">
+      <div class="col-12 col-md-6 mb-2" id="dateSection">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+          <input id="date" type="text" class="form-control datepicker" placeholder="保养日期 / PM Date" style="text-align:center;">
+        </div>
       </div>
-      <div class="col mb-2" id="weekSection" style="display:none;">
-        <select id="WeekNo" class="form-control">
-          <option selected disabled>保养周次/ PM Week</option>
-        </select>
+      <div class="col-12 col-md-6 mb-2" id="weekSection" style="display:none;">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-calendar-week"></i></span>
+          <select id="WeekNo" class="form-control">
+            <option selected disabled>保养周次 / PM Week</option>
+          </select>
+        </div>
       </div>
-      <div class="col mb-2">
-        <select id="workshop" class="form-control">
-          <option selected disabled>车间/ Workshop</option>
-          <option value="ALL">所有/ All</option>
-          <option value="TB1">TB1</option>
-          <option value="TB2">TB2</option>
-        </select>
+      <div class="col-12 col-md-6 mb-2">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-building"></i></span>
+          <select id="workshop" class="form-control">
+            <option selected disabled>车间 / Workshop</option>
+            <option value="ALL">所有 / All</option>
+            <option value="TB1">TB1</option>
+            <option value="TB2">TB2</option>
+          </select>
+        </div>
       </div>
-      <div class="col mb-2">
-        <select id="process" class="form-control">
-          <option selected disabled>工序/ Process</option>
-          <option value="ALL">所有/ All</option>
-          <option value="INJ">注塑/ INJ</option>
-          <option value="TF">植磨毛/ TF</option>
-          <option value="PK">包装/ PK</option>
-        </select>
+      <div class="col-12 col-md-6 mb-2">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-gear"></i></span>
+          <select id="process" class="form-control">
+            <option selected disabled>工序 / Process</option>
+            <option value="ALL">所有 / All</option>
+            <option value="INJ">注塑 / INJ</option>
+            <option value="TF">植磨毛 / TF</option>
+            <option value="PK">包装 / PK</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>`
@@ -178,16 +194,19 @@
     $('#WeekNo').select2({
      data: uniqueWeek.map(w => ({ id: w, text: w })),
      theme: 'bootstrap',
+     width: '100%',
      dropdownParent: $('.swal2-popup')
     });
     function setQueryMode(mode) {
      queryMode = mode;
      var isDate = mode === 'date';
-     $('#modeDate').toggleClass('btn-primary', isDate).toggleClass('btn-outline-primary', !isDate);
-     $('#modeWeek').toggleClass('btn-primary', !isDate).toggleClass('btn-outline-primary', isDate);
+     $('#modeDate').toggleClass('btn-danger', isDate).toggleClass('btn-outline-danger', !isDate);
+     $('#modeWeek').toggleClass('btn-danger', !isDate).toggleClass('btn-outline-danger', isDate);
      $('#dateSection').toggle(isDate);
      $('#weekSection').toggle(!isDate);
     }
+    // select2 在 input-group 中：占据剩余空间但不挤压 icon
+    $('.swal2-popup .input-group > .select2-container').css({ flex: '1 1 0%', minWidth: 0 });
     $('#modeDate').on('click', function() { setQueryMode('date'); });
     $('#modeWeek').on('click', function() { setQueryMode('week'); });
    },
