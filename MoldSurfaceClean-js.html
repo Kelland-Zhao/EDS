@@ -100,11 +100,20 @@
           });
         };
 
+        // --- 表头转换：Sheet 格式 "英文/ 中文" → EDS 规范 "中文<br>英文" ---
+        function transformHeader(h) {
+          const idx = h.indexOf('/');
+          if (idx !== -1) {
+            return h.substring(idx + 1).trim() + '<br>' + h.substring(0, idx).trim();
+          }
+          return h;
+        }
+
         // --- 动态创建列定义 ---
-        let columns = headers.map(header => ({ title: header }));
+        let columns = headers.map(header => ({ title: transformHeader(header) }));
 
         columns.push({
-          title: '操作',
+          title: '操作<br>Actions',
           orderable: false,
           searchable: false,
           // 修改：根据记录的状态来渲染按钮
@@ -124,7 +133,7 @@
         });
 
         columns.push({
-          title: 'Status/ 状态',
+          title: '状态<br>Status',
           orderable: true,
           searchable: true,
           // 修改：根据记录的状态来显示不同的徽章，并提供用于排序的原始数据
