@@ -27,7 +27,9 @@
 
     var reviewTable = null;
     var allReports = [];
-    var currentProc = 'ALL';
+    var _sessionProcRev = (sessionStorage.getItem('Process') || sessionStorage.getItem('pmProcess') || '').toString().trim().toUpperCase();
+    var _defaultProcRev = (_sessionProcRev === 'INJ' ? 'IM' : _sessionProcRev);
+    var currentProc = (_defaultProcRev === 'IM' || _defaultProcRev === 'TF' || _defaultProcRev === 'PK') ? _defaultProcRev : 'ALL';
 
     var currentUser = {
         name: sessionStorage.getItem('Name') || '',
@@ -315,6 +317,9 @@
             currentProc = $(this).data('proc');
             renderTable();
         });
+        // 按用户工序默认选中
+        $('.filter-bar .btn').removeClass('active');
+        $('.filter-bar .btn[data-proc="' + currentProc + '"]').addClass('active');
 
         // 操作按钮（事件委托）
         $('#reviewTable tbody').on('click', 'button[data-act]', function () {

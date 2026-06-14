@@ -8515,6 +8515,17 @@ function getFollowupRecords() {
       throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
     }
 
+    // 构建 Failure_Database failureReportNo -> process 映射
+    const wsDB = ss.getSheetByName('Failure_Database');
+    const processMap = {};
+    if (wsDB) {
+      const dbData = wsDB.getDataRange().getValues();
+      for (let d = 1; d < dbData.length; d++) {
+        const frNo = String(dbData[d][6] || '').trim();
+        if (frNo) processMap[frNo] = String(dbData[d][5] || '').trim();
+      }
+    }
+
     const dataRange = wsFollow.getDataRange();
     const values = dataRange.getValues();
     const headers = values.length > 0 ? values[0] : [];
@@ -8552,6 +8563,10 @@ function getFollowupRecords() {
         String(row[13] || ''),  // Column N - 备注
         String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
+
+      // 追加工序（从 Failure_Database 关联）
+      const process = processMap[String(row[1] || '').trim()] || '';
+      formattedRow.push(process);
 
       if (!formattedRow[0]) {
         console.log('跳过无跟进ID的行 / Skip row without follow-up ID', row);
@@ -9541,6 +9556,17 @@ function getFollowupRecordsForResponsiblePerson(userName) {
       throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
     }
 
+    // 构建 Failure_Database failureReportNo -> process 映射
+    const wsDB = ss.getSheetByName('Failure_Database');
+    const processMap = {};
+    if (wsDB) {
+      const dbData = wsDB.getDataRange().getValues();
+      for (let d = 1; d < dbData.length; d++) {
+        const frNo = String(dbData[d][6] || '').trim();
+        if (frNo) processMap[frNo] = String(dbData[d][5] || '').trim();
+      }
+    }
+
     const dataRange = wsFollow.getDataRange();
     const values = dataRange.getValues();
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
@@ -9586,6 +9612,10 @@ function getFollowupRecordsForResponsiblePerson(userName) {
         String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
 
+      // 追加工序（从 Failure_Database 关联）
+      const process = processMap[String(row[1] || '').trim()] || '';
+      formattedRow.push(process);
+
       if (!formattedRow[0]) {
         console.log('跳过无跟进ID的行 / Skip row without follow-up ID', row);
         continue;
@@ -9624,6 +9654,17 @@ function getFollowupRecordsForVerifier(userName) {
 
     if (!wsFollow) {
       throw new Error('Failure_Report_followup sheet未找到 / Failure_Report_followup sheet not found');
+    }
+
+    // 构建 Failure_Database failureReportNo -> process 映射
+    const wsDB = ss.getSheetByName('Failure_Database');
+    const processMap = {};
+    if (wsDB) {
+      const dbData = wsDB.getDataRange().getValues();
+      for (let d = 1; d < dbData.length; d++) {
+        const frNo = String(dbData[d][6] || '').trim();
+        if (frNo) processMap[frNo] = String(dbData[d][5] || '').trim();
+      }
     }
 
     const dataRange = wsFollow.getDataRange();
@@ -9670,6 +9711,10 @@ function getFollowupRecordsForVerifier(userName) {
         String(row[13] || ''),  // Column N - 备注
         String(row[14] || '')   // Column O - 验证回复 / verifyReply
       ];
+
+      // 追加工序（从 Failure_Database 关联）
+      const process = processMap[String(row[1] || '').trim()] || '';
+      formattedRow.push(process);
 
       if (!formattedRow[0]) {
         console.log('跳过无跟进ID的行 / Skip row without follow-up ID', row);
