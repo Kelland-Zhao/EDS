@@ -581,11 +581,18 @@
   function renderCIChecklist(containerId, proj) {
     var container = document.getElementById(containerId);
     if (!container) return;
-    var items = proj.milestones || [];
+    var items = (proj.milestones || []).slice();
     if (items.length === 0) {
       container.innerHTML = '<p style="color:#999;font-size:12px;padding:8px;">无 follow-up 事项 / No follow-up items</p>';
       return;
     }
+    items.sort(function(a, b) {
+      var pa = parseDate(a.planned), pb = parseDate(b.planned);
+      if (pa && pb) return pa - pb;
+      if (pa) return -1;
+      if (pb) return 1;
+      return 0;
+    });
     var rows = items.map(function(ms, i) {
       var a = parseDate(ms.actual);
       var p = parseDate(ms.planned);
@@ -620,11 +627,18 @@
   function renderSingleProjectGantt(containerId, proj) {
     var container = document.getElementById(containerId);
     if (!container) return;
-    var milestones = proj.milestones;
-    if (!milestones || milestones.length === 0) {
+    var milestones = (proj.milestones || []).slice();
+    if (milestones.length === 0) {
       container.innerHTML = '<p style="color:#999;font-size:12px;padding:8px;">无里程碑数据 / No milestone data</p>';
       return;
     }
+    milestones.sort(function(a, b) {
+      var pa = parseDate(a.planned), pb = parseDate(b.planned);
+      if (pa && pb) return pa - pb;
+      if (pa) return -1;
+      if (pb) return 1;
+      return 0;
+    });
     var dates = [];
     milestones.forEach(function(ms) {
       var dp = parseDate(ms.planned); if (dp) dates.push(dp);
