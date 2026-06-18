@@ -247,7 +247,8 @@ $(document).ready(function () {
     d.pdesc_who      = ($('#fld_pdesc_who').val() || []).join(',');
     d.trouble_desc   = $('#fld_trouble_desc').val() || '';
     d.actions = [];
-    for (let i = 1; i <= 6; i++) {
+    $('#actionTableBody tr').each(function(idx) {
+      const i = idx + 1;
       d.actions.push({
         proc:   $('[name=a_proc_' + i + ']').val() || '',
         who:    $('[name=a_who_' + i + ']').val() || '',
@@ -255,7 +256,7 @@ $(document).ready(function () {
         time:   $('[name=a_time_' + i + ']').val() || '',
         result: $('[name=a_result_' + i + ']').val() || ''
       });
-    }
+    });
     d.photo = $('#photo_preview').is(':visible') ? ($('#photo_preview').attr('src') || '') : '';
 
     // RCA JSON
@@ -294,6 +295,10 @@ $(document).ready(function () {
     }
     if (d.trouble_desc)   $('#fld_trouble_desc').val(d.trouble_desc);
     if (d.actions) {
+      while ($('#actionTableBody tr').length < d.actions.length) {
+        if (typeof window.addActionRow === 'function') window.addActionRow();
+        else break;
+      }
       d.actions.forEach(function(a, i) {
         const n = i + 1;
         $('[name=a_proc_' + n + ']').val(a.proc);
@@ -477,9 +482,15 @@ $(document).ready(function () {
 
       const resultOpts = fm['action_result'] ? splitOpts(fm['action_result'].Options) : ['Y', 'N'];
       const actionWhoOpts = userNames.map(function(u) { return u.display; });
-      let aRows = '';
-      for (let i = 1; i <= 6; i++) {
-        aRows += '<tr><td class="text-center">' + i + '</td>' +
+
+      function buildActionRow(i) {
+        return '<tr>' +
+          '<td class="text-center">' +
+            '<div class="d-flex align-items-center justify-content-center gap-1">' +
+              '<span class="action-no-text">' + i + '</span>' +
+              '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 action-del" title="删除 / Delete">-</button>' +
+            '</div>' +
+          '</td>' +
           '<td><textarea name="a_proc_' + i + '" rows="2"></textarea></td>' +
           '<td><select name="a_who_' + i + '" class="sel2-user"><option value=""></option>' +
           actionWhoOpts.map(function(o){return '<option value="'+o.trim()+'">'+o.trim()+'</option>';}).join('') + '</select></td>' +
@@ -489,7 +500,39 @@ $(document).ready(function () {
           resultOpts.map(function(o) { return '<option>' + o.trim() + '</option>'; }).join('') +
           '</select></td></tr>';
       }
+
+      function reindexActionRows() {
+        $('#actionTableBody tr').each(function(i) {
+          const n = i + 1;
+          $(this).find('.action-no-text').text(n);
+          $(this).find('[name]').each(function() {
+            this.name = this.name.replace(/_\d+$/, '_' + n);
+          });
+        });
+      }
+
+      function addActionRow() {
+        const n = $('#actionTableBody tr').length + 1;
+        const $row = $(buildActionRow(n));
+        $('#actionTableBody').append($row);
+        initUserSelect2($row);
+      }
+      window.addActionRow = addActionRow;
+
+      let aRows = '';
+      for (let i = 1; i <= 6; i++) {
+        aRows += buildActionRow(i);
+      }
       $('#actionTableBody').html(aRows);
+
+      $('#btnActionAddRow').on('click', function() {
+        addActionRow();
+      });
+      $('#actionTableBody').on('click', '.action-del', function() {
+        if ($('#actionTableBody tr').length <= 1) return;
+        $(this).closest('tr').remove();
+        reindexActionRows();
+      });
 
       // === 初始化 RCA ===
       initDefaultRca();
