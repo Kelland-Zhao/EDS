@@ -137,6 +137,7 @@ function doGet(e) {
   Route.path("FailureReport_Template", loadFailureReport_Template);
   Route.path("FailureReport_Review", loadFailureReport_Review);
   Route.path("ProjectTracking", loadProjectTracking);
+  Route.path("INJ_SDM_Summary", loadINJSDMSummary);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
@@ -1251,6 +1252,13 @@ function loadNavigation() {
   let webPage = getReleaseWebPage();
   return render("Navigation", { webPage: webPage })
     .setTitle("导航 | Navigation")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadINJSDMSummary() {
+  let webPage = getReleaseWebPage();
+  return render("INJ_SDM_Summary", { webPage: webPage })
+    .setTitle("INJ SDM 问题汇总 | INJ SDM Issue Summary")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -11407,6 +11415,320 @@ function getUserList() {
     return JSON.stringify(users);
   } catch(e) {
     return JSON.stringify({ error: e.toString() });
+  }
+}
+
+// ==================== INJ SDM 问题汇总 ====================
+const INJ_SDM_SS_ID = '1mOG7PAJX7AdPioJJdSJAmgxjOt2S2NGTIV6SVLtkrH8';
+const INJ_SDM_SHEET_NAME = 'MasterData';
+const INJ_SDM_ADMIN_COL = 59; // BH：复用项目跟进管理员权限
+
+function normalizeINJSDMProcess_(value) {
+  const process = String(value || '').trim().toUpperCase();
+  return process === 'IM' ? 'INJ' : process;
+}
+
+function getINJSDMPermission_(userName, userEmail) {
+  const result = { hasPermission: false, userName: '', userEmail: '' };
+  try {
+    const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return result;
+    const values = ws.getDataRange().getValues();
+    const activeEmail = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+    const requestedEmail = String(userEmail || '').trim().toLowerCase();
+    const requestedName = String(userName || '').trim();
+
+    for (let i = 2; i < values.length; i++) {
+      const rowName = String(values[i][1] || '').trim();
+      const rowEmail = String(values[i][9] || '').trim().toLowerCase();
+      const rowProcess = normalizeINJSDMProcess_(values[i][14]);
+      const adminPermission = String(values[i][INJ_SDM_ADMIN_COL] || '').trim();
+      const identityMatched =
+        (activeEmail && rowEmail === activeEmail) ||
+        (requestedEmail && rowEmail === requestedEmail) ||
+        (!activeEmail && requestedName && rowName === requestedName);
+
+      if (identityMatched && rowProcess === 'INJ' && adminPermission === '管理员') {
+        result.hasPermission = true;
+        result.userName = rowName;
+        result.userEmail = rowEmail;
+        return result;
+      }
+    }
+  } catch (e) {
+    console.error('getINJSDMPermission_ error: ' + e);
+  }
+  return result;
+}
+
+function checkINJSDMPermission(userName, userEmail) {
+  return JSON.stringify(getINJSDMPermission_(userName, userEmail));
+}
+
+function getINJSCUsers_() {
+  const users = [];
+  const seen = {};
+  const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+  if (!ws) return users;
+  const values = ws.getDataRange().getValues();
+  for (let i = 2; i < values.length; i++) {
+    const name = String(values[i][1] || '').trim();
+    const email = String(values[i][9] || '').trim();
+    const process = normalizeINJSDMProcess_(values[i][14]);
+    const position = String(values[i][15] || '').trim().toUpperCase();
+    if (name && process === 'INJ' && position === 'S&C' && !seen[name]) {
+      seen[name] = true;
+      users.push({ name: name, email: email });
+    }
+  }
+  return users.sort(function (a, b) { return a.name.localeCompare(b.name, 'zh-CN'); });
+}
+
+function formatINJSDMDate_(value) {
+  if (!value) return '';
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, 'Asia/Hong_Kong', 'yyyy-MM-dd');
+  }
+  const text = String(value).trim();
+  const compact = text.match(/^(\d{4})(\d{2})(\d{2})$/);
+  return compact ? compact[1] + '-' + compact[2] + '-' + compact[3] : text.substring(0, 10);
+}
+
+function formatINJSDMDateTime_(value) {
+  if (!value) return '';
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+  }
+  return String(value).trim();
+}
+
+function getINJSDMSheet_() {
+  const ws = SpreadsheetApp.openById(INJ_SDM_SS_ID).getSheetByName(INJ_SDM_SHEET_NAME);
+  if (!ws) throw new Error('MasterData sheet not found');
+  return ws;
+}
+
+function readINJSDMRows_() {
+  const ws = getINJSDMSheet_();
+  const lastRow = ws.getLastRow();
+  if (lastRow < 3) return [];
+  return ws.getRange(3, 1, lastRow - 2, 15).getValues();
+}
+
+function rowToINJSDMItem_(row) {
+  let owners = [];
+  try { owners = JSON.parse(String(row[10] || '[]')); } catch (e) {}
+  return {
+    reportId: String(row[0] || ''),
+    reportDate: formatINJSDMDate_(row[1]),
+    dataStartDate: formatINJSDMDate_(row[2]),
+    dataEndDate: formatINJSDMDate_(row[3]),
+    itemId: String(row[4] || ''),
+    category: String(row[5] || ''),
+    workshop: String(row[6] || ''),
+    machineNo: String(row[7] || ''),
+    description: String(row[8] || ''),
+    ownerNames: String(row[9] || ''),
+    owners: owners,
+    createdAt: formatINJSDMDateTime_(row[11]),
+    updatedAt: formatINJSDMDateTime_(row[12]),
+    status: String(row[13] || ''),
+    editHistoryJSON: String(row[14] || '[]')
+  };
+}
+
+function groupINJSDMReports_(rows) {
+  const map = {};
+  rows.forEach(function (row) {
+    const item = rowToINJSDMItem_(row);
+    if (item.status !== 'ACTIVE' || !item.reportId) return;
+    if (!map[item.reportId]) {
+      map[item.reportId] = {
+        reportId: item.reportId,
+        reportDate: item.reportDate,
+        dataStartDate: item.dataStartDate,
+        dataEndDate: item.dataEndDate,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        major: [],
+        outstanding: [],
+        communication: []
+      };
+    }
+    const report = map[item.reportId];
+    report.updatedAt = item.updatedAt || report.updatedAt;
+    if (item.category === 'MAJOR') {
+      report.major.push({ itemId: item.itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
+    } else if (item.category === 'OUTSTANDING') {
+      report.outstanding.push({ itemId: item.itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
+    } else if (item.category === 'COMMUNICATION') {
+      report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners });
+    }
+  });
+  return Object.keys(map).map(function (key) { return map[key]; });
+}
+
+function getINJSDMInitData(userName, userEmail) {
+  try {
+    const permission = getINJSDMPermission_(userName, userEmail);
+    if (!permission.hasPermission) {
+      return JSON.stringify({ success: true, hasPermission: false, scUsers: [], todayReport: null });
+    }
+    const today = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
+    const reports = groupINJSDMReports_(readINJSDMRows_());
+    const todayReport = reports.filter(function (report) { return report.reportDate === today; })[0] || null;
+    return JSON.stringify({
+      success: true,
+      hasPermission: true,
+      scUsers: getINJSCUsers_(),
+      todayReport: todayReport
+    });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  }
+}
+
+function validateINJSDMPayload_(payload) {
+  if (!payload) throw new Error('Missing payload');
+  const reportDate = formatINJSDMDate_(payload.reportDate);
+  const startDate = formatINJSDMDate_(payload.dataStartDate);
+  const endDate = formatINJSDMDate_(payload.dataEndDate);
+  if (!reportDate || !startDate || !endDate) throw new Error('Date is required');
+  if (startDate > endDate) throw new Error('Data start date cannot be later than end date');
+  if (endDate > reportDate) throw new Error('Data date cannot be later than report date');
+
+  const major = Array.isArray(payload.major) ? payload.major : [];
+  const outstanding = Array.isArray(payload.outstanding) ? payload.outstanding : [];
+  const communication = Array.isArray(payload.communication) ? payload.communication : [];
+  if (!major.length && !outstanding.length && !communication.length) throw new Error('At least one item is required');
+
+  major.concat(outstanding).forEach(function (item) {
+    if (['TB1', 'TB2'].indexOf(String(item.workshop || '')) === -1) throw new Error('Workshop is required');
+    if (!String(item.machineNo || '').trim()) throw new Error('Machine number is required');
+    if (!String(item.description || '').trim()) throw new Error('Description is required');
+  });
+  communication.forEach(function (item) {
+    if (!String(item.description || '').trim()) throw new Error('Communication description is required');
+    if (!Array.isArray(item.owners) || !item.owners.length) throw new Error('Communication owner is required');
+  });
+  return {
+    reportDate: reportDate,
+    dataStartDate: startDate,
+    dataEndDate: endDate,
+    major: major,
+    outstanding: outstanding,
+    communication: communication
+  };
+}
+
+function saveINJSDMReport(payload, userName, userEmail) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
+      return JSON.stringify({ success: false, permissionDenied: true, message: 'Permission denied' });
+    }
+    const data = validateINJSDMPayload_(payload);
+    const ws = getINJSDMSheet_();
+    const rows = readINJSDMRows_();
+    const existingActive = [];
+    let reportId = '';
+    let createdAt = '';
+    let previousSnapshot = null;
+
+    rows.forEach(function (row, index) {
+      if (formatINJSDMDate_(row[1]) === data.reportDate && String(row[13] || '') === 'ACTIVE') {
+        existingActive.push(index + 3);
+        reportId = reportId || String(row[0] || '');
+        createdAt = createdAt || formatINJSDMDateTime_(row[11]);
+      }
+    });
+
+    if (reportId) {
+      const reports = groupINJSDMReports_(rows);
+      previousSnapshot = reports.filter(function (report) { return report.reportId === reportId; })[0] || null;
+    } else {
+      reportId = 'RPT-' + data.reportDate.replace(/-/g, '') + '-' + Utilities.getUuid().substring(0, 8);
+    }
+
+    const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+    createdAt = createdAt || now;
+    const history = previousSnapshot ? [{ changedAt: now, before: previousSnapshot }] : [];
+    const historyJSON = JSON.stringify(history);
+
+    if (existingActive.length) {
+      existingActive.forEach(function (sheetRow) {
+        ws.getRange(sheetRow, 13, 1, 3).setValues([[now, 'DELETED', historyJSON]]);
+      });
+    }
+
+    const output = [];
+    let sequence = 1;
+    function addItem(category, item) {
+      const itemId = 'ITM-' + data.reportDate.replace(/-/g, '') + '-' + ('000' + sequence++).slice(-3) + '-' + Utilities.getUuid().substring(0, 4);
+      const owners = Array.isArray(item.owners) ? item.owners : [];
+      output.push([
+        reportId, data.reportDate, data.dataStartDate, data.dataEndDate, itemId, category,
+        String(item.workshop || ''), String(item.machineNo || ''), String(item.description || '').trim(),
+        owners.join('、'), JSON.stringify(owners), createdAt, now, 'ACTIVE', historyJSON
+      ]);
+    }
+    data.major.forEach(function (item) { addItem('MAJOR', item); });
+    data.outstanding.forEach(function (item) { addItem('OUTSTANDING', item); });
+    data.communication.forEach(function (item) { addItem('COMMUNICATION', item); });
+
+    ws.getRange(ws.getLastRow() + 1, 1, output.length, 15).setValues(output);
+    return JSON.stringify({ success: true, reportId: reportId, updated: existingActive.length > 0 });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+function getINJSDMHistory(startDate, endDate, userName, userEmail) {
+  try {
+    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
+      return JSON.stringify({ success: false, permissionDenied: true, records: [] });
+    }
+    const start = formatINJSDMDate_(startDate);
+    const end = formatINJSDMDate_(endDate);
+    let reports = groupINJSDMReports_(readINJSDMRows_());
+    reports = reports.filter(function (report) {
+      return (!start || report.reportDate >= start) && (!end || report.reportDate <= end);
+    }).sort(function (a, b) { return b.reportDate.localeCompare(a.reportDate); });
+    return JSON.stringify({ success: true, records: reports });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString(), records: [] });
+  }
+}
+
+function deleteINJSDMReport(reportId, userName, userEmail) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
+      return JSON.stringify({ success: false, permissionDenied: true, message: 'Permission denied' });
+    }
+    const ws = getINJSDMSheet_();
+    const rows = readINJSDMRows_();
+    const reports = groupINJSDMReports_(rows);
+    const snapshot = reports.filter(function (report) { return report.reportId === reportId; })[0] || null;
+    if (!snapshot) return JSON.stringify({ success: false, message: 'Record not found' });
+    const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+    const historyJSON = JSON.stringify([{ changedAt: now, action: 'DELETE', before: snapshot }]);
+    let count = 0;
+    rows.forEach(function (row, index) {
+      if (String(row[0] || '') === reportId && String(row[13] || '') === 'ACTIVE') {
+        ws.getRange(index + 3, 13, 1, 3).setValues([[now, 'DELETED', historyJSON]]);
+        count++;
+      }
+    });
+    return JSON.stringify({ success: true, deletedRows: count });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
   }
 }
 

@@ -14,6 +14,18 @@
     sessionStorage.setItem('siWebPage', siWebPage);
     $("#name").text(name);
 
+    google.script.run
+      .withSuccessHandler((result) => {
+        try {
+          const permission = JSON.parse(result || '{}');
+          if (permission.hasPermission) $('#INJSDMCardWrap').show();
+        } catch (e) {
+          console.error('INJ SDM permission parse error', e);
+        }
+      })
+      .withFailureHandler((error) => console.error('INJ SDM permission check failed', error))
+      .checkINJSDMPermission(name, '');
+
     $('#PM').click(() => {
         $('#pmModal').modal('show');
     });
@@ -229,6 +241,15 @@
 
     $('#moldSurfaceCleanButton').on('click', () => {
         let url = siWebPage + '?v=MoldSurfaceClean'
+            + '&ID=' + encodeURIComponent(id || '')
+            + '&Name=' + encodeURIComponent(name || '')
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
+    });
+
+    $('#INJSDMSummary').on('click', () => {
+        let url = siWebPage + '?v=INJ_SDM_Summary'
             + '&ID=' + encodeURIComponent(id || '')
             + '&Name=' + encodeURIComponent(name || '')
             + '&Process=' + encodeURIComponent(process || '')

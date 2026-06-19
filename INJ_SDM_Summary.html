@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("CSS");?>
+  <?!=include("Kez_sweetalert2_js");?>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background:#f5f6f8; color:#333; }
+    .brand-logo { width:108px; height:48px; display:grid; place-items:center; border:2px solid #fff; border-radius:50%; color:#fff; font-size:21px; font-weight:800; font-style:italic; transform:rotate(-4deg); }
+    .welcome-bar { background:#fff; border-left:4px solid #E60012; padding:10px 18px; margin:12px 0 16px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.04); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .welcome-bar #name { color:#E60012; font-weight:600; }
+    .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; }
+    .card { border-color:#e9ecef; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    .nav-tabs { border-bottom:2px solid #e9ecef; }
+    .nav-tabs .nav-link { color:#6c757d; border:0; border-bottom:2px solid transparent; margin-bottom:-2px; }
+    .nav-tabs .nav-link.active { color:#E60012; background:transparent; border-bottom-color:#E60012; font-weight:600; }
+    .tab-en { display:block; color:#adb5bd; font-size:11px; }
+    .issue-card { margin-bottom:14px; overflow:hidden; }
+    .issue-card .card-header { background:#fafafa; display:flex; justify-content:space-between; align-items:center; }
+    .issue-title-cn { font-size:15px; font-weight:600; }
+    .issue-title-en { color:#888; font-size:11px; }
+    .count-badge { background:#fff3cd; color:#856404; border-radius:12px; padding:3px 8px; font-size:12px; }
+    .item-row { display:grid; grid-template-columns:34px minmax(130px,.8fr) minmax(150px,1fr) minmax(280px,3fr) 34px; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid #f0f0f0; }
+    .item-row.communication { grid-template-columns:34px minmax(280px,2fr) minmax(180px,1fr) 34px; }
+    .item-num { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#f1f3f5; font-size:12px; }
+    .workshop-choice, .owner-choice { display:flex; gap:4px; flex-wrap:wrap; }
+    .workshop-choice input, .owner-choice input { position:absolute; width:1px; height:1px; opacity:0; }
+    .workshop-choice label, .owner-choice label { margin:0; min-width:62px; padding:7px 9px; border:1px solid #ced4da; border-radius:5px; background:#fff; text-align:center; font-size:12px; cursor:pointer; }
+    .workshop-choice input:checked + label, .owner-choice input:checked + label { color:#fff; background:#E60012; border-color:#E60012; }
+    .delete-item { width:30px; height:30px; padding:0; border:1px solid #dee2e6; border-radius:5px; background:#fff; color:#dc3545; }
+    .delete-item:hover { color:#fff; background:#dc3545; }
+    .add-actions { display:flex; gap:7px; padding:10px 12px 12px; }
+    .bulk-panel { display:none; margin:0 12px 12px; padding:11px; background:#f8f9fa; border:1px solid #e9ecef; border-radius:7px; }
+    .bulk-panel.open { display:block; }
+    .bulk-note { color:#6c757d; font-size:11px; margin:6px 0 9px; }
+    .invalid-field { border-color:#dc3545!important; box-shadow:0 0 0 .15rem rgba(220,53,69,.12)!important; }
+    .invalid-choice { padding:3px; border:1px solid #dc3545; border-radius:6px; }
+    .validation-summary { display:none; margin-top:12px; padding:10px 13px; color:#842029; background:#f8d7da; border:1px solid #f5c2c7; border-radius:6px; font-size:12px; }
+    .validation-summary.show { display:block; }
+    #HistoryTable thead th { background:#E60012!important; color:#fff!important; text-align:center!important; vertical-align:middle; font-size:12px; }
+    #HistoryTable td { font-size:12px; text-align:center; vertical-align:middle; }
+    .detail-block h6 { margin:15px 0 7px; padding-left:8px; border-left:3px solid #E60012; }
+    .sticky-actions { display:flex; justify-content:flex-end; gap:8px; margin:16px 0; }
+    @media(max-width:768px) {
+      .brand-logo { width:80px; height:40px; font-size:16px; }
+      .navbar-brand .brand-cn { font-size:21px!important; }
+      input, textarea { min-height:44px; font-size:16px!important; }
+      textarea { min-height:76px; }
+      .item-row, .item-row.communication { grid-template-columns:30px 1fr 44px; padding:10px; align-items:start; }
+      .item-row > .workshop-choice, .item-row > input, .item-row > textarea, .item-row.communication > textarea, .item-row.communication > .owner-choice { grid-column:2/4; }
+      .item-row .delete-item { grid-column:3; grid-row:1; width:44px; height:44px; font-size:20px; }
+      .workshop-choice label, .owner-choice label { min-height:44px; display:grid; place-items:center; font-size:14px; flex:1; }
+      .owner-choice { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .add-actions { display:grid; grid-template-columns:1fr 1fr; }
+      .add-actions .btn { min-height:44px; }
+      .sticky-actions { position:sticky; bottom:0; z-index:5; margin:0 -12px; padding:10px 12px; background:rgba(245,246,248,.97); }
+      .sticky-actions .btn { flex:1; min-height:48px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar bg-nav">
+    <div class="container-fluid">
+      <div class="navbar-brand d-flex align-items-center gap-3 text-decoration-none">
+        <div class="brand-logo">Colgate</div>
+        <span style="color:white;line-height:1.2;">
+          <span class="brand-cn" style="font-size:xx-large;font-weight:bold;">INJ SDM 问题汇总</span><br>
+          <span style="font-size:14px;opacity:.85;">INJ SDM Issue Summary</span>
+        </span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container-fluid px-3">
+    <div class="welcome-bar">
+      <div><span id="name"></span>，欢迎进入 INJ SDM 问题汇总 / Welcome to INJ SDM Issue Summary</div>
+      <span class="badge bg-secondary">INJ 管理员 / INJ Admin</span>
+    </div>
+
+    <div id="PermissionDenied" class="alert alert-danger d-none">
+      无访问权限，请联系管理员。<br><small>No permission. Please contact an administrator.</small>
+    </div>
+
+    <div id="AppContent" class="d-none">
+      <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#EntryPane"><span>填写记录</span><span class="tab-en">NEW RECORD</span></button></li>
+        <li class="nav-item"><button class="nav-link" id="HistoryTab" data-bs-toggle="tab" data-bs-target="#HistoryPane"><span>历史查询</span><span class="tab-en">HISTORY</span></button></li>
+      </ul>
+
+      <div class="tab-content">
+        <section class="tab-pane fade show active" id="EntryPane">
+          <div class="section-title">基础信息 / BASIC INFORMATION</div>
+          <div class="card"><div class="card-body">
+            <div class="row g-3">
+              <div class="col-12 col-md-4"><label class="form-label">填报日期<br><small class="text-muted">Report Date</small></label><input id="ReportDate" type="date" class="form-control" readonly></div>
+              <div class="col-12 col-md-4"><label class="form-label">数据开始日期<br><small class="text-muted">Data Start Date</small></label><input id="DataStartDate" type="date" class="form-control"></div>
+              <div class="col-12 col-md-4"><label class="form-label">数据结束日期<br><small class="text-muted">Data End Date</small></label><input id="DataEndDate" type="date" class="form-control"></div>
+            </div>
+            <div id="ValidationSummary" class="validation-summary"></div>
+          </div></div>
+
+          <div class="section-title">问题及沟通事项 / ISSUES &amp; COMMUNICATION</div>
+          <div class="card issue-card" id="MajorCard">
+            <div class="card-header"><div><div class="issue-title-cn">大故障 / 大问题</div><div class="issue-title-en">Major Failures / Major Issues</div></div><span class="count-badge">0</span></div>
+            <div class="item-list"></div>
+            <div class="bulk-panel"><textarea class="form-control" rows="4" placeholder="每行一条：机台号 + 空格/冒号/短横线 + 描述"></textarea><div class="bulk-note">E0/H1/V1/S1 → TB1；H2/V2 → TB2；其他机台号手动选择车间</div><div class="d-flex gap-2 justify-content-end"><button class="btn btn-secondary btn-sm cancel-bulk">取消 / Cancel</button><button class="btn btn-primary btn-sm import-bulk">整理并填入 / Import</button></div></div>
+            <div class="add-actions"><button class="btn btn-outline-danger btn-sm add-item" data-type="major">＋ 新增 / Add</button><button class="btn btn-outline-danger btn-sm show-bulk">粘贴整理 / Paste &amp; Parse</button></div>
+          </div>
+
+          <div class="card issue-card" id="OutstandingCard">
+            <div class="card-header"><div><div class="issue-title-cn">今日遗留问题</div><div class="issue-title-en">Outstanding Issues</div></div><span class="count-badge">0</span></div>
+            <div class="item-list"></div>
+            <div class="bulk-panel"><textarea class="form-control" rows="4" placeholder="每行一条：机台号 + 空格/冒号/短横线 + 描述"></textarea><div class="bulk-note">E0/H1/V1/S1 → TB1；H2/V2 → TB2；其他机台号手动选择车间</div><div class="d-flex gap-2 justify-content-end"><button class="btn btn-secondary btn-sm cancel-bulk">取消 / Cancel</button><button class="btn btn-primary btn-sm import-bulk">整理并填入 / Import</button></div></div>
+            <div class="add-actions"><button class="btn btn-outline-danger btn-sm add-item" data-type="outstanding">＋ 新增 / Add</button><button class="btn btn-outline-danger btn-sm show-bulk">粘贴整理 / Paste &amp; Parse</button></div>
+          </div>
+
+          <div class="card issue-card" id="CommunicationCard">
+            <div class="card-header"><div><div class="issue-title-cn">SDM / Team 沟通事项</div><div class="issue-title-en">SDM / Team Communication</div></div><span class="count-badge">0</span></div>
+            <div class="item-list"></div>
+            <div class="add-actions"><button class="btn btn-outline-danger btn-sm add-item" data-type="communication">＋ 新增沟通事项 / Add</button></div>
+          </div>
+          <div class="sticky-actions"><button id="CancelEdit" class="btn btn-secondary d-none">取消编辑 / Cancel</button><button id="SaveReport" class="btn btn-primary"><i class="bi bi-save"></i> 保存 / Save</button></div>
+        </section>
+
+        <section class="tab-pane fade" id="HistoryPane">
+          <div class="section-title">查询条件 / SEARCH FILTERS</div>
+          <div class="card"><div class="card-body"><div class="row g-3 align-items-end">
+            <div class="col-12 col-md-4"><label class="form-label">填报开始日期<br><small class="text-muted">Report Date From</small></label><input id="HistoryStartDate" type="date" class="form-control"></div>
+            <div class="col-12 col-md-4"><label class="form-label">填报结束日期<br><small class="text-muted">Report Date To</small></label><input id="HistoryEndDate" type="date" class="form-control"></div>
+            <div class="col-12 col-md-4"><button id="SearchHistory" class="btn btn-primary w-100">查询 / Search</button></div>
+          </div></div></div>
+          <div class="section-title">历史记录 / RECORD HISTORY</div>
+          <div class="card"><div class="card-body table-responsive">
+            <table id="HistoryTable" class="table table-striped table-bordered mb-0">
+              <thead><tr><th>填报日期<br>Report Date</th><th>数据日期<br>Data Date</th><th>大故障<br>Major</th><th>遗留问题<br>Outstanding</th><th>沟通事项<br>Communication</th><th>操作<br>Actions</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal fade" id="DetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">记录详情 / Record Details</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="DetailBody"></div>
+    </div></div>
+  </div>
+</body>
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("INJ_SDM_Summary-js") ?>
+</html>
