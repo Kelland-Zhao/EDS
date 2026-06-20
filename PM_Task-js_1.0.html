@@ -21,7 +21,7 @@
   // PM Planner确认逻辑函数（全局作用域）
   function triggerPmPlannerConfirmation() {
     Swal.fire({
-      title: 'PM Planner 确认',
+      title: swalTitle('PM Planner 确认','PM Planner Confirmation'),
       html: `
         <div class="mb-2">
           <label>工号：</label>
@@ -117,7 +117,7 @@
           ).join('\n');
 
           Swal.fire({
-            title: '任务未完成说明',
+            title: swalTitle('任务未完成说明','Incomplete Task Explanation'),
             html: `
               <div style="text-align: left;">
                 <p>检测到 <strong>${uncheckedCount}</strong> 个任务未完成：</p>
@@ -171,8 +171,8 @@
   // 执行提交流程的函数（全局作用域）
   function executeSubmissionProcess(confirmUser, incompleteTaskInfo) {
     Swal.fire({
-      title: "确认提交？",
-      text: "一旦提交将无法修改",
+      title: swalTitle('确认提交？','Confirm Submission?'),
+      html: swalHtml('一旦提交将无法修改。','Once submitted, it cannot be modified.'),
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "确认",
@@ -328,55 +328,52 @@
               let image_Submit_Result = (Count_of_image == Count_Image_Upload);
               if (data_Submit_Result == '提交成功' && image_Submit_Result) {
                 Swal.fire({
-                  title: '提交成功',
-                  text: '数据和图片均已成功上传！',
                   icon: 'success',
-                  confirmButtonText: '确定'
+                  title: swalTitle('提交成功','Submission Success'),
+                  html: swalHtml('数据和图片均已成功上传！','Data and images uploaded successfully!'),
+                  timer: 1500,
+                  showConfirmButton: false
                 });
               } else if (data_Submit_Result != '提交成功' && image_Submit_Result) {
                 Swal.fire({
-                  title: '部分成功',
-                  text: '数据上传失败，但图片上传成功。',
                   icon: 'warning',
-                  confirmButtonText: '确定'
+                  title: swalTitle('部分成功','Partial Success'),
+                  html: swalHtml('数据上传失败，但图片上传成功。','Data upload failed, but images uploaded successfully.')
                 });
               } else if (data_Submit_Result == '提交成功' && !image_Submit_Result) {
                 Swal.fire({
-                  title: '部分成功',
-                  text: '数据上传成功，但图片上传失败。',
                   icon: 'warning',
-                  confirmButtonText: '确定'
+                  title: swalTitle('部分成功','Partial Success'),
+                  html: swalHtml('数据上传成功，但图片上传失败。','Data uploaded successfully, but images upload failed.')
                 });
               } else {
                 Swal.fire({
-                  title: '上传失败',
-                  text: '数据和图片均上传失败，请重试。',
                   icon: 'error',
-                  confirmButtonText: '确定'
+                  title: swalTitle('上传失败','Upload Failed'),
+                  html: swalHtml('数据和图片均上传失败，请重试。','Both data and images upload failed. Please retry.')
                 });
               }
             } catch (e) {
               Swal.fire({
-                title: '上传失败',
-                text: '图片上传过程中发生错误，请重试。',
                 icon: 'error',
-                confirmButtonText: '确定'
+                title: swalTitle('上传失败','Upload Failed'),
+                html: swalHtml('图片上传过程中发生错误，请重试。','An error occurred during image upload. Please retry.')
               });
             }
           } else {
             if (data_Submit_Result == '提交成功') {
               Swal.fire({
-                title: '提交成功',
-                text: '数据已成功上传。',
                 icon: 'success',
-                confirmButtonText: '确定'
+                title: swalTitle('提交成功','Submission Success'),
+                html: swalHtml('数据已成功上传。','Data uploaded successfully.'),
+                timer: 1500,
+                showConfirmButton: false
               });
             } else {
               Swal.fire({
-                title: '上传失败',
-                text: '数据上传失败，请重试。',
                 icon: 'error',
-                confirmButtonText: '确定'
+                title: swalTitle('上传失败','Upload Failed'),
+                html: swalHtml('数据上传失败，请重试。','Data upload failed. Please retry.')
               });
             }
           }
@@ -434,7 +431,7 @@
             )
           }
         } catch (e) {
-          Swal.fire('错误', '提交过程中发生异常，请联系管理员。', 'error');
+          Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('提交过程中发生异常，请联系管理员。','An error occurred during submission. Please contact admin.') });
         }
       }
     });
@@ -451,9 +448,8 @@
     if (typeof $.fn.DataTable === 'undefined') {
       Swal.fire({
         icon: 'error',
-        title: '插件加载失败',
-        text: 'DataTables插件未正确加载，请刷新页面重试。',
-        confirmButtonText: '确定'
+        title: swalTitle('插件加载失败','Plugin Load Failed'),
+        html: swalHtml('DataTables插件未正确加载，请刷新页面重试。','DataTables plugin not loaded correctly. Please refresh and retry.')
       });
       return;
     }
@@ -555,9 +551,8 @@
           console.error('后端调用失败:', error);
           Swal.fire({
             icon: 'error',
-            title: '数据加载失败',
-            text: '无法从服务器获取任务清单，错误信息：' + error.message,
-            confirmButtonText: '确定'
+            title: swalTitle('数据加载失败','Data Load Failed'),
+            html: swalHtml('无法从服务器获取任务清单。','Unable to fetch task list from server. Error: ' + error.message),
           });
         })
         .get_Tasklist_new();
@@ -577,9 +572,8 @@
             console.error('getPMrecord: 未找到匹配的保养记录');
             Swal.fire({
               icon: 'warning',
-              title: '未找到记录',
-              text: '未找到匹配的保养记录，请联系管理员检查数据。',
-              confirmButtonText: '确定'
+              title: swalTitle('未找到记录','No Record Found'),
+              html: swalHtml('未找到匹配的保养记录，请联系管理员检查数据。','No matching PM record found. Please contact admin to check data.')
             });
             return;
           }
@@ -676,26 +670,25 @@
           showTable(table_head, tasklist);
           Swal.close();
           Swal.fire({
-            title: '加载成功',
-            html: '<span style="font-size:14px;color:#6c757d;">LOADING SUCCESS</span>',
-            icon: 'success'
+            title: swalTitle('加载成功','Loading Success'),
+            html: swalHtml('保养记录加载成功。','PM record loaded successfully.'),
+            icon: 'success',
+            timer: 1500
           });
         } catch (e) {
           console.error('处理PM记录数据失败:', e);
           Swal.fire({
             icon: 'error',
-            title: '数据处理失败',
-            text: '保养记录数据解析异常，请联系管理员。',
-            confirmButtonText: '确定'
+            title: swalTitle('数据处理失败','Data Processing Failed'),
+            html: swalHtml('保养记录数据解析异常，请联系管理员。','PM record data parsing error. Please contact admin.')
           });
         }
       }).withFailureHandler(function (error) {
         console.error('获取PM记录失败:', error);
         Swal.fire({
           icon: 'error',
-          title: '数据加载失败',
-          text: '无法从服务器获取保养记录，请检查网络后重试。',
-          confirmButtonText: '确定'
+          title: swalTitle('数据加载失败','Data Load Failed'),
+          html: swalHtml('无法从服务器获取保养记录，请检查网络后重试。','Unable to fetch PM records from server. Please check network and retry.')
         });
       }).getPMrecord(PM_Info);
     } else {
@@ -714,7 +707,7 @@
       // 优先用rowData.imageContent
       if (rowData.imageContent) {
         Swal.fire({
-          title: '图片预览',
+          title: swalTitle('图片预览','Image Preview'),
           imageUrl: rowData.imageContent,
           imageAlt: 'Custom image',
           showConfirmButton: false,
@@ -729,7 +722,7 @@
         let reader = new FileReader();
         reader.onload = function (e) {
           Swal.fire({
-            title: '图片预览',
+            title: swalTitle('图片预览','Image Preview'),
             imageUrl: e.target.result,
             imageAlt: 'Custom image',
             showConfirmButton: false,
@@ -739,9 +732,8 @@
       } else {
         Swal.fire({
           icon: 'warning',
-          title: '警告',
-          text: '请先选择一张图片',
-          confirmButtonText: '确定'
+          title: swalTitle('警告','Warning'),
+          html: swalHtml('请先选择一张图片。','Please select an image first.')
         });
       }
     });
@@ -806,14 +798,14 @@
     $(document).on('click', '#TestCheckboxValidationBtn', function () {
 
       if (!table_tasklist) {
-        Swal.fire('错误', '表格未初始化，请先加载任务数据。', 'error');
+        Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('表格未初始化，请先加载任务数据。','Table not initialized. Please load task data first.') });
         return;
       }
 
       let totalRows = table_tasklist.rows().count();
 
       if (totalRows === 0) {
-        Swal.fire('警告', '表格中没有数据，请先加载任务。', 'warning');
+        Swal.fire({ icon:'warning', title:swalTitle('警告','Warning'), html:swalHtml('表格中没有数据，请先加载任务。','No data in table. Please load tasks first.') });
         return;
       }
 
@@ -843,20 +835,20 @@
         ).join('\n');
 
         Swal.fire({
-          title: '发现未完成的任务',
+          title: swalTitle('发现未完成的任务','Incomplete Tasks Found'),
           html: `
             <div style="text-align: left;">
-              <p>检测到 <strong>${uncheckedCount}</strong> 个任务未标记为完成：</p>
+              <p>检测到 <strong>${uncheckedCount}</strong> 个任务未标记为完成：<br><span style="font-size:0.85em;color:#888;">Found <strong>${uncheckedCount}</strong> task(s) not marked as complete:</span></p>
               <div style="max-height: 200px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 12px;">
                 <pre style="margin: 0; white-space: pre-wrap;">${uncheckedDetails}</pre>
               </div>
-              <p style="margin-top: 10px;">是否继续执行？</p>
+              <p style="margin-top: 10px;">是否继续执行？<br><span style="font-size:0.85em;color:#888;">Do you want to continue?</span></p>
             </div>
           `,
           icon: 'warning',
           showCancelButton: true,
-          confirmButtonText: '继续执行',
-          cancelButtonText: '取消操作',
+          confirmButtonText: '继续 / Continue',
+          cancelButtonText: '取消 / Cancel',
           confirmButtonColor: '#d33',
           cancelButtonColor: '#3085d6'
         }).then((result) => {
@@ -864,12 +856,12 @@
             // 调用PM Planner确认逻辑（复用"结束保养"按钮的代码）
             triggerPmPlannerConfirmation();
           } else {
-            Swal.fire('操作取消', '用户取消了操作。', 'info');
+            Swal.fire({ icon:'info', title:swalTitle('操作取消','Operation Cancelled'), html:swalHtml('用户取消了操作。','User cancelled the operation.'), timer:1500, showConfirmButton:false });
           }
         });
       } else {
         // 所有复选框都已选中
-        Swal.fire('验证通过', '所有任务都已标记为完成！', 'success');
+        Swal.fire({ icon:'success', title:swalTitle('验证通过','Verification Passed'), html:swalHtml('所有任务都已标记为完成！','All tasks have been marked as complete!'), timer:1500, showConfirmButton:false });
       }
     });
 
@@ -879,11 +871,11 @@
 
     $(document).on('click', '#TestImageUploadBtn', async function () {
       Swal.fire({
-        title: '测试表单+图片上传',
-        text: '正在测试表单和图片上传功能，请稍候……',
-        icon: 'info',
+        title: swalTitle('测试表单+图片上传','Test Form & Image Upload'),
+        html: swalHtml('正在测试表单和图片上传功能，请稍候……','Testing form and image upload, please wait...'),
+        allowOutsideClick: false,
         showConfirmButton: false,
-        allowOutsideClick: false
+        didOpen: () => { Swal.showLoading(); }
       });
 
       // ====== 构造表单数据（与主流程一致） ======
@@ -1020,55 +1012,52 @@
           let image_Submit_Result = (Count_of_image == Count_Image_Upload);
           if (data_Submit_Result == '提交成功' && image_Submit_Result) {
             Swal.fire({
-              title: '测试成功',
-              text: '数据和图片均已成功上传！',
               icon: 'success',
-              confirmButtonText: '确定'
+              title: swalTitle('测试成功','Test Success'),
+              html: swalHtml('数据和图片均已成功上传！','Data and images uploaded successfully!'),
+              timer: 1500,
+              showConfirmButton: false
             });
           } else if (data_Submit_Result != '提交成功' && image_Submit_Result) {
             Swal.fire({
-              title: '部分成功',
-              text: '数据上传失败，但图片上传成功。',
               icon: 'warning',
-              confirmButtonText: '确定'
+              title: swalTitle('部分成功','Partial Success'),
+              html: swalHtml('数据上传失败，但图片上传成功。','Data upload failed, but images uploaded successfully.')
             });
           } else if (data_Submit_Result == '提交成功' && !image_Submit_Result) {
             Swal.fire({
-              title: '部分成功',
-              text: '数据上传成功，但图片上传失败。',
               icon: 'warning',
-              confirmButtonText: '确定'
+              title: swalTitle('部分成功','Partial Success'),
+              html: swalHtml('数据上传成功，但图片上传失败。','Data uploaded successfully, but images upload failed.')
             });
           } else {
             Swal.fire({
-              title: '上传失败',
-              text: '数据和图片均上传失败，请重试。',
               icon: 'error',
-              confirmButtonText: '确定'
+              title: swalTitle('上传失败','Upload Failed'),
+              html: swalHtml('数据和图片均上传失败，请重试。','Both data and images upload failed. Please retry.')
             });
           }
         } catch (e) {
           Swal.fire({
-            title: '上传失败',
-            text: '图片上传过程中发生错误，请重试。',
             icon: 'error',
-            confirmButtonText: '确定'
+            title: swalTitle('上传失败','Upload Failed'),
+            html: swalHtml('图片上传过程中发生错误，请重试。','An error occurred during image upload. Please retry.')
           });
         }
       } else {
         if (data_Submit_Result == '提交成功') {
           Swal.fire({
-            title: '测试成功',
-            text: '数据已成功上传。',
             icon: 'success',
-            confirmButtonText: '确定'
+            title: swalTitle('测试成功','Test Success'),
+            html: swalHtml('数据已成功上传。','Data uploaded successfully.'),
+            timer: 1500,
+            showConfirmButton: false
           });
         } else {
           Swal.fire({
-            title: '上传失败',
-            text: '数据上传失败，请重试。',
             icon: 'error',
-            confirmButtonText: '确定'
+            title: swalTitle('上传失败','Upload Failed'),
+            html: swalHtml('数据上传失败，请重试。','Data upload failed. Please retry.')
           });
         }
       }
@@ -1139,7 +1128,7 @@
     try {
       if (!data || (data.effective.length === 0 && data.waiting.length === 0 && data.pending.length === 0)) {
         const machineTypes = [global_data["设备类型1"], global_data["设备类型2"], global_data["自动化类型"]].filter(v => v && v !== 'NA').join(', ');
-        Swal.fire('加载失败', `未找到与设备 [${machineTypes}] 匹配的、状态为"生效"的标准任务清单。请检查后台数据。<br>No standard task list with "Effective" status found matching equipment [${machineTypes}]. Please check backend data.`, 'error');
+        Swal.fire({ icon:'error', title:swalTitle('加载失败','Load Failed'), html:swalHtml(`未找到与设备 [${machineTypes}] 匹配的、状态为"生效"的标准任务清单。请检查后台数据。`, `No standard task list with "Effective" status found matching equipment [${machineTypes}]. Please check backend data.`) });
         return;
       }
 
@@ -1150,35 +1139,26 @@
       } else if (data.waiting && data.waiting.length > 0) {
         // 仅有待发放记录
         Swal.fire({
-          title: '提示',
-          html: `
-            文件处于待发放状态<br>
-            Document is waiting for distribution
-          `,
-          icon: 'warning'
+          icon: 'warning',
+          title: swalTitle('提示','Notice'),
+          html: swalHtml('文件处于待发放状态。','Document is waiting for distribution.')
         });
         return;
       } else if (data.pending && data.pending.length > 0) {
         // 仅有待审批记录
         Swal.fire({
-          title: '提示',
-          html: `
-            该保养任务还未审批<br>
-            This PM task is still pending approval
-          `,
-          icon: 'warning'
+          icon: 'warning',
+          title: swalTitle('提示','Notice'),
+          html: swalHtml('该保养任务还未审批。','This PM task is still pending approval.')
         });
         return;
       }
     } catch (error) {
       console.error('DataProcess函数发生错误:', error);
       Swal.fire({
-        title: '错误',
-        html: `
-          数据处理发生错误<br>
-          <span style="font-size:14px;color:#6c757d;">AN ERROR OCCURRED DURING DATA PROCESSING</span>
-        `,
-        icon: 'error'
+        icon: 'error',
+        title: swalTitle('错误','Error'),
+        html: swalHtml('数据处理发生错误。','An error occurred during data processing.')
       });
     }
   }
@@ -1207,7 +1187,7 @@
       // console.log('任务总数:', finalTaskList.length);
 
       if (finalTaskList.length === 0) {
-        Swal.fire('加载失败', '标准任务清单为空或格式错误。<br>Standard task list is empty or format error.', 'error');
+        Swal.fire({ icon:'error', title:swalTitle('加载失败','Load Failed'), html:swalHtml('标准任务清单为空或格式错误。','Standard task list is empty or format error.') });
         return;
       }
 
@@ -1225,12 +1205,9 @@
     } catch (error) {
       console.error('processEffectiveRecords函数发生错误:', error);
       Swal.fire({
-        title: '错误',
-        html: `
-          有效记录处理发生错误<br>
-          <span style="font-size:14px;color:#6c757d;">AN ERROR OCCURRED DURING EFFECTIVE RECORDS PROCESSING</span>
-        `,
-        icon: 'error'
+        icon: 'error',
+        title: swalTitle('错误','Error'),
+        html: swalHtml('有效记录处理发生错误。','An error occurred during effective records processing.')
       });
     }
   }
@@ -1380,9 +1357,8 @@
       // 显示用户友好的错误信息
       Swal.fire({
         icon: 'error',
-        title: '表格加载失败',
-        text: '加载任务表格时发生错误，请刷新页面重试。',
-        confirmButtonText: '确定'
+        title: swalTitle('表格加载失败','Table Load Failed'),
+        html: swalHtml('加载任务表格时发生错误，请刷新页面重试。','An error occurred while loading task table. Please refresh and retry.')
       });
     }
   }
@@ -1403,8 +1379,8 @@
       console.error('global_data未定义');
       Swal.fire({
         icon: 'error',
-        title: '加载失败',
-        text: '无法获取必要的任务数据，请返回上一页重试。',
+        title: swalTitle('加载失败','Load Failed'),
+        html: swalHtml('无法获取必要的任务数据，请返回上一页重试。','Unable to get necessary task data. Please go back and retry.'),
       });
       throw new Error("任务数据 (global_data) 未从 sessionStorage 中获取。");
     }
@@ -1413,13 +1389,13 @@
       global_data = JSON.parse(global_data);
     } catch (e) {
       console.error("解析 global_data 失败:", e);
-      Swal.fire('错误', '任务数据格式错误，请返回并重试。', 'error');
+      Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('任务数据格式错误，请返回并重试。','Task data format error. Please go back and try again.') });
       throw new Error("解析 global_data 失败。");
     }
 
     if (!global_data) {
       console.error('解析后的global_data为空');
-      Swal.fire('错误', '任务数据为空，请返回并重试。', 'error');
+      Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('任务数据为空，请返回并重试。','Task data is empty. Please go back and try again.') });
       throw new Error("解析后的 global_data 为空。");
     }
 
@@ -1450,12 +1426,12 @@
   function alert(message) {
     if (message == '确认提交') {
       Swal.fire({
-        title: "确认提交？",
-        text: "一旦提交将无法修改",
-        icon: "question",
+        title: swalTitle('确认提交？','Confirm Submission?'),
+        html: swalHtml('一旦提交将无法修改。','Once submitted, it cannot be modified.'),
+        icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: "确认",
-        cancelButtonText: "取消"
+        confirmButtonText: '确认 / Confirm',
+        cancelButtonText: '取消 / Cancel'
       }).then((result) => {
         if (result.isConfirmed) {
           return true
@@ -1467,29 +1443,37 @@
     } else if (message == "提交成功") {
       Swal.close();
       Swal.fire({
-        title: '保存成功',
-        icon: 'success'
+        icon: 'success',
+        title: swalTitle('提交成功','Submission Success'),
+        timer: 1500,
+        showConfirmButton: false
       });
-
     } else if (message == "提交中") {
       Swal.fire({
-        title: '数据提交中',
-        text: '数据提交中，请稍后...',
-        icon: 'info',
+        title: swalTitle('数据提交中','Submitting Data...'),
+        html: swalHtml('数据提交中，请稍后...','Submitting data, please wait...'),
         allowOutsideClick: false,
         showConfirmButton: false,
+        didOpen: () => { Swal.showLoading(); }
       });
-    } else if (message !== '确认提交') {
+    } else if (message == '提交失败') {
+      Swal.fire({
+        icon: 'error',
+        title: swalTitle('提交失败','Submission Failed'),
+        html: swalHtml('数据上传失败，请重试。','Data upload failed. Please retry.')
+      });
+    } else if (message == '上传失败') {
+      Swal.fire({
+        icon: 'error',
+        title: swalTitle('上传失败','Upload Failed'),
+        html: swalHtml('上传失败，请重试。','Upload failed. Please retry.')
+      });
+    } else {
       Swal.fire({
         icon: 'warning',
-        title: '警告',
-        text: message,
-        confirmButtonText: '确定'
-      }).then((result) => {
-        if (result.isConfirmed) {
-          return "警告"
-        }
-      })
+        title: swalTitle('警告','Warning'),
+        html: swalHtml(message, message)
+      });
     }
   }
 
@@ -1584,7 +1568,7 @@
     ];
 
     Swal.fire({
-      title: '保养信息/ PM Info',
+      title: swalTitle('保养信息','PM Info'),
       html: htmlContent,
       width: '80%',
       showConfirmButton: true,
@@ -1911,18 +1895,19 @@
         }
 
         Swal.fire({
-          title: "确认提交？",
-          text: "一旦提交将无法修改",
-          icon: "question",
+          title: swalTitle('确认提交？','Confirm Submission?'),
+          html: swalHtml('一旦提交将无法修改。','Once submitted, it cannot be modified.'),
+          icon: 'warning',
           showCancelButton: true,
-          confirmButtonText: "确认",
-          cancelButtonText: "取消"
+          confirmButtonText: '确认 / Confirm',
+          cancelButtonText: '取消 / Cancel'
         }).then(async function (result) {
           if (result.isConfirmed) {
             Swal.fire({
-              title: '数据提交中...',
-              text: '请稍候',
+              title: swalTitle('数据提交中...','Submitting Data...'),
+              html: swalHtml('请稍候。','Please wait.'),
               allowOutsideClick: false,
+              showConfirmButton: false,
               didOpen: () => { Swal.showLoading(); }
             });
 
@@ -1978,13 +1963,13 @@
               google.script.run
                 .withSuccessHandler(function (response) {
                   if (response === "更新成功") {
-                    Swal.fire('成功!', '任务已成功开始。', 'success');
+                    Swal.fire({ icon:'success', title:swalTitle('成功','Success'), html:swalHtml('任务已成功开始。','Task has been started successfully.'), timer:1500, showConfirmButton:false });
                   } else {
-                    Swal.fire('提交失败', response, 'error');
+                    Swal.fire({ icon:'error', title:swalTitle('提交失败','Submission Failed'), html:swalHtml(response, response) });
                   }
                 })
                 .withFailureHandler(function (error) {
-                  Swal.fire('提交失败', error.message, 'error');
+                  Swal.fire({ icon:'error', title:swalTitle('提交失败','Submission Failed'), html:swalHtml(error.message, error.message) });
                 })
                 .updateStartedPMTask(submissionData);
 
@@ -2119,8 +2104,8 @@
           } else {
             Swal.fire({
               icon: 'warning',
-              title: '提示',
-              text: '请先输入有效的工号',
+              title: swalTitle('提示','Notice'),
+              html: swalHtml('请先输入有效的工号。','Please enter a valid working code.'),
               toast: true,
               position: 'top-end',
               showConfirmButton: false,
@@ -2188,7 +2173,7 @@
               Swal.fire({
                 icon: 'error',
                 title: swalTitle('修改失败', 'Update Failed'),
-                text: response
+                html: swalHtml(response, response)
               });
             }
           })
@@ -2199,7 +2184,7 @@
             Swal.fire({
               icon: 'error',
               title: swalTitle('修改失败', 'Update Failed'),
-              text: error.message
+              html: swalHtml(error.message, error.message)
             });
           })
           .updatePmPeople(submissionData);
@@ -2209,13 +2194,13 @@
 
   $("#PmEnd").on("click", function () {
     if (!table_tasklist) {
-      Swal.fire('错误', '表格未初始化，请先加载任务数据。', 'error');
+      Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('表格未初始化，请先加载任务数据。','Table not initialized. Please load task data first.') });
       return;
     }
 
     let totalRows = table_tasklist.rows().count();
     if (totalRows === 0) {
-      Swal.fire('警告', '表格中没有数据，请先加载任务。', 'warning');
+      Swal.fire({ icon:'warning', title:swalTitle('警告','Warning'), html:swalHtml('表格中没有数据，请先加载任务。','No data in table. Please load tasks first.') });
       return;
     }
 
@@ -2245,20 +2230,20 @@
       ).join('\n');
 
       Swal.fire({
-        title: '发现未完成的任务',
+        title: swalTitle('发现未完成的任务','Incomplete Tasks Found'),
         html: `
           <div style="text-align: left;">
-            <p>检测到 <strong>${uncheckedCount}</strong> 个任务未标记为完成：</p>
+            <p>检测到 <strong>${uncheckedCount}</strong> 个任务未标记为完成：<br><span style="font-size:0.85em;color:#888;">Found <strong>${uncheckedCount}</strong> task(s) not marked as complete:</span></p>
             <div style="max-height: 200px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 12px;">
               <pre style="margin: 0; white-space: pre-wrap;">${uncheckedDetails}</pre>
             </div>
-            <p style="margin-top: 10px;">是否继续执行？</p>
+            <p style="margin-top: 10px;">是否继续执行？<br><span style="font-size:0.85em;color:#888;">Do you want to continue?</span></p>
           </div>
         `,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: '继续执行',
-        cancelButtonText: '取消操作',
+        confirmButtonText: '继续 / Continue',
+        cancelButtonText: '取消 / Cancel',
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6'
       }).then((result) => {
@@ -2266,7 +2251,7 @@
           // 调用PM Planner确认逻辑
           triggerPmPlannerConfirmation();
         } else {
-          Swal.fire('操作取消', '用户取消了操作。', 'info');
+          Swal.fire({ icon:'info', title:swalTitle('操作取消','Operation Cancelled'), html:swalHtml('用户取消了操作。','User cancelled the operation.'), timer:1500, showConfirmButton:false });
         }
       });
     } else {
@@ -2452,17 +2437,15 @@
             // 如果图片上传失败，但数据提交成功，仍然显示部分成功
             if (data_Submit_Result == '提交成功') {
               Swal.fire({
-                title: '部分成功',
-                text: '数据上传成功，但图片上传失败。',
                 icon: 'warning',
-                confirmButtonText: '确定'
+                title: swalTitle('部分成功','Partial Success'),
+                html: swalHtml('数据上传成功，但图片上传失败。','Data uploaded successfully, but images upload failed.')
               });
             } else {
               Swal.fire({
-                title: '上传失败',
-                text: '数据和图片均上传失败，请重试。',
                 icon: 'error',
-                confirmButtonText: '确定'
+                title: swalTitle('上传失败','Upload Failed'),
+                html: swalHtml('数据和图片均上传失败，请重试。','Both data and images upload failed. Please retry.')
               });
             }
           }
@@ -2804,7 +2787,7 @@
     ];
     let message = '';
     Swal.fire({
-      title: '临时保养任务/ Temporary PM Task',
+      title: swalTitle('临时保养任务','Temporary PM Task'),
       html: htmlContent,
       width: '80%',
       showConfirmButton: true,
@@ -2846,19 +2829,18 @@
           message = '临时保养任务不能为空'
           Swal.fire({
             icon: 'warning',
-            title: '警告',
-            text: message,
-            confirmButtonText: '确定'
+            title: swalTitle('警告','Warning'),
+            html: swalHtml(message, message)
           })
           return false
         } else {
           message = '确认提交'
           Swal.fire({
-            title: "确认提交？",
-            text: "提交后请点击【提交但不结束保养】按钮，否则新增任务不会被保存",
-            icon: "question",
+            title: swalTitle('确认提交？','Confirm Submission?'),
+            html: swalHtml('提交后请点击【提交但不结束保养】按钮，否则新增任务不会被保存。','After submission, please click "Submit without Ending PM", otherwise the new task will not be saved.'),
+            icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: "确认",
+            confirmButtonText: '确认 / Confirm',
             cancelButtonText: "取消"
           }).then((result) => {
             if (result.isConfirmed) {
@@ -2897,7 +2879,7 @@
                   let reader = new FileReader();
                   reader.onload = function (e) {
                     Swal.fire({
-                      title: '图片预览',
+                      title: swalTitle('图片预览','Image Preview'),
                       imageUrl: e.target.result,
                       imageAlt: 'Custom image',
                       showConfirmButton: false,
@@ -2907,9 +2889,8 @@
                 } else {
                   Swal.fire({
                     icon: 'warning',
-                    title: '警告',
-                    text: '请先选择一张图片',
-                    confirmButtonText: '确定'
+                    title: swalTitle('警告','Warning'),
+                    html: swalHtml('请先选择一张图片。','Please select an image first.')
                   });
                 }
               });
