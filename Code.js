@@ -5694,6 +5694,46 @@ function updateStartedPMTask(data) {
 }
 
 /**
+ * 更新保养人员（仅修改 PM People 列，不影响其他字段）
+ * @param {object} data - { "PM No.": string, "PM People": string, "SheetName": string }
+ * @returns {string} 返回操作结果 "更新成功" 或错误信息
+ */
+function updatePmPeople(data) {
+  try {
+    const id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
+    const ss = SpreadsheetApp.openById(id);
+    const sheetName = data["SheetName"];
+    const ws = getPMSheet(ss) || ss.getSheetByName(sheetName);
+    const pmNo = data["PM No."];
+
+    if (!ws) {
+      throw new Error("在数据库中未找到工作表: " + sheetName);
+    }
+
+    const values = ws.getRange(1, 1, ws.getLastRow(), 1).getValues();
+    let rowNumber = -1;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0] === pmNo) {
+        rowNumber = i + 1;
+        break;
+      }
+    }
+
+    if (rowNumber === -1) {
+      throw new Error("在工作表中未找到 PM No.: " + pmNo);
+    }
+
+    // 仅更新 D 列（第4列）保养人员
+    ws.getRange(rowNumber, 4).setValue(data["PM People"]);
+
+    return "更新成功";
+  } catch (e) {
+    Logger.log("updatePmPeople 错误: " + e.toString());
+    return "错误: " + e.toString();
+  }
+}
+
+/**
  * 修改：根据PM No.找到特定保养记录，并更新其"任务明细"字段。
  * 如果记录不存在，则创建一条新的记录。
  * @param {object} data - 包含pmNo, sheetName, updatedTasklist, 和 shouldAppendStatus 的对象

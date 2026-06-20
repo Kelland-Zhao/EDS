@@ -638,9 +638,11 @@
           $('#PmPeople').val(obj["PM People"]);
           $('#PmStartDate').val(obj["SatrtDate"]);
           $('#PmStartTime').val(obj["StartTime"]);
+          global_workingorder = obj["Notification"] || '';
 
           if (obj["PmStatus"].includes('进行中')) {
             $('#PmStart').prop('disabled', true);
+            $('#EditPmPeople').show();
           } else {
             $('#PmStart').prop('disabled', false);
           }
@@ -1940,6 +1942,7 @@
               'font-weight': 'bold'
             });
             $('#AddTemTask').prop('disabled', false);
+            $('#EditPmPeople').show();
 
             // --- 核心修复：在更新状态后，立即重绘表格使其变为可编辑状态 ---
             const currentTasks = table_tasklist.rows().data().toArray();
@@ -2015,6 +2018,194 @@
       }
     });
   })
+
+  // 修改保养人员按钮
+  $("#EditPmPeople").on("click", function () {
+    // 解析当前保养人员名单
+    let currentPeople = $("#PmPeople").val();
+    let currentNames = currentPeople ? currentPeople.split('/').map(s => s.trim()).filter(Boolean) : [];
+
+    let editPeopleTable;
+    let table_array = [
+      { title: "工号<br>Working Code", data: "WorkingCode" },
+      { title: "姓名<br>Name", data: "Name" },
+      { title: "操作<br>Operation", data: "Operation" }
+    ];
+
+    let htmlContent = `
+    <div class="container">
+      <div id="pmPeopleEditSection">
+          <div class="row mt-1">
+            <div class="col-5">
+              <div class="input-group">
+                <span class="col-4 input-group-text">工号<br>Working Code</span>
+                <input type="number" id="EditWorkingCode" class="col-8 form-control" placeholder="请输入工号"
+                    aria-label="请输入工号" style="text-align: center;">
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="input-group">
+                <span class="col-4 input-group-text">姓名<br>Name</span>
+                <input type="text" id="EditName" class="col-8 form-control" placeholder="自动显示"
+                    aria-label="姓名" style="text-align: center;" readonly>
+              </div>
+            </div>
+            <div class="col-3">
+              <button type="button" class="btn" id="EditAddPmPeople"
+                style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">添加<br>Add</button>
+            </div>
+          </div>
+          <div class="row mt-3">
+            <div class="col-12">
+              <table id="EditPmPeopleTable" class="display table table-bordered table-striped table-hover"></table>
+            </div>
+          </div>
+      </div>
+    </div>
+    `;
+
+    Swal.fire({
+      title: swalTitle('修改保养人员', 'Edit PM People'),
+      html: htmlContent,
+      width: '70%',
+      showConfirmButton: true,
+      confirmButtonText: '确认修改',
+      showCancelButton: true,
+      cancelButtonText: '取消',
+      didOpen: () => {
+        // 初始化表格并预填充当前人员
+        editPeopleTable = $("#EditPmPeopleTable").DataTable({
+          columns: table_array,
+          dom: 'rt',
+          pageLength: 50
+        });
+        editPeopleTable.clear().draw();
+        $('#EditPmPeopleTable thead th').css({
+          'background-color': '#E60012',
+          'color': 'white'
+        });
+
+        // 预填充当前人员（只有姓名，工号显示为"-"）
+        currentNames.forEach(function (name) {
+          if (name) {
+            let deleteButton = '<button type="button" class="btn btn-danger btn-sm delete-btn">删除<br>DELETE</button>';
+            editPeopleTable.row.add({ WorkingCode: '-', Name: name, Operation: deleteButton }).draw(false);
+          }
+        });
+
+        // 工号输入监听，自动显示姓名
+        $("#EditWorkingCode").on("input", function () {
+          let number = $(this).val();
+          if (number.length === 5 && $.isNumeric(number)) {
+            let name = '';
+            global_UserID.forEach((r) => {
+              if (r.WorkingCode == number) { name = r.Name; }
+            });
+            $("#EditName").val(name);
+          } else {
+            $("#EditName").val('');
+          }
+        });
+
+        // 添加按钮
+        $("#EditAddPmPeople").on("click", function () {
+          let code = $("#EditWorkingCode").val();
+          let name = $("#EditName").val();
+          if (code && name) {
+            let deleteButton = '<button type="button" class="btn btn-danger btn-sm delete-btn">删除<br>DELETE</button>';
+            editPeopleTable.row.add({ WorkingCode: code, Name: name, Operation: deleteButton }).draw(false);
+            $("#EditWorkingCode").val('');
+            $("#EditName").val('');
+          } else {
+            Swal.fire({
+              icon: 'warning',
+              title: '提示',
+              text: '请先输入有效的工号',
+              toast: true,
+              position: 'top-end',
+              showConfirmButton: false,
+              timer: 2000
+            });
+          }
+        });
+
+        // 删除按钮
+        $('#EditPmPeopleTable tbody').on('click', 'button.delete-btn', function () {
+          editPeopleTable.row($(this).parents('tr')).remove().draw();
+        });
+      },
+      preConfirm: () => {
+        let allData = [];
+        editPeopleTable.rows().every(function () {
+          let data = this.data();
+          allData.push({ WorkingCode: data.WorkingCode, Name: data.Name });
+        });
+        if (allData.length === 0) {
+          Swal.showValidationMessage('保养人员不能为空');
+          return false;
+        }
+        return allData;
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        let namesJoined = result.value.map(item => item.Name).join("/");
+        let oldPeople = $("#PmPeople").val();
+
+        if (namesJoined === oldPeople) {
+          // 没有变化，不需要保存
+          return;
+        }
+
+        Swal.fire({
+          title: swalTitle('正在保存...', 'Saving...'),
+          allowOutsideClick: false,
+          didOpen: () => { Swal.showLoading(); }
+        });
+
+        // 更新页面显示
+        $("#PmPeople").val(namesJoined);
+
+        // 仅提交 PM People 更新
+        const submissionData = {
+          "PM No.": $("#PmNo").val(),
+          "PM People": namesJoined,
+          "SheetName": global_data["工序"] + "-" + global_data["车间"]
+        };
+
+        google.script.run
+          .withSuccessHandler(function (response) {
+            Swal.close();
+            if (response === "更新成功") {
+              Swal.fire({
+                icon: 'success',
+                title: swalTitle('修改成功', 'Update Success'),
+                timer: 1500,
+                showConfirmButton: false
+              });
+            } else {
+              // 恢复旧值
+              $("#PmPeople").val(oldPeople);
+              Swal.fire({
+                icon: 'error',
+                title: swalTitle('修改失败', 'Update Failed'),
+                text: response
+              });
+            }
+          })
+          .withFailureHandler(function (error) {
+            Swal.close();
+            // 恢复旧值
+            $("#PmPeople").val(oldPeople);
+            Swal.fire({
+              icon: 'error',
+              title: swalTitle('修改失败', 'Update Failed'),
+              text: error.message
+            });
+          })
+          .updatePmPeople(submissionData);
+      }
+    });
+  });
 
   $("#PmEnd").on("click", function () {
     if (!table_tasklist) {

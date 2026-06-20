@@ -204,10 +204,16 @@
                     </div>
                 </div>
                 <div class="col-4">
-                    <div class="input-group">
-                        <span class="col-5 input-group-text">保养人员<br>PM People</span>
-                        <input type="text" id="PmPeople" aria-label="保养人员" class="col-7 form-control"
-                            placeholder="保养人员/ PM People" style="text-align: center;" readonly>
+                    <div style="display: flex; gap: 2px;">
+                        <div class="input-group" style="flex: 1;">
+                            <span class="col-5 input-group-text">保养人员<br>PM People</span>
+                            <input type="text" id="PmPeople" aria-label="保养人员" class="col-7 form-control"
+                                placeholder="保养人员/ PM People" style="text-align: center;" readonly>
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="EditPmPeople"
+                            title="修改保养人员" style="display:none; border: 1px solid #ced4da;">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
                     </div>
                 </div>
             </div>
