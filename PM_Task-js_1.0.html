@@ -1504,14 +1504,14 @@
     <div class="container">
       <div class="row mt-3">
         <div class ="col-auto">
-          <span style="font-family: Helvetica;font-weight: bold; font-size:20px">保养编号/ PM Code</span>
+          <span style="font-family: Helvetica;font-weight: bold; font-size:20px">保养编号<br>PM Code</span>
         </div>
       </div>
 
-      
+
         <div class="col-12 mt-3">
           <div class="input-group">
-            <span class="input-group-text col-4" >保养序列号/ PM Serial No.</span>
+            <span class="input-group-text col-4" >保养序列号<br>PM Serial No.</span>
             <input type="text" id="PmSerialNo" class="form-control col-8" placeholder="保养序列号/ PM Serial No."
                 aria-label="保养序列号/ PM Serial No." aria-describedby="保养序列号/ PM Serial No." style="text-align: center;" readonly>
           </div>
@@ -1519,37 +1519,37 @@
 
         <div class="col-12 mt-3">
           <div class="input-group">
-            <span class="input-group-text col-4" >保养工单号/ PM Working Order</span>
+            <span class="input-group-text col-4" >保养工单号<br>PM Working Order</span>
             <select id="PmWorkingOrder" class="form-control col-8" style="text-align: center;" multiple>
             </select>
           </div>
         </div>
-      
 
-      <div id="pmPeopleSection"> 
+
+      <div id="pmPeopleSection">
           <div class="row mt-3">
             <div class ="col-auto">
-              <span style="font-family: Helvetica;font-weight: bold; font-size:20px">保养人员/ PM People</span>
+              <span style="font-family: Helvetica;font-weight: bold; font-size:20px">保养人员<br>PM People</span>
             </div>
           </div>
           <div class="row mt-1">
             <div class ="col-5">
               <div class="input-group">
-                <span class="col-4 input-group-text">工号/ Working Code</span>
-                <input type="number" id="WorkingCode" class="col-8 form-control" placeholder="请输入工号/ Please input your working code"
-                    aria-label="请输入工号/ Please input your working code" aria-describedby="请输入工号/ Please input your working code" style="text-align: center;">
+                <span class="col-4 input-group-text">工号<br>Working Code</span>
+                <input type="number" id="WorkingCode" class="col-8 form-control" placeholder="请输入工号"
+                    aria-label="请输入工号" aria-describedby="请输入工号" style="text-align: center;">
               </div>
             </div>
             <div class ="col-4">
               <div class="input-group">
-                <span class="col-4 input-group-text">姓名/ Name</span>
+                <span class="col-4 input-group-text">姓名<br>Name</span>
                 <input type="text" id="Name" class="col-8 form-control" placeholder="自动显示"
                     aria-label="姓名/ Name" aria-describedby="姓名/ Name" style="text-align: center;" readonly>
               </div>
             </div>
             <div class ="col-3">
               <button type="button" class="btn" id="AddPmPeople"
-                style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">添加保养人员/ Add PM People</button>
+                style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">添加保养人员<br>Add PM People</button>
             </div>
           </div>
           <div class="row mt-3">
@@ -1562,9 +1562,9 @@
     `;
 
     let table_array = [
-      { title: "工号/ WorkingCode", data: "WorkingCode" },
-      { title: "姓名/ Name", data: "Name" },
-      { title: "操作/ Operation", data: "Operation" }
+      { title: "工号<br>Working Code", data: "WorkingCode" },
+      { title: "姓名<br>Name", data: "Name" },
+      { title: "操作<br>Operation", data: "Operation" }
     ];
 
     Swal.fire({
@@ -1572,7 +1572,9 @@
       html: htmlContent,
       width: '80%',
       showConfirmButton: true,
-      confirmButtonText: '确认保养信息',
+      confirmButtonText: '确认保养信息 / Confirm PM Info',
+      showCancelButton: true,
+      cancelButtonText: '取消 / Cancel',
       didOpen: () => {
         serialNo = global_data["开始日期"].replace(/-/g, '') + global_data["AEM#"]
         $("#PmSerialNo").val(serialNo);
@@ -2765,12 +2767,12 @@
       <div class = 'row  mt-3'>
         <div class ='col-8'>
           <div class="input-group">
-            <span class="col-3 input-group-text">临时保养任务/ Temporary Task</span>
-            <input class='form-control' type='text' id='TemTask' placeholder="请输入任务内容/ Please type in the task description">
+            <span class="col-3 input-group-text">临时保养任务<br>Temporary Task</span>
+            <input class='form-control' type='text' id='TemTask' placeholder="请输入任务内容">
           </div>
         </div>
         <div class ='col-4'>
-          <button class="btn" type="button" id="AddTask" style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">添加任务/ Add Task</button>
+          <button class="btn" type="button" id="AddTask" style="background-color: #E60012;color: white;font-family: Helvetica;font-weight: bold;">添加任务<br>Add Task</button>
         </div>
       </div>
       <div class="row mt-3">
@@ -2781,9 +2783,9 @@
     </div>
     `
     let table_array = [
-      { title: "任务编号/ Task No.", data: "Task_No" },
-      { title: "任务描述/ Task Description", data: "Task_Description" },
-      { title: "操作/ Operation", data: "Operation" }
+      { title: "任务编号<br>Task No.", data: "Task_No" },
+      { title: "任务描述<br>Task Description", data: "Task_Description" },
+      { title: "操作<br>Operation", data: "Operation" }
     ];
     let message = '';
     Swal.fire({
@@ -2791,7 +2793,9 @@
       html: htmlContent,
       width: '80%',
       showConfirmButton: true,
-      confirmButtonText: '确认添加',
+      confirmButtonText: '确认添加 / Confirm Add',
+      showCancelButton: true,
+      cancelButtonText: '取消 / Cancel',
       didOpen: () => {
         table_TempTask = $("#TempTask").DataTable({
           columns: table_array,
@@ -2841,7 +2845,7 @@
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: '确认 / Confirm',
-            cancelButtonText: "取消"
+            cancelButtonText: '取消 / Cancel'
           }).then((result) => {
             if (result.isConfirmed) {
               let button = `<button class="btn btn-info btn-sm text-center preview-btn">预览<br>PREVIEW</button>
