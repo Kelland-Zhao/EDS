@@ -1,12 +1,37 @@
 <script>
+  // 双语 Swal 提示 helper：中文在上，英文在下（小字号、灰色）
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+  // 权限检查完成后的回调：关闭 loading 并显示完成 toast
+  function onCardsLoaded() {
+    Swal.close();
+    Swal.fire({
+      icon: 'success',
+      title: swalTitle('加载完成', 'Loading Complete'),
+      html: swalHtml('所有功能卡片已就绪。', 'All function cards are ready.'),
+      timer: 1500,
+      showConfirmButton: false
+    });
+  }
+
   $(document).ready(() => {
+    // 显示加载 toast
+    Swal.fire({
+      title: swalTitle('加载中...', 'Loading...'),
+      html: swalHtml('正在加载导航卡片，请稍候。', 'Loading navigation cards, please wait.'),
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+
     let name = sessionStorage.getItem('Name');
     let id = sessionStorage.getItem('ID');
     let pwd = sessionStorage.getItem('PWD');
     let process = sessionStorage.getItem('Process');
     let workshop = sessionStorage.getItem('Workshop');
     let siWebPage = sessionStorage.getItem('siWebPage');
-    
+
     sessionStorage.setItem('ID', id);
     sessionStorage.setItem('Name', name);
     sessionStorage.setItem('Process', process);
@@ -22,8 +47,12 @@
         } catch (e) {
           console.error('INJ SDM permission parse error', e);
         }
+        onCardsLoaded();
       })
-      .withFailureHandler((error) => console.error('INJ SDM permission check failed', error))
+      .withFailureHandler((error) => {
+        console.error('INJ SDM permission check failed', error);
+        onCardsLoaded();
+      })
       .checkINJSDMPermission(name, '');
 
     $('#PM').click(() => {
