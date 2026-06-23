@@ -105,12 +105,7 @@ function doGet(e) {
     return handleApprovalAction(e.parameters.action, e.parameters.token);
   }
 
-  Route.path("PM_Plan", loadPM_Plan);
-  Route.path("PMtask", loadPM_Task);
-  Route.path("Shift", loadShift);
   Route.path("addItem_manage", loadaddItem_manage);
-  Route.path("tmp_stop_machine", tmp_stop_machine);
-  Route.path("PointCheck", PointCheck);
   Route.path("MaintenanceReport_Manage", MaintenanceReport_Manage);
   Route.path("ViewHistory", loadViewHistory);
   Route.path("Navigation", loadNavigation);
@@ -1271,47 +1266,6 @@ function loadMoldSurfaceClean() {
 }
 
 
-function loadPM_Plan(
-  intoWebUrl,
-  intoWebLoginId,
-  intoWebLoginName,
-  intoWebLoginType
-) {
-  if (
-    !intoWebUrl &&
-    !intoWebLoginId &&
-    !intoWebLoginName &&
-    !intoWebLoginType
-  ) {
-    intoWebUrl = getReleaseWebPage();
-    intoWebLoginID = "";
-    intoWebLoginName = "";
-    intoWebLoginType = "";
-  }
-  return render("PM_Plan", {
-    webPage: intoWebUrl,
-    intoWebID: intoWebLoginId,
-    intoWebName: intoWebLoginName,
-    intoWebType: intoWebLoginType,
-  })
-    .setTitle("AM/PM计划查询 | AM/PM Plan Query")
-    .setFaviconUrl(webIconUrl);
-}
-
-function loadPM_Task() {
-  let webPage = getReleaseWebPage();
-  return render("PM_Task", { webPage: webPage })
-    .setTitle("保养任务 | PM Task")
-    .setFaviconUrl(webIconUrl);
-}
-
-function loadShift() {
-  let webPage = getReleaseWebPage();
-  return render("Shift", { webPage: webPage })
-    .setTitle("交接班 | Handover")
-    .setFaviconUrl(webIconUrl);
-}
-
 function loadaddItem_manage() {
   let webPage = getReleaseWebPage();
   return render("addItem_manage", { webPage: webPage })
@@ -1348,41 +1302,6 @@ function loadFailureReport_Review() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Review", { webPage: webPage })
     .setTitle("故障报告审核 | Failure Report Review")
-    .setFaviconUrl(webIconUrl);
-}
-
-function tmp_stop_machine() {
-  let webPage = getReleaseWebPage();
-  return render("tmp_stop_machine", { webPage: webPage })
-    .setTitle("临时停机管理 | Temporary Stop Management")
-    .setFaviconUrl(webIconUrl);
-}
-
-function PointCheck(
-  intoWebUrl,
-  intoWebLoginId,
-  intoWebLoginName,
-  intoWebLoginType
-) {
-  console.log(intoWebUrl, intoWebLoginId, intoWebLoginName, intoWebLoginType);
-  if (
-    !intoWebUrl &&
-    !intoWebLoginId &&
-    !intoWebLoginName &&
-    !intoWebLoginType
-  ) {
-    intoWebUrl = getReleaseWebPage();
-    intoWebLoginID = "";
-    intoWebLoginName = "";
-    intoWebLoginType = "";
-  }
-  return render("PointCheck", {
-    webPage: intoWebUrl,
-    intoWebID: intoWebLoginId,
-    intoWebName: intoWebLoginName,
-    intoWebType: intoWebLoginType,
-  })
-    .setTitle("点检 | Inspection")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -3231,29 +3150,6 @@ function getWaitFaultReport(workshop, process) {
 }
 
 function getData_PMTask(workshop, process) {
-  var url_userID =
-    "https://docs.google.com/spreadsheets/d/1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM/";
-  var ss_userID = SpreadsheetApp.openByUrl(url_userID);
-  var ws_userID = ss_userID.getSheetByName("userID");
-  var data_userID = ws_userID
-    .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
-    .getDisplayValues();
-  var url_database =
-    "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
-  var ss_database = SpreadsheetApp.openByUrl(url_database);
-  var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
-  var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
-  var data_shift = ws_database
-    .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
-    .getDisplayValues();
-  if (isMerged) {
-    data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
-  }
-  var data = { user: data_userID, shift: data_shift };
-  return data;
-}
-
-function getData_TMP_stop_machine(workshop, process) {
   var url_userID =
     "https://docs.google.com/spreadsheets/d/1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM/";
   var ss_userID = SpreadsheetApp.openByUrl(url_userID);
