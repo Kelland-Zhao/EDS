@@ -107,6 +107,20 @@
       clearValidation();
     }
 
+    function reloadTodayReport() {
+      google.script.run
+        .withSuccessHandler(raw => {
+          const result = parseResponse(raw);
+          if (!result.success || !result.todayReport) {
+            resetForm();
+            return;
+          }
+          populateForm(result.todayReport);
+        })
+        .withFailureHandler(() => resetForm())
+        .getINJSDMInitData(userName, userEmail);
+    }
+
     function populateForm(report) {
       editingReportId = report.reportId;
       $('#ReportDate').val(report.reportDate);
@@ -290,7 +304,7 @@
           const result = parseResponse(raw);
           if (!result.success) return showError(result.message || '保存失败', 'Failed to save.');
           showSuccess(result.updated ? '记录已更新。' : '记录已保存。', result.updated ? 'Record updated.' : 'Record saved.');
-          resetForm();
+          reloadTodayReport();
         })
         .withFailureHandler(error => { Swal.close(); showError(error.message || String(error), 'Failed to save.'); })
         .saveINJSDMReport(payload, userName, userEmail);
