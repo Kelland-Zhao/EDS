@@ -105,8 +105,6 @@ function doGet(e) {
     return handleApprovalAction(e.parameters.action, e.parameters.token);
   }
 
-  Route.path("addItem_manage", loadaddItem_manage);
-  Route.path("MaintenanceReport_Manage", MaintenanceReport_Manage);
   Route.path("ViewHistory", loadViewHistory);
   Route.path("Navigation", loadNavigation);
   Route.path("home_new_1.0", loadhome_new);
@@ -1266,13 +1264,6 @@ function loadMoldSurfaceClean() {
 }
 
 
-function loadaddItem_manage() {
-  let webPage = getReleaseWebPage();
-  return render("addItem_manage", { webPage: webPage })
-    .setTitle("三班项目管理 | Shift Project Management")
-    .setFaviconUrl(webIconUrl);
-}
-
 // 新增：故障报告上传页面加载函数
 function loadFailureReport_Upload() {
   let webPage = getReleaseWebPage();
@@ -1302,13 +1293,6 @@ function loadFailureReport_Review() {
   let webPage = getReleaseWebPage();
   return render("FailureReport_Review", { webPage: webPage })
     .setTitle("故障报告审核 | Failure Report Review")
-    .setFaviconUrl(webIconUrl);
-}
-
-function MaintenanceReport_Manage() {
-  let webPage = getReleaseWebPage();
-  return render("MaintenanceReport_Manage", { webPage: webPage })
-    .setTitle("故障报告管理 | Failure Report Management")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -2527,67 +2511,6 @@ function getStopPlan() {
   return data;
 }
 
-function getData_additem_manage(workshop, process) {
-  try {
-    var url_PM_Plan =
-      "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
-    var ss_PM_Plan = SpreadsheetApp.openByUrl(url_PM_Plan);
-    var ws_PM_Plan = ss_PM_Plan.getSheetByName("Total PM Plan List");
-    var data_PM_Plan = ws_PM_Plan
-      .getRange(2, 1, ws_PM_Plan.getLastRow() - 1, ws_PM_Plan.getLastColumn())
-      .getDisplayValues();
-
-    var url_userID =
-      "https://docs.google.com/spreadsheets/d/1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM/";
-    var ss_userID = SpreadsheetApp.openByUrl(url_userID);
-    var ws_userID = ss_userID.getSheetByName("userID");
-    var data_userID = ws_userID
-      .getRange(3, 1, ws_userID.getLastRow() - 2, 16)
-      .getDisplayValues();
-
-    var url_workcenter =
-      "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
-    var ss_workcenter = SpreadsheetApp.openByUrl(url_workcenter);
-    var ws_workcenter = ss_workcenter.getSheetByName(
-      "Workcenter & Mold Matrix"
-    );
-    var data_workcenter = ws_workcenter
-      .getRange(3, 1, ws_workcenter.getLastRow(), ws_workcenter.getLastColumn())
-      .getDisplayValues();
-
-    var SheetName_1 = "Shift_" + process + "_" + workshop;
-    var ws_shift = ss_PM_Plan.getSheetByName(SheetName_1);
-    var data_shift = ws_shift
-      .getRange(2, 1, ws_shift.getLastRow() - 1, ws_shift.getLastColumn())
-      .getDisplayValues();
-    var SheetName_2 = "APT_" + process + "_" + workshop;
-    var ws_APT = ss_PM_Plan.getSheetByName(SheetName_2);
-    var data_APT = ws_APT
-      .getRange(2, 1, ws_APT.getLastRow() - 1, ws_APT.getLastColumn())
-      .getDisplayValues();
-
-    var url_TMP =
-      "https://docs.google.com/spreadsheets/d/1iBhTmRl1KjtcSO96rfWhQowiZ4E1jqJohC5wEjF_7rQ/";
-    var ss_TMP = SpreadsheetApp.openByUrl(url_TMP);
-    var ws_TMP = ss_TMP.getSheetByName("Record");
-    var data_TMP = ws_TMP
-      .getRange(2, 1, ws_TMP.getLastRow() - 1, ws_TMP.getLastColumn())
-      .getDisplayValues();
-
-    var data = {
-      PMPlan: data_PM_Plan,
-      userID: data_userID,
-      machine_info: data_workcenter,
-      data_shift: data_shift,
-      data_APT: data_APT,
-      data_TMP: data_TMP,
-    };
-    return ["OK", JSON.stringify(data)];
-  } catch (e) {
-    return ["NO", "创建的任务记录获取出错：" + toString()];
-  }
-}
-
 function getData_shift(workshop, process) {
   try {
     var url_userID =
@@ -2702,99 +2625,6 @@ function getData_select(workshop, process) {
     return ["OK", JSON.stringify(data)];
   } catch (e) {
     return ["NO", "交接班数据加载出错：" + e.toString()];
-  }
-}
-
-function upload_additem_manage(data) {
-  try {
-    data.status = "Ongoing";
-    var url_database =
-      "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
-    var url_TMP =
-      "https://docs.google.com/spreadsheets/d/1iBhTmRl1KjtcSO96rfWhQowiZ4E1jqJohC5wEjF_7rQ/";
-    var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ss_TMP = SpreadsheetApp.openByUrl(url_TMP);
-    var ws_shift = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + data.process + "_" + data.workshop);
-    var isMerged = USE_MERGED_SHIFT_SHEET && ws_shift.getName() === SHIFT_RECORDS_SHEET_NAME;
-    var data_shift = ws_shift
-      .getRange(2, 1, ws_shift.getLastRow() - 1, ws_shift.getLastColumn())
-      .getDisplayValues();
-
-    var SheetName_APT = "APT_" + data.process + "_" + data.workshop;
-    var ws_APT = ss_database.getSheetByName(SheetName_APT);
-
-    var data_APT = ws_APT
-      .getRange(2, 1, ws_APT.getLastRow() - 1, ws_APT.getLastColumn())
-      .getDisplayValues();
-    var ws_TMP = ss_TMP.getSheetByName("Record");
-
-    /*******************写入【临时停机申请】**********************/
-    if (data.result == true) {
-      ws_TMP.appendRow([
-        data.applier,
-        data.submitDate,
-        data.taskDescription,
-        data.workshop,
-        data.Mold_Tooling,
-        data.type,
-        data.bookDate,
-        data.shift,
-        data.workcenter,
-        data.duration,
-      ]);
-    }
-    /*************************************************************/
-
-    /*********************database写入[Y]是否转保养清单*************/
-    var code = data.code + "true";
-    if (isMerged) {
-      var proc = data.process;
-      var wshop = data.workshop;
-      for (var m = 0; m < data_shift.length; m++) {
-        var combined = data_shift[m][0].toString() + data_shift[m][12].toString();
-        if (combined === code) {
-          var rowWorkshop3 = String(data_shift[m][14] || '').trim();
-          var rowProcess3 = String(data_shift[m][15] || '').trim();
-          var processMatch3 = (rowProcess3 === proc) ||
-            (rowProcess3 === 'INJ' && proc === 'IM') ||
-            (rowProcess3 === 'IM' && proc === 'INJ');
-          if (!processMatch3 || rowWorkshop3 !== wshop) {
-            continue;
-          }
-          ws_shift.getRange(m + 2, 19).setValue("Y");
-          break;
-        }
-      }
-    } else {
-      data_shift.forEach((r) => {
-        r[17] = r[0].toString() + r[12].toString();
-      });
-      var codelist = data_shift.map((r) => {
-        return r[17];
-      });
-      var position = codelist.indexOf(code);
-      ws_shift.getRange(position + 2, 19).setValue("Y");
-    }
-    /************************************************************/
-
-    /***********************database APT写入保养清单条目***********/
-    ws_APT.appendRow([
-      data.code,
-      data.machine_type,
-      data.workcenter,
-      data.module,
-      data.taskDescription,
-      data.duration,
-      data.No_resources,
-      data.bookDate,
-      data.shift,
-      data.result,
-      data.status,
-    ]);
-    /***********************************************************/
-    return ["OK", true];
-  } catch (e) {
-    return ["NO", "创建任务保存出错：" + e.toString()];
   }
 }
 
@@ -3010,115 +2840,6 @@ function upload_shift_modal(obj) {
     return ["OK", true];
   } catch (e) {
     return ["NO", "交接班数据保存出错：" + e.toString()];
-  }
-}
-
-function getData_MaintenanceReport_Manage(workshop, process) {
-  try {
-    var url_userID =
-      "https://docs.google.com/spreadsheets/d/1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM/";
-    var ss_userID = SpreadsheetApp.openByUrl(url_userID);
-    var ws_userID = ss_userID.getSheetByName("userID");
-    var data_userID = ws_userID
-      .getRange(3, 1, ws_userID.getLastRow() - 2, 25)
-      .getDisplayValues();
-    var url_database =
-      "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
-    var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
-    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
-    var data_shift = ws_database
-      .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
-      .getDisplayValues();
-    if (isMerged) {
-      data_shift = filterShiftByProcessWorkshop(data_shift, process, workshop);
-    }
-    var data = {
-      user: data_userID,
-      shift: data_shift,
-      process: process,
-      workshop: workshop,
-      type: "S&C",
-    }; //
-    return ["OK", JSON.stringify(data)];
-  } catch (e) {
-    return ["NO", e.toString()];
-  }
-}
-
-function add_MaintenanceReport(obj) {
-  try {
-    var process = obj.user[0][14];
-    var workshop = obj.user[0][13];
-    var url_database =
-      "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
-    var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
-    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
-    var data_shift = ws_database
-      .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
-      .getDisplayValues();
-    obj.data.forEach((r) => {
-      var targetCode = r.code + "已解决";
-      for (var i = 0; i < data_shift.length; i++) {
-        var combined = data_shift[i][0] + data_shift[i][5];
-        if (combined === targetCode) {
-          if (isMerged) {
-            var rowWorkshop4 = String(data_shift[i][14] || '').trim();
-            var rowProcess4 = String(data_shift[i][15] || '').trim();
-            var processMatch4 = (rowProcess4 === process) ||
-              (rowProcess4 === 'INJ' && process === 'IM') ||
-              (rowProcess4 === 'IM' && process === 'INJ');
-            if (!processMatch4 || rowWorkshop4 !== workshop) {
-              continue;
-            }
-          }
-          ws_database.getRange(i + 2, 20).setValue("待完成");
-          break;
-        }
-      }
-    });
-    return ["OK", true];
-  } catch (e) {
-    return ["NO", "增加故障报告出错：" + e.toString()];
-  }
-}
-
-function delete_MaintenanceReport(obj) {
-  try {
-    var process = obj.user[0][14];
-    var workshop = obj.user[0][13];
-    var url_database =
-      "https://docs.google.com/spreadsheets/d/10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w/";
-    var ss_database = SpreadsheetApp.openByUrl(url_database);
-    var ws_database = getShiftSheet(ss_database) || ss_database.getSheetByName("Shift_" + process + "_" + workshop);
-    var isMerged = USE_MERGED_SHIFT_SHEET && ws_database.getName() === SHIFT_RECORDS_SHEET_NAME;
-    var data_shift = ws_database
-      .getRange(2, 1, ws_database.getLastRow() - 1, ws_database.getLastColumn())
-      .getDisplayValues();
-    obj.data.forEach((r) => {
-      var targetCode = r.code + "已解决";
-      for (var i = 0; i < data_shift.length; i++) {
-        var combined = data_shift[i][0] + data_shift[i][5];
-        if (combined === targetCode) {
-          if (isMerged) {
-            var rowWorkshop4 = String(data_shift[i][14] || '').trim();
-            var rowProcess4 = String(data_shift[i][15] || '').trim();
-            var processMatch4 = (rowProcess4 === process) ||
-              (rowProcess4 === 'INJ' && process === 'IM') ||
-              (rowProcess4 === 'IM' && process === 'INJ');
-            if (!processMatch4 || rowWorkshop4 !== workshop) {
-              continue;
-            }
-          }
-          ws_database.getRange(i + 2, 20).setValue("无需填写");
-          break;
-        }
-      }
-    });
-    return ["OK", true];
-  } catch (e) {
-    return ["NO", "删除故障报告出错：" + e.toString()];
   }
 }
 
