@@ -19,11 +19,20 @@
     .nav-tabs .nav-link { color:#6c757d; border:0; border-bottom:2px solid transparent; margin-bottom:-2px; }
     .nav-tabs .nav-link.active { color:#E60012; background:transparent; border-bottom-color:#E60012; font-weight:600; }
     .tab-en { display:block; color:#adb5bd; font-size:11px; }
-    .issue-card { margin-bottom:14px; overflow:hidden; }
+    .issue-card { margin-bottom:14px; overflow:hidden; border-left:4px solid #e9ecef; }
     .issue-card .card-header { background:#fafafa; display:flex; justify-content:space-between; align-items:center; }
     .issue-title-cn { font-size:15px; font-weight:600; }
     .issue-title-en { color:#888; font-size:11px; }
-    .count-badge { background:#fff3cd; color:#856404; border-radius:12px; padding:3px 8px; font-size:12px; }
+    .count-badge { border-radius:12px; padding:3px 8px; font-size:12px; }
+    #MajorCard { border-left-color:#E60012; }
+    #MajorCard .card-header { background:#fff5f5; }
+    #MajorCard .count-badge { background:#fce4e4; color:#c62828; }
+    #OutstandingCard { border-left-color:#fd7e14; }
+    #OutstandingCard .card-header { background:#fff8f0; }
+    #OutstandingCard .count-badge { background:#fff3e0; color:#e65100; }
+    #CommunicationCard { border-left-color:#0d6efd; }
+    #CommunicationCard .card-header { background:#f0f6ff; }
+    #CommunicationCard .count-badge { background:#e0edff; color:#0d47a1; }
     .item-row { display:grid; grid-template-columns:34px minmax(130px,.8fr) minmax(150px,1fr) minmax(280px,3fr) 34px; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid #f0f0f0; }
     .item-row.communication { grid-template-columns:34px minmax(280px,2fr) minmax(180px,1fr) 34px; }
     .item-num { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#f1f3f5; font-size:12px; }
