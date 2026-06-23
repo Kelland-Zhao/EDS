@@ -23,3 +23,4 @@ clasp push
 - 推送会以本地文件覆盖 GAS 端对应文件，请确认本地为最新版本。
 - 如遇文件冲突或需强制覆盖，可使用 `clasp push --force`。
 - 推送完成后如需更新 Web App 部署版本，请另行执行 `clasp deploy`。
+- **不要**在 clasp-push 后自动执行 `git commit` / `git push`，Git 提交由 `/git-push` 工作流单独处理。
