@@ -383,6 +383,17 @@
     return map[cn] || cn.substring(0, 6);
   }
 
+  function getMsRowBgColor(status, planned, actual) {
+    // Status-based background color for milestone rows in update modal
+    if (status === '已完成') return '#e8f5e9'; // green tint
+    if (status === '进行中') return '#fff3e0'; // orange tint
+    var p = parseDate(planned);
+    var a = parseDate(actual);
+    if (a) return '#e8f5e9'; // has actual date = done
+    if (p && p < today) return '#ffebee'; // overdue = red tint
+    return '#f5f5f5'; // pending = light gray
+  }
+
   function getMilestoneColor(ms) {
     var actual = parseDate(ms.actual);
     if (actual) {
@@ -1135,7 +1146,14 @@
     $('#modalMilestonesHint').text(currentUpdateIsCI
       ? '可增删/修改 follow-up 事项，状态选"已完成"自动记录完成日期 / Status→Done auto-records completion date'
       : '可增删/修改里程碑，状态选"已完成"自动记录完成日期，保存后管理员将收到邮件通知 / Status→Done auto-records date; admin notified on save');
-    proj.milestones.forEach(function(ms) {
+    var sortedMs = (proj.milestones || []).slice().sort(function(a, b) {
+      var pa = parseDate(a.planned), pb = parseDate(b.planned);
+      if (pa && pb) return pa - pb;
+      if (pa) return -1;
+      if (pb) return 1;
+      return 0;
+    });
+    sortedMs.forEach(function(ms) {
       addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
     });
 
@@ -1334,7 +1352,8 @@
       ? '<div style="flex:0 0 140px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>'
       : '';
     var statusCol = '<div style="flex:0 0 110px;"><label style="font-size:10px;color:#666;">状态<br><small>Status</small></label>' + ciStatusSelectHtml('upd-ms-status', status) + '</div>';
-    var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;">'
+    var rowBg = getMsRowBgColor(status, planned, actual);
+    var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;background:' + rowBg + ';">'
       + '<div class="flex-fill"><label style="font-size:10px;color:#666;">' + nameLabel + '</label><textarea rows="1" class="form-control form-control-sm upd-ms-name autogrow-name" placeholder="名称 / Name">' + escapeTextarea(name || '') + '</textarea></div>'
       + ownerCol
       + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">' + plannedLabel + '</label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
