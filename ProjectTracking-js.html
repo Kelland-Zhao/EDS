@@ -1193,14 +1193,14 @@
       addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
     });
 
-    // 已完成项目：全部只读
+    // 已完成项目：里程碑只读，但状态可改（用于将项目重新激活）
     if (proj.status === 'Done') {
       $('#updateModalLabel').html('查看项目 / View Project <span class="badge bg-success ms-2" style="font-size:11px;">已完成 / Done</span>');
       $('#modalLeader').prop('disabled', true);
       if ($('#modalLeader').hasClass('select2-hidden-accessible')) $('#modalLeader').select2('enable', false);
-      $('#modalStatus').prop('disabled', true);
-      $('#statusHelp').text('已完成项目不可编辑 / Completed project is read-only');
-      $('#saveBtn').addClass('d-none');
+      $('#modalStatus').prop('disabled', false);
+      $('#statusHelp').text('可修改状态以重新激活项目 / Change status to reactivate project').css('color', '#E60012');
+      $('#saveBtn').removeClass('d-none');
       $('#updateMsAddBtn').addClass('d-none');
       $('#modalType').prop('disabled', true);
       $('#modalMilestones .upd-ms-row').each(function() {
@@ -1213,7 +1213,7 @@
           $(this).find('.upd-ms-owner').replaceWith('<input type="text" class="form-control form-control-sm readonly-field" value="' + ownerText + '" readonly>');
         }
       });
-      $('#modalMilestonesHint').text('已完成项目 — 仅可查看 / Completed project — view only');
+      $('#modalMilestonesHint').text('已完成项目 — 里程碑仅可查看，状态可修改 / Milestones view only, status editable');
     }
 
     // Store current project for save
@@ -1240,6 +1240,14 @@
 
     var updates = {};
     var futureMilestones = [];
+
+    // 已完成项目：里程碑只读，仅更新状态（不重新收集/校验里程碑）
+    if (proj && proj.status === 'Done') {
+      if (!isStatusChanged) { $('#updateModal').modal('hide'); return; }
+      updates.status = newStatus;
+      executeSave(projectName, updates);
+      return;
+    }
 
     // Leader change
     var newLeader = $('#modalLeader').val();
