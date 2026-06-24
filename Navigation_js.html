@@ -264,8 +264,51 @@
     });
 
     $('#MMS').click(() => {
-        let url = "https://script.google.com/a/macros/colpal.com/s/AKfycbw1MZrc24Kf40NsBHF3SggBD6sFKbFxalH_4dkXICgqnWJ5SQ2-5b5C2WNvPlLW_cQc6Q/exec"
+        $('#moldModal').modal('show');
+    });
+
+    let moldBaseUrl = window.location.href.indexOf('/dev') !== -1
+        ? "https://script.google.com/a/macros/colpal.com/s/AKfycbzPkjt4dleuNMc6-GyhkxrK-KehT4rk37DvztwzaOBN/dev"
+        : "https://script.google.com/a/macros/colpal.com/s/AKfycbw1MZrc24Kf40NsBHF3SggBD6sFKbFxalH_4dkXICgqnWJ5SQ2-5b5C2WNvPlLW_cQc6Q/exec";
+
+    $('#Mold_Repair').click(() => {
+        let url = moldBaseUrl + '?v=Repair'
+            + '&loginId=' + encodeURIComponent(id)
+            + '&loginName=' + encodeURIComponent(name)
+            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginProcess=' + encodeURIComponent(process);
         window.open(url);
+        $('#moldModal').modal('hide');
+    });
+
+    $('#Mold_Maintenance').click(() => {
+        let url = moldBaseUrl + '?v=Maintenance'
+            + '&loginId=' + encodeURIComponent(id)
+            + '&loginName=' + encodeURIComponent(name)
+            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginProcess=' + encodeURIComponent(process);
+        window.open(url);
+        $('#moldModal').modal('hide');
+    });
+
+    $('#Mold_Test').click(() => {
+        let url = moldBaseUrl + '?v=Test'
+            + '&loginId=' + encodeURIComponent(id)
+            + '&loginName=' + encodeURIComponent(name)
+            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginProcess=' + encodeURIComponent(process);
+        window.open(url);
+        $('#moldModal').modal('hide');
+    });
+
+    $('#Mold_ChangeOver').click(() => {
+        let url = moldBaseUrl + '?v=ChangeOver'
+            + '&loginId=' + encodeURIComponent(id)
+            + '&loginName=' + encodeURIComponent(name)
+            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginProcess=' + encodeURIComponent(process);
+        window.open(url);
+        $('#moldModal').modal('hide');
     });
 
     $('#moldSurfaceCleanButton').on('click', () => {
