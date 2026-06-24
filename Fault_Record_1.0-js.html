@@ -792,7 +792,10 @@
       let suggestionIndex = head.indexOf('建议措施');
       let pmFollowUpIndex = head.indexOf('后续措施 - 保养');
       let pmFeedbackIndex = head.indexOf('后续措施 - 保养（反馈）');
+      let submitterIndex = head.indexOf('填写人');
       
+      // 填写人列：始终显示
+      if (submitterIndex >= 0) table.column(submitterIndex).visible(true);
       // 是否跟随列：仅注塑工序显示
       if (followIndex >= 0) table.column(followIndex).visible(isInjectionProcess);
       
@@ -801,8 +804,8 @@
       if (directCauseIndex >= 0) table.column(directCauseIndex).visible(false);
       if (suggestionIndex >= 0) table.column(suggestionIndex).visible(false);
       if (pmFollowUpIndex >= 0) table.column(pmFollowUpIndex).visible(false);
-      // 后续措施 - 保养（反馈）列：显式设置为可见
-      if (pmFeedbackIndex >= 0) table.column(pmFeedbackIndex).visible(true);
+      // 后续措施 - 保养（反馈）列：隐藏
+      if (pmFeedbackIndex >= 0) table.column(pmFeedbackIndex).visible(false);
 
       table.clear();
       table.rows.add(mergedContent);
@@ -847,11 +850,11 @@
       columnDefs: [
         {
           // 隐藏指定列：
-          // 0 编号, 1 班次, 9 工单号, 10 交接人, 12 是否转保养, 13 填写人, 14 车间, 15 工序,
+          // 0 编号, 1 班次, 9 工单号, 10 交接人, 12 是否转保养, 14 车间, 15 工序,
           // 16 参与人数, 17 机型, 18 是否已安排PM跟进
           // 判断是否最后、直接原因、建议措施（默认不在历史表中展示）
           targets: function() {
-            let targets = [0, 1, 9, 10, 12, 13, 14, 15, 16, 17, 18];
+            let targets = [0, 1, 9, 10, 12, 14, 15, 16, 17, 18];
             // 动态获取列索引并添加到隐藏列表
             let judgeLastIndex = head.indexOf('判断是否最后');
             let directCauseIndex = head.indexOf('直接原因');
@@ -1070,6 +1073,10 @@
         'color': 'white'
       });
     }
+
+    // 后续措施 - 保养（反馈）列：隐藏
+    let pmFeedbackIndex2 = head.indexOf('后续措施 - 保养（反馈）');
+    if (pmFeedbackIndex2 >= 0) table.column(pmFeedbackIndex2).visible(false);
 
     // 仅注塑工序（INJ/IM）显示"是否跟随"列；TF/PK 隐藏该列
     let sessionProcess = (sessionStorage.getItem('Process') || global_Process || '').toString().trim();

@@ -7370,6 +7370,7 @@ function getFilteredFailureReportData() {
             repairTime: repairTimeStr,
             submitDate: row[11] ? row[11].toString() : "",
             shift: row[1] || "",
+            maintenancePerson: row[6] || "",
             workshop: rowWorkshop || "",
             process: rowProcess || mappedProcess,
             submitter: row[13] || "",
@@ -7427,6 +7428,7 @@ function getFilteredFailureReportData() {
                 repairTime: repairTimeStr,
                 submitDate: row[11] ? row[11].toString() : "",
                 shift: row[1] || "",
+                maintenancePerson: row[6] || "",
                 workshop: row[14] || "",
                 process: row[15] || process,
                 submitter: row[13] || "",
@@ -7530,9 +7532,10 @@ function getFailureReportProgressData(userEmail, userName) {
     // 收集每行的完成天数，用于批量回写后端表格
     const completionDaysBackfill = [];
 
-    // 从 Shift 表查找班次、填写人，以及回补缺失的 repairTime
+    // 从 Shift 表查找班次、填写人、维修人，以及回补缺失的 repairTime
     const shiftShiftMap = {};      // 班次查找表
     const shiftSubmitterMap = {};  // 填写人查找表
+    const shiftMaintenancePersonMap = {}; // 维修人查找表
     const shiftRepairTimeMap = {};
     const hasEmptyRepairTime = data.slice(1).some(function(r) { return !String(r[13] || '').trim(); });
     // 始终构建班次和填写人查找表；仅在需要回补时构建 repairTime 表
@@ -7547,8 +7550,10 @@ function getFailureReportProgressData(userEmail, userName) {
             if (!rNo) continue;
             var rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
             var rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
+            var rMaintenancePerson = sData[j][6] != null ? String(sData[j][6]).trim() : '';
             if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
             if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
+            if (rMaintenancePerson && !shiftMaintenancePersonMap[rNo]) shiftMaintenancePersonMap[rNo] = rMaintenancePerson;
             if (hasEmptyRepairTime) {
               var rTime = sData[j][7] != null ? String(sData[j][7]) : '';
               if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
@@ -7565,8 +7570,10 @@ function getFailureReportProgressData(userEmail, userName) {
             if (!rNo) continue;
             const rShift = sData[j][1] != null ? String(sData[j][1]).trim() : '';
             const rSubmitter = sData[j][13] != null ? String(sData[j][13]).trim() : '';
+            const rMaintenancePerson = sData[j][6] != null ? String(sData[j][6]).trim() : '';
             if (rShift && !shiftShiftMap[rNo]) shiftShiftMap[rNo] = rShift;
             if (rSubmitter && !shiftSubmitterMap[rNo]) shiftSubmitterMap[rNo] = rSubmitter;
+            if (rMaintenancePerson && !shiftMaintenancePersonMap[rNo]) shiftMaintenancePersonMap[rNo] = rMaintenancePerson;
             if (hasEmptyRepairTime) {
               const rTime = sData[j][7] != null ? String(sData[j][7]) : '';
               if (rTime && !shiftRepairTimeMap[rNo]) shiftRepairTimeMap[rNo] = rTime;
@@ -7716,6 +7723,7 @@ function getFailureReportProgressData(userEmail, userName) {
         responsiblePerson: responsiblePerson,
         repairTime: repairTime,
         shift: shiftShiftMap[String(reportNo).trim()] || '',      // 从Shift表查找班次
+        maintenancePerson: shiftMaintenancePersonMap[String(reportNo).trim()] || '', // 从Shift表查找维修人
         submitter: shiftSubmitterMap[String(reportNo).trim()] || '', // 从Shift表查找填写人
         verifyTotal: verifyTotal,
         verifyPassed: verifyPassed,
