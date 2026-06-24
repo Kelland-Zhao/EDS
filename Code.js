@@ -108,7 +108,6 @@ function doGet(e) {
   Route.path("ViewHistory", loadViewHistory);
   Route.path("Navigation", loadNavigation);
   Route.path("home_new_1.0", loadhome_new);
-  Route.path("Shift_1.0", loadShift_new);
   Route.path("PM_Plan_1.0", loadPM_Plan_new);
   Route.path("PM_Task_1.0", loadPM_Task_new);
   Route.path("PM_Production_Confirm", loadPM_Production_Confirm);
@@ -235,12 +234,6 @@ function loadPM_Plan_new(
     .setFaviconUrl(webIconUrl);
 }
 
-function loadShift_new() {
-  let webPage = getReleaseWebPage();
-  return render("Shift_1.0", { webPage: webPage })
-    .setTitle("交接班 | Handover")
-    .setFaviconUrl(webIconUrl);
-}
 
 // 新增：交接班页面加载函数
 function loadHandover_1_0() {
