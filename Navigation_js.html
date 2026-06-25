@@ -263,8 +263,34 @@
         window.open(url);
     });
 
+    let selectedMoldWorkshop = '';
+
     $('#MMS').click(() => {
+        // 重置为车间选择步骤
+        $('#moldWorkshopStep').show();
+        $('#moldFunctionStep').hide();
+        $('#moldWorkshopSelect').val('');
+        selectedMoldWorkshop = '';
         $('#moldModal').modal('show');
+    });
+
+    // 弹窗关闭时重置
+    $('#moldModal').on('hidden.bs.modal', function () {
+        $('#moldWorkshopStep').show();
+        $('#moldFunctionStep').hide();
+        $('#moldWorkshopSelect').val('');
+        selectedMoldWorkshop = '';
+    });
+
+    $('#moldWorkshopConfirm').click(() => {
+        const ws = $('#moldWorkshopSelect').val();
+        if (!ws) {
+            alert('请先选择车间 / Please select a workshop first');
+            return;
+        }
+        selectedMoldWorkshop = ws;
+        $('#moldWorkshopStep').hide();
+        $('#moldFunctionStep').show();
     });
 
     let moldBaseUrl = siWebPage.indexOf('/dev') !== -1
@@ -275,7 +301,7 @@
         let url = moldBaseUrl + '?v=Repair'
             + '&loginId=' + encodeURIComponent(id)
             + '&loginName=' + encodeURIComponent(name)
-            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginWorkshop=' + encodeURIComponent(selectedMoldWorkshop)
             + '&loginProcess=' + encodeURIComponent(process);
         window.open(url);
         $('#moldModal').modal('hide');
@@ -285,7 +311,7 @@
         let url = moldBaseUrl + '?v=Maintenance'
             + '&loginId=' + encodeURIComponent(id)
             + '&loginName=' + encodeURIComponent(name)
-            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginWorkshop=' + encodeURIComponent(selectedMoldWorkshop)
             + '&loginProcess=' + encodeURIComponent(process);
         window.open(url);
         $('#moldModal').modal('hide');
@@ -295,7 +321,7 @@
         let url = moldBaseUrl + '?v=Test'
             + '&loginId=' + encodeURIComponent(id)
             + '&loginName=' + encodeURIComponent(name)
-            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginWorkshop=' + encodeURIComponent(selectedMoldWorkshop)
             + '&loginProcess=' + encodeURIComponent(process);
         window.open(url);
         $('#moldModal').modal('hide');
@@ -305,7 +331,7 @@
         let url = moldBaseUrl + '?v=ChangeOver'
             + '&loginId=' + encodeURIComponent(id)
             + '&loginName=' + encodeURIComponent(name)
-            + '&loginWorkshop=' + encodeURIComponent(workshop)
+            + '&loginWorkshop=' + encodeURIComponent(selectedMoldWorkshop)
             + '&loginProcess=' + encodeURIComponent(process);
         window.open(url);
         $('#moldModal').modal('hide');
