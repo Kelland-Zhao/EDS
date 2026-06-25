@@ -148,6 +148,18 @@
       flex-shrink: 0;
     }
     .modal-card-btn:hover .mc-arrow { color: #E60012; }
+    .modal-card-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .modal-card-btn:disabled:hover {
+      border-color: #e9ecef;
+      box-shadow: none;
+      transform: none;
+      color: #333;
+    }
+    .modal-card-btn:disabled .mc-arrow { color: #adb5bd; }
     .modal-domain-daily .modal-card-btn .mc-icon { color: #0d6efd; }
     .modal-domain-fault .modal-card-btn .mc-icon { color: #fd7e14; }
     .modal-domain-asset .modal-card-btn .mc-icon { color: #198754; }
