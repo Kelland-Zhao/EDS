@@ -265,33 +265,25 @@
 
     let selectedMoldWorkshop = '';
 
+    function updateMoldButtons() {
+        const ws = $('#moldWorkshopSelect').val();
+        selectedMoldWorkshop = ws;
+        const disabled = !ws;
+        $('#Mold_Repair, #Mold_Maintenance, #Mold_Test, #Mold_ChangeOver').prop('disabled', disabled);
+    }
+
     $('#MMS').click(() => {
-        // 重置为车间选择步骤
-        $('#moldWorkshopStep').show();
-        $('#moldFunctionStep').hide();
         $('#moldWorkshopSelect').val('');
-        selectedMoldWorkshop = '';
+        updateMoldButtons();
         $('#moldModal').modal('show');
     });
 
-    // 弹窗关闭时重置
     $('#moldModal').on('hidden.bs.modal', function () {
-        $('#moldWorkshopStep').show();
-        $('#moldFunctionStep').hide();
         $('#moldWorkshopSelect').val('');
-        selectedMoldWorkshop = '';
+        updateMoldButtons();
     });
 
-    $('#moldWorkshopConfirm').click(() => {
-        const ws = $('#moldWorkshopSelect').val();
-        if (!ws) {
-            alert('请先选择车间 / Please select a workshop first');
-            return;
-        }
-        selectedMoldWorkshop = ws;
-        $('#moldWorkshopStep').hide();
-        $('#moldFunctionStep').show();
-    });
+    $('#moldWorkshopSelect').on('change', updateMoldButtons);
 
     let moldBaseUrl = siWebPage.indexOf('/dev') !== -1
         ? "https://script.google.com/a/macros/colpal.com/s/AKfycbzPkjt4dleuNMc6-GyhkxrK-KehT4rk37DvztwzaOBN/dev"
