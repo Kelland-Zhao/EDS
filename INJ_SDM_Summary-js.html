@@ -269,7 +269,7 @@
           renderHistory(historyRecords);
         })
         .withFailureHandler(error => { Swal.close(); showError(error.message || String(error), 'Failed to load history.'); })
-        .getINJSDMHistory($('#HistoryStartDate').val(), $('#HistoryEndDate').val(), userName, userEmail);
+        .getINJSDMHistory('', '', userName, userEmail);
     }
 
     $(document).on('click', '.add-item', function () {
@@ -312,7 +312,7 @@
 
     $('#CancelEdit').on('click', resetForm);
     $('#HistoryTab').on('shown.bs.tab', loadHistory);
-    $('#SearchHistory').on('click', loadHistory);
+
     $(document).on('click', '.view-report', function () {
       const report = historyRecords.find(x => x.reportId === $(this).data('id'));
       if (report) renderDetail(report);
