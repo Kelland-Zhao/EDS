@@ -117,14 +117,16 @@
                 '<button class="btn btn-sm btn-danger op-btn" data-act="return" data-id="' + escapeHtml(r.failureReportNumber) + '">退回<br>Return</button>';
             var reason = r.reviewStatus === '已退回' && r.returnReason
                 ? '<br><small class="text-danger">退回原因: ' + escapeHtml(r.returnReason) + '</small>' : '';
+            var reviewerDisplay = r.reviewer ? extractNameJs(r.reviewer) : '-';
             var tr = '<tr>' +
-                '<td>' + escapeHtml(r.failureReportNumber) + '</td>' +
-                '<td>' + escapeHtml(r.machineNo) + '</td>' +
+                '<td class="text-center">' + escapeHtml(r.failureReportNumber) + '</td>' +
+                '<td class="text-center">' + escapeHtml(r.machineNo) + '</td>' +
                 '<td style="max-width:240px;">' + escapeHtml(r.problemDescription) + '</td>' +
                 '<td class="text-center">' + escapeHtml(dispProc(r.process)) + '</td>' +
-                '<td>' + escapeHtml(extractNameJs(r.responsiblePerson)) + '</td>' +
+                '<td class="text-center">' + escapeHtml(extractNameJs(r.responsiblePerson)) + '</td>' +
                 '<td class="text-center">' + escapeHtml(r.submitDate) + '</td>' +
                 '<td class="text-center">' + statusBadge(r.reviewStatus) + reason + '</td>' +
+                '<td class="text-center">' + escapeHtml(reviewerDisplay) + '</td>' +
                 '<td class="text-center">' + ops + '</td>' +
                 '</tr>';
             tbody.append(tr);

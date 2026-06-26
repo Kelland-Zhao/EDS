@@ -745,6 +745,7 @@ function getPendingReviewReports(userEmail, userName) {
         responsiblePerson: respDisplay,
         submitDate: formatCellDate_(data[i][3]),
         reviewStatus: status,
+        reviewer: String(data[i][15] || '').trim(),
         returnReason: String(data[i][17] || '').trim(),
         content: String(data[i][10] || '')
       });
