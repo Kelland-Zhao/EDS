@@ -734,7 +734,7 @@ function getPendingReviewReports(userEmail, userName) {
       const respDisplay = String(data[i][11] || '').trim();
       const respName = extractName(respDisplay);
       let include = false;
-      if (perm.isAdmin && perm.adminProcess && normalizeProcessCanonical_(reportProcess) === perm.adminProcess) include = true;
+      if (perm.isAdmin) include = true;
       if (!include && perm.isSupervisor && respName && subordinateNames[respName]) include = true;
       if (!include) continue;
       reports.push({
