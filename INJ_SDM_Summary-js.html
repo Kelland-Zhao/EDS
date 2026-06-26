@@ -252,9 +252,9 @@
       const communicationList = report.communication.length ? `<ol>${report.communication.map(item => `<li>${$('<div>').text(item.description).html()} <span class="text-muted">（责任人：${item.owners.join('、')}）</span></li>`).join('')}</ol>` : '<div class="text-muted">无 / None</div>';
       $('#DetailBody').html(`
         <div class="bg-light rounded p-2"><strong>填报日期：</strong>${report.reportDate}　<strong>数据日期：</strong>${dataDateText(report)}<br><small class="text-muted">最后修改：${report.updatedAt || '-'}</small></div>
-        <div class="detail-block"><h6>大故障 / 大问题</h6>${issueList(report.major)}</div>
-        <div class="detail-block"><h6>今日遗留问题</h6>${issueList(report.outstanding)}</div>
-        <div class="detail-block"><h6>SDM / Team 沟通事项</h6>${communicationList}</div>`);
+        <div class="detail-block detail-major"><h6>大故障 / 大问题 <small class="text-muted" style="font-weight:400;">Major Failures / Major Issues</small></h6>${issueList(report.major)}</div>
+        <div class="detail-block detail-outstanding"><h6>今日遗留问题 <small class="text-muted" style="font-weight:400;">Outstanding Issues</small></h6>${issueList(report.outstanding)}</div>
+        <div class="detail-block detail-communication"><h6>SDM / Team 沟通事项 <small class="text-muted" style="font-weight:400;">SDM / Team Communication</small></h6>${communicationList}</div>`);
       bootstrap.Modal.getOrCreateInstance(document.getElementById('DetailModal')).show();
     }
 

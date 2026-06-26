@@ -6,11 +6,11 @@ description: 查看本地与 GAS 的差异并将代码推送到 Google Apps Scri
 
 按以下步骤将本地代码推送到 Google Apps Script (GAS)。
 
-1. 查看本地与 GAS 远端的文件差异，确认要推送的内容。
+<!-- 1. 查看本地与 GAS 远端的文件差异，确认要推送的内容。
 // turbo
 ```powershell
 clasp status
-```
+``` -->
 
 2. 推送代码到 GAS。
 ```powershell
