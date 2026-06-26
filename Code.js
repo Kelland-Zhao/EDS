@@ -501,6 +501,20 @@ function submitFailureReport(dataStr) {
       // 仅保存数据 + 置审核状态=主管审核中 + 清空退回原因；不写 J/I 列、不建跟进
       ws.getRange(rowIndex, 15).setValue('主管审核中'); // O: 审核状态
       ws.getRange(rowIndex, 18).setValue('');           // R: 清空退回原因
+      // 写入审核人（直线上级）
+      const supervisorEmail = getReportSupervisor_(operatorName);
+      if (supervisorEmail) {
+        const permWs2 = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+        const pv2 = permWs2.getDataRange().getValues();
+        let supervisorDisplay = '';
+        for (let si = 2; si < pv2.length; si++) {
+          if (String(pv2[si][9] || '').trim().toLowerCase() === supervisorEmail.toLowerCase()) {
+            supervisorDisplay = String(pv2[si][1] || '').trim() + '【' + supervisorEmail + '】';
+            break;
+          }
+        }
+        ws.getRange(rowIndex, 16).setValue(supervisorDisplay || supervisorEmail); // P: 审核人
+      }
       try {
         notifyReviewSubmission_(values[rowIndex - 1], processFromRow, responsibleDisplay);
       } catch (mailErr) {
