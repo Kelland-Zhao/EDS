@@ -11872,6 +11872,17 @@ function loadPMTasksByDate(dateStr) {
     const ss = SpreadsheetApp.openById('1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4');
     const ws = ss.getSheetByName('PM_Records');
     if (!ws) return [];
+    // Build name→SAPID map from userID
+    const userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    const nameToSap = {};
+    if (userWs) {
+      const userVals = userWs.getDataRange().getValues();
+      for (let i = 2; i < userVals.length; i++) {
+        const sapID = String(userVals[i][0] || '').trim();
+        const name = String(userVals[i][1] || '').trim();
+        if (name && sapID) nameToSap[name] = sapID;
+      }
+    }
     const data = ws.getDataRange().getValues();
     const tasks = [];
     for (let i = 1; i < data.length; i++) {
@@ -11902,8 +11913,10 @@ function loadPMTasksByDate(dateStr) {
         status: taskStatus,
         planStartDate: planDate || startDate,
         dueDate: planDate || startDate,
-        owners: people.split('/'),
+        owners: people.split('/').map(function (n) { return nameToSap[n.trim()] || n.trim(); }),
         collaborators: [],
+        process: process,
+        workshop: workshop,
         createdBy: 'PM Module',
         remark: 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '')
       });
