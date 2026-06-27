@@ -196,9 +196,9 @@ function applyProcessFilter() {
       if (filter === 'INJ' && (ws === 'TB1' || ws === 'TB2')) return true;
       // Handle pipe-separated multi-process
       if (proc && proc.indexOf('|') >= 0) {
-        return proc.split('|').indexOf(filter) >= 0;
+        return proc.split('|').some(function (p) { return processMatch(p, filter); });
       }
-      return proc === filter;
+      return processMatch(proc, filter);
     });
     todayTasks = todayTasks.filter(function (t) {
       return taskMatchesProcess(t, filter);
@@ -344,25 +344,27 @@ function loadProcessMap(callback) {
     .loadUserProcessMap();
 }
 
+function processMatch(taskProc, filter) {
+  // INJ = IM = 注塑
+  const pc = (taskProc || '').toUpperCase();
+  if (filter === 'INJ') return pc === 'INJ' || pc === 'IM';
+  return pc === filter;
+}
+
 function taskMatchesProcess(task, filter) {
   if (!filter) return true;
   // If task has its own process/workshop field (PM tasks), use it exclusively
   if (task.process || task.workshop) {
-    if (task.process && task.process.toUpperCase() === filter) return true;
+    if (task.process && processMatch(task.process, filter)) return true;
     if (filter === 'INJ' && task.workshop && (task.workshop === 'TB1' || task.workshop === 'TB2')) return true;
-    return false; // 有自身工序字段但不匹配 → 直接排除，不回退到人员查询
+    return false;
   }
   // Manual tasks without process: check owners via SAPID→process map
   const people = (task.owners || []).concat(task.collaborators || []);
   for (let i = 0; i < people.length; i++) {
     const pid = (people[i] || '').trim();
     if (!pid) continue;
-    const proc = (userProcessMap[pid] || '').toUpperCase();
-    if (proc && proc.indexOf('|') >= 0) {
-      if (proc.split('|').indexOf(filter) >= 0) return true;
-    } else if (proc === filter) {
-      return true;
-    }
+    if (processMatch(userProcessMap[pid], filter)) return true;
   }
   return false;
 }
