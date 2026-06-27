@@ -70,7 +70,7 @@ function initPage() {
       $('#taskOwner').select2({ data: data, placeholder: '选择负责人 / Select Owner', allowClear: true, width: '100%', dropdownParent: $('#taskDetailModal') });
       $('#taskCollaborators').select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%', dropdownParent: $('#taskDetailModal') });
     })
-    .loadUserListForSelect();
+    .loadTodayStaffForSelect(new Date().toISOString().split('T')[0]);
 
   // DataTable init
   taskTable = $('#taskTable').DataTable({
@@ -278,7 +278,7 @@ function openTaskModal(taskID) {
     $('#editTaskID').val('');
     $('#taskTitle').val('').prop('readonly', false);
     $('#taskDescription').val('').prop('readonly', false);
-    $('#taskType').val('临时').prop('disabled', false);
+    $('#taskType').val('保养').prop('disabled', false);
     $('#taskPriority').val('中').prop('disabled', false);
     $('#taskStatus').val('未开始').prop('disabled', true);
     $('#taskPlanStart').val(new Date().toISOString().split('T')[0]).prop('readonly', false);

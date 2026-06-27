@@ -139,6 +139,7 @@ function buildUrl(page) {
 }
 
 function loadUserList(callback) {
+  const date = currentDateStr || new Date().toISOString().split('T')[0];
   google.script.run
     .withSuccessHandler(function (result) {
       const users = JSON.parse(result || '[]');
@@ -149,7 +150,7 @@ function loadUserList(callback) {
       $('#taskCollaborators').empty().select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%' });
       if (callback) callback();
     })
-    .loadUserListForSelect();
+    .loadTodayStaffForSelect(date);
 }
 
 function loadDashboard() {
@@ -366,7 +367,7 @@ function openTaskModal(taskData) {
   $('#editTaskID').val('');
   $('#taskTitle').val('');
   $('#taskDescription').val('');
-  $('#taskType').val('临时');
+  $('#taskType').val('保养');
   $('#taskPriority').val('中');
   $('#taskPlanStart').val(currentDateStr);
   $('#taskDueDate').val('');

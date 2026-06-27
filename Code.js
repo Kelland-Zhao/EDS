@@ -11391,6 +11391,37 @@ function loadUserListForSelect() {
   }
 }
 
+function loadTodayStaffForSelect(dateStr) {
+  try {
+    // 优先从 IM 排班主数据读取当天在岗人员
+    const staffResult = JSON.parse(loadIMStaffByDate(dateStr));
+    const staff = staffResult.success ? staffResult.data : [];
+    const seen = {};
+    const users = [];
+    staff.forEach(function (s) {
+      const key = s.sapID || s.name;
+      if (key && !seen[key]) {
+        seen[key] = true;
+        users.push({ id: key, text: (s.name || key) + (s.workshop ? ' [' + s.workshop + ']' : '') });
+      }
+    });
+    // Fallback: DailyStaff table
+    if (users.length === 0) {
+      const dailyResult = JSON.parse(loadDailyStaffByDate(dateStr));
+      const dailyStaff = dailyResult.success ? dailyResult.data : [];
+      dailyStaff.forEach(function (s) {
+        if (s.sapID && !seen[s.sapID]) {
+          seen[s.sapID] = true;
+          users.push({ id: s.sapID, text: s.sapID + (s.shift ? ' [' + s.shift + ']' : '') });
+        }
+      });
+    }
+    return JSON.stringify(users);
+  } catch (e) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
 function loadUserProcessMap() {
   try {
     const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
