@@ -51,16 +51,46 @@
     .staff-card {
       display: flex;
       align-items: center;
-      padding: 8px 0;
+      padding: 6px 8px 6px 10px;
       border-bottom: 1px solid #f0f0f0;
-      gap: 10px;
+      border-left: 3px solid transparent;
+      gap: 8px;
       font-size: 13px;
+      transition: background .1s;
     }
     .staff-card:last-child { border-bottom: none; }
     .staff-card .staff-name { font-weight: 600; color: #333; min-width: 60px; }
-    .staff-card .staff-status { padding: 2px 8px; border-radius: 10px; font-size: 11px; }
     .staff-card .staff-role { color: #6c757d; font-size: 12px; }
-    .staff-card .staff-shift { color: #888; font-size: 11px; margin-left: auto; }
+    .staff-card .staff-shift { font-size: 11px; margin-left: auto; padding: 1px 0; }
+    /* 车间分组标题 */
+    .ws-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 4px 10px;
+      margin: 8px 0 2px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ws-group-title .ws-badge {
+      font-size: 10px;
+      padding: 1px 8px;
+      border-radius: 8px;
+      color: #fff;
+    }
+    .ws-tb1 .ws-group-title { background: #e7f1ff; color: #0d6efd; }
+    .ws-tb1 .ws-group-title .ws-badge { background: #0d6efd; }
+    .ws-tb2 .ws-group-title { background: #d1f2e0; color: #198754; }
+    .ws-tb2 .ws-group-title .ws-badge { background: #198754; }
+    /* 班次色标 */
+    .shift-morning .staff-card { border-left-color: #ffc107; background: #fffef5; }
+    .shift-afternoon .staff-card { border-left-color: #fd7e14; background: #fffaf5; }
+    .shift-night .staff-card { border-left-color: #6f42c1; background: #faf9ff; }
+    .shift-morning .staff-shift { color: #b8860b; font-weight: 600; }
+    .shift-afternoon .staff-shift { color: #c15100; font-weight: 600; }
+    .shift-night .staff-shift { color: #6f42c1; font-weight: 600; }
     .status-ongoing { background: #fff3cd; color: #856404; }
     .status-completed { background: #d4edda; color: #155724; }
     .status-pending { background: #e2e3e5; color: #383d41; }

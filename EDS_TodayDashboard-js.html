@@ -216,23 +216,64 @@ function applyProcessFilter() {
   else if (diffDays === 1) dateLabel += ' (明天)';
   $('#dateInfo').text(dateLabel);
 
-  // Staff list
+  // Staff list - grouped by workshop, color-coded by shift
   if (staff.length === 0) {
     $('#staffList').html('<div class="empty-state">暂无人员安排<br><span style="font-size:11px;">No staff assigned today</span><br><a class="btn btn-sm btn-outline-primary mt-2" style="font-size:11px;" onclick="window.open(buildUrl(\'EDS_DailyStaff\'))"><i class="bi bi-people-fill"></i> 去安排人员<br><span style="font-size:10px;">Go to Staff Arrangement</span></a></div>');
   } else {
-    let html = '';
-    staff.forEach(function (s) {
-      const statusText = s.attendanceStatus || '在岗';
-      const statusClass = statusText === '在岗' ? 'status-completed' :
-        (statusText === '请假' ? 'status-cancelled' :
-          (statusText === '外出' ? 'status-waiting' : 'status-pending'));
-      html += '<div class="staff-card">'
-        + '<span class="staff-name">' + (s.name || s.sapID || '--') + '</span>'
-        + '<span class="staff-status ' + statusClass + '">' + statusText + '</span>'
-        + '<span class="staff-role">' + (s.workRole || s.workshop || '') + '</span>'
-        + '<span class="staff-shift">' + (s.shift || '') + '</span>'
-        + '</div>';
+    // Group by workshop
+    const tb1Staff = staff.filter(function (s) { return (s.workshop || s.workRole || '').toUpperCase() === 'TB1'; });
+    const tb2Staff = staff.filter(function (s) { return (s.workshop || s.workRole || '').toUpperCase() === 'TB2'; });
+    const otherStaff = staff.filter(function (s) {
+      const ws = (s.workshop || s.workRole || '').toUpperCase();
+      return ws !== 'TB1' && ws !== 'TB2';
     });
+    // Shift sort order: 早班→中班→夜班
+    const shiftOrder = { '早班': 0, '中班': 1, '夜班': 2 };
+    function sortByShift(arr) {
+      arr.sort(function (a, b) {
+        return (shiftOrder[a.shift] !== undefined ? shiftOrder[a.shift] : 9)
+             - (shiftOrder[b.shift] !== undefined ? shiftOrder[b.shift] : 9);
+      });
+    }
+    sortByShift(tb1Staff); sortByShift(tb2Staff); sortByShift(otherStaff);
+
+    function shiftCSS(shift) {
+      if (shift === '早班') return 'shift-morning';
+      if (shift === '中班') return 'shift-afternoon';
+      if (shift === '夜班') return 'shift-night';
+      return '';
+    }
+    function renderStaffGroup(staffArr) {
+      let h = '';
+      staffArr.forEach(function (s) {
+        const sc = shiftCSS(s.shift);
+        h += '<div class="' + sc + '"><div class="staff-card">'
+          + '<span class="staff-name">' + (s.name || s.sapID || '--') + '</span>'
+          + '<span class="staff-role">' + (s.workRole || s.workshop || '') + '</span>'
+          + '<span class="staff-shift">' + (s.shift || '') + '</span>'
+          + '</div></div>';
+      });
+      return h;
+    }
+    let html = '';
+    const wsCount = (tb1Staff.length > 0 ? 1 : 0) + (tb2Staff.length > 0 ? 1 : 0) + (otherStaff.length > 0 ? 1 : 0);
+    if (tb1Staff.length > 0) {
+      html += '<div class="ws-tb1"><div class="ws-group-title"><span class="ws-badge">TB1</span> 注塑一线 / IM Line 1 <span style="margin-left:auto;font-weight:400;">' + tb1Staff.length + '人</span></div>';
+      html += renderStaffGroup(tb1Staff);
+      html += '</div>';
+    }
+    if (tb2Staff.length > 0) {
+      html += '<div class="ws-tb2"><div class="ws-group-title"><span class="ws-badge">TB2</span> 注塑二线 / IM Line 2 <span style="margin-left:auto;font-weight:400;">' + tb2Staff.length + '人</span></div>';
+      html += renderStaffGroup(tb2Staff);
+      html += '</div>';
+    }
+    if (otherStaff.length > 0) {
+      html += '<div class="ws-group-title">其他 / Other <span style="margin-left:auto;font-weight:400;">' + otherStaff.length + '人</span></div>';
+      html += renderStaffGroup(otherStaff);
+    }
+    if (wsCount > 1) {
+      html += '<div style="text-align:center;padding:6px 0;color:#888;font-size:11px;">合计 / Total: <strong>' + staff.length + '</strong> 人</div>';
+    }
     $('#staffList').html(html);
   }
 
