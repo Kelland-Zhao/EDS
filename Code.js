@@ -11890,8 +11890,9 @@ function loadPMTasksByDate(dateStr) {
       if (!pmNo) continue;
       // Map PM status to task status
       let taskStatus = '未开始';
-      if (status.indexOf('进行中') !== -1) taskStatus = '进行中';
-      else if (status.indexOf('已完成') !== -1) taskStatus = '已完成';
+      const s = status.toLowerCase();
+      if (s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1) taskStatus = '进行中';
+      else if (s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1) taskStatus = '已完成';
       tasks.push({
         taskID: pmNo,
         title: 'PM: ' + workcenter + (workshop ? ' [' + workshop + ']' : '') + ' - ' + people,
