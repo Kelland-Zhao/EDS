@@ -11844,6 +11844,29 @@ function loadIMStaffByDate(dateStr) {
   }
 }
 
+function normalizeDate_(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  // Handle string formats: "2026-1-5", "2026.01.05", "2026/01/05", "2026-01-05"
+  let s = String(val).trim();
+  // Remove time portion
+  const spaceIdx = s.indexOf(' ');
+  if (spaceIdx > 0) s = s.substring(0, spaceIdx);
+  // Split on common separators
+  const parts = s.split(/[.\-\/]/);
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    if (y > 2000 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return Utilities.formatString('%04d-%02d-%02d', y, m, d);
+    }
+  }
+  return s;
+}
+
 function loadPMTasksByDate(dateStr) {
   try {
     const ss = SpreadsheetApp.openById('1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4');
@@ -11852,22 +11875,8 @@ function loadPMTasksByDate(dateStr) {
     const data = ws.getDataRange().getValues();
     const tasks = [];
     for (let i = 1; i < data.length; i++) {
-      const planDateRaw = data[i][4]; // E: Plan PM Date
-      const startDateRaw = data[i][5]; // F: SatrtDate
-      let planDate = '';
-      if (planDateRaw instanceof Date) {
-        planDate = Utilities.formatDate(planDateRaw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else if (planDateRaw) {
-        const s = String(planDateRaw).trim();
-        planDate = s.length >= 10 ? s.substring(0, 10).replace(/\./g, '-') : s;
-      }
-      let startDate = '';
-      if (startDateRaw instanceof Date) {
-        startDate = Utilities.formatDate(startDateRaw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else if (startDateRaw) {
-        const s = String(startDateRaw).trim();
-        startDate = s.length >= 10 ? s.substring(0, 10).replace(/\./g, '-') : s;
-      }
+      const planDate = normalizeDate_(data[i][4]); // E: Plan PM Date
+      const startDate = normalizeDate_(data[i][5]); // F: SatrtDate
       // Match if plan date or start date equals requested date
       if (planDate !== dateStr && startDate !== dateStr) continue;
       const pmNo = String(data[i][0] || '').trim();
