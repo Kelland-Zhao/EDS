@@ -222,9 +222,6 @@ function applyProcessFilter() {
   } else {
     let html = '';
     staff.forEach(function (s) {
-      const statusClass = s.attendanceStatus === '在岗' ? 'status-completed' :
-        (s.attendanceStatus === '请假' ? 'status-cancelled' :
-          (s.attendanceStatus === '外出' ? 'status-waiting' : 'status-pending'));
       const statusText = s.attendanceStatus || '在岗';
       const statusClass = statusText === '在岗' ? 'status-completed' :
         (statusText === '请假' ? 'status-cancelled' :
