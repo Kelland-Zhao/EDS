@@ -106,6 +106,12 @@ $(document).ready(function () {
   // Save task
   $('#btnSaveTask').on('click', function () { saveTask(); });
 
+  // Staff column manage button
+  $('#btnStaffManage').on('click', function (e) {
+    e.preventDefault();
+    window.open(buildUrl('EDS_DailyStaff'));
+  });
+
   // Navigation buttons
   $('#btnDailyStaff').on('click', function () {
     window.open(buildUrl('EDS_DailyStaff'));
@@ -208,7 +214,7 @@ function applyProcessFilter() {
 
   // Staff list
   if (staff.length === 0) {
-    $('#staffList').html('<div class="empty-state">暂无人员安排<br><span style="font-size:11px;">No staff assigned today</span></div>');
+    $('#staffList').html('<div class="empty-state">暂无人员安排<br><span style="font-size:11px;">No staff assigned today</span><br><a class="btn btn-sm btn-outline-primary mt-2" style="font-size:11px;" onclick="window.open(buildUrl(\'EDS_DailyStaff\'))"><i class="bi bi-people-fill"></i> 去安排人员<br><span style="font-size:10px;">Go to Staff Arrangement</span></a></div>');
   } else {
     let html = '';
     staff.forEach(function (s) {
