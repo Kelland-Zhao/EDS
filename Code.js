@@ -11389,6 +11389,23 @@ function loadUserListForSelect() {
   }
 }
 
+function loadUserProcessMap() {
+  try {
+    const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return JSON.stringify({});
+    const values = ws.getDataRange().getValues();
+    const map = {};
+    for (let i = 2; i < values.length; i++) {
+      const sapID = String(values[i][0] || '').trim();
+      const process = String(values[i][14] || '').trim();
+      if (sapID) map[sapID] = process;
+    }
+    return JSON.stringify(map);
+  } catch (e) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
 function getAttendanceOptions() {
   return JSON.stringify(["在岗", "休息", "请假", "外出", "培训"]);
 }

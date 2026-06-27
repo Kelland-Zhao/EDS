@@ -17,6 +17,8 @@ let currentPermission = '';
 let currentSapID = '';
 let currentUserName = '';
 let currentDateStr = '';
+let currentProcessFilter = '';  // 工序筛选
+let cachedDashboardData = null; // 缓存数据用于前端筛选
 
 $(document).ready(function () {
   // Read session info
@@ -62,20 +64,17 @@ $(document).ready(function () {
       if (currentPermission) {
         sessionStorage.setItem('EDSTaskPermission', currentPermission);
       }
-      // Load user list for Select2
-      loadUserList(function () {
-        // Set date and load
-        $('#datePicker').val(currentDateStr);
-        currentDate = currentDateStr;
-        loadDashboard();
-      });
+      // Load user list + process map before first render
+      let loaded = 0;
+      function onBothLoaded() { loaded++; if (loaded >= 2) { $('#datePicker').val(currentDateStr); currentDate = currentDateStr; loadDashboard(); } }
+      loadUserList(onBothLoaded);
+      loadProcessMap(onBothLoaded);
     })
     .withFailureHandler(function () {
-      loadUserList(function () {
-        $('#datePicker').val(currentDateStr);
-        currentDate = currentDateStr;
-        loadDashboard();
-      });
+      let loaded = 0;
+      function onBothLoaded() { loaded++; if (loaded >= 2) { $('#datePicker').val(currentDateStr); currentDate = currentDateStr; loadDashboard(); } }
+      loadUserList(onBothLoaded);
+      loadProcessMap(onBothLoaded);
     })
     .checkEDSTaskPermission(name, '');
 
@@ -91,6 +90,14 @@ $(document).ready(function () {
       didOpen: function () { Swal.showLoading(); }
     });
     loadDashboard();
+  });
+
+  // Process filter
+  $('.pf-btn').on('click', function () {
+    $('.pf-btn').removeClass('active');
+    $(this).addClass('active');
+    currentProcessFilter = $(this).data('process') || '';
+    applyProcessFilter();
   });
 
   // FAB: New Task
@@ -160,9 +167,32 @@ function loadDashboard() {
 }
 
 function renderDashboard(data) {
-  const staff = data.staff || [];
-  const todayTasks = data.todayTasks || [];
-  const overdueTasks = data.overdueTasks || [];
+  // Cache full data for client-side process filtering
+  cachedDashboardData = data;
+  applyProcessFilter();
+}
+
+function applyProcessFilter() {
+  if (!cachedDashboardData) return;
+  const data = cachedDashboardData;
+  const filter = currentProcessFilter;
+  let staff = data.staff || [];
+  let todayTasks = data.todayTasks || [];
+  let overdueTasks = data.overdueTasks || [];
+
+  // Apply process filter
+  if (filter) {
+    staff = staff.filter(function (s) {
+      const proc = (userProcessMap[s.sapID] || '').toUpperCase();
+      return proc === filter;
+    });
+    todayTasks = todayTasks.filter(function (t) {
+      return taskMatchesProcess(t, filter);
+    });
+    overdueTasks = overdueTasks.filter(function (t) {
+      return taskMatchesProcess(t, filter);
+    });
+  }
 
   // Update date info
   const today = new Date().toISOString().split('T')[0];
@@ -239,6 +269,39 @@ function renderTaskCards(tasks) {
       + '</div></div>';
   });
   return html;
+}
+
+let userProcessMap = {};
+
+function loadProcessMap(callback) {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      userProcessMap = JSON.parse(result || '{}');
+      if (callback) callback();
+    })
+    .withFailureHandler(function () {
+      if (callback) callback();
+    })
+    .loadUserProcessMap();
+}
+
+function taskMatchesProcess(task, filter) {
+  if (!filter) return true;
+  // Check owner's process
+  if (task.owners && task.owners.length > 0) {
+    for (let i = 0; i < task.owners.length; i++) {
+      const proc = (userProcessMap[task.owners[i]] || '').toUpperCase();
+      if (proc === filter) return true;
+    }
+  }
+  // Check collaborators' process
+  if (task.collaborators && task.collaborators.length > 0) {
+    for (let i = 0; i < task.collaborators.length; i++) {
+      const proc = (userProcessMap[task.collaborators[i]] || '').toUpperCase();
+      if (proc === filter) return true;
+    }
+  }
+  return false;
 }
 
 function viewTask(taskID) {
