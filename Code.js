@@ -6,6 +6,19 @@ const userLogInformationId = "1ecEx7G_FX7DAJ_8cm1AxSaN2h95IVo8n-W4WMX-g1m4";
 const webIconUrl =
   "https://images.ctfassets.net/m3056igwnpsm/2QQOLoOlu2v9JFVVjTnsrz/8fea197464768353c908b0c2c9d0edb3/EDS.png";
 
+// ============================================================
+//  任务安排模块常量 / Task Arrangement Module Constants
+// ============================================================
+const TASK_SS_ID = "1UBg1Ake18cFp6gj0jKRX1Y9GJ0VL1pY5aXK-UoCeAY0";
+const TASK_DAILY_STAFF_SHEET = "DailyStaff";
+const TASK_TASKS_SHEET = "Tasks";
+const TASK_MEMBERS_SHEET = "TaskMembers";
+const TASK_TEMPLATES_SHEET = "DailyTemplates";
+const TASK_NOTIFICATIONS_SHEET = "TaskNotifications";
+const TASK_LOGS_SHEET = "TaskLogs";
+const TASK_CONFIG_SHEET = "TaskConfig";
+const TASK_PERMISSION_COL = 62; // Column BK (0-indexed)
+
 // Inspection2.0 统一记录表开关（紧急回滚设 false）
 var USE_UNIFIED_INSPECTION_SHEET = true;
 
@@ -130,6 +143,10 @@ function doGet(e) {
   Route.path("FailureReport_Review", loadFailureReport_Review);
   Route.path("ProjectTracking", loadProjectTracking);
   Route.path("INJ_SDM_Summary", loadINJSDMSummary);
+  Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
+  Route.path("EDS_DailyStaff", loadEDSDailyStaff);
+  Route.path("EDS_TaskList", loadEDSTaskList);
+  Route.path("EDS_MyTasks", loadEDSMyTasks);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
@@ -1260,6 +1277,55 @@ function loadINJSDMSummary() {
   let webPage = getReleaseWebPage();
   return render("INJ_SDM_Summary", { webPage: webPage })
     .setTitle("INJ SDM 问题汇总 | INJ SDM Issue Summary")
+    .setFaviconUrl(webIconUrl);
+}
+
+// 任务安排模块 load 函数 / Task Arrangement load functions
+function loadEDSTodayDashboard(webPage, id, name, process) {
+  let pageUrl = webPage || getReleaseWebPage();
+  return render("EDS_TodayDashboard", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("今日工作台 | Today's Dashboard")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadEDSDailyStaff(webPage, id, name, process) {
+  let pageUrl = webPage || getReleaseWebPage();
+  return render("EDS_DailyStaff", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("每日安排 | Daily Staff Arrangement")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadEDSTaskList(webPage, id, name, process) {
+  let pageUrl = webPage || getReleaseWebPage();
+  return render("EDS_TaskList", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("任务列表 | Task List")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadEDSMyTasks(webPage, id, name, process) {
+  let pageUrl = webPage || getReleaseWebPage();
+  return render("EDS_MyTasks", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("我的任务 | My Tasks")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -11155,6 +11221,736 @@ function getINJSCUsers_() {
     }
   }
   return users.sort(function (a, b) { return a.name.localeCompare(b.name, 'zh-CN'); });
+}
+
+// ============================================================
+//  任务安排模块 - 权限 / Task Arrangement - Permission
+// ============================================================
+
+function getEDSTaskPermission_(userName) {
+  const result = { permission: "", sapID: "", name: "", workshop: "", process: "", shift: "" };
+  try {
+    const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return result;
+    const values = ws.getDataRange().getValues();
+    const requestedName = String(userName || '').trim();
+    for (let i = 2; i < values.length; i++) {
+      const rowName = String(values[i][1] || '').trim();
+      if (rowName && rowName === requestedName) {
+        const perm = String(values[i][TASK_PERMISSION_COL] || '').trim();
+        if (perm) {
+          result.permission = perm;
+          result.sapID = String(values[i][0] || '').trim();
+          result.name = rowName;
+          result.workshop = String(values[i][13] || '').trim();
+          result.process = String(values[i][14] || '').trim();
+          result.shift = String(values[i][50] || '').trim(); // AY col = 班次
+          return result;
+        }
+      }
+    }
+    // Fallback: match by Session email
+    const activeEmail = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+    if (activeEmail && !result.permission) {
+      for (let i = 2; i < values.length; i++) {
+        const rowEmail = String(values[i][9] || '').trim().toLowerCase();
+        if (rowEmail === activeEmail) {
+          const perm = String(values[i][TASK_PERMISSION_COL] || '').trim();
+          if (perm) {
+            result.permission = perm;
+            result.sapID = String(values[i][0] || '').trim();
+            result.name = String(values[i][1] || '').trim();
+            result.workshop = String(values[i][13] || '').trim();
+            result.process = String(values[i][14] || '').trim();
+            result.shift = String(values[i][50] || '').trim();
+            return result;
+          }
+        }
+      }
+    }
+  } catch (e) { console.error('getEDSTaskPermission_ error: ' + e); }
+  return result;
+}
+
+function checkEDSTaskPermission(userName, userEmail) {
+  return JSON.stringify(getEDSTaskPermission_(userName));
+}
+
+// ============================================================
+//  任务安排模块 - ID 生成器 / Task Arrangement - ID Generators
+// ============================================================
+
+function generateTaskID_() {
+  const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd");
+  const lastRow = ws.getLastRow();
+  if (lastRow <= 1) return "TASK-" + today + "-0001";
+  const data = ws.getRange(2, 1, lastRow - 1, 1).getValues();
+  let maxSeq = 0;
+  const prefix = "TASK-" + today + "-";
+  for (let i = 0; i < data.length; i++) {
+    const id = String(data[i][0] || '');
+    if (id.indexOf(prefix) === 0) {
+      const seq = parseInt(id.substring(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return prefix + Utilities.formatString("%04d", maxSeq + 1);
+}
+
+function generateStaffID_() {
+  const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_DAILY_STAFF_SHEET);
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd");
+  const lastRow = ws.getLastRow();
+  if (lastRow <= 1) return "STAFF-" + today + "-0001";
+  const data = ws.getRange(2, 1, lastRow - 1, 1).getValues();
+  let maxSeq = 0;
+  const prefix = "STAFF-" + today + "-";
+  for (let i = 0; i < data.length; i++) {
+    const id = String(data[i][0] || '');
+    if (id.indexOf(prefix) === 0) {
+      const seq = parseInt(id.substring(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return prefix + Utilities.formatString("%04d", maxSeq + 1);
+}
+
+function generateTemplateID_() {
+  const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TEMPLATES_SHEET);
+  const lastRow = ws.getLastRow();
+  if (lastRow <= 1) return "TMPL-001";
+  const data = ws.getRange(2, 1, lastRow - 1, 1).getValues();
+  let maxSeq = 0;
+  for (let i = 0; i < data.length; i++) {
+    const id = String(data[i][0] || '');
+    if (id.indexOf("TMPL-") === 0) {
+      const seq = parseInt(id.substring(5), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return "TMPL-" + Utilities.formatString("%03d", maxSeq + 1);
+}
+
+function generateLogID_() {
+  const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_LOGS_SHEET);
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd");
+  const lastRow = ws.getLastRow();
+  if (lastRow <= 1) return "LOG-" + today + "-0001";
+  const data = ws.getRange(2, 1, lastRow - 1, 1).getValues();
+  let maxSeq = 0;
+  const prefix = "LOG-" + today + "-";
+  for (let i = 0; i < data.length; i++) {
+    const id = String(data[i][0] || '');
+    if (id.indexOf(prefix) === 0) {
+      const seq = parseInt(id.substring(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return prefix + Utilities.formatString("%04d", maxSeq + 1);
+}
+
+// ============================================================
+//  任务安排模块 - 日志 / Task Arrangement - Logging
+// ============================================================
+
+function writeTaskLog_(action, targetType, targetID, beforeJSON, afterJSON, operatorSAPID, operatorName) {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_LOGS_SHEET);
+    if (!ws) return;
+    const logID = generateLogID_();
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    ws.appendRow([logID, action, targetType, targetID, beforeJSON || '', afterJSON || '', operatorSAPID, operatorName, now]);
+  } catch (e) {
+    console.error('writeTaskLog_ error: ' + e);
+  }
+}
+
+// ============================================================
+//  任务安排模块 - 辅助函数 / Task Arrangement - Helpers
+// ============================================================
+
+function loadUserListForSelect() {
+  try {
+    const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return JSON.stringify([]);
+    const values = ws.getDataRange().getValues();
+    const users = [];
+    for (let i = 2; i < values.length; i++) {
+      const sapID = String(values[i][0] || '').trim();
+      const name = String(values[i][1] || '').trim();
+      if (sapID && name) {
+        users.push({ id: sapID, text: name + ' (' + sapID + ')' });
+      }
+    }
+    return JSON.stringify(users);
+  } catch (e) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
+function getAttendanceOptions() {
+  return JSON.stringify(["在岗", "休息", "请假", "外出", "培训"]);
+}
+
+function getWorkRoleOptions() {
+  return JSON.stringify(["设备", "模具", "SAP", "点检", "其他"]);
+}
+
+function getShiftOptions() {
+  return JSON.stringify(["白班", "中班", "夜班"]);
+}
+
+function loadTaskConfig() {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_CONFIG_SHEET);
+    if (!ws) return JSON.stringify({});
+    const data = ws.getDataRange().getValues();
+    const config = {};
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').trim();
+      if (key) config[key] = String(data[i][1] || '').trim();
+    }
+    return JSON.stringify(config);
+  } catch (e) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
+function loadTaskLogs(targetType, targetID) {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_LOGS_SHEET);
+    if (!ws) return JSON.stringify([]);
+    const data = ws.getDataRange().getValues();
+    const logs = [];
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][2] || '') === targetType && String(data[i][3] || '') === targetID) {
+        logs.push({
+          logID: data[i][0], action: data[i][1], targetType: data[i][2],
+          targetID: data[i][3], beforeValue: data[i][4], afterValue: data[i][5],
+          operatorSAPID: data[i][6], operatorName: data[i][7], createdAt: data[i][8]
+        });
+      }
+    }
+    return JSON.stringify(logs);
+  } catch (e) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
+// ============================================================
+//  任务安排模块 - 人员排班 CRUD / Task Arrangement - Staff CRUD
+// ============================================================
+
+function loadDailyStaffByDate(dateStr) {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_DAILY_STAFF_SHEET);
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    const data = ws.getDataRange().getValues();
+    const result = [];
+    for (let i = 1; i < data.length; i++) {
+      const rowDate = data[i][1] instanceof Date
+        ? Utilities.formatDate(data[i][1], Session.getScriptTimeZone(), "yyyy-MM-dd")
+        : String(data[i][1] || '');
+      if (rowDate === dateStr) {
+        result.push({
+          staffID: String(data[i][0] || ''),
+          date: rowDate,
+          sapID: String(data[i][2] || ''),
+          attendanceStatus: String(data[i][3] || ''),
+          workRole: String(data[i][4] || ''),
+          shift: String(data[i][5] || ''),
+          remark: String(data[i][6] || '')
+        });
+      }
+    }
+    return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function copyStaffFromYesterday(today, operatorSAPID, operatorName) {
+  try {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = Utilities.formatDate(yesterday, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_DAILY_STAFF_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: 'Sheet not found' });
+    const data = ws.getDataRange().getValues();
+    const yesterdayStaff = [];
+    for (let i = 1; i < data.length; i++) {
+      const rowDate = data[i][1] instanceof Date
+        ? Utilities.formatDate(data[i][1], Session.getScriptTimeZone(), "yyyy-MM-dd")
+        : String(data[i][1] || '');
+      if (rowDate === yesterdayStr) {
+        yesterdayStaff.push({
+          sapID: String(data[i][2] || ''),
+          attendanceStatus: String(data[i][3] || ''),
+          workRole: String(data[i][4] || ''),
+          shift: String(data[i][5] || ''),
+          remark: String(data[i][6] || '')
+        });
+      }
+    }
+    if (yesterdayStaff.length === 0) {
+      return JSON.stringify({ success: false, message: '昨日无人员安排数据 / No staff data from yesterday' });
+    }
+    // Delete existing today rows
+    deleteStaffRowsByDate_(ws, data, today);
+    // Insert new rows
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    yesterdayStaff.forEach(function (s) {
+      const staffID = generateStaffID_();
+      ws.appendRow([staffID, today, s.sapID, s.attendanceStatus, s.workRole, s.shift, s.remark, now, operatorSAPID, now, operatorSAPID]);
+    });
+    writeTaskLog_('copyFromYesterday', 'DailyStaff', today, yesterdayStr + ' (' + yesterdayStaff.length + ' rows)', today + ' (' + yesterdayStaff.length + ' rows)', operatorSAPID, operatorName);
+    return JSON.stringify({ success: true, message: '已从昨日复制 ' + yesterdayStaff.length + ' 人 / Copied ' + yesterdayStaff.length + ' staff' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function deleteStaffRowsByDate_(ws, allData, dateStr) {
+  const rowsToDelete = [];
+  for (let i = allData.length - 1; i >= 1; i--) {
+    const rowDate = allData[i][1] instanceof Date
+      ? Utilities.formatDate(allData[i][1], Session.getScriptTimeZone(), "yyyy-MM-dd")
+      : String(allData[i][1] || '');
+    if (rowDate === dateStr) {
+      rowsToDelete.push(i + 1);
+    }
+  }
+  // Delete from bottom to top
+  rowsToDelete.forEach(function (r) { ws.deleteRow(r); });
+}
+
+function applyDailyStaffTemplate(today, templateID, operatorSAPID, operatorName) {
+  try {
+    const templateWs = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TEMPLATES_SHEET);
+    if (!templateWs) return JSON.stringify({ success: false, message: 'Templates sheet not found' });
+    const templateData = templateWs.getDataRange().getValues();
+    const templateRows = [];
+    for (let i = 1; i < templateData.length; i++) {
+      if (String(templateData[i][1] || '') === templateID) {
+        templateRows.push({
+          sapID: String(templateData[i][2] || ''),
+          attendanceStatus: String(templateData[i][3] || ''),
+          workRole: String(templateData[i][4] || ''),
+          shift: String(templateData[i][5] || ''),
+          sortOrder: parseInt(templateData[i][6]) || 0
+        });
+      }
+    }
+    if (templateRows.length === 0) {
+      return JSON.stringify({ success: false, message: '模板无数据 / Template has no data' });
+    }
+    // Sort by SortOrder
+    templateRows.sort(function (a, b) { return a.sortOrder - b.sortOrder; });
+    // Delete existing today rows
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_DAILY_STAFF_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: 'DailyStaff sheet not found' });
+    const data = ws.getDataRange().getValues();
+    deleteStaffRowsByDate_(ws, data, today);
+    // Insert new rows
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    templateRows.forEach(function (s) {
+      const staffID = generateStaffID_();
+      ws.appendRow([staffID, today, s.sapID, s.attendanceStatus, s.workRole, s.shift, '', now, operatorSAPID, now, operatorSAPID]);
+    });
+    writeTaskLog_('applyTemplate', 'DailyStaff', today, 'template:' + templateID, today + ' (' + templateRows.length + ' rows)', operatorSAPID, operatorName);
+    return JSON.stringify({ success: true, message: '已从模板生成 ' + templateRows.length + ' 人 / Generated ' + templateRows.length + ' staff' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function saveDailyStaff(staffJSON, dateStr, operatorSAPID, operatorName) {
+  try {
+    const staffList = typeof staffJSON === 'string' ? JSON.parse(staffJSON) : staffJSON;
+    if (!Array.isArray(staffList) || staffList.length === 0) {
+      return JSON.stringify({ success: false, message: '无数据 / No data' });
+    }
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_DAILY_STAFF_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: 'DailyStaff sheet not found' });
+    const data = ws.getDataRange().getValues();
+    deleteStaffRowsByDate_(ws, data, dateStr);
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    staffList.forEach(function (s) {
+      const staffID = s.staffID || generateStaffID_();
+      ws.appendRow([staffID, dateStr, s.sapID, s.attendanceStatus, s.workRole, s.shift, s.remark || '', now, operatorSAPID, now, operatorSAPID]);
+    });
+    writeTaskLog_('saveDailyStaff', 'DailyStaff', dateStr, '', JSON.stringify(staffList).substring(0, 500), operatorSAPID, operatorName);
+    return JSON.stringify({ success: true, message: '已保存 ' + staffList.length + ' 人 / Saved ' + staffList.length + ' staff' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function loadDailyTemplates() {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TEMPLATES_SHEET);
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    const data = ws.getDataRange().getValues();
+    const templates = {};
+    for (let i = 1; i < data.length; i++) {
+      const templateID = String(data[i][1] || '').trim();
+      const templateName = String(data[i][2] || '').trim();
+      const sapID = String(data[i][3] || '').trim();
+      const active = String(data[i][7] || '').trim();
+      if (templateID && templateName && active === 'Y') {
+        if (!templates[templateID]) {
+          templates[templateID] = {
+            templateID: templateID,
+            templateName: templateName,
+            staff: []
+          };
+        }
+        if (sapID) {
+          templates[templateID].staff.push({
+            sapID: sapID,
+            attendanceStatus: String(data[i][4] || ''),
+            workRole: String(data[i][5] || ''),
+            shift: String(data[i][6] || ''),
+            sortOrder: parseInt(data[i][6]) || 0
+          });
+        }
+      }
+    }
+    return JSON.stringify({ success: true, data: Object.values(templates) });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function saveDailyTemplate(templateJSON) {
+  try {
+    const tmpl = typeof templateJSON === 'string' ? JSON.parse(templateJSON) : templateJSON;
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TEMPLATES_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: 'Templates sheet not found' });
+    const templateID = tmpl.templateID || generateTemplateID_();
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    // If updating existing, delete old rows
+    if (tmpl.templateID) {
+      const data = ws.getDataRange().getValues();
+      for (let i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][1] || '') === templateID) {
+          ws.deleteRow(i + 1);
+        }
+      }
+    }
+    (tmpl.staff || []).forEach(function (s, idx) {
+      ws.appendRow([templateID, tmpl.templateName || '', s.sapID || '', s.attendanceStatus || '在岗', s.workRole || '', s.shift || '白班', idx + 1, 'Y']);
+    });
+    return JSON.stringify({ success: true, templateID: templateID, message: '模板已保存 / Template saved' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// ============================================================
+//  任务安排模块 - 任务 CRUD / Task Arrangement - Task CRUD
+// ============================================================
+
+function loadTasks(filterJSON) {
+  try {
+    const filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+    const tasksWs = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
+    const membersWs = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_MEMBERS_SHEET);
+    if (!tasksWs) return JSON.stringify({ success: true, data: [] });
+    const taskData = tasksWs.getDataRange().getValues();
+    const memberData = membersWs ? membersWs.getDataRange().getValues() : [];
+    // Build member lookup: TaskID -> { owners: [...], collaborators: [...] }
+    const memberMap = {};
+    for (let i = 1; i < memberData.length; i++) {
+      const taskID = String(memberData[i][1] || '').trim();
+      if (!taskID) continue;
+      if (!memberMap[taskID]) memberMap[taskID] = { owners: [], collaborators: [] };
+      const sapID = String(memberData[i][2] || '').trim();
+      const role = String(memberData[i][3] || '').trim();
+      if (role === 'owner') {
+        memberMap[taskID].owners.push(sapID);
+      } else if (role === 'collaborator') {
+        memberMap[taskID].collaborators.push(sapID);
+      }
+    }
+    const result = [];
+    for (let i = 1; i < taskData.length; i++) {
+      const taskID = String(taskData[i][0] || '').trim();
+      if (!taskID) continue;
+      const status = String(taskData[i][5] || '').trim();
+      const dueDateRaw = taskData[i][7];
+      const dueDate = dueDateRaw instanceof Date
+        ? Utilities.formatDate(dueDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd")
+        : String(dueDateRaw || '');
+      // Apply filters
+      if (filter.status && status !== filter.status) continue;
+      if (filter.search) {
+        const title = String(taskData[i][1] || '').toLowerCase();
+        const desc = String(taskData[i][2] || '').toLowerCase();
+        const q = filter.search.toLowerCase();
+        if (title.indexOf(q) === -1 && desc.indexOf(q) === -1 && taskID.toLowerCase().indexOf(q) === -1) continue;
+      }
+      if (filter.dateFrom && dueDate && dueDate < filter.dateFrom) continue;
+      if (filter.dateTo && dueDate && dueDate > filter.dateTo) continue;
+      // Owner filter
+      if (filter.ownerSAPID) {
+        const mems = memberMap[taskID];
+        const allMembers = (mems ? mems.owners.concat(mems.collaborators) : []);
+        if (allMembers.indexOf(filter.ownerSAPID) === -1) continue;
+      }
+      const mems = memberMap[taskID] || { owners: [], collaborators: [] };
+      result.push({
+        taskID: taskID,
+        title: String(taskData[i][1] || ''),
+        description: String(taskData[i][2] || ''),
+        taskType: String(taskData[i][3] || ''),
+        priority: String(taskData[i][4] || ''),
+        status: status,
+        planStartDate: taskData[i][6] instanceof Date
+          ? Utilities.formatDate(taskData[i][6], Session.getScriptTimeZone(), "yyyy-MM-dd")
+          : String(taskData[i][6] || ''),
+        dueDate: dueDate,
+        completedAt: taskData[i][8] instanceof Date
+          ? Utilities.formatDate(taskData[i][8], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")
+          : String(taskData[i][8] || ''),
+        createdBy: String(taskData[i][9] || ''),
+        closedBy: String(taskData[i][10] || ''),
+        remark: String(taskData[i][11] || ''),
+        owners: mems.owners,
+        collaborators: mems.collaborators,
+        createdAt: String(taskData[i][12] || ''),
+        updatedAt: String(taskData[i][13] || '')
+      });
+    }
+    // Sort by priority (高 first) then due date
+    const priorityOrder = { '高': 0, '中': 1, '低': 2 };
+    result.sort(function (a, b) {
+      const pa = priorityOrder[a.priority] !== undefined ? priorityOrder[a.priority] : 3;
+      const pb = priorityOrder[b.priority] !== undefined ? priorityOrder[b.priority] : 3;
+      if (pa !== pb) return pa - pb;
+      return (a.dueDate || '').localeCompare(b.dueDate || '');
+    });
+    return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function loadTodayDashboardData(date, sapID) {
+  try {
+    // Load staff
+    const staffResult = JSON.parse(loadDailyStaffByDate(date));
+    // Load all tasks (not cancelled)
+    const tasksData = JSON.parse(loadTasks(JSON.stringify({})));
+    const allTasks = tasksData.success ? tasksData.data : [];
+    // Today tasks: status != 已完成/已取消 AND (planStartDate <= today OR created today)
+    const todayTasks = allTasks.filter(function (t) {
+      if (t.status === '已完成' || t.status === '已取消') return false;
+      if (t.planStartDate <= date && t.dueDate >= date) return true;
+      return false;
+    });
+    // Overdue tasks: dueDate < today AND status != 已完成/已取消
+    const overdueTasks = allTasks.filter(function (t) {
+      if (t.status === '已完成' || t.status === '已取消') return false;
+      return t.dueDate && t.dueDate < date;
+    });
+    // My tasks: owner or collaborator, not completed/cancelled
+    const myTasks = allTasks.filter(function (t) {
+      if (t.status === '已完成' || t.status === '已取消') return false;
+      return t.owners.indexOf(sapID) !== -1 || t.collaborators.indexOf(sapID) !== -1;
+    });
+    return JSON.stringify({
+      success: true,
+      data: {
+        staff: staffResult.success ? staffResult.data : [],
+        todayTasks: todayTasks,
+        overdueTasks: overdueTasks,
+        myTasks: myTasks
+      }
+    });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function loadMyTasks(sapID) {
+  try {
+    const tasksData = JSON.parse(loadTasks(JSON.stringify({})));
+    const allTasks = tasksData.success ? tasksData.data : [];
+    const ownerTasks = allTasks.filter(function (t) {
+      return t.owners.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
+    });
+    const collaboratorTasks = allTasks.filter(function (t) {
+      return t.collaborators.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
+    });
+    return JSON.stringify({
+      success: true,
+      data: { ownerTasks: ownerTasks, collaboratorTasks: collaboratorTasks }
+    });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function createTask(taskJSON, membersJSON, operatorSAPID, operatorName) {
+  try {
+    const task = typeof taskJSON === 'string' ? JSON.parse(taskJSON) : taskJSON;
+    const members = typeof membersJSON === 'string' ? JSON.parse(membersJSON) : (membersJSON || []);
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: 'Tasks sheet not found' });
+    const taskID = generateTaskID_();
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    ws.appendRow([
+      taskID,
+      task.title || '',
+      task.description || '',
+      task.taskType || '临时',
+      task.priority || '中',
+      task.status || '未开始',
+      task.planStartDate || '',
+      task.dueDate || '',
+      '',
+      operatorSAPID,
+      '',
+      task.remark || '',
+      now,
+      now
+    ]);
+    // Save task members
+    saveTaskMembers_(taskID, members, operatorSAPID);
+    writeTaskLog_('createTask', 'Task', taskID, '', JSON.stringify(task).substring(0, 500), operatorSAPID, operatorName);
+    return JSON.stringify({ success: true, taskID: taskID, message: '任务已创建 / Task created' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function saveTaskMembers_(taskID, members, operatorSAPID) {
+  const membersWs = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_MEMBERS_SHEET);
+  if (!membersWs) return;
+  // Delete existing members for this task
+  const data = membersWs.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][1] || '') === taskID) {
+      membersWs.deleteRow(i + 1);
+    }
+  }
+  // Insert new members
+  const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  members.forEach(function (m) {
+    const memberID = Utilities.getUuid();
+    membersWs.appendRow([memberID, taskID, m.sapID || m.id || '', m.memberRole || m.role || 'collaborator', 'Y', now, operatorSAPID]);
+  });
+}
+
+function updateTask(taskJSON, operatorSAPID, operatorName) {
+  try {
+    const task = typeof taskJSON === 'string' ? JSON.parse(taskJSON) : taskJSON;
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: 'Tasks sheet not found' });
+    const data = ws.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === task.taskID) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) return JSON.stringify({ success: false, message: '任务未找到 / Task not found' });
+    const beforeJSON = JSON.stringify({
+      title: String(data[rowIndex - 1][1] || ''),
+      description: String(data[rowIndex - 1][2] || ''),
+      taskType: String(data[rowIndex - 1][3] || ''),
+      priority: String(data[rowIndex - 1][4] || ''),
+      status: String(data[rowIndex - 1][5] || ''),
+      planStartDate: String(data[rowIndex - 1][6] || ''),
+      dueDate: String(data[rowIndex - 1][7] || ''),
+      remark: String(data[rowIndex - 1][11] || '')
+    });
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    ws.getRange(rowIndex, 2).setValue(task.title || data[rowIndex - 1][1]);
+    ws.getRange(rowIndex, 3).setValue(task.description !== undefined ? task.description : data[rowIndex - 1][2]);
+    ws.getRange(rowIndex, 4).setValue(task.taskType || data[rowIndex - 1][3]);
+    ws.getRange(rowIndex, 5).setValue(task.priority || data[rowIndex - 1][4]);
+    ws.getRange(rowIndex, 7).setValue(task.planStartDate || data[rowIndex - 1][6]);
+    ws.getRange(rowIndex, 8).setValue(task.dueDate || data[rowIndex - 1][7]);
+    ws.getRange(rowIndex, 12).setValue(task.remark !== undefined ? task.remark : data[rowIndex - 1][11]);
+    ws.getRange(rowIndex, 14).setValue(now);
+    writeTaskLog_('updateTask', 'Task', task.taskID, beforeJSON, JSON.stringify(task).substring(0, 500), operatorSAPID, operatorName);
+    return JSON.stringify({ success: true, message: '任务已更新 / Task updated' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function updateTaskStatus(taskID, newStatus, operatorSAPID, operatorName) {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: 'Tasks sheet not found' });
+    const data = ws.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === taskID) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) return JSON.stringify({ success: false, message: '任务未找到 / Task not found' });
+    const oldStatus = String(data[rowIndex - 1][5] || '');
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    ws.getRange(rowIndex, 6).setValue(newStatus);
+    ws.getRange(rowIndex, 14).setValue(now);
+    if (newStatus === '已完成') {
+      ws.getRange(rowIndex, 9).setValue(now);
+    }
+    writeTaskLog_('updateStatus', 'Task', taskID, oldStatus, newStatus, operatorSAPID, operatorName);
+    return JSON.stringify({ success: true, message: '状态已更新 / Status updated' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function closeTask(taskID, operatorSAPID, operatorName) {
+  return updateTaskStatus(taskID, '已完成', operatorSAPID, operatorName);
+}
+
+function cancelTask(taskID, operatorSAPID, operatorName) {
+  return updateTaskStatus(taskID, '已取消', operatorSAPID, operatorName);
+}
+
+function loadTaskMembers(taskID) {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_MEMBERS_SHEET);
+    if (!ws) return JSON.stringify([]);
+    const data = ws.getDataRange().getValues();
+    const members = [];
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][1] || '') === taskID) {
+        members.push({
+          memberID: String(data[i][0] || ''),
+          taskID: String(data[i][1] || ''),
+          sapID: String(data[i][2] || ''),
+          memberRole: String(data[i][3] || ''),
+          canUpdate: String(data[i][4] || '')
+        });
+      }
+    }
+    return JSON.stringify(members);
+  } catch (e) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
+function saveTaskMembers(taskID, membersJSON, operatorSAPID, operatorName) {
+  try {
+    const members = typeof membersJSON === 'string' ? JSON.parse(membersJSON) : membersJSON;
+    saveTaskMembers_(taskID, members, operatorSAPID);
+    writeTaskLog_('updateMembers', 'TaskMembers', taskID, '', JSON.stringify(members).substring(0, 500), operatorSAPID, operatorName);
+    return JSON.stringify({ success: true, message: '成员已更新 / Members updated' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
 }
 
 function formatINJSDMDate_(value) {

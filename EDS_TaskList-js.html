@@ -1,0 +1,441 @@
+<script>
+// ============================================================
+//  任务列表 JS / Task List JS
+// ============================================================
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+const PRIORITY_CLASS = { '高': 'badge bg-danger', '中': 'badge bg-warning text-dark', '低': 'badge bg-secondary' };
+const STATUS_CLASS = { '未开始': 'status-pending', '进行中': 'status-ongoing', '等待中': 'status-waiting', '已完成': 'status-completed', '已取消': 'status-cancelled' };
+
+let taskTable = null;
+let currentPermission = '';
+let currentSapID = '';
+let currentUserName = '';
+
+$(document).ready(function () {
+  const name = sessionStorage.getItem('Name') || '';
+  currentPermission = sessionStorage.getItem('EDSTaskPermission') || '';
+  currentUserName = name;
+  $('#name').text(name);
+
+  // User badge
+  if (currentPermission) {
+    const labels = { 'admin': '管理员 / Admin', 'supervisor': '主管 / Supervisor', 'employee': '员工 / Employee' };
+    const cls = currentPermission === 'admin' ? 'bg-danger' : (currentPermission === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary');
+    $('#userLevelBadge').removeClass('bg-secondary').addClass(cls).text(labels[currentPermission] || '');
+  }
+
+  google.script.run
+    .withSuccessHandler(function (result) {
+      const perm = JSON.parse(result || '{}');
+      currentSapID = perm.sapID || '';
+      currentPermission = perm.permission || currentPermission;
+      if (currentPermission) sessionStorage.setItem('EDSTaskPermission', currentPermission);
+      initPage();
+    })
+    .checkEDSTaskPermission(name, '');
+
+  // Back to dashboard
+  $('#btnBackDashboard').on('click', function (e) {
+    e.preventDefault();
+    window.open(buildUrl('EDS_TodayDashboard'));
+  });
+});
+
+function buildUrl(page) {
+  const siWebPage = sessionStorage.getItem('siWebPage') || '';
+  return siWebPage + '?v=' + page
+    + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || '')
+    + '&Name=' + encodeURIComponent(currentUserName)
+    + '&Process=' + encodeURIComponent(sessionStorage.getItem('Process') || '')
+    + '&Workshop=' + encodeURIComponent(sessionStorage.getItem('Workshop') || '');
+}
+
+function initPage() {
+  // Initialize Select2 for owner/collaborators
+  google.script.run
+    .withSuccessHandler(function (result) {
+      const users = JSON.parse(result || '[]');
+      const data = Array.isArray(users) ? users.map(function (u) { return { id: u.id, text: u.text }; }) : [];
+      $('#taskOwner').select2({ data: data, placeholder: '选择负责人 / Select Owner', allowClear: true, width: '100%', dropdownParent: $('#taskDetailModal') });
+      $('#taskCollaborators').select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%', dropdownParent: $('#taskDetailModal') });
+    })
+    .loadUserListForSelect();
+
+  // DataTable init
+  taskTable = $('#taskTable').DataTable({
+    pageLength: 25,
+    order: [[6, 'asc']], // due date
+    columns: [
+      { data: 'taskID', width: '100px' },
+      { data: 'priority', render: function (d) { return '<span class="' + (PRIORITY_CLASS[d] || '') + '" style="font-size:10px;">' + (d || '') + '</span>'; } },
+      { data: 'status', render: function (d) { return '<span class="' + (STATUS_CLASS[d] || '') + '">' + (d || '') + '</span>'; } },
+      { data: 'title' },
+      { data: 'taskType' },
+      { data: 'planStartDate' },
+      { data: 'dueDate' },
+      { data: 'owners', render: function (d) { return (d || []).join(', '); } },
+      { data: 'collaborators', render: function (d) { return (d || []).join(', '); } },
+      { data: null, orderable: false, width: '160px', render: function (d, type, row) {
+        const btnStyle = 'font-size:0.7rem;width:70px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;';
+        let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
+        html += '<button class="btn btn-sm btn-outline-primary edit-task-btn" data-tid="' + row.taskID + '" style="' + btnStyle + '"><i class="bi bi-eye"></i> 查看<br>View</button>';
+        if (row.status !== '已完成' && row.status !== '已取消') {
+          if (currentPermission === 'admin' || currentPermission === 'supervisor' ||
+              row.owners.indexOf(currentSapID) !== -1 || row.collaborators.indexOf(currentSapID) !== -1) {
+            html += '<select class="form-select form-select-sm status-quick" data-tid="' + row.taskID + '" style="font-size:10px;width:70px;padding:2px;">';
+            html += '<option value="">变更状态...</option>';
+            html += '<option value="进行中">进行中</option>';
+            html += '<option value="等待中">等待中</option>';
+            html += '<option value="已完成">已完成</option>';
+            if (currentPermission === 'admin' || currentPermission === 'supervisor') {
+              html += '<option value="已取消">已取消</option>';
+            }
+            html += '</select>';
+          }
+        }
+        html += '</div>';
+        return html;
+      }}
+    ],
+    language: {
+      emptyTable: '暂无任务 / No tasks',
+      search: '搜索:',
+      lengthMenu: '每页 _MENU_ 条',
+      info: '第 _START_ - _END_ 条，共 _TOTAL_ 条'
+    }
+  });
+
+  // Load data
+  loadTaskData();
+
+  // Filter
+  $('#btnFilter').on('click', function () { loadTaskData(); });
+  $('#filterSearch').on('keypress', function (e) { if (e.which === 13) loadTaskData(); });
+
+  // New task
+  $('#btnNewTask').on('click', function () { openTaskModal(); });
+
+  // Save task
+  $('#btnSaveTask').on('click', function () { saveTaskFromModal(); });
+
+  // Complete task
+  $('#btnCompleteTask').on('click', function () {
+    const tid = $('#editTaskID').val();
+    if (!tid) return;
+    Swal.fire({
+      title: swalTitle('确认', 'Confirm'),
+      html: swalHtml('确认完成任务？', 'Confirm to complete this task?'),
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '确认 / Confirm',
+      cancelButtonText: '取消 / Cancel'
+    }).then(function (r) {
+      if (!r.isConfirmed) return;
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          Swal.close();
+          const r2 = JSON.parse(res || '{}');
+          if (r2.success) {
+            Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
+            $('#taskDetailModal').modal('hide');
+            loadTaskData();
+          } else {
+            Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
+          }
+        })
+        .closeTask(tid, currentSapID, currentUserName);
+    });
+  });
+
+  // Cancel task
+  $('#btnCancelTask').on('click', function () {
+    const tid = $('#editTaskID').val();
+    if (!tid) return;
+    Swal.fire({
+      title: swalTitle('警告', 'Warning'),
+      html: swalHtml('确认取消此任务？此操作不可恢复。', 'Cancel this task? This cannot be undone.'),
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '确认取消 / Confirm Cancel',
+      cancelButtonText: '返回 / Back'
+    }).then(function (r) {
+      if (!r.isConfirmed) return;
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          Swal.close();
+          const r2 = JSON.parse(res || '{}');
+          if (r2.success) {
+            Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
+            $('#taskDetailModal').modal('hide');
+            loadTaskData();
+          } else {
+            Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
+          }
+        })
+        .cancelTask(tid, currentSapID, currentUserName);
+    });
+  });
+
+  // Edit task button
+  $(document).on('click', '.edit-task-btn', function () {
+    const tid = $(this).data('tid');
+    openTaskModal(tid);
+  });
+
+  // Quick status change
+  $(document).on('change', '.status-quick', function () {
+    const tid = $(this).data('tid');
+    const newStatus = $(this).val();
+    if (!newStatus) return;
+    if (newStatus === '已完成' || newStatus === '已取消') {
+      const action = newStatus === '已完成' ? '完成' : '取消';
+      Swal.fire({
+        title: swalTitle('确认', 'Confirm'),
+        html: swalHtml('确认' + action + '此任务？', 'Confirm to ' + (newStatus === '已完成' ? 'complete' : 'cancel') + '?'),
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '确认 / Confirm',
+        cancelButtonText: '取消 / Cancel'
+      }).then(function (r) {
+        if (!r.isConfirmed) { loadTaskData(); return; }
+        doUpdateStatus(tid, newStatus);
+      });
+    } else {
+      doUpdateStatus(tid, newStatus);
+    }
+  });
+
+  // Check for taskID URL param (from dashboard click)
+  const urlParams = new URLSearchParams(window.location.search);
+  const taskIDParam = urlParams.get('taskID');
+  if (taskIDParam) {
+    setTimeout(function () { openTaskModal(taskIDParam); }, 500);
+  }
+});
+
+function showLoading() {
+  Swal.fire({
+    title: swalTitle('处理中...', 'Processing...'),
+    html: swalHtml('请稍候。', 'Please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+}
+
+function loadTaskData() {
+  const filter = {
+    status: $('#filterStatus').val() || undefined,
+    search: $('#filterSearch').val().trim() || undefined
+  };
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (result) {
+      Swal.close();
+      const res = JSON.parse(result || '{}');
+      if (res.success && Array.isArray(res.data)) {
+        taskTable.clear().rows.add(res.data).draw();
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(res.message || '', '') });
+      }
+    })
+    .withFailureHandler(function (error) {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml('网络错误', 'Network error') });
+    })
+    .loadTasks(JSON.stringify(filter));
+}
+
+function openTaskModal(taskID) {
+  if (taskID) {
+    // Load existing task data
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function (result) {
+        Swal.close();
+        const res = JSON.parse(result || '{}');
+        const tasks = (res.success && res.data) ? res.data : [];
+        const task = tasks.find(function (t) { return t.taskID === taskID; });
+        if (task) fillTaskForm(task);
+        else Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('任务未找到', 'Task not found') });
+      })
+      .loadTasks(JSON.stringify({}));
+  } else {
+    $('#taskDetailTitle').text('新建任务 / New Task');
+    $('#editTaskID').val('');
+    $('#taskTitle').val('').prop('readonly', false);
+    $('#taskDescription').val('').prop('readonly', false);
+    $('#taskType').val('临时').prop('disabled', false);
+    $('#taskPriority').val('中').prop('disabled', false);
+    $('#taskStatus').val('未开始').prop('disabled', true);
+    $('#taskPlanStart').val(new Date().toISOString().split('T')[0]).prop('readonly', false);
+    $('#taskDueDate').val('').prop('readonly', false);
+    $('#taskRemark').val('').prop('readonly', false);
+    $('#taskOwner').val(null).trigger('change').prop('disabled', false);
+    $('#taskCollaborators').val(null).trigger('change').prop('disabled', false);
+    $('#btnSaveTask').show();
+    $('#btnCompleteTask').hide();
+    $('#btnCancelTask').hide();
+    $('#taskLogsContent').html('新任务，暂无日志 / New task, no logs yet');
+    $('#taskDetailModal').modal('show');
+  }
+}
+
+function fillTaskForm(task) {
+  const isAdmin = currentPermission === 'admin';
+  const isSupervisor = currentPermission === 'supervisor';
+  const isOwner = task.owners.indexOf(currentSapID) !== -1;
+  const isCollab = task.collaborators.indexOf(currentSapID) !== -1;
+  const canEdit = isAdmin || isSupervisor || isOwner || (task.status !== '已完成' && task.status !== '已取消' && isCollab);
+  const isCompleted = task.status === '已完成' || task.status === '已取消';
+
+  $('#taskDetailTitle').text(canEdit ? '编辑任务 / Edit Task' : '任务详情 / Task Detail');
+  $('#editTaskID').val(task.taskID);
+  $('#taskTitle').val(task.title).prop('readonly', !canEdit);
+  $('#taskDescription').val(task.description).prop('readonly', !canEdit);
+  $('#taskType').val(task.taskType).prop('disabled', !canEdit);
+  $('#taskPriority').val(task.priority).prop('disabled', !canEdit);
+  $('#taskStatus').val(task.status).prop('disabled', !canEdit && !isAdmin && !isSupervisor);
+  $('#taskPlanStart').val(task.planStartDate).prop('readonly', !canEdit);
+  $('#taskDueDate').val(task.dueDate).prop('readonly', !canEdit);
+  $('#taskRemark').val(task.remark).prop('readonly', !canEdit);
+
+  // Set owner and collaborators
+  if (task.owners && task.owners.length > 0) {
+    $('#taskOwner').val(task.owners[0]).trigger('change');
+  } else {
+    $('#taskOwner').val(null).trigger('change');
+  }
+  $('#taskOwner').prop('disabled', !canEdit && !isAdmin && !isSupervisor);
+  if (task.collaborators && task.collaborators.length > 0) {
+    $('#taskCollaborators').val(task.collaborators).trigger('change');
+  } else {
+    $('#taskCollaborators').val(null).trigger('change');
+  }
+  $('#taskCollaborators').prop('disabled', !canEdit && !isAdmin && !isSupervisor);
+
+  // Action buttons
+  $('#btnSaveTask').toggle(canEdit && !isCompleted);
+  $('#btnCompleteTask').toggle((isAdmin || isSupervisor || isOwner) && !isCompleted);
+  $('#btnCancelTask').toggle((isAdmin || isSupervisor) && !isCompleted);
+
+  // Load task logs
+  google.script.run
+    .withSuccessHandler(function (result) {
+      const logs = JSON.parse(result || '[]');
+      if (Array.isArray(logs) && logs.length > 0) {
+        let html = '<div style="font-size:11px;">';
+        logs.forEach(function (l) {
+          html += '<div style="padding:4px 0;border-bottom:1px solid #eee;">'
+            + '<strong>' + (l.action || '') + '</strong> '
+            + '<span style="color:#888;">' + (l.operatorName || '') + '</span> '
+            + '<span style="color:#adb5bd;">' + (l.createdAt || '') + '</span>'
+            + '</div>';
+        });
+        html += '</div>';
+        $('#taskLogsContent').html(html);
+      } else {
+        $('#taskLogsContent').html('暂无操作记录 / No operation logs');
+      }
+    })
+    .loadTaskLogs('Task', task.taskID);
+
+  $('#taskDetailModal').modal('show');
+}
+
+function saveTaskFromModal() {
+  const tid = $('#editTaskID').val();
+  const title = $('#taskTitle').val().trim();
+  if (!title) {
+    Swal.fire({ icon: 'warning', title: swalTitle('提示', 'Info'), html: swalHtml('请输入任务标题', 'Please enter task title') });
+    return;
+  }
+  const taskData = {
+    taskID: tid,
+    title: title,
+    description: $('#taskDescription').val().trim(),
+    taskType: $('#taskType').val(),
+    priority: $('#taskPriority').val(),
+    planStartDate: $('#taskPlanStart').val(),
+    dueDate: $('#taskDueDate').val(),
+    remark: $('#taskRemark').val().trim()
+  };
+  const newStatus = $('#taskStatus').val();
+
+  showLoading();
+
+  if (tid) {
+    // Update existing task
+    google.script.run
+      .withSuccessHandler(function (res) {
+        const r = JSON.parse(res || '{}');
+        if (r.success) {
+          // Also update status if changed
+          updateStatusIfNeeded(tid, newStatus);
+        } else {
+          Swal.close();
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+        }
+      })
+      .updateTask(JSON.stringify(taskData), currentSapID, currentUserName);
+  } else {
+    // Create new task
+    const ownerVal = $('#taskOwner').val();
+    const collabVals = $('#taskCollaborators').val() || [];
+    const members = [];
+    if (ownerVal) members.push({ sapID: ownerVal, memberRole: 'owner' });
+    collabVals.forEach(function (v) { members.push({ sapID: v, memberRole: 'collaborator' }); });
+    taskData.status = newStatus;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        Swal.close();
+        const r = JSON.parse(res || '{}');
+        if (r.success) {
+          Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+          $('#taskDetailModal').modal('hide');
+          loadTaskData();
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+        }
+      })
+      .createTask(JSON.stringify(taskData), JSON.stringify(members), currentSapID, currentUserName);
+  }
+}
+
+function updateStatusIfNeeded(taskID, newStatus) {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      Swal.close();
+      const r = JSON.parse(res || '{}');
+      if (r.success) {
+        Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+        $('#taskDetailModal').modal('hide');
+        loadTaskData();
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+      }
+    })
+    .updateTaskStatus(taskID, newStatus, currentSapID, currentUserName);
+}
+
+function doUpdateStatus(taskID, newStatus) {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (res) {
+      Swal.close();
+      const r = JSON.parse(res || '{}');
+      if (r.success) {
+        Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+        loadTaskData();
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+      }
+    })
+    .updateTaskStatus(taskID, newStatus, currentSapID, currentUserName);
+}
+</script>

@@ -1,0 +1,178 @@
+<script>
+// ============================================================
+//  我的任务 JS / My Tasks JS
+// ============================================================
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+const PRIORITY_CLASS = { '高': 'badge bg-danger', '中': 'badge bg-warning text-dark', '低': 'badge bg-secondary' };
+const STATUS_CLASS = { '未开始': 'status-pending', '进行中': 'status-ongoing', '等待中': 'status-waiting', '已完成': 'status-completed', '已取消': 'status-cancelled' };
+
+let ownerTable = null;
+let collabTable = null;
+let currentSapID = '';
+let currentUserName = '';
+
+$(document).ready(function () {
+  const name = sessionStorage.getItem('Name') || '';
+  currentUserName = name;
+  $('#name').text(name);
+
+  // Init tables
+  ownerTable = $('#ownerTable').DataTable({
+    pageLength: 50,
+    paging: false,
+    searching: false,
+    ordering: false,
+    info: false,
+    columns: [
+      { data: 'taskID', width: '100px' },
+      { data: 'title' },
+      { data: 'priority', render: function (d) { return '<span class="' + (PRIORITY_CLASS[d] || '') + '" style="font-size:10px;">' + (d || '') + '</span>'; } },
+      { data: 'status', render: function (d) { return '<span class="' + (STATUS_CLASS[d] || '') + '">' + (d || '') + '</span>'; } },
+      { data: 'dueDate' },
+      { data: 'collaborators', render: function (d) { return (d || []).join(', '); } },
+      { data: null, orderable: false, width: '120px', render: function (d, type, row) {
+        let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
+        html += '<button class="btn btn-sm btn-outline-primary view-task-btn" data-tid="' + row.taskID + '" style="font-size:10px;padding:2px 6px;"><i class="bi bi-eye"></i></button>';
+        html += '<select class="form-select form-select-sm quick-status" data-tid="' + row.taskID + '" style="font-size:10px;width:80px;padding:2px;">';
+        html += '<option value="">改状态</option>';
+        if (row.status !== '进行中') html += '<option value="进行中">进行中</option>';
+        if (row.status !== '等待中') html += '<option value="等待中">等待中</option>';
+        if (row.status !== '已完成') html += '<option value="已完成">已完成</option>';
+        html += '</select></div>';
+        return html;
+      }}
+    ],
+    language: { emptyTable: '暂无负责的任务 / No owned tasks' }
+  });
+
+  collabTable = $('#collabTable').DataTable({
+    pageLength: 50,
+    paging: false,
+    searching: false,
+    ordering: false,
+    info: false,
+    columns: [
+      { data: 'taskID', width: '100px' },
+      { data: 'title' },
+      { data: 'priority', render: function (d) { return '<span class="' + (PRIORITY_CLASS[d] || '') + '" style="font-size:10px;">' + (d || '') + '</span>'; } },
+      { data: 'status', render: function (d) { return '<span class="' + (STATUS_CLASS[d] || '') + '">' + (d || '') + '</span>'; } },
+      { data: 'dueDate' },
+      { data: 'owners', render: function (d) { return (d || []).join(', '); } },
+      { data: null, orderable: false, width: '120px', render: function (d, type, row) {
+        let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
+        html += '<button class="btn btn-sm btn-outline-primary view-task-btn" data-tid="' + row.taskID + '" style="font-size:10px;padding:2px 6px;"><i class="bi bi-eye"></i></button>';
+        html += '<select class="form-select form-select-sm quick-status" data-tid="' + row.taskID + '" style="font-size:10px;width:80px;padding:2px;">';
+        html += '<option value="">改状态</option>';
+        if (row.status !== '进行中') html += '<option value="进行中">进行中</option>';
+        if (row.status !== '等待中') html += '<option value="等待中">等待中</option>';
+        html += '</select></div>';
+        return html;
+      }}
+    ],
+    language: { emptyTable: '暂无协作的任务 / No collaborated tasks' }
+  });
+
+  // Get user info
+  google.script.run
+    .withSuccessHandler(function (result) {
+      const perm = JSON.parse(result || '{}');
+      currentSapID = perm.sapID || '';
+      loadMyTaskData();
+    })
+    .checkEDSTaskPermission(name, '');
+
+  // View task
+  $(document).on('click', '.view-task-btn', function () {
+    const tid = $(this).data('tid');
+    const siWebPage = sessionStorage.getItem('siWebPage') || '';
+    window.open(siWebPage + '?v=EDS_TaskList'
+      + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || '')
+      + '&Name=' + encodeURIComponent(currentUserName)
+      + '&taskID=' + encodeURIComponent(tid));
+  });
+
+  // Quick status update
+  $(document).on('change', '.quick-status', function () {
+    const tid = $(this).data('tid');
+    const newStatus = $(this).val();
+    if (!newStatus) return;
+    if (newStatus === '已完成') {
+      Swal.fire({
+        title: swalTitle('确认', 'Confirm'),
+        html: swalHtml('确认完成此任务？', 'Confirm to complete this task?'),
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '确认 / Confirm',
+        cancelButtonText: '取消 / Cancel'
+      }).then(function (r) {
+        if (!r.isConfirmed) { loadMyTaskData(); return; }
+        doStatusUpdate(tid, newStatus);
+      });
+    } else {
+      doStatusUpdate(tid, newStatus);
+    }
+  });
+
+  // Back
+  $('#btnBackDashboard').on('click', function (e) {
+    e.preventDefault();
+    const siWebPage = sessionStorage.getItem('siWebPage') || '';
+    window.open(siWebPage + '?v=EDS_TodayDashboard'
+      + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || '')
+      + '&Name=' + encodeURIComponent(currentUserName)
+      + '&Process=' + encodeURIComponent(sessionStorage.getItem('Process') || '')
+      + '&Workshop=' + encodeURIComponent(sessionStorage.getItem('Workshop') || ''));
+  });
+});
+
+function loadMyTaskData() {
+  if (!currentSapID) return;
+  Swal.fire({
+    title: swalTitle('加载数据中...', 'Loading Data...'),
+    html: swalHtml('正在获取我的任务，请稍候。', 'Fetching my tasks, please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+  google.script.run
+    .withSuccessHandler(function (result) {
+      Swal.close();
+      const res = JSON.parse(result || '{}');
+      if (res.success && res.data) {
+        ownerTable.clear().rows.add(res.data.ownerTasks || []).draw();
+        collabTable.clear().rows.add(res.data.collaboratorTasks || []).draw();
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(res.message || '', '') });
+      }
+    })
+    .withFailureHandler(function (error) {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml('网络错误', 'Network error') });
+    })
+    .loadMyTasks(currentSapID);
+}
+
+function doStatusUpdate(taskID, newStatus) {
+  Swal.fire({
+    title: swalTitle('更新中...', 'Updating...'),
+    html: swalHtml('请稍候。', 'Please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+  google.script.run
+    .withSuccessHandler(function (res) {
+      Swal.close();
+      const r = JSON.parse(res || '{}');
+      if (r.success) {
+        Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+        loadMyTaskData();
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+      }
+    })
+    .updateTaskStatus(taskID, newStatus, currentSapID, currentUserName);
+}
+</script>

@@ -1,0 +1,310 @@
+<script>
+// ============================================================
+//  每日安排 JS / Daily Staff Arrangement JS
+// ============================================================
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+let currentDate = '';
+let currentPermission = '';
+let currentSapID = '';
+let currentUserName = '';
+let staffTable = null;
+let userList = [];
+let selectedStaffRows = [];
+
+$(document).ready(function () {
+  const name = sessionStorage.getItem('Name') || '';
+  currentPermission = sessionStorage.getItem('EDSTaskPermission') || '';
+  currentUserName = name;
+  currentDate = new Date().toISOString().split('T')[0];
+
+  $('#name').text(name);
+  $('#datePicker').val(currentDate);
+
+  // User level badge
+  if (currentPermission) {
+    const labels = { 'admin': '管理员 / Admin', 'supervisor': '主管 / Supervisor', 'employee': '员工 / Employee' };
+    const cls = currentPermission === 'admin' ? 'bg-danger' : (currentPermission === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary');
+    $('#userLevelBadge').removeClass('bg-secondary').addClass(cls).text(labels[currentPermission] || currentPermission);
+  }
+
+  // Show template button for admin/supervisor
+  if (currentPermission === 'admin' || currentPermission === 'supervisor') {
+    $('#btnSaveAsTemplate').show();
+  }
+
+  // Initialize DataTable
+  staffTable = $('#staffTable').DataTable({
+    paging: false,
+    searching: false,
+    ordering: false,
+    info: false,
+    scrollY: '55vh',
+    columns: [
+      { data: 'name' },
+      { data: 'attendanceStatus', render: function (d) { return renderSelect('attendance', d); } },
+      { data: 'workRole', render: function (d) { return renderSelect('role', d); } },
+      { data: 'shift', render: function (d) { return renderSelect('shift', d); } },
+      { data: 'remark', render: function (d, type, row) {
+        return '<input type="text" class="form-control form-control-sm remark-input" value="' + (d || '') + '" data-sid="' + row.sapID + '" style="font-size:11px;min-width:120px;">';
+      }},
+      { data: null, render: function (d, type, row) {
+        return '<button class="btn btn-sm btn-outline-danger del-row-btn" data-sid="' + row.sapID + '" style="font-size:10px;padding:2px 6px;"><i class="bi bi-trash"></i></button>';
+      }}
+    ],
+    language: { emptyTable: '暂无数据 / No data' }
+  });
+
+  // Get user info
+  google.script.run
+    .withSuccessHandler(function (result) {
+      const perm = JSON.parse(result || '{}');
+      currentSapID = perm.sapID || '';
+      currentPermission = perm.permission || currentPermission;
+      if (currentPermission) sessionStorage.setItem('EDSTaskPermission', currentPermission);
+      loadStaffData();
+    })
+    .checkEDSTaskPermission(name, '');
+
+  // Date change
+  $('#datePicker').on('change', function () {
+    currentDate = $(this).val();
+    loadStaffData();
+  });
+
+  // Copy from yesterday
+  $('#btnCopyYesterday').on('click', function () {
+    Swal.fire({
+      title: swalTitle('确认', 'Confirm'),
+      html: swalHtml('从昨日复制安排到 ' + currentDate + '？现有数据将被覆盖。', 'Copy staff from yesterday to ' + currentDate + '? Existing data will be overwritten.'),
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '确认 / Confirm',
+      cancelButtonText: '取消 / Cancel'
+    }).then(function (r) {
+      if (!r.isConfirmed) return;
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function (res) {
+          Swal.close();
+          const r2 = JSON.parse(res || '{}');
+          if (r2.success) {
+            Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
+            loadStaffData();
+          } else {
+            Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
+          }
+        })
+        .copyStaffFromYesterday(currentDate, currentSapID, currentUserName);
+    });
+  });
+
+  // Apply template
+  $('#btnApplyTemplate').on('click', function () {
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        Swal.close();
+        const r = JSON.parse(res || '{}');
+        if (!r.success || !r.data || r.data.length === 0) {
+          Swal.fire({ icon: 'info', title: swalTitle('提示', 'Info'), html: swalHtml('暂无可用模板', 'No templates available') });
+          return;
+        }
+        let html = '';
+        r.data.forEach(function (t) {
+          html += '<button class="modal-card-btn template-select-btn" data-tid="' + t.templateID + '" style="width:100%;margin-bottom:6px;">'
+            + '<i class="bi bi-layers mc-icon"></i>'
+            + '<div class="mc-text"><div class="title-cn">' + t.templateName + '</div>'
+            + '<div class="title-en">' + (t.staff ? t.staff.length : 0) + ' people</div></div>'
+            + '<i class="bi bi-chevron-right mc-arrow"></i></button>';
+        });
+        $('#templateList').html(html);
+        $('#templateModal').modal('show');
+      })
+      .loadDailyTemplates();
+  });
+
+  $(document).on('click', '.template-select-btn', function () {
+    const tid = $(this).data('tid');
+    $('#templateModal').modal('hide');
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        Swal.close();
+        const r = JSON.parse(res || '{}');
+        if (r.success) {
+          Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+          loadStaffData();
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+        }
+      })
+      .applyDailyStaffTemplate(currentDate, tid, currentSapID, currentUserName);
+  });
+
+  // Save staff
+  $('#btnSaveStaff').on('click', function () {
+    const rows = collectStaffData();
+    if (rows.length === 0) {
+      Swal.fire({ icon: 'info', title: swalTitle('提示', 'Info'), html: swalHtml('无数据可保存', 'No data to save') });
+      return;
+    }
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        Swal.close();
+        const r = JSON.parse(res || '{}');
+        if (r.success) {
+          Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+        }
+      })
+      .saveDailyStaff(JSON.stringify(rows), currentDate, currentSapID, currentUserName);
+  });
+
+  // Save as template
+  $('#btnSaveAsTemplate').on('click', function () {
+    $('#templateName').val('');
+    $('#saveTemplateModal').modal('show');
+  });
+
+  $('#btnConfirmSaveTemplate').on('click', function () {
+    const tmplName = $('#templateName').val().trim();
+    if (!tmplName) {
+      Swal.fire({ icon: 'warning', title: swalTitle('提示', 'Info'), html: swalHtml('请输入模板名称', 'Please enter template name') });
+      return;
+    }
+    const rows = collectStaffData();
+    if (rows.length === 0) {
+      Swal.fire({ icon: 'info', title: swalTitle('提示', 'Info'), html: swalHtml('无数据可保存', 'No data') });
+      return;
+    }
+    const tmpl = { templateName: tmplName, staff: rows };
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        Swal.close();
+        const r = JSON.parse(res || '{}');
+        if (r.success) {
+          $('#saveTemplateModal').modal('hide');
+          Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
+        }
+      })
+      .saveDailyTemplate(JSON.stringify(tmpl));
+  });
+
+  // Back to dashboard
+  $('#btnBackDashboard').on('click', function (e) {
+    e.preventDefault();
+    const siWebPage = sessionStorage.getItem('siWebPage') || '';
+    window.open(siWebPage + '?v=EDS_TodayDashboard'
+      + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || '')
+      + '&Name=' + encodeURIComponent(currentUserName)
+      + '&Process=' + encodeURIComponent(sessionStorage.getItem('Process') || '')
+      + '&Workshop=' + encodeURIComponent(sessionStorage.getItem('Workshop') || ''));
+  });
+
+  // Delete row
+  $(document).on('click', '.del-row-btn', function () {
+    const sid = $(this).data('sid');
+    const row = $(this).closest('tr');
+    staffTable.row(row).remove().draw();
+  });
+
+  // Add new blank row (via double-click on empty area)
+  $('#staffTable').on('dblclick', 'tbody', function () {
+    addEmptyRow();
+  });
+});
+
+function showLoading() {
+  Swal.fire({
+    title: swalTitle('处理中...', 'Processing...'),
+    html: swalHtml('请稍候。', 'Please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+}
+
+function loadStaffData() {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (res) {
+      Swal.close();
+      const r = JSON.parse(res || '{}');
+      const data = (r.success && r.data) ? r.data : [];
+      // Load user list
+      google.script.run
+        .withSuccessHandler(function (userRes) {
+          const users = Array.isArray(JSON.parse(userRes || '[]')) ? JSON.parse(userRes || '[]') : [];
+          userList = users;
+          // Map SAPID to name
+          const nameMap = {};
+          users.forEach(function (u) { nameMap[u.id] = u.text; });
+          const rows = data.map(function (s) {
+            return {
+              sapID: s.sapID,
+              name: nameMap[s.sapID] || s.sapID,
+              attendanceStatus: s.attendanceStatus || '在岗',
+              workRole: s.workRole || '',
+              shift: s.shift || '白班',
+              remark: s.remark || ''
+            };
+          });
+          staffTable.clear().rows.add(rows).draw();
+        })
+        .loadUserListForSelect();
+    })
+    .loadDailyStaffByDate(currentDate);
+}
+
+function addEmptyRow() {
+  staffTable.row.add({
+    sapID: '',
+    name: '<input type="text" class="form-control form-control-sm user-search" placeholder="搜索人名...">',
+    attendanceStatus: '在岗',
+    workRole: '',
+    shift: '白班',
+    remark: ''
+  }).draw();
+}
+
+function renderSelect(type, value) {
+  let options = [];
+  if (type === 'attendance') {
+    options = ['在岗', '休息', '请假', '外出', '培训'];
+  } else if (type === 'role') {
+    options = ['设备', '模具', 'SAP', '点检', '其他'];
+  } else if (type === 'shift') {
+    options = ['白班', '中班', '夜班'];
+  }
+  let html = '<select class="form-select form-select-sm inline-select" style="font-size:11px;">';
+  options.forEach(function (o) {
+    html += '<option value="' + o + '"' + (o === value ? ' selected' : '') + '>' + o + '</option>';
+  });
+  html += '</select>';
+  return html;
+}
+
+function collectStaffData() {
+  const rows = [];
+  staffTable.rows().every(function () {
+    const d = this.data();
+    const $row = $(this.node());
+    const attendance = $row.find('td:eq(1) select').val() || d.attendanceStatus || '在岗';
+    const role = $row.find('td:eq(2) select').val() || d.workRole || '';
+    const shift = $row.find('td:eq(3) select').val() || d.shift || '白班';
+    const remark = $row.find('.remark-input').val() || d.remark || '';
+    const sapID = d.sapID || '';
+    if (sapID) {
+      rows.push({ sapID: sapID, attendanceStatus: attendance, workRole: role, shift: shift, remark: remark });
+    }
+  });
+  return rows;
+}
+</script>

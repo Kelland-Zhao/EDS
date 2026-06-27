@@ -1,0 +1,308 @@
+<script>
+// ============================================================
+//  今日工作台 JS / Today's Dashboard JS
+// ============================================================
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+// Priority badge colors
+const PRIORITY_CLASS = { '高': 'badge bg-danger', '中': 'badge bg-warning text-dark', '低': 'badge bg-secondary' };
+const STATUS_CLASS = {
+  '未开始': 'status-pending', '进行中': 'status-ongoing',
+  '等待中': 'status-waiting', '已完成': 'status-completed', '已取消': 'status-cancelled'
+};
+
+let currentDate = '';
+let currentPermission = '';
+let currentSapID = '';
+let currentUserName = '';
+let currentDateStr = '';
+
+$(document).ready(function () {
+  // Read session info
+  const id = sessionStorage.getItem('ID') || '';
+  const name = sessionStorage.getItem('Name') || '';
+  const process = sessionStorage.getItem('Process') || '';
+  const workshop = sessionStorage.getItem('Workshop') || '';
+  currentPermission = sessionStorage.getItem('EDSTaskPermission') || '';
+  currentUserName = name;
+  currentDateStr = new Date().toISOString().split('T')[0];
+
+  // Welcome bar
+  $('#name').text(name || '--');
+
+  // Permission badge
+  const permLabels = {
+    'admin': '管理员 / Admin',
+    'supervisor': '主管 / Supervisor',
+    'employee': '员工 / Employee'
+  };
+  if (currentPermission) {
+    const badgeClass = currentPermission === 'admin' ? 'bg-danger' : (currentPermission === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary');
+    $('#userLevelBadge').removeClass('bg-secondary').addClass(badgeClass).text(permLabels[currentPermission] || currentPermission);
+  } else {
+    $('#userLevelBadge').text('无权限 / No Permission');
+    $('#permissionNotice').show();
+  }
+
+  // Get user SAPID
+  google.script.run
+    .withSuccessHandler(function (result) {
+      const perm = JSON.parse(result || '{}');
+      currentSapID = perm.sapID || id;
+      currentPermission = perm.permission || currentPermission;
+      if (currentPermission) {
+        sessionStorage.setItem('EDSTaskPermission', currentPermission);
+      }
+      // Load user list for Select2
+      loadUserList(function () {
+        // Set date and load
+        $('#datePicker').val(currentDateStr);
+        currentDate = currentDateStr;
+        loadDashboard();
+      });
+    })
+    .withFailureHandler(function () {
+      loadUserList(function () {
+        $('#datePicker').val(currentDateStr);
+        currentDate = currentDateStr;
+        loadDashboard();
+      });
+    })
+    .checkEDSTaskPermission(name, '');
+
+  // Date picker change
+  $('#datePicker').on('change', function () {
+    currentDate = $(this).val();
+    currentDateStr = currentDate;
+    loadDashboard();
+  });
+
+  // FAB: New Task
+  $('#fabNewTask').on('click', function () { openTaskModal(); });
+
+  // Save task
+  $('#btnSaveTask').on('click', function () { saveTask(); });
+
+  // Navigation buttons
+  $('#btnDailyStaff').on('click', function () {
+    window.open(buildUrl('EDS_DailyStaff'));
+  });
+  $('#btnTaskList').on('click', function () {
+    window.open(buildUrl('EDS_TaskList'));
+  });
+  $('#btnMyTasks').on('click', function () {
+    window.open(buildUrl('EDS_MyTasks'));
+  });
+
+  // FAB visibility: employee can add tasks, admin/supervisor can too
+  if (!currentPermission) {
+    $('#fabContainer').hide();
+  }
+});
+
+function buildUrl(page) {
+  const siWebPage = sessionStorage.getItem('siWebPage') || '';
+  return siWebPage + '?v=' + page
+    + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || '')
+    + '&Name=' + encodeURIComponent(currentUserName)
+    + '&Process=' + encodeURIComponent(sessionStorage.getItem('Process') || '')
+    + '&Workshop=' + encodeURIComponent(sessionStorage.getItem('Workshop') || '');
+}
+
+function loadUserList(callback) {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      const users = JSON.parse(result || '[]');
+      const data = Array.isArray(users) ? users.map(function (u) {
+        return { id: u.id, text: u.text };
+      }) : [];
+      $('#taskOwner').empty().select2({ data: data, placeholder: '选择负责人 / Select Owner', allowClear: true, width: '100%' });
+      $('#taskCollaborators').empty().select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%' });
+      if (callback) callback();
+    })
+    .loadUserListForSelect();
+}
+
+function loadDashboard() {
+  if (!currentDate) return;
+  Swal.fire({
+    title: swalTitle('加载数据中...', 'Loading Data...'),
+    html: swalHtml('正在获取今日工作台数据，请稍候。', 'Fetching dashboard data, please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+
+  google.script.run
+    .withSuccessHandler(function (result) {
+      Swal.close();
+      const res = JSON.parse(result || '{}');
+      if (!res.success) {
+        Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(res.message || '未知错误', 'Unknown error') });
+        return;
+      }
+      renderDashboard(res.data);
+    })
+    .withFailureHandler(function (error) {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml('网络错误: ' + error, 'Network error: ' + error) });
+    })
+    .loadTodayDashboardData(currentDate, currentSapID);
+}
+
+function renderDashboard(data) {
+  const staff = data.staff || [];
+  const todayTasks = data.todayTasks || [];
+  const overdueTasks = data.overdueTasks || [];
+
+  // Update date info
+  const today = new Date().toISOString().split('T')[0];
+  const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+  const d = new Date(currentDate + 'T00:00:00');
+  const dayName = dayNames[d.getDay()];
+  const diffDays = Math.round((d - new Date(today + 'T00:00:00')) / 86400000);
+  let dateLabel = '星期' + dayName;
+  if (diffDays === 0) dateLabel += ' (今天)';
+  else if (diffDays === -1) dateLabel += ' (昨天)';
+  else if (diffDays === 1) dateLabel += ' (明天)';
+  $('#dateInfo').text(dateLabel);
+
+  // Staff list
+  if (staff.length === 0) {
+    $('#staffList').html('<div class="empty-state">暂无人员安排<br><span style="font-size:11px;">No staff assigned today</span></div>');
+  } else {
+    let html = '';
+    staff.forEach(function (s) {
+      const statusClass = s.attendanceStatus === '在岗' ? 'status-completed' :
+        (s.attendanceStatus === '请假' ? 'status-cancelled' :
+          (s.attendanceStatus === '外出' ? 'status-waiting' : 'status-pending'));
+      html += '<div class="staff-card">'
+        + '<span class="staff-name">' + (s.sapID || '--') + '</span>'
+        + '<span class="staff-status ' + statusClass + '">' + s.attendanceStatus + '</span>'
+        + '<span class="staff-role">' + (s.workRole || '') + '</span>'
+        + '<span class="staff-shift">' + (s.shift || '') + '</span>'
+        + '</div>';
+    });
+    $('#staffList').html(html);
+  }
+
+  // Tasks grouped by status
+  const newTasks = todayTasks.filter(function (t) { return t.status === '未开始'; });
+  const ongoingTasks = todayTasks.filter(function (t) { return t.status === '进行中'; });
+  const waitingTasks = todayTasks.filter(function (t) { return t.status === '等待中'; });
+
+  $('#countNew').text(newTasks.length);
+  $('#countOngoing').text(ongoingTasks.length);
+  $('#countWaiting').text(waitingTasks.length);
+
+  $('#newTasks').html(renderTaskCards(newTasks));
+  $('#ongoingTasks').html(renderTaskCards(ongoingTasks));
+  $('#waitingTasks').html(renderTaskCards(waitingTasks));
+
+  // Overdue tasks
+  if (overdueTasks.length === 0) {
+    $('#overdueList').html('<div class="empty-state">暂无超期任务<br><span style="font-size:11px;">No overdue tasks</span></div>');
+  } else {
+    let html = '';
+    overdueTasks.forEach(function (t) {
+      html += '<div class="overdue-task" onclick="viewTask(\'' + t.taskID + '\')">'
+        + '<div class="ot-title">' + (t.title || t.taskID) + '</div>'
+        + '<div class="ot-due">截止: ' + (t.dueDate || '--') + ' | ' + (t.priority || '') + ' | 负责人: ' + (t.owners.join(', ') || '--') + '</div>'
+        + '</div>';
+    });
+    $('#overdueList').html(html);
+  }
+}
+
+function renderTaskCards(tasks) {
+  if (!tasks || tasks.length === 0) {
+    return '<div class="empty-state">暂无 / None</div>';
+  }
+  let html = '';
+  tasks.forEach(function (t) {
+    html += '<div class="task-card" onclick="viewTask(\'' + t.taskID + '\')">'
+      + '<div class="task-title">' + (t.title || t.taskID) + '</div>'
+      + '<div class="task-meta">'
+      + '<span class="meta-item"><span class="badge ' + (PRIORITY_CLASS[t.priority] || 'bg-secondary') + '" style="font-size:10px;">' + (t.priority || '') + '</span></span>'
+      + '<span class="meta-item"><span class="' + (STATUS_CLASS[t.status] || '') + '" style="font-size:10px;padding:1px 6px;border-radius:8px;">' + (t.status || '') + '</span></span>'
+      + '<span class="meta-item"><i class="bi bi-calendar3"></i> ' + (t.planStartDate || '--') + ' ~ ' + (t.dueDate || '--') + '</span>'
+      + '<span class="meta-item"><i class="bi bi-person"></i> ' + (t.owners.join(', ') || '--') + '</span>'
+      + '</div></div>';
+  });
+  return html;
+}
+
+function viewTask(taskID) {
+  window.open(buildUrl('EDS_TaskList') + '&taskID=' + encodeURIComponent(taskID));
+}
+
+// ---- New Task Modal ----
+function openTaskModal(taskData) {
+  $('#taskModalTitle').text('新建任务 / New Task');
+  $('#editTaskID').val('');
+  $('#taskTitle').val('');
+  $('#taskDescription').val('');
+  $('#taskType').val('临时');
+  $('#taskPriority').val('中');
+  $('#taskPlanStart').val(currentDateStr);
+  $('#taskDueDate').val('');
+  $('#taskRemark').val('');
+  $('#taskOwner').val(null).trigger('change');
+  $('#taskCollaborators').val(null).trigger('change');
+  $('#btnSaveTask').show();
+  $('#taskModal').modal('show');
+}
+
+function saveTask() {
+  const title = $('#taskTitle').val().trim();
+  if (!title) {
+    Swal.fire({ icon: 'warning', title: swalTitle('提示', 'Info'), html: swalHtml('请输入任务标题', 'Please enter task title') });
+    return;
+  }
+  const taskData = {
+    title: title,
+    description: $('#taskDescription').val().trim(),
+    taskType: $('#taskType').val(),
+    priority: $('#taskPriority').val(),
+    planStartDate: $('#taskPlanStart').val(),
+    dueDate: $('#taskDueDate').val(),
+    remark: $('#taskRemark').val().trim()
+  };
+  const ownerVal = $('#taskOwner').val();
+  const collabVals = $('#taskCollaborators').val() || [];
+  const members = [];
+  if (ownerVal) {
+    members.push({ sapID: ownerVal, memberRole: 'owner' });
+  }
+  collabVals.forEach(function (v) {
+    members.push({ sapID: v, memberRole: 'collaborator' });
+  });
+
+  Swal.fire({
+    title: swalTitle('保存中...', 'Saving...'),
+    html: swalHtml('正在创建任务，请稍候。', 'Creating task, please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+
+  google.script.run
+    .withSuccessHandler(function (result) {
+      Swal.close();
+      const res = JSON.parse(result || '{}');
+      if (res.success) {
+        Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(res.message, 'Task created'), timer: 1500 });
+        $('#taskModal').modal('hide');
+        loadDashboard();
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(res.message, 'Failed to create task') });
+      }
+    })
+    .withFailureHandler(function (error) {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('网络错误: ' + error, 'Network error: ' + error) });
+    })
+    .createTask(JSON.stringify(taskData), JSON.stringify(members), currentSapID, currentUserName);
+}
+</script>

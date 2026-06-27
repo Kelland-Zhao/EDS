@@ -55,6 +55,24 @@
       })
       .checkINJSDMPermission(name, '');
 
+    // Task Arrangement permission check
+    google.script.run
+      .withSuccessHandler((result) => {
+        try {
+          const perm = JSON.parse(result || '{}');
+          if (perm.permission) {
+            $('#EDSTaskCardWrap').show();
+            sessionStorage.setItem('EDSTaskPermission', perm.permission);
+          }
+        } catch (e) {
+          console.error('Task arrangement permission parse error', e);
+        }
+      })
+      .withFailureHandler((error) => {
+        console.error('Task arrangement permission check failed', error);
+      })
+      .checkEDSTaskPermission(name, '');
+
     $('#PM').click(() => {
         $('#pmModal').modal('show');
     });
@@ -340,6 +358,16 @@
 
     $('#INJSDMSummary').on('click', () => {
         let url = siWebPage + '?v=INJ_SDM_Summary'
+            + '&ID=' + encodeURIComponent(id || '')
+            + '&Name=' + encodeURIComponent(name || '')
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
+    });
+
+    // 任务安排 / Daily Work Arrangement
+    $('#EDSTaskArrangement').on('click', () => {
+        let url = siWebPage + '?v=EDS_TodayDashboard'
             + '&ID=' + encodeURIComponent(id || '')
             + '&Name=' + encodeURIComponent(name || '')
             + '&Process=' + encodeURIComponent(process || '')
