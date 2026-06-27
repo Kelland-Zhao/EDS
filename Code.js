@@ -11925,23 +11925,28 @@ function loadPMTasksByDate(dateStr) {
     const planWs = ss.getSheetByName('Total PM Plan List');
     if (planWs) {
       const planData = planWs.getDataRange().getValues();
+      // Dedup by date + workcenter (PM_Records J = Workcenter, Plan G = AEM#)
       const existingWorkcenters = {};
-      tasks.forEach(function (t) { existingWorkcenters[t.title] = true; });
+      tasks.forEach(function (t) {
+        const wc = t.remark.match(/PM No: (\S+)/);
+        if (wc) existingWorkcenters[dateStr + '_' + wc[1]] = true;
+      });
       for (let i = 1; i < planData.length; i++) {
         const planStartDate = normalizeDate_(planData[i][4]); // E: 开始日期
         if (planStartDate !== dateStr) continue;
         const workshop = String(planData[i][2] || '').trim(); // C: 车间
         const process = String(planData[i][3] || '').trim(); // D: 工序
         const aem = String(planData[i][6] || '').trim(); // G: AEM#
+        const pmHours = String(planData[i][7] || '').trim(); // H: 保养时间
         const pmType = String(planData[i][8] || '').trim(); // I: 保养类型
         const machineType = String(planData[i][9] || '').trim(); // J: 机型
         if (!aem) continue;
-        const title = 'PM: ' + aem + (workshop ? ' [' + workshop + ']' : '') + ' - ' + pmType;
-        if (existingWorkcenters[title]) continue; // Already in PM_Records
-        existingWorkcenters[title] = true;
+        const dedupKey = dateStr + '_' + aem;
+        if (existingWorkcenters[dedupKey]) continue; // Already in PM_Records
+        existingWorkcenters[dedupKey] = true;
         tasks.push({
           taskID: 'PLAN-' + aem + '-' + dateStr.replace(/-/g, ''),
-          title: title,
+          title: 'PM: ' + aem + (workshop ? ' [' + workshop + ']' : '') + ' - ' + pmType,
           description: '保养类型: ' + pmType + ' | 机型: ' + machineType + ' | 计划中 / Planned',
           taskType: '保养',
           priority: '中',
