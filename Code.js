@@ -11844,20 +11844,84 @@ function loadIMStaffByDate(dateStr) {
   }
 }
 
+function loadPMTasksByDate(dateStr) {
+  try {
+    const ss = SpreadsheetApp.openById('1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4');
+    const ws = ss.getSheetByName('PM_Records');
+    if (!ws) return [];
+    const data = ws.getDataRange().getValues();
+    const tasks = [];
+    for (let i = 1; i < data.length; i++) {
+      const planDateRaw = data[i][4]; // E: Plan PM Date
+      const startDateRaw = data[i][5]; // F: SatrtDate
+      let planDate = '';
+      if (planDateRaw instanceof Date) {
+        planDate = Utilities.formatDate(planDateRaw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      } else if (planDateRaw) {
+        const s = String(planDateRaw).trim();
+        planDate = s.length >= 10 ? s.substring(0, 10).replace(/\./g, '-') : s;
+      }
+      let startDate = '';
+      if (startDateRaw instanceof Date) {
+        startDate = Utilities.formatDate(startDateRaw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      } else if (startDateRaw) {
+        const s = String(startDateRaw).trim();
+        startDate = s.length >= 10 ? s.substring(0, 10).replace(/\./g, '-') : s;
+      }
+      // Match if plan date or start date equals requested date
+      if (planDate !== dateStr && startDate !== dateStr) continue;
+      const pmNo = String(data[i][0] || '').trim();
+      const status = String(data[i][1] || '').trim();
+      const people = String(data[i][3] || '').trim();
+      const workcenter = String(data[i][9] || '').trim();
+      const process = String(data[i][21] || '').trim(); // V: 工序
+      const workshop = String(data[i][22] || '').trim(); // W: 车间
+      const totalTasks = String(data[i][11] || '').trim(); // L: 总任务数量
+      const unfinishedCount = String(data[i][13] || '').trim(); // N: 任务未完成数量
+      if (!pmNo) continue;
+      // Map PM status to task status
+      let taskStatus = '未开始';
+      if (status.indexOf('进行中') !== -1) taskStatus = '进行中';
+      else if (status.indexOf('已完成') !== -1) taskStatus = '已完成';
+      tasks.push({
+        taskID: pmNo,
+        title: 'PM: ' + workcenter + (workshop ? ' [' + workshop + ']' : '') + ' - ' + people,
+        description: '总任务: ' + totalTasks + ' | 未完成: ' + unfinishedCount + ' | 状态: ' + status,
+        taskType: '保养',
+        priority: '中',
+        status: taskStatus,
+        planStartDate: planDate || startDate,
+        dueDate: planDate || startDate,
+        owners: people.split('/'),
+        collaborators: [],
+        createdBy: 'PM Module',
+        remark: 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '')
+      });
+    }
+    return tasks;
+  } catch (e) {
+    console.error('loadPMTasksByDate error: ' + e);
+    return [];
+  }
+}
+
 function loadTodayDashboardData(date, sapID) {
   try {
     // Load staff from IM scheduling master data
     const staffResult = JSON.parse(loadIMStaffByDate(date));
-    // Also try DailyStaff as fallback if IM data is empty
     let staff = staffResult.success ? staffResult.data : [];
+    // Fallback: DailyStaff table
     if (staff.length === 0) {
       const fallbackStaff = JSON.parse(loadDailyStaffByDate(date));
       staff = fallbackStaff.success ? fallbackStaff.data : [];
     }
-    // Load all tasks (not cancelled)
+    // Load manual tasks
     const tasksData = JSON.parse(loadTasks(JSON.stringify({})));
-    const allTasks = tasksData.success ? tasksData.data : [];
-    // Today tasks: status != 已完成/已取消 AND (planStartDate <= today OR created today)
+    let allTasks = tasksData.success ? tasksData.data : [];
+    // Merge PM tasks from PM_Records
+    const pmTasks = loadPMTasksByDate(date);
+    allTasks = pmTasks.concat(allTasks);
+    // Today tasks: status != 已完成/已取消 AND in date range
     const todayTasks = allTasks.filter(function (t) {
       if (t.status === '已完成' || t.status === '已取消') return false;
       if (t.planStartDate <= date && t.dueDate >= date) return true;
