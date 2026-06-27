@@ -44,6 +44,15 @@ $(document).ready(function () {
     $('#userLevelBadge').text('无权限 / No Permission').addClass('bg-danger');
   }
 
+  // 页面加载即显示 toast / Show loading toast immediately
+  Swal.fire({
+    title: swalTitle('加载数据中...', 'Loading Data...'),
+    html: swalHtml('正在获取今日工作台数据，请稍候。', 'Fetching dashboard data, please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+
   // Get user SAPID
   google.script.run
     .withSuccessHandler(function (result) {
@@ -74,6 +83,13 @@ $(document).ready(function () {
   $('#datePicker').on('change', function () {
     currentDate = $(this).val();
     currentDateStr = currentDate;
+    Swal.fire({
+      title: swalTitle('加载数据中...', 'Loading Data...'),
+      html: swalHtml('正在切换日期，请稍候。', 'Switching date, please wait.'),
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: function () { Swal.showLoading(); }
+    });
     loadDashboard();
   });
 
@@ -125,13 +141,6 @@ function loadUserList(callback) {
 
 function loadDashboard() {
   if (!currentDate) return;
-  Swal.fire({
-    title: swalTitle('加载数据中...', 'Loading Data...'),
-    html: swalHtml('正在获取今日工作台数据，请稍候。', 'Fetching dashboard data, please wait.'),
-    allowOutsideClick: false,
-    showConfirmButton: false,
-    didOpen: function () { Swal.showLoading(); }
-  });
 
   google.script.run
     .withSuccessHandler(function (result) {
