@@ -366,15 +366,6 @@ function taskMatchesProcess(task, filter) {
   }
   return false;
 }
-  // Manual tasks without process: check owners via SAPID→process map
-  const people = (task.owners || []).concat(task.collaborators || []);
-  for (let i = 0; i < people.length; i++) {
-    const pid = (people[i] || '').trim();
-    if (!pid) continue;
-    if (processMatch(userProcessMap[pid], filter)) return true;
-  }
-  return false;
-}
 
 function viewTask(taskID) {
   window.open(buildUrl('EDS_TaskList') + '&taskID=' + encodeURIComponent(taskID));
