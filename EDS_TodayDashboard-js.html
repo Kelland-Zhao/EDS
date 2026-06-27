@@ -41,8 +41,7 @@ $(document).ready(function () {
     const badgeClass = currentPermission === 'admin' ? 'bg-danger' : (currentPermission === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary');
     $('#userLevelBadge').removeClass('bg-secondary').addClass(badgeClass).text(permLabels[currentPermission] || currentPermission);
   } else {
-    $('#userLevelBadge').text('无权限 / No Permission');
-    $('#permissionNotice').show();
+    $('#userLevelBadge').text('无权限 / No Permission').addClass('bg-danger');
   }
 
   // Get user SAPID
