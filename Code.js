@@ -11921,6 +11921,42 @@ function loadPMTasksByDate(dateStr) {
         remark: 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '')
       });
     }
+    // Also read Total PM Plan List for planned-but-not-started PM tasks
+    const planWs = ss.getSheetByName('Total PM Plan List');
+    if (planWs) {
+      const planData = planWs.getDataRange().getValues();
+      const existingWorkcenters = {};
+      tasks.forEach(function (t) { existingWorkcenters[t.title] = true; });
+      for (let i = 1; i < planData.length; i++) {
+        const planStartDate = normalizeDate_(planData[i][4]); // E: 开始日期
+        if (planStartDate !== dateStr) continue;
+        const workshop = String(planData[i][2] || '').trim(); // C: 车间
+        const process = String(planData[i][3] || '').trim(); // D: 工序
+        const aem = String(planData[i][6] || '').trim(); // G: AEM#
+        const pmType = String(planData[i][8] || '').trim(); // I: 保养类型
+        const machineType = String(planData[i][9] || '').trim(); // J: 机型
+        if (!aem) continue;
+        const title = 'PM: ' + aem + (workshop ? ' [' + workshop + ']' : '') + ' - ' + pmType;
+        if (existingWorkcenters[title]) continue; // Already in PM_Records
+        existingWorkcenters[title] = true;
+        tasks.push({
+          taskID: 'PLAN-' + aem + '-' + dateStr.replace(/-/g, ''),
+          title: title,
+          description: '保养类型: ' + pmType + ' | 机型: ' + machineType + ' | 计划中 / Planned',
+          taskType: '保养',
+          priority: '中',
+          status: '未开始',
+          planStartDate: dateStr,
+          dueDate: dateStr,
+          owners: [],
+          collaborators: [],
+          process: process,
+          workshop: workshop,
+          createdBy: 'PM Plan',
+          remark: '源自保养计划 / From PM Plan'
+        });
+      }
+    }
     return tasks;
   } catch (e) {
     console.error('loadPMTasksByDate error: ' + e);
