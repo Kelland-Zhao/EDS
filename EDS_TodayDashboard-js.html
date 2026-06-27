@@ -346,16 +346,18 @@ function loadProcessMap(callback) {
 
 function taskMatchesProcess(task, filter) {
   if (!filter) return true;
-  // 1. Direct process/workshop field on task (PM tasks have these)
-  if (task.process && task.process.toUpperCase() === filter) return true;
-  if (filter === 'INJ' && task.workshop && (task.workshop === 'TB1' || task.workshop === 'TB2')) return true;
-  // 2. Check owners & collaborators via SAPID→process map
+  // If task has its own process/workshop field (PM tasks), use it exclusively
+  if (task.process || task.workshop) {
+    if (task.process && task.process.toUpperCase() === filter) return true;
+    if (filter === 'INJ' && task.workshop && (task.workshop === 'TB1' || task.workshop === 'TB2')) return true;
+    return false; // 有自身工序字段但不匹配 → 直接排除，不回退到人员查询
+  }
+  // Manual tasks without process: check owners via SAPID→process map
   const people = (task.owners || []).concat(task.collaborators || []);
   for (let i = 0; i < people.length; i++) {
     const pid = (people[i] || '').trim();
     if (!pid) continue;
     const proc = (userProcessMap[pid] || '').toUpperCase();
-    // Handle pipe-separated multi-process: "INJ|TF" matches INJ or TF
     if (proc && proc.indexOf('|') >= 0) {
       if (proc.split('|').indexOf(filter) >= 0) return true;
     } else if (proc === filter) {
