@@ -19,6 +19,15 @@ $(document).ready(function () {
   currentUserName = name;
   $('#name').text(name);
 
+  // 页面加载即显示 toast
+  Swal.fire({
+    title: swalTitle('加载数据中...', 'Loading Data...'),
+    html: swalHtml('正在获取任务列表，请稍候。', 'Fetching task list, please wait.'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+
   // User badge
   if (currentPermission) {
     const labels = { 'admin': '管理员 / Admin', 'supervisor': '主管 / Supervisor', 'employee': '员工 / Employee' };
