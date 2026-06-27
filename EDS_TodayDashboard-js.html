@@ -189,8 +189,12 @@ function applyProcessFilter() {
   // Apply process filter
   if (filter) {
     staff = staff.filter(function (s) {
+      // Check userID process map first, then workshop field
       const proc = (userProcessMap[s.sapID] || '').toUpperCase();
-      return proc === filter;
+      const ws = (s.workshop || '').toUpperCase();
+      // TB1/TB2 → INJ
+      if (filter === 'INJ' && (ws === 'TB1' || ws === 'TB2' || proc === 'INJ')) return true;
+      return proc === filter || ws === filter;
     });
     todayTasks = todayTasks.filter(function (t) {
       return taskMatchesProcess(t, filter);
@@ -221,10 +225,14 @@ function applyProcessFilter() {
       const statusClass = s.attendanceStatus === '在岗' ? 'status-completed' :
         (s.attendanceStatus === '请假' ? 'status-cancelled' :
           (s.attendanceStatus === '外出' ? 'status-waiting' : 'status-pending'));
+      const statusText = s.attendanceStatus || '在岗';
+      const statusClass = statusText === '在岗' ? 'status-completed' :
+        (statusText === '请假' ? 'status-cancelled' :
+          (statusText === '外出' ? 'status-waiting' : 'status-pending'));
       html += '<div class="staff-card">'
-        + '<span class="staff-name">' + (s.sapID || '--') + '</span>'
-        + '<span class="staff-status ' + statusClass + '">' + s.attendanceStatus + '</span>'
-        + '<span class="staff-role">' + (s.workRole || '') + '</span>'
+        + '<span class="staff-name">' + (s.name || s.sapID || '--') + '</span>'
+        + '<span class="staff-status ' + statusClass + '">' + statusText + '</span>'
+        + '<span class="staff-role">' + (s.workRole || s.workshop || '') + '</span>'
         + '<span class="staff-shift">' + (s.shift || '') + '</span>'
         + '</div>';
     });

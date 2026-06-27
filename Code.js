@@ -18,6 +18,8 @@ const TASK_NOTIFICATIONS_SHEET = "TaskNotifications";
 const TASK_LOGS_SHEET = "TaskLogs";
 const TASK_CONFIG_SHEET = "TaskConfig";
 const TASK_PERMISSION_COL = 62; // Column BK (0-indexed)
+const IM_SCHEDULING_SS_ID = "1dyS5C7r4pqYIeRT0p1zYzngt0EDCYR4hsswurAsEBYg"; // 注塑排班主数据
+const IM_SCHEDULING_SHEET = "MasterData";
 
 // Inspection2.0 统一记录表开关（紧急回滚设 false）
 var USE_UNIFIED_INSPECTION_SHEET = true;
@@ -11754,10 +11756,73 @@ function loadTasks(filterJSON) {
   }
 }
 
+function loadIMStaffByDate(dateStr) {
+  try {
+    // Convert yyyy-MM-dd to yyyy.MM.dd
+    const parts = dateStr.split('-');
+    const datePrefix = parts[0] + '.' + parts[1] + '.' + parts[2];
+    const ws = SpreadsheetApp.openById(IM_SCHEDULING_SS_ID).getSheetByName(IM_SCHEDULING_SHEET);
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    const data = ws.getDataRange().getValues();
+    // Build name→SAPID map from userID
+    const userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    const nameToSap = {};
+    if (userWs) {
+      const userVals = userWs.getDataRange().getValues();
+      for (let i = 2; i < userVals.length; i++) {
+        const name = String(userVals[i][1] || '').trim();
+        const sapID = String(userVals[i][0] || '').trim();
+        if (name && sapID) nameToSap[name] = sapID;
+      }
+    }
+    // Shift mapping: 1夜→夜班, 2早→早班, 3中→中班
+    const shiftMap = { '1夜': '夜班', '2早': '早班', '3中': '中班' };
+    const result = [];
+    for (let i = 1; i < data.length; i++) {
+      const dateShift = String(data[i][0] || '');
+      if (dateShift.indexOf(datePrefix) === 0) {
+        const workshop = String(data[i][1] || '').trim();
+        const name = String(data[i][3] || '').trim();
+        const hours = String(data[i][4] || '').trim();
+        // Parse shift from dateShift string: "2026.06.25_1夜" → "1夜"
+        const shiftPart = dateShift.substring(datePrefix.length + 1); // skip "2026.06.25_"
+        const shift = shiftMap[shiftPart] || shiftPart;
+        const sapID = nameToSap[name] || '';
+        if (name) {
+          result.push({
+            sapID: sapID,
+            name: name,
+            workshop: workshop,
+            attendanceStatus: '在岗',
+            workRole: workshop === 'TB1' ? 'TB1' : 'TB2',
+            shift: shift,
+            hours: hours
+          });
+        }
+      }
+    }
+    // Deduplicate by name (same person might appear multiple times)
+    const seen = {};
+    const unique = [];
+    result.forEach(function (r) {
+      if (!seen[r.name]) { seen[r.name] = true; unique.push(r); }
+    });
+    return JSON.stringify({ success: true, data: unique });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
 function loadTodayDashboardData(date, sapID) {
   try {
-    // Load staff
-    const staffResult = JSON.parse(loadDailyStaffByDate(date));
+    // Load staff from IM scheduling master data
+    const staffResult = JSON.parse(loadIMStaffByDate(date));
+    // Also try DailyStaff as fallback if IM data is empty
+    let staff = staffResult.success ? staffResult.data : [];
+    if (staff.length === 0) {
+      const fallbackStaff = JSON.parse(loadDailyStaffByDate(date));
+      staff = fallbackStaff.success ? fallbackStaff.data : [];
+    }
     // Load all tasks (not cancelled)
     const tasksData = JSON.parse(loadTasks(JSON.stringify({})));
     const allTasks = tasksData.success ? tasksData.data : [];
@@ -11780,7 +11845,7 @@ function loadTodayDashboardData(date, sapID) {
     return JSON.stringify({
       success: true,
       data: {
-        staff: staffResult.success ? staffResult.data : [],
+        staff: staff,
         todayTasks: todayTasks,
         overdueTasks: overdueTasks,
         myTasks: myTasks
