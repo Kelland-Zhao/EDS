@@ -282,14 +282,17 @@ function applyProcessFilter() {
   const newTasks = todayTasks.filter(function (t) { return t.status === '未开始'; });
   const ongoingTasks = todayTasks.filter(function (t) { return t.status === '进行中'; });
   const waitingTasks = todayTasks.filter(function (t) { return t.status === '等待中'; });
+  const doneTasks = todayTasks.filter(function (t) { return t.status === '已完成'; });
 
   $('#countNew').text(newTasks.length);
   $('#countOngoing').text(ongoingTasks.length);
   $('#countWaiting').text(waitingTasks.length);
+  $('#countDone').text(doneTasks.length);
 
   $('#newTasks').html(renderTaskCards(newTasks));
   $('#ongoingTasks').html(renderTaskCards(ongoingTasks));
   $('#waitingTasks').html(renderTaskCards(waitingTasks));
+  $('#doneTasks').html(renderTaskCards(doneTasks));
 
   // Overdue tasks
   if (overdueTasks.length === 0) {

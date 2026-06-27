@@ -11930,9 +11930,9 @@ function loadTodayDashboardData(date, sapID) {
     // Merge PM tasks from PM_Records
     const pmTasks = loadPMTasksByDate(date);
     allTasks = pmTasks.concat(allTasks);
-    // Today tasks: status != 已完成/已取消 AND in date range
+    // Today tasks: status != 已取消 AND in date range (include 已完成)
     const todayTasks = allTasks.filter(function (t) {
-      if (t.status === '已完成' || t.status === '已取消') return false;
+      if (t.status === '已取消') return false;
       if (t.planStartDate <= date && t.dueDate >= date) return true;
       return false;
     });
@@ -11941,9 +11941,9 @@ function loadTodayDashboardData(date, sapID) {
       if (t.status === '已完成' || t.status === '已取消') return false;
       return t.dueDate && t.dueDate < date;
     });
-    // My tasks: owner or collaborator, not completed/cancelled
+    // My tasks: owner or collaborator, exclude cancelled only
     const myTasks = allTasks.filter(function (t) {
-      if (t.status === '已完成' || t.status === '已取消') return false;
+      if (t.status === '已取消') return false;
       return t.owners.indexOf(sapID) !== -1 || t.collaborators.indexOf(sapID) !== -1;
     });
     return JSON.stringify({
