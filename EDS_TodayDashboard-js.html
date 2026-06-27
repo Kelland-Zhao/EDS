@@ -353,12 +353,19 @@ function processMatch(taskProc, filter) {
 
 function taskMatchesProcess(task, filter) {
   if (!filter) return true;
-  // If task has its own process/workshop field (PM tasks), use it exclusively
-  if (task.process || task.workshop) {
-    if (task.process && processMatch(task.process, filter)) return true;
-    if (filter === 'INJ' && task.workshop && (task.workshop === 'TB1' || task.workshop === 'TB2')) return true;
-    return false;
+  // If task has its own process field (PM tasks), use it exclusively
+  if (task.process) {
+    return processMatch(task.process, filter);
   }
+  // Manual tasks without process: check owners via SAPID→process map
+  const people = (task.owners || []).concat(task.collaborators || []);
+  for (let i = 0; i < people.length; i++) {
+    const pid = (people[i] || '').trim();
+    if (!pid) continue;
+    if (processMatch(userProcessMap[pid], filter)) return true;
+  }
+  return false;
+}
   // Manual tasks without process: check owners via SAPID→process map
   const people = (task.owners || []).concat(task.collaborators || []);
   for (let i = 0; i < people.length; i++) {
