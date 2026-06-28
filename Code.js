@@ -11794,23 +11794,93 @@ function loadTasks(filterJSON) {
   }
 }
 
-// Load all PM tasks for task list (today + past 90 days overdue)
+// Load all PM tasks for task list — read sheets once, filter in memory
 function loadAllPMTasks(filterJSON) {
   try {
     var filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
-    var allPM = [];
-    var seen = {};
-    var tz = Session.getScriptTimeZone();
-    for (var d = 90; d >= 0; d--) {
-      var dt = new Date();
-      dt.setDate(dt.getDate() - d);
-      var dateStr = Utilities.formatDate(dt, tz, 'yyyy-MM-dd');
-      var tasks = loadPMTasksByDate(dateStr);
-      tasks.forEach(function (t) {
-        var key = t.taskID;
-        if (!seen[key]) { seen[key] = true; allPM.push(t); }
-      });
+    var ss = SpreadsheetApp.openById('1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4');
+    var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+    var cutoffStr = Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+    // Build name→SAPID map once
+    var userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    var nameToSap = {};
+    if (userWs) {
+      var userVals = userWs.getDataRange().getValues();
+      for (var i = 2; i < userVals.length; i++) {
+        var nm = String(userVals[i][1] || '').trim();
+        var sid = String(userVals[i][0] || '').trim();
+        if (nm && sid) nameToSap[nm] = sid;
+      }
     }
+
+    function addDays_(d, n) {
+      if (n <= 0) return d;
+      var p = d.split('-');
+      var dt = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+      dt.setDate(dt.getDate() + n);
+      return Utilities.formatDate(dt, 'Asia/Shanghai', 'yyyy-MM-dd');
+    }
+
+    // Step 1: Read Total PM Plan List once → build taskMap
+    var taskMap = {};
+    var planWs = ss.getSheetByName('Total PM Plan List');
+    if (planWs) {
+      var planData = planWs.getDataRange().getValues();
+      for (var i = 1; i < planData.length; i++) {
+        var planDate = normalizeDate_(planData[i][4]);
+        var planHours = parseFloat(String(planData[i][7] || '0'));
+        var durationDays = Math.max(1, Math.ceil(planHours / 24));
+        var planEndDate = addDays_(planDate, durationDays - 1);
+        if (planDate < cutoffStr) continue;
+        var aem = String(planData[i][6] || '').trim();
+        if (!aem) continue;
+        var key = planDate + '_' + aem;
+        if (taskMap[key]) continue;
+        taskMap[key] = {
+          taskID: 'PLAN-' + aem + '-' + planDate.replace(/-/g, ''),
+          title: 'PM: ' + aem + (String(planData[i][2] || '').trim() ? ' [' + String(planData[i][2] || '').trim() + ']' : '') + ' - ' + String(planData[i][8] || '').trim(),
+          description: '工时: ' + planHours + 'h | 机型: ' + String(planData[i][9] || '').trim() + ' | 计划中 / Planned',
+          taskType: '保养', priority: '中', status: '未开始',
+          planStartDate: planDate, dueDate: planEndDate,
+          owners: [], collaborators: [], ownerNames: [],
+          process: String(planData[i][3] || '').trim(),
+          workshop: String(planData[i][2] || '').trim(),
+          createdBy: 'PM Plan', remark: '源自保养计划 / From PM Plan'
+        };
+      }
+    }
+
+    // Step 2: PM_Records overlay once
+    var recordsWs = ss.getSheetByName('PM_Records');
+    if (recordsWs) {
+      var recordsData = recordsWs.getDataRange().getValues();
+      for (var i = 1; i < recordsData.length; i++) {
+        var pmNo = String(recordsData[i][0] || '').trim();
+        var status = String(recordsData[i][1] || '').trim();
+        var people = String(recordsData[i][3] || '').trim();
+        var workcenter = String(recordsData[i][9] || '').trim();
+        if (!pmNo || !workcenter) continue;
+        var recPlanDate = normalizeDate_(recordsData[i][4]);
+        var key = recPlanDate + '_' + workcenter;
+        var existing = taskMap[key];
+        if (!existing) continue;
+        var s = status.toLowerCase();
+        if (s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1) existing.status = '进行中';
+        else if (s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1) existing.status = '已完成';
+        var oNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
+        existing.owners = oNames.map(function (n) { return nameToSap[n] || n; });
+        existing.ownerNames = oNames;
+        var endDate = normalizeDate_(recordsData[i][7]);
+        if (endDate) existing.dueDate = endDate;
+        existing.description = '总任务: ' + String(recordsData[i][11] || '').trim() + ' | 未完成: ' + String(recordsData[i][13] || '').trim() + ' | 状态: ' + status;
+        existing.createdBy = 'PM Module';
+        existing.remark = 'PM No: ' + pmNo;
+      }
+    }
+
+    var allPM = Object.values(taskMap);
     // Apply filters
     if (filter.status) {
       allPM = allPM.filter(function (t) { return t.status === filter.status; });
