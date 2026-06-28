@@ -95,14 +95,12 @@
       <button class="pf-btn" data-process="PK">包装<br><span style="font-size:10px;">PK</span></button>
       <span style="margin-left:8px;"></span>
       <label>状态 / Status:</label>
-      <select id="filterStatus" class="form-select form-select-sm" style="width:120px;">
-        <option value="">全部 / All</option>
-        <option value="未开始">未开始</option>
-        <option value="进行中">进行中</option>
-        <option value="等待中">等待中</option>
-        <option value="已完成">已完成</option>
-        <option value="已取消">已取消</option>
-      </select>
+      <button class="pf-btn active" data-status="">全部<br><span style="font-size:10px;">All</span></button>
+      <button class="pf-btn" data-status="未开始">未开始<br><span style="font-size:10px;">Not Started</span></button>
+      <button class="pf-btn" data-status="进行中">进行中<br><span style="font-size:10px;">Ongoing</span></button>
+      <button class="pf-btn" data-status="等待中">等待中<br><span style="font-size:10px;">Waiting</span></button>
+      <button class="pf-btn" data-status="已完成">已完成<br><span style="font-size:10px;">Completed</span></button>
+      <button class="pf-btn" data-status="已取消">已取消<br><span style="font-size:10px;">Cancelled</span></button>
       <label>搜索 / Search:</label>
       <input type="text" id="filterSearch" class="form-control form-control-sm" style="width:160px;" placeholder="标题/描述...">
       <button class="btn btn-sm btn-outline-secondary" id="btnFilter"><i class="bi bi-search"></i> 筛选 / Filter</button>
