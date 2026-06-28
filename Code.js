@@ -11778,6 +11778,7 @@ function loadTasks(filterJSON) {
         createdBy: String(taskData[i][9] || ''),
         closedBy: String(taskData[i][10] || ''),
         remark: String(taskData[i][11] || ''),
+        process: String(taskData[i][14] || ''),
         owners: mems.owners,
         collaborators: mems.collaborators,
         createdAt: String(taskData[i][12] || ''),
