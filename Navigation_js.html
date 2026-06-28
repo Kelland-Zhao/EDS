@@ -366,13 +366,36 @@
     });
 
     // 任务安排 / Daily Work Arrangement
+    // 任务安排 Modal
     $('#EDSTaskArrangement').on('click', () => {
+        $('#taskModal').modal('show');
+    });
+    $('#EDS_TodayDashboard').on('click', () => {
         let url = siWebPage + '?v=EDS_TodayDashboard'
             + '&ID=' + encodeURIComponent(id || '')
             + '&Name=' + encodeURIComponent(name || '')
             + '&Process=' + encodeURIComponent(process || '')
             + '&Workshop=' + encodeURIComponent(workshop || '');
         window.open(url);
+        $('#taskModal').modal('hide');
+    });
+    $('#EDS_TaskList_Nav').on('click', () => {
+        let url = siWebPage + '?v=EDS_TaskList'
+            + '&ID=' + encodeURIComponent(id || '')
+            + '&Name=' + encodeURIComponent(name || '')
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
+        $('#taskModal').modal('hide');
+    });
+    $('#EDS_MyTasks').on('click', () => {
+        let url = siWebPage + '?v=EDS_MyTasks'
+            + '&ID=' + encodeURIComponent(id || '')
+            + '&Name=' + encodeURIComponent(name || '')
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
+        $('#taskModal').modal('hide');
     });
 
     // 项目跟进
