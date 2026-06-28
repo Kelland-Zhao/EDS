@@ -11882,6 +11882,15 @@ function loadPMTasksByDate(dateStr) {
       }
     }
 
+    // Helper: add N days to yyyy-MM-dd string
+    function addDays_(dateStr, days) {
+      if (days <= 0) return dateStr;
+      const parts = dateStr.split('-');
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      d.setDate(d.getDate() + days);
+      return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    }
+
     // Step 1: Read Total PM Plan List as base (all tasks are "未开始" until found in PM_Records)
     const taskMap = {}; // key: date_workcenter → task object
     const planWs = ss.getSheetByName('Total PM Plan List');
@@ -11889,7 +11898,12 @@ function loadPMTasksByDate(dateStr) {
       const planData = planWs.getDataRange().getValues();
       for (let i = 1; i < planData.length; i++) {
         const planDate = normalizeDate_(planData[i][4]); // E: 开始日期
-        if (planDate !== dateStr) continue;
+        const planHours = parseFloat(String(planData[i][7] || '0')); // H: 保养时间
+        // Calculate end date: 保养时间(h) / 24h per day, ceil
+        const durationDays = Math.max(1, Math.ceil(planHours / 24));
+        const planEndDate = addDays_(planDate, durationDays - 1);
+        // Show task for all dates in range [planDate, planEndDate]
+        if (dateStr < planDate || dateStr > planEndDate) continue;
         const workshop = String(planData[i][2] || '').trim(); // C: 车间
         const process = String(planData[i][3] || '').trim(); // D: 工序
         const aem = String(planData[i][6] || '').trim(); // G: AEM#
@@ -11923,7 +11937,11 @@ function loadPMTasksByDate(dateStr) {
       for (let i = 1; i < recordsData.length; i++) {
         const planDate = normalizeDate_(recordsData[i][4]); // E: Plan PM Date
         const startDate = normalizeDate_(recordsData[i][5]); // F: SatrtDate
-        if (planDate !== dateStr && startDate !== dateStr) continue;
+        const endDate = normalizeDate_(recordsData[i][7]); // H: EndDate
+        // Match if dateStr falls in [planDate/startDate, endDate] range
+        const recStart = startDate || planDate;
+        const recEnd = endDate || recStart;
+        if (dateStr < recStart || dateStr > recEnd) continue;
         const pmNo = String(recordsData[i][0] || '').trim();
         const status = String(recordsData[i][1] || '').trim();
         const people = String(recordsData[i][3] || '').trim();
@@ -11934,14 +11952,15 @@ function loadPMTasksByDate(dateStr) {
         const unfinishedCount = String(recordsData[i][13] || '').trim();
         if (!pmNo) continue;
 
-        const key = dateStr + '_' + workcenter;
-        const existing = taskMap[key];
-
         // Map PM status
         let taskStatus = '未开始';
         const s = status.toLowerCase();
         if (s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1) taskStatus = '进行中';
         else if (s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1) taskStatus = '已完成';
+
+        // Find plan entry by workcenter (date-independent key matching)
+        const planKey = dateStr + '_' + workcenter;
+        const existing = taskMap[planKey];
 
         if (existing) {
           // Update existing plan entry with PM_Records status
@@ -11951,16 +11970,16 @@ function loadPMTasksByDate(dateStr) {
           existing.createdBy = 'PM Module';
           existing.remark = 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '');
         } else {
-          // PM_Records entry without matching plan (edge case)
-          taskMap[key] = {
+          // PM_Records entry for a date that also has a plan entry (use same key)
+          taskMap[planKey] = {
             taskID: pmNo,
             title: 'PM: ' + workcenter + (workshop ? ' [' + workshop + ']' : '') + ' - ' + people,
             description: '总任务: ' + totalTasks + ' | 未完成: ' + unfinishedCount + ' | 状态: ' + status,
             taskType: '保养',
             priority: '中',
             status: taskStatus,
-            planStartDate: planDate || startDate,
-            dueDate: planDate || startDate,
+            planStartDate: recStart,
+            dueDate: recEnd,
             owners: people.split('/').map(function (n) { return nameToSap[n.trim()] || n.trim(); }),
             collaborators: [],
             process: process,
