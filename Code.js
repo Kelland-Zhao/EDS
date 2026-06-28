@@ -11893,6 +11893,7 @@ function loadPMTasksByDate(dateStr) {
 
     // Step 1: Read Total PM Plan List as base (all tasks are "未开始" until found in PM_Records)
     const taskMap = {}; // key: date_workcenter → task object
+    const wcToKeys = {}; // workcenter → [keys] for PM_Records overlay
     const planWs = ss.getSheetByName('Total PM Plan List');
     if (planWs) {
       const planData = planWs.getDataRange().getValues();
@@ -11927,10 +11928,13 @@ function loadPMTasksByDate(dateStr) {
           createdBy: 'PM Plan',
           remark: '源自保养计划 / From PM Plan'
         };
+        // Reverse index for PM_Records overlay
+        if (!wcToKeys[aem]) wcToKeys[aem] = [];
+        wcToKeys[aem].push(key);
       }
     }
 
-    // Step 2: Overlay with PM_Records status for matching entries
+    // Step 2: Overlay with PM_Records — only match if record's date aligns with plan
     const recordsWs = ss.getSheetByName('PM_Records');
     if (recordsWs) {
       const recordsData = recordsWs.getDataRange().getValues();
@@ -11939,61 +11943,56 @@ function loadPMTasksByDate(dateStr) {
         const status = String(recordsData[i][1] || '').trim();
         const people = String(recordsData[i][3] || '').trim();
         const workcenter = String(recordsData[i][9] || '').trim();
-        if (!pmNo) continue;
-        const planDate = normalizeDate_(recordsData[i][4]); // E: Plan PM Date
-        const startDate = normalizeDate_(recordsData[i][5]); // F: SatrtDate
-        const endDate = normalizeDate_(recordsData[i][7]); // H: EndDate
-        // Match if dateStr falls in [recStart, recEnd]; ongoing tasks without EndDate match all future dates
-        const recStart = startDate || planDate;
+        if (!pmNo || !workcenter) continue;
+        const recPlanDate = normalizeDate_(recordsData[i][4]); // E: Plan PM Date
+        const recStartDate = normalizeDate_(recordsData[i][5]); // F: SatrtDate
+        const recEndDate = normalizeDate_(recordsData[i][7]); // H: EndDate
+        const recStart = recStartDate || recPlanDate;
         const s = status.toLowerCase();
         const isOngoing = s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1;
         const isDone = s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1;
-        if (dateStr < recStart) continue;
-        if (!isOngoing && endDate && dateStr > endDate) continue;
-        if (isDone && !endDate && dateStr > recStart) continue;
-        const process = String(recordsData[i][21] || '').trim(); // V: 工序
-        const workshop = String(recordsData[i][22] || '').trim(); // W: 车间
-        const totalTasks = String(recordsData[i][11] || '').trim();
-        const unfinishedCount = String(recordsData[i][13] || '').trim();
 
-        // Map PM status (isOngoing/isDone already computed above)
-        let taskStatus = '未开始';
-        if (isOngoing) taskStatus = '进行中';
-        else if (isDone) taskStatus = '已完成';
-
-        // Resolve owners: SAPID for filtering + names for display
-        const ownerNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
-        const ownerIDs = ownerNames.map(function (n) { return nameToSap[n] || n; });
-
-        // Find plan entry by workcenter (date-independent key matching)
-        const planKey = dateStr + '_' + workcenter;
-        const existing = taskMap[planKey];
-
-        if (existing) {
-          // Update existing plan entry with PM_Records status
-          existing.status = taskStatus;
-          existing.dueDate = endDate || existing.dueDate;
-          existing.owners = ownerIDs;
-          existing.ownerNames = ownerNames;
-          existing.description = '总任务: ' + totalTasks + ' | 未完成: ' + unfinishedCount + ' | 状态: ' + status;
-          existing.createdBy = 'PM Module';
-          existing.remark = 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '');
-        } else {
-          // PM_Records entry without matching plan entry for this date
+        // Only overlay plan entries whose date range contains recStart
+        const keys = wcToKeys[workcenter] || [];
+        let matched = false;
+        for (let k = 0; k < keys.length; k++) {
+          const planEntry = taskMap[keys[k]];
+          if (!planEntry) continue;
+          // Check if record's start date falls within this plan entry's range
+          if (recStart >= planEntry.planStartDate && recStart <= planEntry.dueDate) {
+            planEntry.status = isOngoing ? '进行中' : (isDone ? '已完成' : '未开始');
+            if (recEndDate) planEntry.dueDate = recEndDate;
+            const oNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
+            planEntry.owners = oNames.map(function (n) { return nameToSap[n] || n; });
+            planEntry.ownerNames = oNames;
+            const process = String(recordsData[i][21] || '').trim();
+            const workshop = String(recordsData[i][22] || '').trim();
+            planEntry.description = '总任务: ' + String(recordsData[i][11] || '').trim() + ' | 未完成: ' + String(recordsData[i][13] || '').trim() + ' | 状态: ' + status;
+            planEntry.createdBy = 'PM Module';
+            planEntry.remark = 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '');
+            matched = true;
+          }
+        }
+        // If no plan entry matched but record is for the viewing date, add it
+        if (!matched && (recStart === dateStr || (recStartDate === dateStr))) {
+          const process = String(recordsData[i][21] || '').trim();
+          const workshop = String(recordsData[i][22] || '').trim();
+          const totalTasks = String(recordsData[i][11] || '').trim();
+          const unfinishedCount = String(recordsData[i][13] || '').trim();
+          let taskStatus = '未开始';
+          if (isOngoing) taskStatus = '进行中';
+          else if (isDone) taskStatus = '已完成';
+          const oNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
+          const planKey = dateStr + '_' + workcenter;
           taskMap[planKey] = {
             taskID: pmNo,
             title: 'PM: ' + workcenter + (workshop ? ' [' + workshop + ']' : '') + ' - ' + people,
             description: '总任务: ' + totalTasks + ' | 未完成: ' + unfinishedCount + ' | 状态: ' + status,
-            taskType: '保养',
-            priority: '中',
-            status: taskStatus,
-            planStartDate: recStart,
-            dueDate: endDate || recStart,
-            owners: ownerIDs,
-            ownerNames: ownerNames,
-            collaborators: [],
-            process: process,
-            workshop: workshop,
+            taskType: '保养', priority: '中', status: taskStatus,
+            planStartDate: recStart, dueDate: recEndDate || recStart,
+            owners: oNames.map(function (n) { return nameToSap[n] || n; }),
+            ownerNames: oNames, collaborators: [],
+            process: process, workshop: workshop,
             createdBy: 'PM Module',
             remark: 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '')
           };
