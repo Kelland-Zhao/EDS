@@ -1,4 +1,4 @@
-const devWebPage =
+﻿const devWebPage =
   "https://script.google.com/a/macros/colpal.com/s/AKfycbz92tqMHCvBErGfu_yHxtSeL25lDOkuuKcNTPvkMJQ/dev";
 const releaseWebPage =
   "https://script.google.com/a/colpal.com/macros/s/AKfycbyaQjG5yFGYxU825DrODhSLl2bdfbYKpqAH4qOIzKoTJ4b-5qU/exec";
@@ -11870,7 +11870,7 @@ function normalizeDate_(val) {
 function loadPMTasksByDate(dateStr) {
   try {
     const ss = SpreadsheetApp.openById('1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4');
-    // Build name→SAPID map from userID
+    // Build name->SAPID map from userID
     const userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
     const nameToSap = {};
     if (userWs) {
@@ -11882,59 +11882,47 @@ function loadPMTasksByDate(dateStr) {
       }
     }
 
-    // Helper: add N days to yyyy-MM-dd string
-    function addDays_(dateStr, days) {
-      if (days <= 0) return dateStr;
-      const parts = dateStr.split('-');
-      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-      d.setDate(d.getDate() + days);
-      return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    function addDays_(d, n) {
+      if (n <= 0) return d;
+      var p = d.split('-');
+      var dt = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+      dt.setDate(dt.getDate() + n);
+      return Utilities.formatDate(dt, 'Asia/Shanghai', 'yyyy-MM-dd');
     }
 
-    // Step 1: Read Total PM Plan List as base (all tasks are "未开始" until found in PM_Records)
-    const taskMap = {}; // key: date_workcenter → task object
-    const wcToKeys = {}; // workcenter → [keys] for PM_Records overlay
+    // Step 1: Total PM Plan List -> base, key = PlanDate_AEM#
+    const taskMap = {};
     const planWs = ss.getSheetByName('Total PM Plan List');
     if (planWs) {
       const planData = planWs.getDataRange().getValues();
       for (let i = 1; i < planData.length; i++) {
         const planDate = normalizeDate_(planData[i][4]); // E: 开始日期
         const planHours = parseFloat(String(planData[i][7] || '0')); // H: 保养时间
-        // Calculate end date: 保养时间(h) / 24h per day, ceil
         const durationDays = Math.max(1, Math.ceil(planHours / 24));
         const planEndDate = addDays_(planDate, durationDays - 1);
-        // Show task for all dates in range [planDate, planEndDate]
         if (dateStr < planDate || dateStr > planEndDate) continue;
-        const workshop = String(planData[i][2] || '').trim(); // C: 车间
-        const process = String(planData[i][3] || '').trim(); // D: 工序
         const aem = String(planData[i][6] || '').trim(); // G: AEM#
-        const pmType = String(planData[i][8] || '').trim(); // I: 保养类型
-        const machineType = String(planData[i][9] || '').trim(); // J: 机型
         if (!aem) continue;
-        const key = dateStr + '_' + aem;
+        const key = planDate + '_' + aem;
+        if (taskMap[key]) continue;
+        const workshop = String(planData[i][2] || '').trim();
+        const process = String(planData[i][3] || '').trim();
+        const pmType = String(planData[i][8] || '').trim();
+        const machineType = String(planData[i][9] || '').trim();
         taskMap[key] = {
-          taskID: 'PLAN-' + aem + '-' + dateStr.replace(/-/g, ''),
+          taskID: 'PLAN-' + aem + '-' + planDate.replace(/-/g, ''),
           title: 'PM: ' + aem + (workshop ? ' [' + workshop + ']' : '') + ' - ' + pmType,
-          description: '保养类型: ' + pmType + ' | 机型: ' + machineType + ' | 工时: ' + planHours + 'h | 计划中 / Planned',
-          taskType: '保养',
-          priority: '中',
-          status: '未开始',
-          planStartDate: planDate,
-          dueDate: planEndDate,
-          owners: [],
-          collaborators: [],
-          process: process,
-          workshop: workshop,
-          createdBy: 'PM Plan',
-          remark: '源自保养计划 / From PM Plan'
+          description: '工时: ' + planHours + 'h | 机型: ' + machineType + ' | 计划中 / Planned',
+          taskType: '保养', priority: '中', status: '未开始',
+          planStartDate: planDate, dueDate: planEndDate,
+          owners: [], collaborators: [], ownerNames: [],
+          process: process, workshop: workshop,
+          createdBy: 'PM Plan', remark: '源自保养计划 / From PM Plan'
         };
-        // Reverse index for PM_Records overlay
-        if (!wcToKeys[aem]) wcToKeys[aem] = [];
-        wcToKeys[aem].push(key);
       }
     }
 
-    // Step 2: Overlay with PM_Records — only match if record's date aligns with plan
+    // Step 2: PM_Records overlay -> key = PlanPMDate_Workcenter
     const recordsWs = ss.getSheetByName('PM_Records');
     if (recordsWs) {
       const recordsData = recordsWs.getDataRange().getValues();
@@ -11945,58 +11933,20 @@ function loadPMTasksByDate(dateStr) {
         const workcenter = String(recordsData[i][9] || '').trim();
         if (!pmNo || !workcenter) continue;
         const recPlanDate = normalizeDate_(recordsData[i][4]); // E: Plan PM Date
-        const recStartDate = normalizeDate_(recordsData[i][5]); // F: SatrtDate
-        const recEndDate = normalizeDate_(recordsData[i][7]); // H: EndDate
-        const recStart = recStartDate || recPlanDate;
+        const key = recPlanDate + '_' + workcenter;
+        const existing = taskMap[key];
+        if (!existing) continue;
         const s = status.toLowerCase();
-        const isOngoing = s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1;
-        const isDone = s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1;
-
-        // Only overlay plan entries whose date range contains recStart
-        const keys = wcToKeys[workcenter] || [];
-        let matched = false;
-        for (let k = 0; k < keys.length; k++) {
-          const planEntry = taskMap[keys[k]];
-          if (!planEntry) continue;
-          // Check if record's start date falls within this plan entry's range
-          if (recStart >= planEntry.planStartDate && recStart <= planEntry.dueDate) {
-            planEntry.status = isOngoing ? '进行中' : (isDone ? '已完成' : '未开始');
-            if (recEndDate) planEntry.dueDate = recEndDate;
-            const oNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
-            planEntry.owners = oNames.map(function (n) { return nameToSap[n] || n; });
-            planEntry.ownerNames = oNames;
-            const process = String(recordsData[i][21] || '').trim();
-            const workshop = String(recordsData[i][22] || '').trim();
-            planEntry.description = '总任务: ' + String(recordsData[i][11] || '').trim() + ' | 未完成: ' + String(recordsData[i][13] || '').trim() + ' | 状态: ' + status;
-            planEntry.createdBy = 'PM Module';
-            planEntry.remark = 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '');
-            matched = true;
-          }
-        }
-        // If no plan entry matched but record is for the viewing date, add it
-        if (!matched && (recStart === dateStr || (recStartDate === dateStr))) {
-          const process = String(recordsData[i][21] || '').trim();
-          const workshop = String(recordsData[i][22] || '').trim();
-          const totalTasks = String(recordsData[i][11] || '').trim();
-          const unfinishedCount = String(recordsData[i][13] || '').trim();
-          let taskStatus = '未开始';
-          if (isOngoing) taskStatus = '进行中';
-          else if (isDone) taskStatus = '已完成';
-          const oNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
-          const planKey = dateStr + '_' + workcenter;
-          taskMap[planKey] = {
-            taskID: pmNo,
-            title: 'PM: ' + workcenter + (workshop ? ' [' + workshop + ']' : '') + ' - ' + people,
-            description: '总任务: ' + totalTasks + ' | 未完成: ' + unfinishedCount + ' | 状态: ' + status,
-            taskType: '保养', priority: '中', status: taskStatus,
-            planStartDate: recStart, dueDate: recEndDate || recStart,
-            owners: oNames.map(function (n) { return nameToSap[n] || n; }),
-            ownerNames: oNames, collaborators: [],
-            process: process, workshop: workshop,
-            createdBy: 'PM Module',
-            remark: 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '')
-          };
-        }
+        if (s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1) existing.status = '进行中';
+        else if (s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1) existing.status = '已完成';
+        const oNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
+        existing.owners = oNames.map(function (n) { return nameToSap[n] || n; });
+        existing.ownerNames = oNames;
+        var endDate = normalizeDate_(recordsData[i][7]);
+        if (endDate) existing.dueDate = endDate;
+        existing.description = '总任务: ' + String(recordsData[i][11] || '').trim() + ' | 未完成: ' + String(recordsData[i][13] || '').trim() + ' | 状态: ' + status;
+        existing.createdBy = 'PM Module';
+        existing.remark = 'PM No: ' + pmNo;
       }
     }
 
