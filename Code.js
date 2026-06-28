@@ -11735,6 +11735,13 @@ function loadTasks(filterJSON) {
         : String(dueDateRaw || '');
       // Apply filters
       if (filter.status && status !== filter.status) continue;
+      if (filter.process) {
+        const taskProcess = String(taskData[i][14] || '').trim(); // Column O = process (new field)
+        // INJ = IM equivalence
+        const pc = taskProcess.toUpperCase();
+        if (filter.process === 'INJ') { if (pc !== 'INJ' && pc !== 'IM') continue; }
+        else if (pc !== filter.process) continue;
+      }
       if (filter.search) {
         const title = String(taskData[i][1] || '').toLowerCase();
         const desc = String(taskData[i][2] || '').toLowerCase();
@@ -11782,6 +11789,47 @@ function loadTasks(filterJSON) {
       return (a.dueDate || '').localeCompare(b.dueDate || '');
     });
     return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// Load all PM tasks for task list (today + past 90 days overdue)
+function loadAllPMTasks(filterJSON) {
+  try {
+    var filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+    var allPM = [];
+    var seen = {};
+    var tz = Session.getScriptTimeZone();
+    for (var d = 90; d >= 0; d--) {
+      var dt = new Date();
+      dt.setDate(dt.getDate() - d);
+      var dateStr = Utilities.formatDate(dt, tz, 'yyyy-MM-dd');
+      var tasks = loadPMTasksByDate(dateStr);
+      tasks.forEach(function (t) {
+        var key = t.taskID;
+        if (!seen[key]) { seen[key] = true; allPM.push(t); }
+      });
+    }
+    // Apply filters
+    if (filter.status) {
+      allPM = allPM.filter(function (t) { return t.status === filter.status; });
+    }
+    if (filter.process) {
+      allPM = allPM.filter(function (t) {
+        var pc = (t.process || '').toUpperCase();
+        if (filter.process === 'INJ') return pc === 'INJ' || pc === 'IM';
+        return pc === filter.process;
+      });
+    }
+    if (filter.search) {
+      var q = filter.search.toLowerCase();
+      allPM = allPM.filter(function (t) {
+        return (t.title || '').toLowerCase().indexOf(q) >= 0
+          || (t.description || '').toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    return JSON.stringify({ success: true, data: allPM });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }

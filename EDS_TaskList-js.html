@@ -123,6 +123,13 @@ function initPage() {
   $('#btnFilter').on('click', function () { loadTaskData(); });
   $('#filterSearch').on('keypress', function (e) { if (e.which === 13) loadTaskData(); });
 
+  // Process filter
+  $('.pf-btn').on('click', function () {
+    $('.pf-btn').removeClass('active');
+    $(this).addClass('active');
+    loadTaskData();
+  });
+
   // New task
   $('#btnNewTask').on('click', function () { openTaskModal(); });
 
@@ -237,26 +244,41 @@ function showLoading() {
 }
 
 function loadTaskData() {
+  const process = $('.pf-btn.active').data('process') || undefined;
   const filter = {
     status: $('#filterStatus').val() || undefined,
-    search: $('#filterSearch').val().trim() || undefined
+    search: $('#filterSearch').val().trim() || undefined,
+    process: process
   };
   showLoading();
+  // Load manual tasks + PM tasks in parallel
+  var manualDone = false, pmDone = false;
+  var manualData = [], pmData = [];
+  function onBothDone() {
+    if (!manualDone || !pmDone) return;
+    Swal.close();
+    // Merge: PM tasks first, then manual (dedup by taskID)
+    var seen = {};
+    pmData.forEach(function (t) { seen[t.taskID] = true; });
+    var all = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    taskTable.clear().rows.add(all).draw();
+  }
   google.script.run
     .withSuccessHandler(function (result) {
-      Swal.close();
-      const res = JSON.parse(result || '{}');
-      if (res.success && Array.isArray(res.data)) {
-        taskTable.clear().rows.add(res.data).draw();
-      } else {
-        Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(res.message || '', '') });
-      }
+      var res = JSON.parse(result || '{}');
+      if (res.success) manualData = res.data || [];
+      manualDone = true; onBothDone();
     })
-    .withFailureHandler(function (error) {
-      Swal.close();
-      Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml('网络错误', 'Network error') });
-    })
+    .withFailureHandler(function () { manualDone = true; onBothDone(); })
     .loadTasks(JSON.stringify(filter));
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var res = JSON.parse(result || '{}');
+      if (res.success) pmData = res.data || [];
+      pmDone = true; onBothDone();
+    })
+    .withFailureHandler(function () { pmDone = true; onBothDone(); })
+    .loadAllPMTasks(JSON.stringify(filter));
 }
 
 function openTaskModal(taskID) {
