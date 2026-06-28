@@ -11935,6 +11935,11 @@ function loadPMTasksByDate(dateStr) {
     if (recordsWs) {
       const recordsData = recordsWs.getDataRange().getValues();
       for (let i = 1; i < recordsData.length; i++) {
+        const pmNo = String(recordsData[i][0] || '').trim();
+        const status = String(recordsData[i][1] || '').trim();
+        const people = String(recordsData[i][3] || '').trim();
+        const workcenter = String(recordsData[i][9] || '').trim();
+        if (!pmNo) continue;
         const planDate = normalizeDate_(recordsData[i][4]); // E: Plan PM Date
         const startDate = normalizeDate_(recordsData[i][5]); // F: SatrtDate
         const endDate = normalizeDate_(recordsData[i][7]); // H: EndDate
@@ -11945,16 +11950,11 @@ function loadPMTasksByDate(dateStr) {
         const isDone = s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1;
         if (dateStr < recStart) continue;
         if (!isOngoing && endDate && dateStr > endDate) continue;
-        if (isDone && !endDate && dateStr > recStart) continue; // 已完成但无EndDate，仅匹配开始日
-        const pmNo = String(recordsData[i][0] || '').trim();
-        const status = String(recordsData[i][1] || '').trim();
-        const people = String(recordsData[i][3] || '').trim();
-        const workcenter = String(recordsData[i][9] || '').trim();
+        if (isDone && !endDate && dateStr > recStart) continue;
         const process = String(recordsData[i][21] || '').trim(); // V: 工序
         const workshop = String(recordsData[i][22] || '').trim(); // W: 车间
         const totalTasks = String(recordsData[i][11] || '').trim();
         const unfinishedCount = String(recordsData[i][13] || '').trim();
-        if (!pmNo) continue;
 
         // Map PM status (isOngoing/isDone already computed above)
         let taskStatus = '未开始';
