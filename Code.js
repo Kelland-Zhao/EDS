@@ -12026,9 +12026,8 @@ function loadPMTasksByDate(dateStr) {
         const planHours = parseFloat(String(planData[i][7] || '0')); // H: 保养时间
         const durationDays = Math.max(1, Math.ceil(planHours / 24));
         const planEndDate = addDays_(planDate, durationDays - 1);
-        // Include if viewing date is >= plan start date, within 90-day overdue window
         if (dateStr < planDate) continue;
-        if (planEndDate < addDays_(dateStr, -90)) continue; // Skip tasks >90 days overdue
+        if (addDays_(planEndDate, 90) < dateStr) continue; // Skip tasks >90 days overdue
         const aem = String(planData[i][6] || '').trim(); // G: AEM#
         if (!aem) continue;
         const key = planDate + '_' + aem;
@@ -12176,7 +12175,8 @@ function createTask(taskJSON, membersJSON, operatorSAPID, operatorName) {
       '',
       task.remark || '',
       now,
-      now
+      now,
+      task.process || ''
     ]);
     // Save task members
     saveTaskMembers_(taskID, members, operatorSAPID);
