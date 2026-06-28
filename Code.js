@@ -146,7 +146,6 @@ function doGet(e) {
   Route.path("ProjectTracking", loadProjectTracking);
   Route.path("INJ_SDM_Summary", loadINJSDMSummary);
   Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
-  Route.path("EDS_DailyStaff", loadEDSDailyStaff);
   Route.path("EDS_TaskList", loadEDSTaskList);
   Route.path("EDS_MyTasks", loadEDSMyTasks);
 
@@ -1292,18 +1291,6 @@ function loadEDSTodayDashboard(webPage, id, name, process) {
     intoWebType: process || ""
   })
     .setTitle("今日工作台 | Today's Dashboard")
-    .setFaviconUrl(webIconUrl);
-}
-
-function loadEDSDailyStaff(webPage, id, name, process) {
-  let pageUrl = webPage || getReleaseWebPage();
-  return render("EDS_DailyStaff", {
-    webPage: pageUrl,
-    intoWebID: id || "",
-    intoWebName: name || "",
-    intoWebType: process || ""
-  })
-    .setTitle("每日安排 | Daily Staff Arrangement")
     .setFaviconUrl(webIconUrl);
 }
 
