@@ -122,7 +122,7 @@ function initPage() {
     var group = $(this).data('process') !== undefined ? 'process' : 'status';
     $('.pf-btn[data-' + group + ']').removeClass('active');
     $(this).addClass('active');
-    loadTaskData();
+    applyFiltersAndRender();
   });
   // Default: show "进行中"
   $('.pf-btn[data-process]').removeClass('active');
@@ -130,12 +130,12 @@ function initPage() {
   $('.pf-btn[data-status]').removeClass('active');
   $('.pf-btn[data-status="进行中"]').addClass('active');
 
-  // Load data (after defaults set)
-  loadTaskData();
+  // Load data once (after defaults set)
+  initTaskData();
 
   // Filter
-  $('#btnFilter').on('click', function () { loadTaskData(); });
-  $('#filterSearch').on('keypress', function (e) { if (e.which === 13) loadTaskData(); });
+  $('#btnFilter').on('click', function () { applyFiltersAndRender(); });
+  $('#filterSearch').on('keypress', function (e) { if (e.which === 13) applyFiltersAndRender(); });
 
   // New task
   $('#btnNewTask').on('click', function () { openTaskModal(); });
@@ -164,7 +164,7 @@ function initPage() {
           if (r2.success) {
             Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
             $('#taskDetailModal').modal('hide');
-            loadTaskData();
+            applyFiltersAndRender();
           } else {
             Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
           }
@@ -194,7 +194,7 @@ function initPage() {
           if (r2.success) {
             Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
             $('#taskDetailModal').modal('hide');
-            loadTaskData();
+            applyFiltersAndRender();
           } else {
             Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
           }
@@ -224,7 +224,7 @@ function initPage() {
         confirmButtonText: '确认 / Confirm',
         cancelButtonText: '取消 / Cancel'
       }).then(function (r) {
-        if (!r.isConfirmed) { loadTaskData(); return; }
+        if (!r.isConfirmed) { applyFiltersAndRender(); return; }
         doUpdateStatus(tid, newStatus);
       });
     } else {
@@ -250,26 +250,34 @@ function showLoading() {
   });
 }
 
-function loadTaskData() {
-  const process = $('.pf-btn.active[data-process]').data('process') || undefined;
-  const status = $('.pf-btn.active[data-status]').data('status') || undefined;
-  const filter = {
-    status: status,
-    search: $('#filterSearch').val().trim() || undefined,
-    process: process
-  };
-  showLoading();
-  // Load manual tasks + PM tasks in parallel
+var allTasksCache = []; // Full data loaded once
+
+function reloadData(callback) {
+  var manualDone = false, pmDone = false, manualData = [], pmData = [];
+  function done() {
+    if (!manualDone || !pmDone) return;
+    var seen = {};
+    pmData.forEach(function (t) { seen[t.taskID] = true; });
+    allTasksCache = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    if (callback) callback();
+  }
+  google.script.run.withSuccessHandler(function (r) { manualData = (JSON.parse(r || '{}').data || []); manualDone = true; done(); })
+    .withFailureHandler(function () { manualDone = true; done(); }).loadTasks(JSON.stringify({}));
+  google.script.run.withSuccessHandler(function (r) { pmData = (JSON.parse(r || '{}').data || []); pmDone = true; done(); })
+    .withFailureHandler(function () { pmDone = true; done(); }).loadAllPMTasks(JSON.stringify({}));
+}
+
+function initTaskData() {
+  // Load all data once, no filter
   var manualDone = false, pmDone = false;
   var manualData = [], pmData = [];
   function onBothDone() {
     if (!manualDone || !pmDone) return;
     Swal.close();
-    // Merge: PM tasks first, then manual (dedup by taskID)
     var seen = {};
     pmData.forEach(function (t) { seen[t.taskID] = true; });
-    var all = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
-    taskTable.clear().rows.add(all).draw();
+    allTasksCache = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    applyFiltersAndRender();
   }
   google.script.run
     .withSuccessHandler(function (result) {
@@ -278,7 +286,7 @@ function loadTaskData() {
       manualDone = true; onBothDone();
     })
     .withFailureHandler(function () { manualDone = true; onBothDone(); })
-    .loadTasks(JSON.stringify(filter));
+    .loadTasks(JSON.stringify({}));
   google.script.run
     .withSuccessHandler(function (result) {
       var res = JSON.parse(result || '{}');
@@ -286,7 +294,34 @@ function loadTaskData() {
       pmDone = true; onBothDone();
     })
     .withFailureHandler(function () { pmDone = true; onBothDone(); })
-    .loadAllPMTasks(JSON.stringify(filter));
+    .loadAllPMTasks(JSON.stringify({}));
+}
+
+function applyFiltersAndRender() {
+  var process = $('.pf-btn.active[data-process]').data('process') || undefined;
+  var status = $('.pf-btn.active[data-status]').data('status') || undefined;
+  var search = $('#filterSearch').val().trim().toLowerCase();
+  var filtered = allTasksCache;
+  // Status filter
+  if (status) {
+    filtered = filtered.filter(function (t) { return t.status === status; });
+  }
+  // Process filter
+  if (process) {
+    filtered = filtered.filter(function (t) {
+      var pc = (t.process || '').toUpperCase();
+      if (process === 'INJ') return pc === 'INJ' || pc === 'IM';
+      return pc === process;
+    });
+  }
+  // Search filter
+  if (search) {
+    filtered = filtered.filter(function (t) {
+      return (t.title || '').toLowerCase().indexOf(search) >= 0
+        || (t.description || '').toLowerCase().indexOf(search) >= 0;
+    });
+  }
+  taskTable.clear().rows.add(filtered).draw();
 }
 
 function openTaskModal(taskID) {
@@ -438,7 +473,7 @@ function saveTaskFromModal() {
         if (r.success) {
           Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
           $('#taskDetailModal').modal('hide');
-          loadTaskData();
+          reloadData(applyFiltersAndRender)();
         } else {
           Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
         }
@@ -455,7 +490,7 @@ function updateStatusIfNeeded(taskID, newStatus) {
       if (r.success) {
         Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
         $('#taskDetailModal').modal('hide');
-        loadTaskData();
+        reloadData(applyFiltersAndRender)();
       } else {
         Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
       }
@@ -471,7 +506,7 @@ function doUpdateStatus(taskID, newStatus) {
       const r = JSON.parse(res || '{}');
       if (r.success) {
         Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
-        loadTaskData();
+        reloadData(applyFiltersAndRender)();
       } else {
         Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
       }
