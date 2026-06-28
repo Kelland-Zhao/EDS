@@ -91,14 +91,6 @@ $(document).ready(function () {
   // Save task
   $('#btnSaveTask').on('click', function () { saveTask(); });
 
-  // Navigation buttons
-  $('#btnTaskList').on('click', function () {
-    window.open(buildUrl('EDS_TaskList'));
-  });
-  $('#btnMyTasks').on('click', function () {
-    window.open(buildUrl('EDS_MyTasks'));
-  });
-
   // FAB visibility: employee can add tasks, admin/supervisor can too
   if (!currentPermission) {
     $('#fabContainer').hide();
