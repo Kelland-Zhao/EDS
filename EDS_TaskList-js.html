@@ -117,26 +117,25 @@ function initPage() {
     }
   });
 
-  // Load data
-  loadTaskData();
-
-  // Filter
-  $('#btnFilter').on('click', function () { loadTaskData(); });
-  $('#filterSearch').on('keypress', function (e) { if (e.which === 13) loadTaskData(); });
-
   // Process & Status filter buttons
   $(document).on('click', '.pf-btn', function () {
     var group = $(this).data('process') !== undefined ? 'process' : 'status';
-    // Only toggle within same group
     $('.pf-btn[data-' + group + ']').removeClass('active');
     $(this).addClass('active');
     loadTaskData();
   });
   // Default: show "进行中"
   $('.pf-btn[data-process]').removeClass('active');
-  $('.pf-btn[data-process=""]').addClass('active'); // 全部 process
+  $('.pf-btn[data-process=""]').addClass('active');
   $('.pf-btn[data-status]').removeClass('active');
-  $('.pf-btn[data-status="进行中"]').addClass('active'); // default status
+  $('.pf-btn[data-status="进行中"]').addClass('active');
+
+  // Load data (after defaults set)
+  loadTaskData();
+
+  // Filter
+  $('#btnFilter').on('click', function () { loadTaskData(); });
+  $('#filterSearch').on('keypress', function (e) { if (e.which === 13) loadTaskData(); });
 
   // New task
   $('#btnNewTask').on('click', function () { openTaskModal(); });
