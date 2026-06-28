@@ -11885,16 +11885,13 @@ function loadAllPMTasks(filterJSON) {
     }
 
     var allPM = Object.values(taskMap);
+    // Mark overdue FIRST (before filters)
+    allPM.forEach(function (t) {
+      if (t.status === '未开始' && t.dueDate && t.dueDate < today) t.status = '已超期';
+    });
     // Apply filters
     if (filter.status) {
-      allPM = allPM.filter(function (t) {
-        if (t.status === filter.status) {
-          // "未开始" only if task is still within its planned window (not overdue)
-          if (filter.status === '未开始' && t.dueDate && t.dueDate < today) return false;
-          return true;
-        }
-        return false;
-      });
+      allPM = allPM.filter(function (t) { return t.status === filter.status; });
     }
     if (filter.process) {
       allPM = allPM.filter(function (t) {
@@ -11910,10 +11907,6 @@ function loadAllPMTasks(filterJSON) {
           || (t.description || '').toLowerCase().indexOf(q) >= 0;
       });
     }
-    // Mark overdue
-    allPM.forEach(function (t) {
-      if (t.status === '未开始' && t.dueDate && t.dueDate < today) t.status = '已超期';
-    });
     return JSON.stringify({ success: true, data: allPM });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
