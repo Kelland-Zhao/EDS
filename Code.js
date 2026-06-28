@@ -11734,7 +11734,11 @@ function loadTasks(filterJSON) {
         ? Utilities.formatDate(dueDateRaw, Session.getScriptTimeZone(), "yyyy-MM-dd")
         : String(dueDateRaw || '');
       // Apply filters
-      if (filter.status && status !== filter.status) continue;
+      if (filter.status) {
+        if (status !== filter.status) continue;
+        // "未开始" only if within planned window (not overdue)
+        if (filter.status === '未开始' && dueDate && dueDate < Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')) continue;
+      }
       if (filter.process) {
         const taskProcess = String(taskData[i][14] || '').trim(); // Column O = process (new field)
         // INJ = IM equivalence
@@ -11883,7 +11887,14 @@ function loadAllPMTasks(filterJSON) {
     var allPM = Object.values(taskMap);
     // Apply filters
     if (filter.status) {
-      allPM = allPM.filter(function (t) { return t.status === filter.status; });
+      allPM = allPM.filter(function (t) {
+        if (t.status === filter.status) {
+          // "未开始" only if task is still within its planned window (not overdue)
+          if (filter.status === '未开始' && t.dueDate && t.dueDate < today) return false;
+          return true;
+        }
+        return false;
+      });
     }
     if (filter.process) {
       allPM = allPM.filter(function (t) {
