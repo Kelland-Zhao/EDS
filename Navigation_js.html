@@ -379,6 +379,15 @@
         window.open(url);
         $('#taskModal').modal('hide');
     });
+    $('#EDS_ResourceGantt').on('click', () => {
+        let url = siWebPage + '?v=EDS_ResourceGantt'
+            + '&ID=' + encodeURIComponent(id || '')
+            + '&Name=' + encodeURIComponent(name || '')
+            + '&Process=' + encodeURIComponent(process || '')
+            + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
+        $('#taskModal').modal('hide');
+    });
     $('#EDS_TaskList_Nav').on('click', () => {
         let url = siWebPage + '?v=EDS_TaskList'
             + '&ID=' + encodeURIComponent(id || '')

@@ -146,6 +146,7 @@ function doGet(e) {
   Route.path("ProjectTracking", loadProjectTracking);
   Route.path("INJ_SDM_Summary", loadINJSDMSummary);
   Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
+  Route.path("EDS_ResourceGantt", loadEDSResourceGantt);
   Route.path("EDS_TaskList", loadEDSTaskList);
   Route.path("EDS_MyTasks", loadEDSMyTasks);
 
@@ -1291,6 +1292,18 @@ function loadEDSTodayDashboard(webPage, id, name, process) {
     intoWebType: process || ""
   })
     .setTitle("今日工作台 | Today's Dashboard")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadEDSResourceGantt(webPage, id, name, process) {
+  let pageUrl = webPage || getReleaseWebPage();
+  return render("EDS_ResourceGantt", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("任务规划 | Resource Gantt")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -11917,6 +11930,172 @@ function loadTodayDashboardData(date, sapID) {
         myTasks: myTasks
       }
     });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function addDaysYMD_(dateStr, days) {
+  const parts = String(dateStr || '').split('-');
+  const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  dt.setDate(dt.getDate() + days);
+  return Utilities.formatDate(dt, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function getResourceGroupDefs_() {
+  return [
+    { key: 'mold', name: '模具组', en: 'Mold Team' },
+    { key: 'tb1', name: 'TB1工序', en: 'TB1 Process' },
+    { key: 'tb2', name: 'TB2工序', en: 'TB2 Process' },
+    { key: 'test', name: '测试组', en: 'Test Team' },
+    { key: 'pm', name: '保养组', en: 'PM Team' }
+  ];
+}
+
+function buildResourceUserMap_() {
+  const map = {};
+  try {
+    const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return map;
+    const values = ws.getDataRange().getValues();
+    for (let i = 2; i < values.length; i++) {
+      const sapID = String(values[i][0] || '').trim();
+      if (!sapID) continue;
+      map[sapID] = {
+        sapID: sapID,
+        name: String(values[i][1] || '').trim(),
+        workshop: String(values[i][13] || '').trim(),
+        process: String(values[i][14] || '').trim(),
+        shift: String(values[i][50] || '').trim()
+      };
+    }
+  } catch (e) {
+    console.error('buildResourceUserMap_ error: ' + e);
+  }
+  return map;
+}
+
+function inferResourceGroup_(person, task) {
+  const workshop = String((person && person.workshop) || (task && task.workshop) || '').toUpperCase();
+  const process = String((person && person.process) || (task && task.process) || '').toUpperCase();
+  const roleText = [
+    person && person.workRole,
+    person && person.name,
+    task && task.taskType,
+    task && task.title,
+    task && task.description
+  ].join(' ');
+
+  if (workshop === 'TB1') return 'tb1';
+  if (workshop === 'TB2') return 'tb2';
+  if (roleText.indexOf('模具') !== -1 || /MOLD/i.test(roleText)) return 'mold';
+  if (roleText.indexOf('测试') !== -1 || /TEST|TF/i.test(roleText) || process === 'TF') return 'test';
+  if (roleText.indexOf('保养') !== -1 || /PM/i.test(roleText)) return 'pm';
+  if (process === 'INJ' || process === 'IM') return workshop === 'TB2' ? 'tb2' : 'tb1';
+  return 'pm';
+}
+
+function loadResourceGanttData(startDate, daysCount) {
+  try {
+    const days = [];
+    const count = Math.max(1, Math.min(parseInt(daysCount || 7, 10) || 7, 31));
+    for (let i = 0; i < count; i++) days.push(addDaysYMD_(startDate, i));
+
+    const userMap = buildResourceUserMap_();
+    const staffByDate = {};
+    const staffLookup = {};
+    days.forEach(function (date) {
+      let staff = [];
+      try {
+        const imResult = JSON.parse(loadIMStaffByDate(date));
+        staff = imResult.success ? imResult.data : [];
+      } catch (e) {}
+      if (staff.length === 0) {
+        try {
+          const dailyResult = JSON.parse(loadDailyStaffByDate(date));
+          staff = dailyResult.success ? dailyResult.data : [];
+        } catch (e) {}
+      }
+      staffByDate[date] = staff;
+      staff.forEach(function (s) {
+        const key = String(s.sapID || s.name || '').trim();
+        if (!key) return;
+        staffLookup[key] = Object.assign({}, userMap[key] || {}, s);
+      });
+    });
+
+    const taskMap = {};
+    function addTask_(task) {
+      if (!task || !task.taskID || task.status === '已取消') return;
+      const start = String(task.planStartDate || '').trim();
+      const due = String(task.dueDate || start).trim();
+      if (!start && !due) return;
+      if ((due || start) < days[0] || (start || due) > days[days.length - 1]) return;
+      if (!taskMap[task.taskID]) taskMap[task.taskID] = task;
+    }
+
+    const manualResult = JSON.parse(loadTasks(JSON.stringify({})));
+    const manualTasks = manualResult.success ? manualResult.data : [];
+    manualTasks.forEach(addTask_);
+    days.forEach(function (date) {
+      loadPMTasksByDate(date).forEach(addTask_);
+    });
+
+    const groupMap = {};
+    getResourceGroupDefs_().forEach(function (g) {
+      groupMap[g.key] = { key: g.key, name: g.name, en: g.en, people: {}, dailyCounts: {} };
+      days.forEach(function (date) { groupMap[g.key].dailyCounts[date] = 0; });
+    });
+
+    Object.keys(taskMap).forEach(function (taskID) {
+      const task = taskMap[taskID];
+      const start = String(task.planStartDate || task.dueDate || '').trim();
+      const due = String(task.dueDate || task.planStartDate || '').trim();
+      const members = (task.owners || []).concat(task.collaborators || []).filter(Boolean);
+      if (members.length === 0) members.push('未分配');
+
+      members.forEach(function (memberID) {
+        const person = staffLookup[memberID] || userMap[memberID] || { sapID: memberID, name: memberID };
+        const groupKey = inferResourceGroup_(person, task);
+        const group = groupMap[groupKey] || groupMap.pm;
+        if (!group.people[memberID]) {
+          group.people[memberID] = {
+            sapID: memberID,
+            name: person.name || memberID,
+            workshop: person.workshop || task.workshop || '',
+            process: person.process || task.process || '',
+            tasks: []
+          };
+        }
+        group.people[memberID].tasks.push({
+          taskID: task.taskID,
+          title: task.title || task.taskID,
+          taskType: task.taskType || '',
+          priority: task.priority || '',
+          status: task.status || '',
+          start: start,
+          end: due,
+          role: (task.owners || []).indexOf(memberID) !== -1 ? 'owner' : 'collaborator'
+        });
+
+        days.forEach(function (date) {
+          if (start <= date && due >= date) group.dailyCounts[date]++;
+        });
+      });
+    });
+
+    const groups = getResourceGroupDefs_().map(function (def) {
+      const group = groupMap[def.key];
+      return {
+        key: group.key,
+        name: group.name,
+        en: group.en,
+        dailyCounts: group.dailyCounts,
+        people: Object.keys(group.people).map(function (key) { return group.people[key]; })
+      };
+    });
+
+    return JSON.stringify({ success: true, data: { days: days, groups: groups } });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }

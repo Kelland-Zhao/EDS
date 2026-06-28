@@ -3,6 +3,8 @@
 
 # 本地预览产物（Claude Preview 等）
 .preview/**
+.superpowers/**
+tests/**
 
 # 文档（不需要部署到 GAS）
 docs/**
