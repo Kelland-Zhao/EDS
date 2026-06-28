@@ -11910,6 +11910,10 @@ function loadAllPMTasks(filterJSON) {
           || (t.description || '').toLowerCase().indexOf(q) >= 0;
       });
     }
+    // Mark overdue
+    allPM.forEach(function (t) {
+      if (t.status === '未开始' && t.dueDate && t.dueDate < today) t.status = '已超期';
+    });
     return JSON.stringify({ success: true, data: allPM });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
@@ -12080,6 +12084,10 @@ function loadPMTasksByDate(dateStr) {
       }
     }
 
+    // Mark overdue: 未开始 + dueDate < viewing date → 已超期
+    Object.values(taskMap).forEach(function (t) {
+      if (t.status === '未开始' && t.dueDate && t.dueDate < dateStr) t.status = '已超期';
+    });
     return Object.values(taskMap);
   } catch (e) {
     console.error('loadPMTasksByDate error: ' + e);
