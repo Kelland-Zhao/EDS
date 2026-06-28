@@ -11900,9 +11900,8 @@ function loadPMTasksByDate(dateStr) {
         const planHours = parseFloat(String(planData[i][7] || '0')); // H: 保养时间
         const durationDays = Math.max(1, Math.ceil(planHours / 24));
         const planEndDate = addDays_(planDate, durationDays - 1);
-        // Include if viewing date is within plan range, or within 30 days past due (for overdue display)
+        // Include if viewing date is >= plan start date (overdue tasks show permanently)
         if (dateStr < planDate) continue;
-        if (dateStr > addDays_(planEndDate, 30)) continue; // Max 30 days overdue visibility
         const aem = String(planData[i][6] || '').trim(); // G: AEM#
         if (!aem) continue;
         const key = planDate + '_' + aem;
