@@ -11938,10 +11938,14 @@ function loadPMTasksByDate(dateStr) {
         const planDate = normalizeDate_(recordsData[i][4]); // E: Plan PM Date
         const startDate = normalizeDate_(recordsData[i][5]); // F: SatrtDate
         const endDate = normalizeDate_(recordsData[i][7]); // H: EndDate
-        // Match if dateStr falls in [planDate/startDate, endDate] range
+        // Match if dateStr falls in [recStart, recEnd]; ongoing tasks without EndDate match all future dates
         const recStart = startDate || planDate;
-        const recEnd = endDate || recStart;
-        if (dateStr < recStart || dateStr > recEnd) continue;
+        const s = status.toLowerCase();
+        const isOngoing = s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1;
+        const isDone = s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1;
+        if (dateStr < recStart) continue;
+        if (!isOngoing && endDate && dateStr > endDate) continue;
+        if (isDone && !endDate && dateStr > recStart) continue; // 已完成但无EndDate，仅匹配开始日
         const pmNo = String(recordsData[i][0] || '').trim();
         const status = String(recordsData[i][1] || '').trim();
         const people = String(recordsData[i][3] || '').trim();
@@ -11952,11 +11956,14 @@ function loadPMTasksByDate(dateStr) {
         const unfinishedCount = String(recordsData[i][13] || '').trim();
         if (!pmNo) continue;
 
-        // Map PM status
+        // Map PM status (isOngoing/isDone already computed above)
         let taskStatus = '未开始';
-        const s = status.toLowerCase();
-        if (s.indexOf('ongoing') !== -1 || s.indexOf('进行中') !== -1) taskStatus = '进行中';
-        else if (s.indexOf('done') !== -1 || s.indexOf('已完成') !== -1 || s.indexOf('finished') !== -1) taskStatus = '已完成';
+        if (isOngoing) taskStatus = '进行中';
+        else if (isDone) taskStatus = '已完成';
+
+        // Resolve owners: SAPID for filtering + names for display
+        const ownerNames = people.split('/').map(function (n) { return n.trim(); }).filter(Boolean);
+        const ownerIDs = ownerNames.map(function (n) { return nameToSap[n] || n; });
 
         // Find plan entry by workcenter (date-independent key matching)
         const planKey = dateStr + '_' + workcenter;
@@ -11966,7 +11973,8 @@ function loadPMTasksByDate(dateStr) {
           // Update existing plan entry with PM_Records status
           existing.status = taskStatus;
           existing.dueDate = endDate || existing.dueDate;
-          existing.owners = people.split('/').map(function (n) { return nameToSap[n.trim()] || n.trim(); });
+          existing.owners = ownerIDs;
+          existing.ownerNames = ownerNames;
           existing.description = '总任务: ' + totalTasks + ' | 未完成: ' + unfinishedCount + ' | 状态: ' + status;
           existing.createdBy = 'PM Module';
           existing.remark = 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '');
@@ -11981,7 +11989,8 @@ function loadPMTasksByDate(dateStr) {
             status: taskStatus,
             planStartDate: recStart,
             dueDate: endDate || recStart,
-            owners: people.split('/').map(function (n) { return nameToSap[n.trim()] || n.trim(); }),
+            owners: ownerIDs,
+            ownerNames: ownerNames,
             collaborators: [],
             process: process,
             workshop: workshop,

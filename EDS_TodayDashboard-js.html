@@ -324,7 +324,7 @@ function renderTaskCards(tasks) {
       + '<span class="meta-item"><span class="badge ' + (PRIORITY_CLASS[t.priority] || 'bg-secondary') + '" style="font-size:10px;">' + (t.priority || '') + '</span></span>'
       + '<span class="meta-item"><span class="' + (STATUS_CLASS[t.status] || '') + '" style="font-size:10px;padding:1px 6px;border-radius:8px;">' + (t.status || '') + '</span></span>'
       + '<span class="meta-item"><i class="bi bi-calendar3"></i> ' + (t.planStartDate || '--') + ' ~ ' + (t.dueDate || '--') + '</span>'
-      + '<span class="meta-item"><i class="bi bi-person"></i> ' + (t.owners.join(', ') || '--') + '</span>'
+      + '<span class="meta-item"><i class="bi bi-person"></i> ' + ((t.ownerNames && t.ownerNames.length > 0 ? t.ownerNames : t.owners).join(', ') || '--') + '</span>'
       + '</div></div>';
   });
   return html;
