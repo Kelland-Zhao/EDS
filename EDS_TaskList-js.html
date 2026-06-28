@@ -89,8 +89,9 @@ function initPage() {
       { data: null, orderable: false, width: '160px', render: function (d, type, row) {
         const btnStyle = 'font-size:0.7rem;width:70px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;';
         let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
+        var isPM = row.taskType === '保养' && (row.createdBy === 'PM Module' || row.createdBy === 'PM Plan');
         html += '<button class="btn btn-sm btn-outline-primary edit-task-btn" data-tid="' + row.taskID + '" style="' + btnStyle + '"><i class="bi bi-eye"></i> 查看<br>View</button>';
-        if (row.status !== '已完成' && row.status !== '已取消') {
+        if (!isPM && row.status !== '已完成' && row.status !== '已取消') {
           if (currentPermission === 'admin' || currentPermission === 'supervisor' ||
               row.owners.indexOf(currentSapID) !== -1 || row.collaborators.indexOf(currentSapID) !== -1) {
             html += '<select class="form-select form-select-sm status-quick" data-tid="' + row.taskID + '" style="font-size:10px;width:70px;padding:2px;">';
@@ -317,11 +318,12 @@ function openTaskModal(taskID) {
 }
 
 function fillTaskForm(task) {
+  const isPM = task.taskType === '保养' && (task.createdBy === 'PM Module' || task.createdBy === 'PM Plan');
   const isAdmin = currentPermission === 'admin';
   const isSupervisor = currentPermission === 'supervisor';
   const isOwner = task.owners.indexOf(currentSapID) !== -1;
   const isCollab = task.collaborators.indexOf(currentSapID) !== -1;
-  const canEdit = isAdmin || isSupervisor || isOwner || (task.status !== '已完成' && task.status !== '已取消' && isCollab);
+  const canEdit = !isPM && (isAdmin || isSupervisor || isOwner || (task.status !== '已完成' && task.status !== '已取消' && isCollab));
   const isCompleted = task.status === '已完成' || task.status === '已取消';
 
   $('#taskDetailTitle').text(canEdit ? '编辑任务 / Edit Task' : '任务详情 / Task Detail');
