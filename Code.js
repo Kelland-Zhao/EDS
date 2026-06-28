@@ -11914,12 +11914,12 @@ function loadPMTasksByDate(dateStr) {
         taskMap[key] = {
           taskID: 'PLAN-' + aem + '-' + dateStr.replace(/-/g, ''),
           title: 'PM: ' + aem + (workshop ? ' [' + workshop + ']' : '') + ' - ' + pmType,
-          description: '保养类型: ' + pmType + ' | 机型: ' + machineType + ' | 计划中 / Planned',
+          description: '保养类型: ' + pmType + ' | 机型: ' + machineType + ' | 工时: ' + planHours + 'h | 计划中 / Planned',
           taskType: '保养',
           priority: '中',
           status: '未开始',
-          planStartDate: dateStr,
-          dueDate: dateStr,
+          planStartDate: planDate,
+          dueDate: planEndDate,
           owners: [],
           collaborators: [],
           process: process,
@@ -11965,12 +11965,13 @@ function loadPMTasksByDate(dateStr) {
         if (existing) {
           // Update existing plan entry with PM_Records status
           existing.status = taskStatus;
+          existing.dueDate = endDate || existing.dueDate;
           existing.owners = people.split('/').map(function (n) { return nameToSap[n.trim()] || n.trim(); });
           existing.description = '总任务: ' + totalTasks + ' | 未完成: ' + unfinishedCount + ' | 状态: ' + status;
           existing.createdBy = 'PM Module';
           existing.remark = 'PM No: ' + pmNo + (process ? ' | 工序: ' + process : '');
         } else {
-          // PM_Records entry for a date that also has a plan entry (use same key)
+          // PM_Records entry without matching plan entry for this date
           taskMap[planKey] = {
             taskID: pmNo,
             title: 'PM: ' + workcenter + (workshop ? ' [' + workshop + ']' : '') + ' - ' + people,
@@ -11979,7 +11980,7 @@ function loadPMTasksByDate(dateStr) {
             priority: '中',
             status: taskStatus,
             planStartDate: recStart,
-            dueDate: recEnd,
+            dueDate: endDate || recStart,
             owners: people.split('/').map(function (n) { return nameToSap[n.trim()] || n.trim(); }),
             collaborators: [],
             process: process,
