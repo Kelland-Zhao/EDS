@@ -46,7 +46,7 @@ $(document).ready(function () {
     $('#userLevelBadge').text('无权限 / No Permission').addClass('bg-danger');
   }
 
-  // 页面加载即显示 toast / Show loading toast immediately
+  // 页面加载即显示 toast
   Swal.fire({
     title: swalTitle('加载数据中...', 'Loading Data...'),
     html: swalHtml('正在获取今日工作台数据，请稍候。', 'Fetching dashboard data, please wait.'),
@@ -55,28 +55,13 @@ $(document).ready(function () {
     didOpen: function () { Swal.showLoading(); }
   });
 
-  // Get user SAPID
-  google.script.run
-    .withSuccessHandler(function (result) {
-      const perm = JSON.parse(result || '{}');
-      currentSapID = perm.sapID || id;
-      currentPermission = perm.permission || currentPermission;
-      if (currentPermission) {
-        sessionStorage.setItem('EDSTaskPermission', currentPermission);
-      }
-      // Load user list + process map before first render
-      let loaded = 0;
-      function onBothLoaded() { loaded++; if (loaded >= 2) { $('#datePicker').val(currentDateStr); currentDate = currentDateStr; loadDashboard(); } }
-      loadUserList(onBothLoaded);
-      loadProcessMap(onBothLoaded);
-    })
-    .withFailureHandler(function () {
-      let loaded = 0;
-      function onBothLoaded() { loaded++; if (loaded >= 2) { $('#datePicker').val(currentDateStr); currentDate = currentDateStr; loadDashboard(); } }
-      loadUserList(onBothLoaded);
-      loadProcessMap(onBothLoaded);
-    })
-    .checkEDSTaskPermission(name, '');
+  // Start all loads in parallel — no serial permission check
+  currentSapID = id;
+  currentDate = currentDateStr;
+  $('#datePicker').val(currentDateStr);
+  loadDashboard();      // Main data
+  loadUserList(null);   // For task modal
+  loadProcessMap(null); // For filtering
 
   // Date picker change
   $('#datePicker').on('change', function () {
