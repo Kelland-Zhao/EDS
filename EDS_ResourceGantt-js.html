@@ -43,7 +43,7 @@ function loadResourceGantt() {
       Swal.close();
       const res = JSON.parse(result || '{}');
       if (!res.success) {
-        Swal.fire('错误 / Error', res.message || '加载失败 / Load failed', 'error');
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(res.message || '加载失败', 'Load failed') });
         return;
       }
       resourceData = res.data;
@@ -55,7 +55,7 @@ function loadResourceGantt() {
     })
     .withFailureHandler(function (err) {
       Swal.close();
-      Swal.fire('错误 / Error', '加载失败 / Load failed: ' + err.message, 'error');
+      Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('加载失败: ' + err.message, 'Load failed: ' + err.message) });
     })
     .loadResourceGanttData(start, days);
 }
