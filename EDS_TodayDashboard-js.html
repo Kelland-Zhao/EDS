@@ -122,8 +122,8 @@ function loadUserList(callback) {
       const data = Array.isArray(users) ? users.map(function (u) {
         return { id: u.id, text: u.text };
       }) : [];
-      $('#taskOwner').empty().select2({ data: data, placeholder: '选择负责人 / Select Owner', allowClear: true, width: '100%' });
-      $('#taskCollaborators').empty().select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%' });
+      $('#taskOwner').empty().select2({ data: data, placeholder: '选择负责人 / Select Owner', allowClear: true, width: '100%', dropdownParent: $('#taskModal') });
+      $('#taskCollaborators').empty().select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%', multiple: true, closeOnSelect: false, dropdownParent: $('#taskModal') });
       if (callback) callback();
     })
     .loadTodayStaffForSelect(date);

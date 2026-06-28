@@ -68,7 +68,7 @@ function initPage() {
       const users = JSON.parse(result || '[]');
       const data = Array.isArray(users) ? users.map(function (u) { return { id: u.id, text: u.text }; }) : [];
       $('#taskOwner').select2({ data: data, placeholder: '选择负责人 / Select Owner', allowClear: true, width: '100%', dropdownParent: $('#taskDetailModal') });
-      $('#taskCollaborators').select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%', dropdownParent: $('#taskDetailModal') });
+      $('#taskCollaborators').select2({ data: data, placeholder: '选择协作人 / Select Collaborators', allowClear: true, width: '100%', multiple: true, closeOnSelect: false, dropdownParent: $('#taskDetailModal') });
     })
     .loadTodayStaffForSelect(new Date().toISOString().split('T')[0]);
 
