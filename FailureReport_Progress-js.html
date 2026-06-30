@@ -144,13 +144,12 @@ function initializeTables() {
                 className: 'text-center align-middle',
                 render: function(data, type, row) {
                     var s = String(data || '');
-                    if (s.indexOf('已完成') > -1) {
-                        return '<span class="badge bg-success">已完成<br>Completed</span>';
-                    }
-                    if (s.indexOf('已上传') > -1) {
-                        return '<span class="badge bg-warning text-dark">已上传<br>Uploaded</span>';
-                    }
-                    return '<span class="badge bg-danger">未上传<br>Not Uploaded</span>';
+                    if (s === '已完成') return '<span class="badge bg-success">已完成<br>Completed</span>';
+                    if (s === '审核通过') return '<span class="badge bg-info">审核通过<br>Approved</span>';
+                    if (s === '主管审核中') return '<span class="badge bg-warning text-dark">审核中<br>Under Review</span>';
+                    if (s === '已退回') return '<span class="badge bg-danger">已退回<br>Returned</span>';
+                    if (s === '待提交') return '<span class="badge bg-secondary">待提交<br>Pending</span>';
+                    return '<span class="badge bg-secondary">' + s + '</span>';
                 }
             },
             {
@@ -237,13 +236,12 @@ function initializeTables() {
                 className: 'text-center align-middle',
                 render: function(data, type, row) {
                     var s = String(data || '');
-                    if (s.indexOf('已完成') > -1) {
-                        return '<span class="badge bg-success">已完成<br>Completed</span>';
-                    }
-                    if (s.indexOf('已上传') > -1) {
-                        return '<span class="badge bg-warning text-dark">已上传<br>Uploaded</span>';
-                    }
-                    return '<span class="badge bg-danger">未上传<br>Not Uploaded</span>';
+                    if (s === '已完成') return '<span class="badge bg-success">已完成<br>Completed</span>';
+                    if (s === '审核通过') return '<span class="badge bg-info">审核通过<br>Approved</span>';
+                    if (s === '主管审核中') return '<span class="badge bg-warning text-dark">审核中<br>Under Review</span>';
+                    if (s === '已退回') return '<span class="badge bg-danger">已退回<br>Returned</span>';
+                    if (s === '待提交') return '<span class="badge bg-secondary">待提交<br>Pending</span>';
+                    return '<span class="badge bg-secondary">' + s + '</span>';
                 }
             },
             {
@@ -330,13 +328,12 @@ function initializeTables() {
                 className: 'text-center align-middle',
                 render: function(data, type, row) {
                     var s = String(data || '');
-                    if (s.indexOf('已完成') > -1) {
-                        return '<span class="badge bg-success">已完成<br>Completed</span>';
-                    }
-                    if (s.indexOf('已上传') > -1) {
-                        return '<span class="badge bg-warning text-dark">已上传<br>Uploaded</span>';
-                    }
-                    return '<span class="badge bg-danger">未上传<br>Not Uploaded</span>';
+                    if (s === '已完成') return '<span class="badge bg-success">已完成<br>Completed</span>';
+                    if (s === '审核通过') return '<span class="badge bg-info">审核通过<br>Approved</span>';
+                    if (s === '主管审核中') return '<span class="badge bg-warning text-dark">审核中<br>Under Review</span>';
+                    if (s === '已退回') return '<span class="badge bg-danger">已退回<br>Returned</span>';
+                    if (s === '待提交') return '<span class="badge bg-secondary">待提交<br>Pending</span>';
+                    return '<span class="badge bg-secondary">' + s + '</span>';
                 }
             },
             {
@@ -407,7 +404,10 @@ function loadFailureReportProgressData() {
             // 加载失败时也关闭加载提示框
             Swal.close();
         })
-        .getFailureReportProgressData();
+        .getFailureReportProgressData(
+            sessionStorage.getItem('Email') || '',
+            sessionStorage.getItem('Name') || ''
+        );
 }
 
 // 处理故障报告进度数据
@@ -425,15 +425,7 @@ function processFailureReportProgressData(data) {
             return;
         }
 
-        // 主管审核：排除"主管审核中 / 已退回"（未通过审核的不进 Progress；空/已通过/已上传/已完成 照常显示）
-        ['IM', 'TF', 'PK'].forEach(function(k) {
-            if (Array.isArray(data[k])) {
-                data[k] = data[k].filter(function(it) {
-                    var rs = String((it && it.reviewStatus) || '').trim();
-                    return rs !== '主管审核中' && rs !== '已退回';
-                });
-            }
-        });
+        // 全生命周期展示：所有O列状态均显示（待提交/主管审核中/已退回/审核通过/已完成）
 
         // 处理IM工序数据
         if (data.IM && data.IM.length > 0) {

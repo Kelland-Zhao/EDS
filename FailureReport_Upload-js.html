@@ -21,9 +21,9 @@ const escapeHtml = (value) => {
 // Upload 仅展示：未提交(空) / 已退回 / 主管审核中（已通过及之后去 Progress）
 function isUploadVisible(item) {
     const rs = String((item && item.reviewStatus) || '').trim();
-    if (rs === '已通过') return false;
+    if (rs === '审核通过' || rs === '已完成' || rs === '已通过') return false; // 已审核通过的去 Progress
     if (item && item.attachments && String(item.attachments).trim() !== '') return false; // 已最终上传
-    return true; // 空 / 已退回 / 主管审核中
+    return true; // 待提交 / 已退回 / 主管审核中
 }
 
 function renderUploadStatus(data, type, row) {
@@ -35,7 +35,13 @@ function renderUploadStatus(data, type, row) {
     if (rs === '主管审核中') {
         return '<span class="badge bg-warning text-dark">审核中<br>Under Review</span>';
     }
-    return '<span class="badge bg-secondary">未提交<br>Not Submitted</span>';
+    if (rs === '审核通过') {
+        return '<span class="badge bg-info">审核通过<br>Approved</span>';
+    }
+    if (rs === '已完成') {
+        return '<span class="badge bg-success">已完成<br>Completed</span>';
+    }
+    return '<span class="badge bg-secondary">待提交<br>Pending</span>';
 }
 
 function renderUploadActions(row, proc) {
@@ -49,7 +55,10 @@ function renderUploadActions(row, proc) {
     if (rs === '已退回') {
         return '<button class="btn btn-sm btn-warning edit-template-btn" data-id="' + id + '" style="display:block;width:120px;margin:2px auto;">修改<br>Edit</button>' + saveBtn;
     }
-    // 未提交
+    if (rs === '审核通过' || rs === '已完成') {
+        return ''; // 不应出现在 Upload，防御性返回空
+    }
+    // 待提交
     return '<button class="btn btn-sm btn-primary fill-template-btn" data-id="' + id + '" style="display:block;width:120px;margin:2px auto;">填写故障报告<br>Fill Report</button>' + saveBtn;
 }
 

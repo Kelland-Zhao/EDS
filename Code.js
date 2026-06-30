@@ -858,7 +858,8 @@ function approveReport(reportNo, reviewerEmail, reviewerName) {
     }
 
     // 审核状态/审核人/审核日期 + reviewHistory
-    ws.getRange(rowIndex, 15).setValue('已通过');
+    // 无限进项→已完成，有跟进项→审核通过
+    ws.getRange(rowIndex, 15).setValue(followRows.length > 0 ? '审核通过' : '已完成');
     ws.getRange(rowIndex, 16).setValue(String(reviewerName || '') + '【' + String(reviewerEmail || '') + '】');
     ws.getRange(rowIndex, 17).setValue(nowYmd);
     json.reviewHistory = Array.isArray(json.reviewHistory) ? json.reviewHistory : [];
@@ -7737,14 +7738,16 @@ function getFailureReportProgressData(userEmail, userName) {
       const verifyAgg = verifyMap.get(String(failureReportNumber).trim()) || { pass: 0, total: 0 };
       const verifyPassed = verifyAgg.pass;
       const verifyTotal = verifyAgg.total;
-      const hasAttachment = !!(attachments && String(attachments).trim() !== '');
-      let progressStatus = '未上传 / Not Uploaded';
-      if (hasAttachment) {
-        if (verifyTotal === 0 || verifyPassed >= verifyTotal) {
-          progressStatus = '已完成 / Completed';
-        } else {
-          progressStatus = '已上传 / Uploaded';
-        }
+      // O列值映射为统一状态（兼容旧值：空→待提交，已通过→按验证状态推断）
+      var reviewStatusStr = String(row[14] || '').trim();
+      var progressStatus;
+      if (reviewStatusStr === '' || reviewStatusStr === '未提交') {
+        progressStatus = '待提交';
+      } else if (reviewStatusStr === '已通过') {
+        // 旧"已通过"：按验证状态推断新值
+        progressStatus = (verifyTotal === 0 || verifyPassed >= verifyTotal) ? '已完成' : '审核通过';
+      } else {
+        progressStatus = reviewStatusStr;
       }
 
       // 计算完成天数
@@ -8019,6 +8022,12 @@ function writeToFailureDatabase(rowData, process, responsiblePerson) {
       repairTimeHeader.setValue("维修时间 / Repair Time");
     }
     failureDatabaseSheet.getRange(nextRow, REPAIR_TIME_COL).setValue(repairTime);
+
+    // O列: 审核状态初始值 = 待提交
+    var REVIEW_STATUS_COL = 15;
+    var reviewStatusHeader = failureDatabaseSheet.getRange(1, REVIEW_STATUS_COL);
+    if (!reviewStatusHeader.getValue()) reviewStatusHeader.setValue('审核状态');
+    failureDatabaseSheet.getRange(nextRow, REVIEW_STATUS_COL).setValue('待提交');
 
     console.log(
       "成功写入Failure_Database sheet / Successfully wrote to Failure_Database sheet"
@@ -8504,6 +8513,36 @@ function updateFollowupFieldValue(followupId, fieldKey, value) {
  * @param {string} verifyReply
  * @param {string} verifierName
  */
+/**
+ * 同步报告主表 O 列状态：遍历所有跟进，全部已通过/已取消→已完成，否则→审核通过
+ */
+function syncReportStatus_(ss, failureReportNo) {
+  var ws = ss.getSheetByName('Failure_Database');
+  var wsFollow = ss.getSheetByName('Failure_Report_followup');
+  if (!ws || !wsFollow) return;
+  var data = ws.getDataRange().getValues();
+  var reportRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][6]).trim() === String(failureReportNo).trim()) {
+      reportRow = i + 1;
+      break;
+    }
+  }
+  if (reportRow === -1) return;
+
+  var followData = wsFollow.getDataRange().getValues();
+  var hasActive = false, allDone = true;
+  for (var j = 1; j < followData.length; j++) {
+    if (String(followData[j][1]).trim() !== String(failureReportNo).trim()) continue;
+    var st = String(followData[j][8] || '').trim();
+    if (!st) continue;
+    hasActive = true;
+    if (st !== '已通过 / Passed' && st !== '已取消 / Cancelled') allDone = false;
+  }
+  var newStatus = !hasActive || allDone ? '已完成' : '审核通过';
+  ws.getRange(reportRow, 15).setValue(newStatus);
+}
+
 function saveVerifyStatusAndReply(followupId, status, verifyReply, verifierName) {
   try {
     const ss = SpreadsheetApp.openById('1YAPdZKVEOHgCGIJRQwWTQBmwaWIS4yd1SQKJJfRCtAU');
@@ -8533,6 +8572,10 @@ function saveVerifyStatusAndReply(followupId, status, verifyReply, verifierName)
     wsFollow.getRange(rowIndex, 9).setValue(normalizedStatus);   // I列 status
     wsFollow.getRange(rowIndex, 15).setValue(normalizedReply);   // O列 verify_reply
     wsFollow.getRange(rowIndex, 11).setValue(nowYmd);            // K列 updated_date
+
+    // 同步主表 O 列：全部跟进通过→已完成
+    var reportNo = String(data[rowIndex - 1][1] || '').trim();
+    if (reportNo) syncReportStatus_(ss, reportNo);
 
     // 触发邮件通知
     try {
@@ -8569,6 +8612,11 @@ function returnFollowupRecord(followupId, reason, newDate, verifierName) {
     wsFollow.getRange(rowIndex, 15).setValue(updatedReply);
     wsFollow.getRange(rowIndex, 6).setValue(newDate);
     wsFollow.getRange(rowIndex, 11).setValue(nowYmd);
+
+    // 同步主表 O 列：跟进退回→审核通过
+    var reportNo = String(rowData[1] || '').trim();
+    if (reportNo) syncReportStatus_(ss, reportNo);
+
     try { sendReturnNotificationToResponsible(rowData, reason, newDate, verifierName, nowStr); } catch (e) { console.error('退回邮件发送失败:', e); }
     return { success: true, updatedDate: nowYmd, updatedReply: updatedReply };
   } catch (error) {
@@ -8626,6 +8674,11 @@ function cancelFollowupRecord(followupId, reason, verifierName) {
     wsFollow.getRange(rowIndex, 9).setValue('已取消 / Cancelled');
     wsFollow.getRange(rowIndex, 15).setValue(updatedReply);
     wsFollow.getRange(rowIndex, 11).setValue(nowYmd);
+
+    // 同步主表 O 列：跟进取消→审核通过
+    var reportNo = String(rowData[1] || '').trim();
+    if (reportNo) syncReportStatus_(ss, reportNo);
+
     try { sendCancelNotificationToAll(rowData, reason, verifierName, nowStr); } catch (e) { console.error('取消邮件发送失败:', e); }
     return { success: true, updatedDate: nowYmd, updatedReply: updatedReply };
   } catch (error) {
@@ -10411,6 +10464,46 @@ function setupFailureReportFillPermissionColumn() {
     console.error('初始化权限列失败:', error);
     return 'Error: ' + error.message;
   }
+}
+
+/**
+ * 迁移 O 列审核状态为全生命周期状态（一次性）
+ * 空→待提交，已通过→审核通过/已完成（按跟进验证状态判断）
+ * 使用方式：在 GAS 编辑器中手动执行一次 migrateReviewStatus_O_Column()
+ */
+function migrateReviewStatus_O_Column() {
+  var ss = SpreadsheetApp.openById(FR_SS_ID);
+  var ws = ss.getSheetByName('Failure_Database');
+  var wsFollow = ss.getSheetByName('Failure_Report_followup');
+  if (!ws) return 'Failure_Database sheet 未找到';
+  var data = ws.getDataRange().getValues();
+  var updated = 0;
+
+  for (var i = 1; i < data.length; i++) {
+    var status = String(data[i][14] || '').trim();
+    var reportNo = String(data[i][6] || '').trim();
+
+    if (status === '') {
+      ws.getRange(i + 1, 15).setValue('待提交');
+      updated++;
+    } else if (status === '已通过') {
+      var allDone = true, hasActive = false;
+      if (wsFollow) {
+        var followData = wsFollow.getDataRange().getValues();
+        for (var j = 1; j < followData.length; j++) {
+          if (String(followData[j][1]).trim() !== reportNo) continue;
+          var st = String(followData[j][8] || '').trim();
+          if (!st) continue;
+          hasActive = true;
+          if (st !== '已通过 / Passed' && st !== '已取消 / Cancelled') allDone = false;
+        }
+      }
+      ws.getRange(i + 1, 15).setValue(!hasActive || allDone ? '已完成' : '审核通过');
+      updated++;
+    }
+  }
+  console.log('O列状态迁移完成，共更新 ' + updated + ' 行');
+  return '迁移完成，共更新 ' + updated + ' 行';
 }
 
 /**
