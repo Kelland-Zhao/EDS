@@ -1811,6 +1811,8 @@
           // 构建JSON对象
           let objAll = {
             "编号": taskNo,
+            "部件": taskData.parts,
+            "检查标准": taskData.standard,
             "检查结果": taskData.result,
             "备注": taskData.remarks,
             "解决状态": taskData.resolved,

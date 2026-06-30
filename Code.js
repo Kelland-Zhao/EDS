@@ -12002,45 +12002,98 @@ function loadResourceGanttData(startDate, daysCount) {
     for (let i = 0; i < count; i++) days.push(addDaysYMD_(startDate, i));
 
     const userMap = buildResourceUserMap_();
+
+    // ---- 优化: 一次性读取 IM 排班数据，不再按天循环读表 ----
     const staffByDate = {};
     const staffLookup = {};
-    days.forEach(function (date) {
-      let staff = [];
-      try {
-        const imResult = JSON.parse(loadIMStaffByDate(date));
-        staff = imResult.success ? imResult.data : [];
-      } catch (e) {}
-      if (staff.length === 0) {
-        try {
-          const dailyResult = JSON.parse(loadDailyStaffByDate(date));
-          staff = dailyResult.success ? dailyResult.data : [];
-        } catch (e) {}
+    const dateSet = {};
+    days.forEach(function (d) { dateSet[d] = true; staffByDate[d] = []; });
+
+    // Build name→SAPID map ONCE (instead of per-day in loadIMStaffByDate)
+    const userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    const nameToSap = {};
+    if (userWs) {
+      const userVals = userWs.getDataRange().getValues();
+      for (let i = 2; i < userVals.length; i++) {
+        const nm = String(userVals[i][1] || '').trim();
+        const sid = String(userVals[i][0] || '').trim();
+        if (nm && sid) nameToSap[nm] = sid;
       }
-      staffByDate[date] = staff;
-      staff.forEach(function (s) {
-        const key = String(s.sapID || s.name || '').trim();
-        if (!key) return;
-        staffLookup[key] = Object.assign({}, userMap[key] || {}, s);
-      });
+    }
+
+    // Read IM data ONCE, scan all rows, bucket into relevant dates
+    const imWs = SpreadsheetApp.openById(IM_SCHEDULING_SS_ID).getSheetByName(IM_SCHEDULING_SHEET);
+    if (imWs) {
+      const imData = imWs.getDataRange().getValues();
+      const shiftMap = { '1夜': '夜班', '2早': '早班', '3中': '中班' };
+      const seen = {}; // dedup by name+date
+      for (let i = 1; i < imData.length; i++) {
+        const dateShift = String(imData[i][0] || '');
+        const usIdx = dateShift.lastIndexOf('_');
+        const datePart = usIdx > 0 ? dateShift.substring(0, usIdx) : dateShift;
+        const normalizedDate = datePart.replace(/\./g, '-'); // "2026.06.25"→"2026-06-25"
+        if (!dateSet[normalizedDate]) continue;
+
+        const workshop = String(imData[i][1] || '').trim();
+        const name = String(imData[i][3] || '').trim();
+        const hours = String(imData[i][4] || '').trim();
+        const shiftPart = usIdx > 0 ? dateShift.substring(usIdx + 1) : '';
+        const shift = shiftMap[shiftPart] || shiftPart;
+        const sapID = nameToSap[name] || '';
+        if (!name) continue;
+        const dedupKey = name + '_' + normalizedDate;
+        if (seen[dedupKey]) continue;
+        seen[dedupKey] = true;
+        const staffObj = {
+          sapID: sapID, name: name, workshop: workshop,
+          attendanceStatus: '在岗',
+          workRole: workshop === 'TB1' ? 'TB1' : 'TB2',
+          shift: shift, hours: hours
+        };
+        staffByDate[normalizedDate].push(staffObj);
+        const key = String(sapID || name).trim();
+        if (key) staffLookup[key] = Object.assign({}, userMap[key] || {}, staffObj);
+      }
+    }
+
+    // Fallback: dates with no IM data → loadDailyStaffByDate (rare cold path)
+    days.forEach(function (date) {
+      if (staffByDate[date].length > 0) return;
+      try {
+        const dailyResult = JSON.parse(loadDailyStaffByDate(date));
+        const staff = dailyResult.success ? dailyResult.data : [];
+        staffByDate[date] = staff;
+        staff.forEach(function (s) {
+          const key = String(s.sapID || s.name || '').trim();
+          if (!key) return;
+          staffLookup[key] = Object.assign({}, userMap[key] || {}, s);
+        });
+      } catch (e) {}
     });
 
+    // ---- 优化: 用 loadAllPMTasks 一次性读取保养任务，不再按天循环 ----
     const taskMap = {};
     function addTask_(task) {
       if (!task || !task.taskID || task.status === '已取消') return;
       const start = String(task.planStartDate || '').trim();
       const due = String(task.dueDate || start).trim();
       if (!start && !due) return;
+      // Only include tasks overlapping our date window
       if ((due || start) < days[0] || (start || due) > days[days.length - 1]) return;
       if (!taskMap[task.taskID]) taskMap[task.taskID] = task;
     }
 
+    // Manual tasks (single read)
     const manualResult = JSON.parse(loadTasks(JSON.stringify({})));
     const manualTasks = manualResult.success ? manualResult.data : [];
     manualTasks.forEach(addTask_);
-    days.forEach(function (date) {
-      loadPMTasksByDate(date).forEach(addTask_);
-    });
 
+    // PM tasks (single read via loadAllPMTasks, not per-day loadPMTasksByDate)
+    const allPMResult = JSON.parse(loadAllPMTasks(JSON.stringify({})));
+    const allPMTasks = allPMResult.success ? allPMResult.data : [];
+    allPMTasks.forEach(addTask_);
+
+    // ---- Grouping logic (unchanged) ----
     const groupMap = {};
     getResourceGroupDefs_().forEach(function (g) {
       groupMap[g.key] = { key: g.key, name: g.name, en: g.en, people: {}, dailyCounts: {} };
