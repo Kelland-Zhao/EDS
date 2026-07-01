@@ -67,7 +67,7 @@
       names.forEach(function(n) { addMilestoneRow(n, formatDateYMD(today)); });
     });
 
-    // 项目类型切换：新品/新自动化 ↔ CI
+    // 项目类型切换：新品/新自动化 ↔ CI/Kaizen
     $('#addType').on('change', function() { toggleAddType($(this).val()); });
     $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', formatDateYMD(today), ''); });
 
@@ -549,13 +549,14 @@
 
   // ==================== Main table render ====================
 
-  function projType(p) { return (p.type === 'CI') ? 'CI' : '标准'; }
+  function projType(p) { var t = p.type || '新品/新自动化'; return (t === 'CI' || t === 'Kaizen') ? t : '新品/新自动化'; }
   function projProcess(p) { return (p.process || 'INJ'); }
+  function isCIType(t) { return t === 'CI' || t === 'Kaizen'; }
 
   function typeBadge(p) {
     var t = projType(p);
-    var bg = (t === 'CI') ? '#6f42c1' : '#0d6efd';
-    var txt = (t === 'CI') ? 'CI' : '新品/新自动化';
+    var bg = t === 'CI' ? '#6f42c1' : (t === 'Kaizen' ? '#17a2b8' : '#0d6efd');
+    var txt = t === 'CI' ? 'CI' : (t === 'Kaizen' ? 'Kaizen' : '新品/新自动化');
     return '<span class="status-badge" style="background:' + bg + ';">' + txt + '</span>';
   }
 
@@ -645,7 +646,7 @@
         row.child('<div id="' + ganttId + '" class="p-2" style="background:#fafafa;"></div>').show();
         $btn.text('▼');
         if (proj) {
-          if (projType(proj) === 'CI') renderCIChecklist(ganttId, proj);
+          if (isCIType(projType(proj))) renderCIChecklist(ganttId, proj);
           else renderSingleProjectGantt(ganttId, proj);
         }
       }
@@ -1186,11 +1187,12 @@
     $('#statusHelp').text('选"已完成"后自动记录完成日期 / Done auto-sets completion date').css('color', '#198754');
 
     // Build milestone/follow-up rows — type-aware
-    currentUpdateIsCI = (projType(proj) === 'CI');
-    var pType = proj.type || '标准';
+    currentUpdateIsCI = isCIType(projType(proj));
+    var pType = proj.type || '新品/新自动化';
     $('#modalType').empty()
-      .append('<option value="标准">新品/新自动化 / New Product & Automation</option>')
-      .append('<option value="CI">CI（follow-up）/ CI</option>')
+      .append('<option value="新品/新自动化">新品/新自动化 / New Product & Automation</option>')
+      .append('<option value="CI">CI / CI</option>')
+      .append('<option value="Kaizen">Kaizen / Kaizen</option>')
       .val(pType).prop('disabled', false);
     $('#typeHelp').text('切换类型将重建节点列表 / Switching type rebuilds milestone list');
     // 解析项目 Leader（"姓名 (邮箱)"），供 CI 行 owner 缺省回退
@@ -1302,7 +1304,7 @@
     updates.milestonesReplace = newMsArr;
 
     var newType = $('#modalType').val();
-    if (proj && newType && newType !== (proj.type || '标准')) updates.type = newType;
+    if (proj && newType && newType !== (proj.type || '新品/新自动化')) updates.type = newType;
     if (isStatusChanged) updates.status = newStatus;
 
     function executeSave(pn, upd) {
@@ -1506,9 +1508,9 @@
     if (!ownerDisplay) $sel.val(null).trigger('change');
   }
 
-  // 切换录入表单：新品/新自动化（里程碑）↔ CI（follow-up）
+  // 切换录入表单：新品/新自动化（里程碑）↔ CI/Kaizen（follow-up）
   function toggleAddType(type) {
-    if (type === 'CI') {
+    if (isCIType(type)) {
       $('#addStandardSection').addClass('d-none');
       $('#addTemplateWrap').addClass('d-none');
       $('#addCISection').removeClass('d-none');
@@ -1523,13 +1525,13 @@
   function openAddModal() {
     $('#addProjectName').val('');
     $('#addStatus').val('Not start');
-    $('#addType').val('标准');
+    $('#addType').val('CI');
     $('#addTemplate').val('standard');
     $('#addProcess').val(normalizeProcess(globalProcess) || 'INJ');
     $('#addMilestones').empty();
     $('#addFollowups').empty();
-    MS_TEMPLATES.standard.forEach(function(n) { addMilestoneRow(n, formatDateYMD(today)); });
-    toggleAddType('标准');
+    addFollowupRow('', '', '', formatDateYMD(today), '');
+    toggleAddType('CI');
 
     if ($('.select2-user').hasClass('select2-hidden-accessible')) $('.select2-user').select2('destroy');
     $('.select2-user').empty().append('<option value=""></option>').val('');
@@ -1546,9 +1548,9 @@
   function submitAddProject() {
     var projectName = $('#addProjectName').val().trim();
     if (!projectName) { Swal.fire('提示 / Notice', '请输入项目名称 / Project name required', 'warning'); return; }
-    var type = $('#addType').val() || '标准';
+    var type = $('#addType').val() || '新品/新自动化';
     var milestones = [];
-    if (type === 'CI') {
+    if (isCIType(type)) {
       var missingOwner = false;
       $('#addFollowups .ci-fu-row').each(function() {
         var name = $(this).find('.ci-fu-name').val().trim();

@@ -156,8 +156,9 @@
         <button class="btn btn-sm btn-outline-danger" id="addProjectBtn"><i class="bi bi-plus-lg"></i> 添加项目<br><small>Add Project</small></button>
         <div class="btn-group btn-group-sm ms-2" role="group" id="typeFilter" style="font-size:11px;">
           <button type="button" class="btn btn-danger" data-type="all">全部<br><small>All</small></button>
-          <button type="button" class="btn btn-outline-danger" data-type="标准">新品/新自动化<br><small>New Prod/Auto</small></button>
+          <button type="button" class="btn btn-outline-danger" data-type="新品/新自动化">新品/新自动化<br><small>New Prod/Auto</small></button>
           <button type="button" class="btn btn-outline-danger" data-type="CI">CI<br><small>CI</small></button>
+          <button type="button" class="btn btn-outline-danger" data-type="Kaizen">Kaizen<br><small>Kaizen</small></button>
         </div>
         <div class="btn-group btn-group-sm ms-2" role="group" id="processFilter" style="font-size:11px;">
           <button type="button" class="btn btn-danger" data-process="all">全部<br><small>All</small></button>
@@ -250,8 +251,9 @@
             <div class="col-6">
               <label class="form-label fw-bold" style="font-size:12px;">项目类型<br><small>Project Type</small></label>
               <select class="form-select" id="modalType" style="font-size:12px;" disabled>
-                <option value="标准">新品/新自动化 / New Product & Automation</option>
-                <option value="CI">CI（follow-up）/ CI</option>
+                <option value="新品/新自动化">新品/新自动化 / New Product & Automation</option>
+                <option value="CI">CI / CI</option>
+                <option value="Kaizen">Kaizen / Kaizen</option>
               </select>
               <div class="form-text" id="typeHelp" style="font-size:10px;"></div>
             </div>
@@ -302,8 +304,9 @@
             <div class="col-4">
               <label class="form-label fw-bold" style="font-size:12px;">项目类型<br><small>Project Type</small></label>
               <select class="form-select" id="addType" style="font-size:12px;">
-                <option value="标准" selected>新品/新自动化项目（里程碑）/ New Product & Automation</option>
-                <option value="CI">CI（follow-up）/ CI</option>
+                <option value="新品/新自动化">新品/新自动化 / New Product & Automation</option>
+                <option value="CI" selected>CI / CI</option>
+                <option value="Kaizen">Kaizen / Kaizen</option>
               </select>
             </div>
             <div class="col-4" id="addTemplateWrap">

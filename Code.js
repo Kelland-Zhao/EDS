@@ -10672,7 +10672,7 @@ const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理（用
 const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
 const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
 const PROJECT_MILESTONES_JSON_COL = 4;  // Col E — 里程碑 JSON 数组（单一数据源）
-const PROJECT_TYPE_COL = 5;             // Col F — 项目类型：标准 / CI（缺省按 标准）
+const PROJECT_TYPE_COL = 5;             // Col F — 项目类型：新品/新自动化 / CI / Kaizen
 const PROJECT_ID_COL = 6;              // Col G — 项目编号
 const PROJECT_CREATED_COL = 7;         // Col H — 创建时间
 const PROJECT_COMPLETED_COL = 8;       // Col I — 完成时间
@@ -10737,7 +10737,7 @@ function getProjectTrackingData() {
         leader: String(row[1] || ''),
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
-        type: String(row[PROJECT_TYPE_COL] || '').trim() || '标准',
+        type: String(row[PROJECT_TYPE_COL] || '').trim() || '新品/新自动化',
         process: String(row[PROJECT_PROCESS_COL] || '').trim() || 'INJ',
         milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL]),
         createdAt: String(row[PROJECT_CREATED_COL] || ''),
@@ -10918,7 +10918,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     }
 
     if (updates.type !== undefined) {
-      const currentType = String(currentRow[PROJECT_TYPE_COL] || '').trim() || '标准';
+      const currentType = String(currentRow[PROJECT_TYPE_COL] || '').trim() || '新品/新自动化';
       if (updates.type !== currentType) {
         changes.type = { old: currentType, new: updates.type };
         const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
@@ -12962,7 +12962,7 @@ function addProject(dataStr) {
       };
     });
 
-    const projType = (data.type === 'CI') ? 'CI' : '标准';
+    const projType = (data.type === 'CI' || data.type === 'Kaizen') ? data.type : '新品/新自动化';
 
     // 生成唯一项目编号 PRJ-YYYYMMDD-NNN
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
