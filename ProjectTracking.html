@@ -159,6 +159,12 @@
           <button type="button" class="btn btn-outline-danger" data-type="标准">新品/新自动化<br><small>New Prod/Auto</small></button>
           <button type="button" class="btn btn-outline-danger" data-type="CI">CI<br><small>CI</small></button>
         </div>
+        <div class="btn-group btn-group-sm ms-2" role="group" id="processFilter" style="font-size:11px;">
+          <button type="button" class="btn btn-danger" data-process="all">全部<br><small>All</small></button>
+          <button type="button" class="btn btn-outline-danger" data-process="INJ">注塑<br><small>INJ</small></button>
+          <button type="button" class="btn btn-outline-danger" data-process="TF">植磨毛<br><small>TF</small></button>
+          <button type="button" class="btn btn-outline-danger" data-process="PK">包装<br><small>PK</small></button>
+        </div>
         <span class="leader-filter-wrap ms-2" title="按 Leader 筛选 / Filter by Leader">
           <i class="bi bi-person-badge leader-filter-icon"></i>
           <select id="leaderFilter" style="width:140px;font-size:12px;"></select>
@@ -306,6 +312,16 @@
                 <option value="standard">新品/新自动化设备安装（7节点）/ New Prod & Automation 7-node</option>
                 <option value="simple">精简版（3节点）/ Simplified 3-node</option>
                 <option value="custom">空白自定义 / Custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="row mb-2">
+            <div class="col-4">
+              <label class="form-label fw-bold" style="font-size:12px;">工序<br><small>Process</small></label>
+              <select class="form-select" id="addProcess" style="font-size:12px;">
+                <option value="INJ">注塑 / INJ</option>
+                <option value="TF">植磨毛 / TF</option>
+                <option value="PK">包装 / PK</option>
               </select>
             </div>
           </div>

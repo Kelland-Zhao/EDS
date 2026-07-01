@@ -17,6 +17,7 @@
   var dtInstance = null;
   var userListCache = null;
   var currentTypeFilter = 'all';
+  var currentProcessFilter = 'all';
   var currentLeaderFilter = '';
   var hideCompleted = true;
   var showOnlyMine = false;
@@ -77,6 +78,14 @@
     $('#typeFilter button').on('click', function() {
       currentTypeFilter = $(this).data('type');
       $('#typeFilter button').removeClass('btn-danger').addClass('btn-outline-danger');
+      $(this).removeClass('btn-outline-danger').addClass('btn-danger');
+      renderTable();
+    });
+
+    // 工序筛选
+    $('#processFilter button').on('click', function() {
+      currentProcessFilter = $(this).data('process');
+      $('#processFilter button').removeClass('btn-danger').addClass('btn-outline-danger');
       $(this).removeClass('btn-outline-danger').addClass('btn-danger');
       renderTable();
     });
@@ -215,8 +224,22 @@
         // 状态下拉所有人可编辑
         $('#modalStatus').prop('disabled', false);
         $('#statusHelp').text('选"已完成"后自动记录完成日期 / Done auto-sets completion date').css('color', '#198754');
+        // 工序筛选初始状态：管理员默认全部，非管理员默认当前工序
+        if (!isAdmin) {
+          var userProc = normalizeProcess(globalProcess);
+          currentProcessFilter = userProc || 'INJ';
+          $('#processFilter button').removeClass('btn-danger').addClass('btn-outline-danger');
+          $('#processFilter button[data-process="' + currentProcessFilter + '"]').removeClass('btn-outline-danger').addClass('btn-danger');
+        }
       } catch(e) {}
     }).checkProjectPermission(globalName);
+  }
+
+  function normalizeProcess(p) {
+    if (!p) return '';
+    p = String(p).trim().toUpperCase();
+    if (p === 'IM') return 'INJ';
+    return p;
   }
 
   // Preload user list at page init for instant add-modal open
@@ -527,6 +550,7 @@
   // ==================== Main table render ====================
 
   function projType(p) { return (p.type === 'CI') ? 'CI' : '标准'; }
+  function projProcess(p) { return (p.process || 'INJ'); }
 
   function typeBadge(p) {
     var t = projType(p);
@@ -540,6 +564,7 @@
       if (hideCompleted && p.status === 'Done') return false;
       if (showOnlyMine && (!p.leader || p.leader.replace(/\(.*\)/, '').trim() !== globalName)) return false;
       if (currentTypeFilter !== 'all' && projType(p) !== currentTypeFilter) return false;
+      if (currentProcessFilter !== 'all' && (p.process || 'INJ') !== currentProcessFilter) return false;
       if (currentLeaderFilter && (!p.leader || p.leader !== currentLeaderFilter)) return false;
       return true;
     }) : [];
@@ -1500,6 +1525,7 @@
     $('#addStatus').val('Not start');
     $('#addType').val('标准');
     $('#addTemplate').val('standard');
+    $('#addProcess').val(normalizeProcess(globalProcess) || 'INJ');
     $('#addMilestones').empty();
     $('#addFollowups').empty();
     MS_TEMPLATES.standard.forEach(function(n) { addMilestoneRow(n, formatDateYMD(today)); });
@@ -1546,7 +1572,8 @@
     var data = {
       projectName: projectName, leader: $('#addLeader').val() || '',
       technician: $('#addTechnician').val() || '',
-      status: $('#addStatus').val() || 'Not start', type: type, milestones: milestones
+      status: $('#addStatus').val() || 'Not start', type: type, milestones: milestones,
+      process: $('#addProcess').val() || normalizeProcess(globalProcess) || 'INJ'
     };
     Swal.fire({ title: swalTitle('正在提交...', 'Submitting...'), html: swalHtml('正在添加新项目，请稍候。', 'Adding new project, please wait.'), allowOutsideClick: false, showConfirmButton: false, didOpen: function() { Swal.showLoading(); } });
     google.script.run
