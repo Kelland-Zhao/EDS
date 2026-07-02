@@ -123,6 +123,10 @@
     #updateModal .upd-ms-owner + .select2-container .select2-selection__arrow,
     #addModal .ci-fu-owner + .select2-container .select2-selection__arrow { height:29px; }
     .ci-fu-status { width:120px; font-size:12px; }
+    .add-ms-owner-wrap { flex:1; min-width:0; }
+    #addModal .add-ms-owner + .select2-container .select2-selection--single { height:31px; padding:0 8px; }
+    #addModal .add-ms-owner + .select2-container .select2-selection__rendered { line-height:31px; }
+    #addModal .add-ms-owner + .select2-container .select2-selection__arrow { height:29px; }
   </style>
 </head>
 
@@ -334,7 +338,7 @@
               <label class="form-label fw-bold mb-0" style="font-size:12px;">里程碑计划日期<br><small>Milestone Planned Dates</small></label>
               <button type="button" class="btn btn-sm btn-outline-danger" id="addMsAddBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加节点<br><small>Add Milestone</small></button>
             </div>
-            <div class="text-muted mb-1" style="font-size:11px;">留空表示 NA / Blank = NA</div>
+            <div class="text-muted mb-1" style="font-size:11px;">每条需填：里程碑 + 责任人 + 计划日期 / Item + Owner + Due</div>
             <div style="max-height:260px;overflow-y:auto;">
               <div id="addMilestones"></div>
             </div>

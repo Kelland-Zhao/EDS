@@ -171,13 +171,11 @@
           actual: $(this).find('.ms-actual').val(),
           status: $(this).find('.upd-ms-status').val()
         };
-        if (wasCI) {
-          var ownerVal = $(this).find('.upd-ms-owner').val();
-          if (ownerVal) {
-            var om = String(ownerVal).match(/^(.*?)\s*\(([^)]*)\)\s*$/);
-            r.owner = om ? om[1].trim() : ownerVal;
-            r.ownerEmail = om ? om[2].trim() : '';
-          }
+        var ownerVal = $(this).find('.upd-ms-owner').val();
+        if (ownerVal) {
+          var om = String(ownerVal).match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+          r.owner = om ? om[1].trim() : ownerVal;
+          r.ownerEmail = om ? om[2].trim() : '';
         }
         if (r.name || r.planned) rows.push(r);
       });
@@ -1291,13 +1289,11 @@
       if (actualVal) { var d = parseDate(actualVal); if (d && d > today) futureMilestones.push({ name: name, date: actualVal }); }
       var ownerName = '', ownerEmail = '', itemStatus = '';
       itemStatus = $(this).find('.upd-ms-status').val() || '';
-      if (currentUpdateIsCI) {
-        var disp = $(this).find('.upd-ms-owner').val() || '';
-        var cache = (userListCache || []).filter(function(u) { return u.display === disp; })[0];
-        if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
-        else if (disp) { ownerName = disp; }
-        if (!ownerName) ciMissingOwner = true;
-      }
+      var disp = $(this).find('.upd-ms-owner').val() || '';
+      var cache = (userListCache || []).filter(function(u) { return u.display === disp; })[0];
+      if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
+      else if (disp) { ownerName = disp; }
+      if (!ownerName) ciMissingOwner = true;
       newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail, status: itemStatus });
     });
     if (ciMissingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
@@ -1419,9 +1415,7 @@
     var isCI = currentUpdateIsCI;
     var nameLabel = isCI ? '事项<br><small>Item</small>' : '里程碑名称<br><small>Name</small>';
     var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划日期<br><small>Planned</small>';
-    var ownerCol = isCI
-      ? '<div style="flex:0 0 140px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>'
-      : '';
+    var ownerCol = '<div style="flex:0 0 140px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>';
     var statusCol = '<div style="flex:0 0 110px;"><label style="font-size:10px;color:#666;">状态<br><small>Status</small></label>' + ciStatusSelectHtml('upd-ms-status', status) + '</div>';
     var rowStyle = getMsRowStyle(status, planned, actual);
     var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;' + rowStyle + '">'
@@ -1445,23 +1439,21 @@
       if (!$act.val()) $act.val(formatDateYMD(today));
     }
 
-    if (isCI) {
-      var $sel = $row.find('.upd-ms-owner');
-      // owner 为空时默认填项目 Leader，避免回退成列表第一人
-      var oName = owner, oEmail = ownerEmail;
-      if (!oName && currentUpdateLeader) { oName = currentUpdateLeader.name; oEmail = currentUpdateLeader.email; }
-      if (oName) {
-        var disp = oEmail ? (oName + ' (' + oEmail + ')') : oName;
-        $sel.append('<option value="' + disp.replace(/"/g,'&quot;') + '" selected>' + oName + '</option>');
-      }
-      $sel.select2({
-        data: userListCache || [],
-        dropdownParent: $('#updateModal'),
-        templateResult: function(it) { return it.display || it.text; },
-        templateSelection: function(it) { return it.name || it.text || ''; },
-        placeholder: '责任人 / Owner', allowClear: false, width: '100%'
-      });
+    var $sel = $row.find('.upd-ms-owner');
+    // owner 为空时默认填项目 Leader，避免回退成列表第一人
+    var oName = owner, oEmail = ownerEmail;
+    if (!oName && currentUpdateLeader) { oName = currentUpdateLeader.name; oEmail = currentUpdateLeader.email; }
+    if (oName) {
+      var disp = oEmail ? (oName + ' (' + oEmail + ')') : oName;
+      $sel.append('<option value="' + disp.replace(/"/g,'&quot;') + '" selected>' + oName + '</option>');
     }
+    $sel.select2({
+      data: userListCache || [],
+      dropdownParent: $('#updateModal'),
+      templateResult: function(it) { return it.display || it.text; },
+      templateSelection: function(it) { return it.name || it.text || ''; },
+      placeholder: '责任人 / Owner', allowClear: false, width: '100%'
+    });
   }
 
   // ==================== Add Project ====================
@@ -1469,11 +1461,20 @@
   function addMilestoneRow(name, planned) {
     var $row = $('<div class="add-ms-row">'
       + '<textarea rows="1" class="form-control form-control-sm add-ms-name autogrow-name" placeholder="里程碑名称 / Milestone Name">' + escapeTextarea(name || '') + '</textarea>'
+      + '<div class="add-ms-owner-wrap"><select class="form-select form-select-sm add-ms-owner" style="width:100%;"></select></div>'
       + '<input type="date" class="form-control form-control-sm add-ms-date" value="' + (planned || '') + '">'
       + '<button type="button" class="btn btn-sm btn-outline-secondary add-ms-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
     $row.find('.add-ms-del-btn').on('click', function() { $row.remove(); });
     $('#addMilestones').append($row);
+    var $sel = $row.find('.add-ms-owner');
+    $sel.select2({
+      data: userListCache || [],
+      dropdownParent: $('#addModal'),
+      templateResult: function(item) { return item.display || item.text; },
+      templateSelection: function(item) { return item.name || item.text || ''; },
+      placeholder: '责任人 / Owner', allowClear: false, width: '100%'
+    });
   }
 
   // CI 事项状态下拉 HTML
@@ -1568,7 +1569,12 @@
       $('#addMilestones .add-ms-row').each(function() {
         var name = $(this).find('.add-ms-name').val().trim();
         var planned = $(this).find('.add-ms-date').val().trim();
-        if (name) milestones.push({ name: name, planned: planned || 'NA' });
+        var ownerDisp = $(this).find('.add-ms-owner').val() || '';
+        var cache = (userListCache || []).filter(function(u) { return u.display === ownerDisp; })[0];
+        var ownerName = '', ownerEmail = '';
+        if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
+        else if (ownerDisp) { ownerName = ownerDisp; }
+        if (name) milestones.push({ name: name, planned: planned || 'NA', owner: ownerName, ownerEmail: ownerEmail });
       });
     }
     var data = {
