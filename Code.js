@@ -4474,6 +4474,7 @@ function SelectItem() {
   let workcenterData = ws.getRange(2, 1, ws.getLastRow() - 1, 3).getValues();
   
   let WORKCENTER = [];
+  let seen = {};
   workcenterData.forEach((r) => {
     if (r[0] !== "") {  // 确保机台号不为空
       let obj = {};
@@ -4481,8 +4482,25 @@ function SelectItem() {
       obj.workshop = r[1];     // B列：车间（TB1/TB2）
       obj.process = r[2];      // C列：工序（INJ/IM/TF/PK）
       WORKCENTER.push(obj);
+      seen[String(r[0]).trim()] = true;
     }
   });
+
+  // 从 Workcenter_手动维护 工作表获取手动维护的机台号
+  let wsManual = ss.getSheetByName("Workcenter_手动维护");
+  if (wsManual) {
+    let manualData = wsManual.getRange(2, 1, wsManual.getLastRow() - 1, 3).getValues();
+    manualData.forEach((r) => {
+      if (r[0] !== "" && !seen[String(r[0]).trim()]) {
+        let obj = {};
+        obj.workcenter = r[0];
+        obj.workshop = r[1];
+        obj.process = r[2];
+        WORKCENTER.push(obj);
+        seen[String(r[0]).trim()] = true;
+      }
+    });
+  }
   // console.log(WORKCENTER);
   id = "1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM";
   ss = SpreadsheetApp.openById(id);
