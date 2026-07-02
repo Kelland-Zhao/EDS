@@ -4474,6 +4474,7 @@ function SelectItem() {
   let workcenterData = ws.getRange(2, 1, ws.getLastRow() - 1, 3).getValues();
   
   let WORKCENTER = [];
+  let seen = {};
   workcenterData.forEach((r) => {
     if (r[0] !== "") {  // 确保机台号不为空
       let obj = {};
@@ -4481,8 +4482,25 @@ function SelectItem() {
       obj.workshop = r[1];     // B列：车间（TB1/TB2）
       obj.process = r[2];      // C列：工序（INJ/IM/TF/PK）
       WORKCENTER.push(obj);
+      seen[String(r[0]).trim()] = true;
     }
   });
+
+  // 从 Workcenter_手动维护 工作表获取手动维护的机台号
+  let wsManual = ss.getSheetByName("Workcenter_手动维护");
+  if (wsManual) {
+    let manualData = wsManual.getRange(2, 1, wsManual.getLastRow() - 1, 3).getValues();
+    manualData.forEach((r) => {
+      if (r[0] !== "" && !seen[String(r[0]).trim()]) {
+        let obj = {};
+        obj.workcenter = r[0];
+        obj.workshop = r[1];
+        obj.process = r[2];
+        WORKCENTER.push(obj);
+        seen[String(r[0]).trim()] = true;
+      }
+    });
+  }
   // console.log(WORKCENTER);
   id = "1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM";
   ss = SpreadsheetApp.openById(id);
@@ -10672,10 +10690,11 @@ const PROJECT_PERMISSION_COL = 59; // BH column - 项目跟进权限管理（用
 const PROJECT_TRACKING_HISTORY_SHEET_NAME = 'ProjectTracking_History';
 const PROJECT_TRACKING_APPROVALS_SHEET_NAME = 'ProjectTracking_Approvals';
 const PROJECT_MILESTONES_JSON_COL = 4;  // Col E — 里程碑 JSON 数组（单一数据源）
-const PROJECT_TYPE_COL = 5;             // Col F — 项目类型：标准 / CI（缺省按 标准）
+const PROJECT_TYPE_COL = 5;             // Col F — 项目类型：新品/新自动化 / CI / Kaizen
 const PROJECT_ID_COL = 6;              // Col G — 项目编号
 const PROJECT_CREATED_COL = 7;         // Col H — 创建时间
 const PROJECT_COMPLETED_COL = 8;       // Col I — 完成时间
+const PROJECT_PROCESS_COL = 9;         // Col J — 工序（INJ/TF/PK）
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10736,7 +10755,8 @@ function getProjectTrackingData() {
         leader: String(row[1] || ''),
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
-        type: String(row[PROJECT_TYPE_COL] || '').trim() || '标准',
+        type: String(row[PROJECT_TYPE_COL] || '').trim() || '新品/新自动化',
+        process: String(row[PROJECT_PROCESS_COL] || '').trim() || 'INJ',
         milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL]),
         createdAt: String(row[PROJECT_CREATED_COL] || ''),
         completedAt: String(row[PROJECT_COMPLETED_COL] || '')
@@ -10916,7 +10936,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
     }
 
     if (updates.type !== undefined) {
-      const currentType = String(currentRow[PROJECT_TYPE_COL] || '').trim() || '标准';
+      const currentType = String(currentRow[PROJECT_TYPE_COL] || '').trim() || '新品/新自动化';
       if (updates.type !== currentType) {
         changes.type = { old: currentType, new: updates.type };
         const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
@@ -12966,7 +12986,7 @@ function addProject(dataStr, editorName) {
       };
     });
 
-    const projType = (data.type === 'CI') ? 'CI' : '标准';
+    const projType = (data.type === 'CI' || data.type === 'Kaizen') ? data.type : '新品/新自动化';
 
     // 生成唯一项目编号 PRJ-YYYYMMDD-NNN
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
@@ -12994,7 +13014,8 @@ function addProject(dataStr, editorName) {
       projType,
       projectId,
       nowDate,
-      ''
+      '',
+      data.process || 'INJ'
     ];
 
     ws.appendRow(row);
@@ -13188,6 +13209,28 @@ function deleteProject(projectName, projectId, editorName) {
   } catch (e) {
     return JSON.stringify({ success: false, message: '删除失败 / Delete failed: ' + e.toString() });
   }
+}
+
+// ========== 项目跟进工序列迁移：历史数据 J 列回填 INJ ==========
+// 使用方式：在 GAS 编辑器中手动执行一次 migrateProjectProcessColumn()
+function migrateProjectProcessColumn() {
+  const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
+  const ws = ss.getSheetByName(PROJECT_TRACKING_SHEET_NAME);
+  if (!ws) return 'Sheet 项目总表 not found';
+  const lastRow = ws.getLastRow();
+  if (lastRow <= 1) return 'No data rows to migrate';
+  // J 列（第10列）批量写入 INJ
+  const range = ws.getRange(2, PROJECT_PROCESS_COL + 1, lastRow - 1, 1);
+  const values = range.getValues();
+  let count = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (!values[i][0] || String(values[i][0]).trim() === '') {
+      values[i][0] = 'INJ';
+      count++;
+    }
+  }
+  if (count > 0) range.setValues(values);
+  return 'Migration complete: ' + count + ' rows backfilled with INJ / 迁移完成：' + count + ' 行回填 INJ';
 }
 
 // ========== Inspection2.0 数据迁移：6 Sheet → 1 统一记录表 ==========
