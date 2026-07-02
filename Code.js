@@ -10796,7 +10796,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
         if (ms.index >= 0 && ms.index < currentMsArr.length) {
           const currentActual = String(currentMsArr[ms.index].actual || '').trim();
           if ((ms.actual || '') !== currentActual) {
-            actualChanges.push({ name: currentMsArr[ms.index].name, old: currentActual, new: ms.actual || '' });
+            actualChanges.push({ name: currentMsArr[ms.index].name, old: currentActual, new: ms.actual || '', owner: currentMsArr[ms.index].owner || '' });
           }
           currentMsArr[ms.index].actual = ms.actual || '';
         }
@@ -10839,7 +10839,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
           const oldP = String(oldMs.planned || '').trim();
           const newP = String(newMs.planned || 'NA');
           if (oldP !== newP) {
-            plannedChanges.push({ name: msLabel, old: oldP || 'NA', new: newP });
+            plannedChanges.push({ name: msLabel, old: oldP || 'NA', new: newP, owner: (newMs.owner || oldMs.owner || '') });
             historyRows.push({ milestone: msLabel, plannedOld: oldP || 'NA', plannedNew: newP, note: '计划日期变更' });
           }
           // 名称
@@ -11040,6 +11040,7 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
         rows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-weight:500;color:#2c3e50;">' + escapeHtml(ms.name) + '</td>';
         rows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-family:monospace;color:#555;">' + escapeHtml(ms.planned || 'NA') + '</td>';
         rows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-family:monospace;color:#555;">' + escapeHtml(fmtDate(ms.actual) || '未完成/Pending') + '</td>';
+        rows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;">' + escapeHtml(ms.owner || '') + '</td>';
         rows += '</tr>';
       });
       sectionsHtml += '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">里程碑结构已更新 / Milestone Structure Updated</h3>'
@@ -11049,6 +11050,7 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
         + '<th style="padding:12px;text-align:left;">里程碑 / Milestone</th>'
         + '<th style="padding:12px;text-align:left;">计划日期 / Planned</th>'
         + '<th style="padding:12px;text-align:left;">实际完成 / Actual</th>'
+        + '<th style="padding:12px;text-align:left;">责任人 / Owner</th>'
         + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
 
@@ -11065,6 +11067,7 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
           + escapeHtml(fmtDate(ms.new) || '空/Empty')
           + (isFutureDate ? ' &nbsp;<span style="background:#fff3cd;color:#856404;font-size:11px;padding:2px 6px;border-radius:3px;">⚠️ 计划时间推迟 / Planned Delayed</span>' : '')
           + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;">' + escapeHtml(ms.owner || '') + '</td>'
           + '</tr>';
       });
       sectionsHtml += '<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">里程碑实际完成日期更新 / Milestone Actual Date Update</h3>'
@@ -11074,6 +11077,7 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
         + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
         + '<th style="padding:12px;text-align:left;font-weight:600;">原日期 / Old</th>'
         + '<th style="padding:12px;text-align:left;font-weight:600;">新日期 / New</th>'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">责任人 / Owner</th>'
         + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
 
@@ -11084,6 +11088,7 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
           + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-weight:500;">' + escapeHtml(pd.name) + '</td>'
           + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#777;font-family:monospace;">' + escapeHtml(pd.old || 'NA') + '</td>'
           + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;font-family:monospace;font-weight:600;">' + escapeHtml(pd.new) + '</td>'
+          + '<td style="padding:10px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;">' + escapeHtml(pd.owner || '') + '</td>'
           + '</tr>';
       });
       // Check for future planned dates and add warning
@@ -11092,7 +11097,7 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
         return nd && nd !== 'NA' && nd > today;
       });
       if (hasFuturePlanned) {
-        rows += '<tr><td colspan="3" style="padding:8px 12px;background:#fff3cd;color:#856404;font-size:12px;">'
+        rows += '<tr><td colspan="4" style="padding:8px 12px;background:#fff3cd;color:#856404;font-size:12px;">'
           + '⚠️ <strong>计划时间推迟 / Planned Delayed</strong> — '
           + '部分里程碑的新计划日期晚于当前日期。<br>'
           + '<span style="font-size:11px;opacity:0.8;">Some milestones have new planned dates later than today. Plan may be delayed.</span>'
@@ -11105,6 +11110,7 @@ function sendProjectUpdateNotification(projectName, editorName, changes) {
         + '<th style="padding:12px;text-align:left;font-weight:600;">里程碑 / Milestone</th>'
         + '<th style="padding:12px;text-align:left;font-weight:600;">原计划 / Old</th>'
         + '<th style="padding:12px;text-align:left;font-weight:600;">新计划 / New</th>'
+        + '<th style="padding:12px;text-align:left;font-weight:600;">责任人 / Owner</th>'
         + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
 
@@ -12939,7 +12945,7 @@ function createResultPage(title, message, isSuccess) {
  * @param {string} dataStr - JSON with project data
  * @returns {string} JSON string
  */
-function addProject(dataStr) {
+function addProject(dataStr, editorName) {
   try {
     const data = JSON.parse(dataStr);
     const ss = SpreadsheetApp.openById(PROJECT_TRACKING_SS_ID);
@@ -12992,9 +12998,141 @@ function addProject(dataStr) {
     ];
 
     ws.appendRow(row);
+
+    // 发送创建通知邮件
+    sendProjectCreationNotification(data.projectName, data.leader, editorName || '', projectId, projType, data.status || 'Not start', msJsonArr);
+
     return JSON.stringify({ success: true, message: '添加成功 / Project added successfully', projectId: projectId });
   } catch (e) {
     return JSON.stringify({ success: false, message: '添加失败 / Add failed: ' + e.toString() });
+  }
+}
+
+/**
+ * 发送项目创建通知给所有相关人
+ * Send project creation notification to all stakeholders
+ * @param {string} projectName - 项目名称
+ * @param {string} leader - Leader 值（"姓名 (email)" 格式）
+ * @param {string} editorName - 创建人姓名
+ * @param {string} projectId - 项目编号
+ * @param {string} projType - 项目类型（标准/CI）
+ * @param {string} status - 初始状态
+ * @param {Array} milestonesArr - 里程碑数组 [{name, planned, actual, owner, ownerEmail, status}]
+ */
+function sendProjectCreationNotification(projectName, leader, editorName, projectId, projType, status, milestonesArr) {
+  try {
+    // 1. 提取 Leader 邮箱
+    const leaderEmail = (String(leader || '').match(/\(([^)]+)\)/) || [])[1] || '';
+    const leaderName = String(leader || '').replace(/\(.*\)/, '').trim();
+
+    // 2. 获取 Leader 直线上级 + INJ 管理员
+    const permSs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID);
+    const permWs = permSs.getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!permWs) return;
+    const permVals = permWs.getDataRange().getValues();
+    const INJ_ADMIN_COLS = { process: 14, perm: 59, email: 9, name: 1, supervisor: 60 };
+    const injAdminEmails = [];
+    let supervisorEmail = '';
+    for (let i = 2; i < permVals.length; i++) {
+      const proc  = String(permVals[i][INJ_ADMIN_COLS.process] || '').trim();
+      const perm  = String(permVals[i][INJ_ADMIN_COLS.perm] || '').trim();
+      const email = String(permVals[i][INJ_ADMIN_COLS.email] || '').trim();
+      if (proc === 'INJ' && perm === '管理员' && email) {
+        injAdminEmails.push(email);
+      }
+      const name = String(permVals[i][INJ_ADMIN_COLS.name] || '').trim();
+      if (name === leaderName) {
+        supervisorEmail = String(permVals[i][INJ_ADMIN_COLS.supervisor] || '').trim();
+      }
+    }
+
+    // 3. 事项责任人邮箱
+    const ownerEmails = [];
+    (milestonesArr || []).forEach(function(ms) {
+      const e = String((ms && ms.ownerEmail) || '').trim();
+      if (e) ownerEmails.push(e);
+    });
+
+    // 4. 构建收件人：To=项目Leader, CC=INJ管理员+直线上级+事项责任人（去重）
+    const ccList = [...new Set([...injAdminEmails, supervisorEmail, ...ownerEmails].filter(Boolean))];
+    const ccFiltered = leaderEmail ? ccList.filter(function(e) { return e.toLowerCase() !== leaderEmail.toLowerCase(); }) : ccList;
+    const toEmail = leaderEmail || ccFiltered.shift() || '';
+
+    if (!toEmail) {
+      console.log('No recipients for project creation notification: ' + projectName);
+      return;
+    }
+
+    const webPage = getReleaseWebPage();
+    const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    const subject = '【项目跟进】' + escapeHtml(editorName || leaderName) + ' 创建了新项目 / New Project Created - ' + projectName;
+
+    const statusMap = {
+      'Not start': '未开始 / Not Start',
+      'Processing': '进行中 / In Progress',
+      'Done': '已完成 / Done',
+      'Delayed': '已延迟 / Delayed',
+      'Canceled': '已取消 / Canceled'
+    };
+    const statusDisplay = statusMap[status] || status;
+
+    // 里程碑/事项表格
+    let msRows = '';
+    const isCI = (projType === 'CI');
+    (milestonesArr || []).forEach(function(ms, i) {
+      msRows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">';
+      msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-weight:500;color:#2c3e50;">' + escapeHtml(ms.name) + '</td>';
+      msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-family:monospace;color:#555;">' + escapeHtml(ms.planned || 'NA') + '</td>';
+      msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;">' + escapeHtml(ms.owner || '') + '</td>';
+      if (isCI) {
+        msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;color:#555;">' + escapeHtml(ms.status || '未开始') + '</td>';
+      }
+      msRows += '</tr>';
+    });
+
+    // 里程碑表头：CI 类型多一列"事项状态"
+    let msHeaderCols = '<th style="padding:12px;text-align:left;">名称<br><small>Name</small></th>'
+      + '<th style="padding:12px;text-align:left;">计划日期<br><small>Planned</small></th>'
+      + '<th style="padding:12px;text-align:left;">责任人<br><small>Owner</small></th>';
+    if (isCI) {
+      msHeaderCols += '<th style="padding:12px;text-align:left;">事项状态<br><small>Status</small></th>';
+    }
+
+    const htmlBody = '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background-color:#f8f9fa;padding:20px;">'
+      + '<div style="background:#fff0f0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;border-left:5px solid #E60012;">'
+      + '<h2 style="color:#E60012;text-align:center;margin-bottom:20px;border-bottom:3px solid #E60012;padding-bottom:10px;">'
+      + '【新项目创建通知】项目跟进<br><span style="font-size:0.8em;">New Project Created - Project Tracking</span></h2>'
+      + '<p style="font-size:15px;line-height:1.6;color:#c0392b;">（' + today + '）新项目已创建：<br>'
+      + '<span style="font-size:0.9em;opacity:0.85;">A new project has been created:</span></p>'
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:30px;margin-bottom:20px;">'
+      + '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">'
+      + '<tr><td style="padding:8px 12px;width:140px;font-weight:600;color:#555;">项目 / Project</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(projectName) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">项目编号 / ID</td><td style="padding:8px 12px;color:#2c3e50;font-family:monospace;">' + escapeHtml(projectId) + '</td></tr>'
+      + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">项目负责人 / Leader</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(leaderName) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">项目类型 / Type</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(projType) + '</td></tr>'
+      + '<tr><td style="padding:8px 12px;font-weight:600;color:#555;">初始状态 / Status</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(statusDisplay) + '</td></tr>'
+      + '<tr style="background:#f8f9fa;"><td style="padding:8px 12px;font-weight:600;color:#555;">创建人 / Creator</td><td style="padding:8px 12px;color:#2c3e50;">' + escapeHtml(editorName || leaderName) + '</td></tr>'
+      + '</table>'
+      + (msRows ? ('<h3 style="color:#E60012;border-bottom:2px solid #E60012;padding-bottom:8px;margin:16px 0 12px;">' + (isCI ? '事项清单 / Follow-up Items' : '里程碑计划 / Milestones') + '</h3>'
+        + '<div style="overflow-x:auto;">'
+        + '<table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">'
+        + '<thead><tr style="background:linear-gradient(135deg,#E60012,#c0000f);color:white;">'
+        + msHeaderCols
+        + '</tr></thead><tbody>' + msRows + '</tbody></table></div>') : '')
+      + '</div>'
+      + '<div style="background:#ffffff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);padding:20px;text-align:center;">'
+      + '<p style="margin-bottom:12px;"><a href="' + webPage + '?v=ProjectTracking" style="background:#E60012;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;">点击查看项目跟进 / View Project Tracking</a></p>'
+      + '<p style="margin:0;font-size:12px;color:#999;font-style:italic;">此邮件由系统自动发送，请勿回复。<br><span style="font-size:0.9em;">Auto-sent by system, please do not reply.</span></p>'
+      + '</div></div>';
+
+    const mailOptions = { htmlBody: htmlBody };
+    if (ccFiltered.length > 0) mailOptions.cc = ccFiltered.join(',');
+    GmailApp.sendEmail(toEmail, subject, '', mailOptions);
+    console.log('项目创建通知已发送 / Project creation notification sent — To: ' + toEmail + (ccFiltered.length > 0 ? ', CC: ' + ccFiltered.join(',') : ''));
+  } catch (e) {
+    console.error('sendProjectCreationNotification error: ' + e);
   }
 }
 

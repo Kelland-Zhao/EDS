@@ -1548,6 +1548,7 @@
       technician: $('#addTechnician').val() || '',
       status: $('#addStatus').val() || 'Not start', type: type, milestones: milestones
     };
+    var editorName = globalName || '';
     Swal.fire({ title: swalTitle('正在提交...', 'Submitting...'), html: swalHtml('正在添加新项目，请稍候。', 'Adding new project, please wait.'), allowOutsideClick: false, showConfirmButton: false, didOpen: function() { Swal.showLoading(); } });
     google.script.run
       .withSuccessHandler(function(result) {
@@ -1559,6 +1560,6 @@
         } catch(e) { Swal.fire('错误 / Error', e.message, 'error'); }
       })
       .withFailureHandler(function(err) { Swal.close(); Swal.fire('错误 / Error', '提交失败: ' + err.message, 'error'); })
-      .addProject(JSON.stringify(data));
+      .addProject(JSON.stringify(data), editorName);
   }
 </script>
