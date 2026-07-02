@@ -7409,6 +7409,17 @@ If you receive this email, it means the failure report email function is working
   }
 }
 
+/** 将 Date 对象或日期字符串格式化为 YYYY-MM-DD，用于字符串比较（避免 new Date('YYYY-MM-DD') UTC 时区偏差） */
+function _formatDateStr(raw) {
+  if (!raw) return '';
+  var d = raw instanceof Date ? raw : new Date(raw);
+  if (isNaN(d.getTime())) return '';
+  var yyyy = d.getFullYear();
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  return yyyy + '-' + mm + '-' + dd;
+}
+
 function getFilteredFailureReportData() {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let spreadsheet = SpreadsheetApp.openById(id);
@@ -7458,8 +7469,8 @@ function getFilteredFailureReportData() {
           if (mappedProcess === 'PK') {
             var rawSubmitDate = row[11];
             if (rawSubmitDate) {
-              var submitDateObj = rawSubmitDate instanceof Date ? rawSubmitDate : new Date(rawSubmitDate);
-              if (submitDateObj < new Date('2026-05-15')) continue;
+              var dateStr = _formatDateStr(row[11]);
+              if (dateStr < '2026-05-15') continue;
             }
             var problemDesc = String(row[3] || '');
             if (problemDesc.includes('转规格')) continue;
@@ -7516,8 +7527,8 @@ function getFilteredFailureReportData() {
               if (process === 'PK') {
                 var rawSubmitDate = row[11];
                 if (rawSubmitDate) {
-                  var submitDateObj = rawSubmitDate instanceof Date ? rawSubmitDate : new Date(rawSubmitDate);
-                  if (submitDateObj < new Date('2026-05-15')) continue;
+                  var dateStr = _formatDateStr(row[11]);
+                  if (dateStr < '2026-05-15') continue;
                 }
                 var problemDesc = String(row[3] || '');
                 if (problemDesc.includes('转规格')) continue;
