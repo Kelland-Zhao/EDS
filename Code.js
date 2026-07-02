@@ -13036,7 +13036,7 @@ function addProject(dataStr, editorName) {
  * @param {string} leader - Leader 值（"姓名 (email)" 格式）
  * @param {string} editorName - 创建人姓名
  * @param {string} projectId - 项目编号
- * @param {string} projType - 项目类型（标准/CI）
+ * @param {string} projType - 项目类型（新品/新自动化 / CI / Kaizen）
  * @param {string} status - 初始状态
  * @param {Array} milestonesArr - 里程碑数组 [{name, planned, actual, owner, ownerEmail, status}]
  */
@@ -13100,7 +13100,7 @@ function sendProjectCreationNotification(projectName, leader, editorName, projec
 
     // 里程碑/事项表格
     let msRows = '';
-    const isCI = (projType === 'CI');
+    const isCI = (projType === 'CI' || projType === 'Kaizen');
     (milestonesArr || []).forEach(function(ms, i) {
       msRows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">';
       msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-weight:500;color:#2c3e50;">' + escapeHtml(ms.name) + '</td>';
