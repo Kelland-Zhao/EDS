@@ -65,6 +65,10 @@
     .ci-fu-name { flex:1.4; font-size:12px; }
     .ci-fu-owner-wrap { flex:1; min-width:0; }
     .ci-fu-date { width:130px; font-size:12px; }
+    /* 更新模态框里程碑表格 */
+    #modalMilestonesTable td { vertical-align: middle; padding: 4px 6px; }
+    #modalMilestonesTable td:first-child { padding-left: 8px; }
+    #modalMilestonesTable td:last-child { text-align: center; }
     /* 事项/里程碑名称自动撑高文本框：换行可见、禁止手动拉伸 */
     textarea.autogrow-name {
       resize:none; overflow:hidden; white-space:pre-wrap; word-break:break-word;
@@ -150,6 +154,7 @@
       </div>
       <div class="perm-info">
         <span id="userLevelBadge" class="badge bg-secondary">加载中... / Loading...</span>
+        <span id="permissionNotice" class="ms-2" style="display:none;font-size:11px;color:#dc3545;">无操作权限，请联系管理员<br><small>No permission, contact admin</small></span>
       </div>
     </div>
 
@@ -239,7 +244,19 @@
               <button type="button" class="btn btn-sm btn-outline-danger d-none" id="updateMsAddBtn" style="font-size:11px;"><i class="bi bi-plus"></i> 添加节点<br><small>Add Milestone</small></button>
             </div>
             <div class="text-muted mb-1" id="modalMilestonesHint" style="font-size:11px;">计划日期（只读） / 实际完成日期（可编辑）</div>
-            <div style="max-height:300px;overflow-y:auto;"><div id="modalMilestones"></div></div>
+            <div style="max-height:300px;overflow-y:auto;">
+              <table class="table table-sm table-borderless mb-0" id="modalMilestonesTable" style="font-size:12px;">
+                <thead id="modalMilestonesHead"><tr style="background:#f8f9fa;border-bottom:2px solid #e9ecef;">
+                  <th style="min-width:140px;">名称<br><small>Name</small></th>
+                  <th style="width:110px;">责任人<br><small>Owner</small></th>
+                  <th style="width:115px;">计划日期<br><small>Planned</small></th>
+                  <th style="width:115px;">实际完成<br><small>Actual</small></th>
+                  <th style="width:90px;">状态<br><small>Status</small></th>
+                  <th style="width:36px;"></th>
+                </tr></thead>
+                <tbody id="modalMilestones"></tbody>
+              </table>
+            </div>
           </div>
           <div class="row">
             <div class="col-6">
@@ -264,9 +281,9 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline-danger d-none me-auto" id="deleteProjectBtn"><i class="bi bi-trash"></i> 删除项目 / Delete</button>
+          <button type="button" class="btn btn-danger d-none me-auto" id="deleteProjectBtn"><i class="bi bi-trash"></i> 删除项目 / Delete</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
-          <button type="button" class="btn btn-danger" id="saveBtn">保存 / Save</button>
+          <button type="button" class="btn btn-primary" id="saveBtn">保存 / Save</button>
         </div>
       </div>
     </div>
@@ -281,18 +298,28 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <div class="row mb-3">
-            <div class="col-6">
+          <div class="row mb-2">
+            <div class="col-12">
               <label class="form-label fw-bold" style="font-size:12px;">项目名称<br><small>Project Name</small></label>
               <input type="text" class="form-control" id="addProjectName" placeholder="输入项目名称 / Enter Project Name" required autocomplete="off">
             </div>
-            <div class="col-3">
+          </div>
+          <div class="row mb-3">
+            <div class="col-4">
               <label class="form-label fw-bold" style="font-size:12px;">项目 Leader<br><small>Project Leader</small></label>
               <select class="form-select select2-user" id="addLeader" style="width:100%;"></select>
             </div>
-            <div class="col-3">
+            <div class="col-4">
               <label class="form-label fw-bold" style="font-size:12px;">测试责任技术员 <span style="color:#999;font-weight:normal;">(选填)</span><br><small>Test Technician (Optional)</small></label>
               <select class="form-select select2-user" id="addTechnician" style="width:100%;"></select>
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-bold" style="font-size:12px;">工序<br><small>Process</small></label>
+              <select class="form-select" id="addProcess" style="font-size:12px;">
+                <option value="INJ">注塑 / INJ</option>
+                <option value="TF">植磨毛 / TF</option>
+                <option value="PK">包装 / PK</option>
+              </select>
             </div>
           </div>
           <div class="row mb-2">
@@ -322,16 +349,6 @@
               </select>
             </div>
           </div>
-          <div class="row mb-2">
-            <div class="col-4">
-              <label class="form-label fw-bold" style="font-size:12px;">工序<br><small>Process</small></label>
-              <select class="form-select" id="addProcess" style="font-size:12px;">
-                <option value="INJ">注塑 / INJ</option>
-                <option value="TF">植磨毛 / TF</option>
-                <option value="PK">包装 / PK</option>
-              </select>
-            </div>
-          </div>
           <!-- 新品/新自动化类型：里程碑计划日期 -->
           <div class="mb-2" id="addStandardSection">
             <div class="d-flex justify-content-between align-items-center mb-1">
@@ -357,7 +374,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
-          <button type="button" class="btn btn-danger" id="addSubmitBtn">提交 / Submit</button>
+          <button type="button" class="btn btn-primary" id="addSubmitBtn">提交 / Submit</button>
         </div>
       </div>
     </div>

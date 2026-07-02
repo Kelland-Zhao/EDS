@@ -162,9 +162,10 @@
       var wasCI = currentUpdateIsCI;
       currentUpdateIsCI = (newType === 'CI');
       if (wasCI === currentUpdateIsCI) return;
-      // 收集当前行数据
+      // 收集当前行数据 + 更新 thead
+      updateMilestonesThead(currentUpdateIsCI);
       var rows = [];
-      $('#modalMilestones .upd-ms-row').each(function() {
+      $('#modalMilestones tr').each(function() {
         var r = {
           name: $(this).find('.upd-ms-name').val().trim(),
           planned: $(this).find('.upd-ms-planned').val(),
@@ -193,18 +194,21 @@
 
     // 状态改变时更新实际完成日期和行背景色
     $('#modalMilestones').on('change', '.upd-ms-status', function() {
-      var $row = $(this).closest('.upd-ms-row');
+      var $row = $(this).closest('tr');
+      var $actualCell = $row.find('.ms-actual-cell');
       var $actual = $row.find('.ms-actual');
       var newStatus = $(this).val();
       if (newStatus === '已完成') {
+        $actualCell.show();
         $actual.val(formatDateYMD(today)).prop('readonly', true).addClass('readonly-field');
       } else {
+        $actualCell.hide();
         $actual.val('').prop('readonly', false).removeClass('readonly-field');
       }
       var planned = $row.find('.upd-ms-planned').val();
       var actual = $actual.val();
       var newStyle = getMsRowStyle(newStatus, planned, actual);
-      $row.attr('style', 'border-bottom:1px solid #f0f0f0;' + newStyle);
+      $row.attr('style', newStyle);
     });
   });
 
@@ -216,8 +220,10 @@
         var badge = $('#userLevelBadge');
         if (isAdmin) {
           badge.removeClass('bg-secondary').addClass('badge bg-success').text('管理员 / Admin');
+          $('#permissionNotice').hide();
         } else {
           badge.removeClass('bg-secondary').addClass('badge bg-warning text-dark').text('普通用户 / User');
+          $('#permissionNotice').show();
         }
         // 状态下拉所有人可编辑
         $('#modalStatus').prop('disabled', false);
@@ -1186,6 +1192,7 @@
 
     // Build milestone/follow-up rows — type-aware
     currentUpdateIsCI = isCIType(projType(proj));
+    updateMilestonesThead(currentUpdateIsCI);
     var pType = proj.type || '新品/新自动化';
     $('#modalType').empty()
       .append('<option value="新品/新自动化">新品/新自动化 / New Product & Automation</option>')
@@ -1228,7 +1235,7 @@
       $('#saveBtn').removeClass('d-none');
       $('#updateMsAddBtn').addClass('d-none');
       $('#modalType').prop('disabled', true);
-      $('#modalMilestones .upd-ms-row').each(function() {
+      $('#modalMilestones tr').each(function() {
         $(this).find('input, select').prop('disabled', true);
         $(this).find('.upd-ms-del-btn').addClass('d-none');
         if ($(this).find('.upd-ms-owner').hasClass('select2-hidden-accessible')) {
@@ -1281,7 +1288,7 @@
     // All users: collect full milestone array
     var newMsArr = [];
     var ciMissingOwner = false;
-    $('#modalMilestones .upd-ms-row').each(function() {
+    $('#modalMilestones tr').each(function() {
       var name = $(this).find('.upd-ms-name').val().trim();
       var plannedVal = $(this).find('.upd-ms-planned').val().trim();
       var actualVal = $(this).find('.ms-actual').val().trim();
@@ -1413,19 +1420,15 @@
 
   function addUpdateMilestoneRow(name, planned, actual, owner, ownerEmail, status) {
     var isCI = currentUpdateIsCI;
-    var nameLabel = isCI ? '事项<br><small>Item</small>' : '里程碑名称<br><small>Name</small>';
-    var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划日期<br><small>Planned</small>';
-    var ownerCol = '<div style="flex:0 0 140px;"><label style="font-size:10px;color:#666;">责任人<br><small>Owner</small></label><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></div>';
-    var statusCol = '<div style="flex:0 0 110px;"><label style="font-size:10px;color:#666;">状态<br><small>Status</small></label>' + ciStatusSelectHtml('upd-ms-status', status) + '</div>';
     var rowStyle = getMsRowStyle(status, planned, actual);
-    var $row = $('<div class="upd-ms-row d-flex align-items-end gap-2 py-1" style="border-bottom:1px solid #f0f0f0;' + rowStyle + '">'
-      + '<div class="flex-fill"><label style="font-size:10px;color:#666;">' + nameLabel + '</label><textarea rows="1" class="form-control form-control-sm upd-ms-name autogrow-name" placeholder="名称 / Name">' + escapeTextarea(name || '') + '</textarea></div>'
-      + ownerCol
-      + '<div style="flex:0 0 120px;"><label style="font-size:10px;color:#666;">' + plannedLabel + '</label><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></div>'
-      + '<div style="flex:0 0 120px;display:none;"><label style="font-size:10px;color:#666;">实际完成<br><small>Actual</small></label><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></div>'
-      + statusCol
-      + '<button type="button" class="btn btn-sm btn-outline-secondary upd-ms-del-btn mb-0" title="删除 / Remove"><i class="bi bi-x"></i></button>'
-      + '</div>');
+    var $row = $('<tr style="' + rowStyle + '">'
+      + '<td style="vertical-align:middle;"><textarea rows="1" class="form-control form-control-sm upd-ms-name autogrow-name" placeholder="名称 / Name">' + escapeTextarea(name || '') + '</textarea></td>'
+      + '<td style="vertical-align:middle;"><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></td>'
+      + '<td style="vertical-align:middle;"><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></td>'
+      + '<td style="vertical-align:middle;display:none;" class="ms-actual-cell"><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></td>'
+      + '<td style="vertical-align:middle;">' + ciStatusSelectHtml('upd-ms-status', status) + '</td>'
+      + '<td style="vertical-align:middle;text-align:center;"><button type="button" class="btn btn-sm btn-outline-secondary upd-ms-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button></td>'
+      + '</tr>');
     $row.find('.upd-ms-del-btn').on('click', function() { $row.remove(); });
     $('#modalMilestones').append($row);
 
@@ -1433,8 +1436,9 @@
     if (!isCI && !status && actual && parseDate(actual)) {
       $row.find('.upd-ms-status').val('已完成');
     }
-    // 状态为"已完成"时确保隐藏的实际完成日期有值
+    // 状态为"已完成"时显示实际完成日期并确保有值
     if ($row.find('.upd-ms-status').val() === '已完成') {
+      $row.find('.ms-actual-cell').show();
       var $act = $row.find('.ms-actual');
       if (!$act.val()) $act.val(formatDateYMD(today));
     }
@@ -1454,6 +1458,19 @@
       templateSelection: function(it) { return it.name || it.text || ''; },
       placeholder: '责任人 / Owner', allowClear: false, width: '100%'
     });
+  }
+
+  function updateMilestonesThead(isCI) {
+    var nameLabel = isCI ? '事项<br><small>Item</small>' : '名称<br><small>Name</small>';
+    var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划日期<br><small>Planned</small>';
+    $('#modalMilestonesHead').html('<tr style="background:#f8f9fa;border-bottom:2px solid #e9ecef;">'
+      + '<th style="min-width:140px;">' + nameLabel + '</th>'
+      + '<th style="width:110px;">责任人<br><small>Owner</small></th>'
+      + '<th style="width:115px;">' + plannedLabel + '</th>'
+      + '<th style="width:115px;">实际完成<br><small>Actual</small></th>'
+      + '<th style="width:90px;">状态<br><small>Status</small></th>'
+      + '<th style="width:36px;"></th>'
+      + '</tr>');
   }
 
   // ==================== Add Project ====================
