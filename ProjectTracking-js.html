@@ -195,18 +195,21 @@
     // 状态改变时更新实际完成日期和行背景色
     $('#modalMilestones').on('change', '.upd-ms-status', function() {
       var $row = $(this).closest('tr');
-      var $actualCell = $row.find('.ms-actual-cell');
+      var $cell = $row.find('.ms-actual-cell');
       var $actual = $row.find('.ms-actual');
+      var $na = $row.find('.ms-actual-na');
       var newStatus = $(this).val();
       if (newStatus === '已完成') {
-        $actualCell.show();
-        $actual.val(formatDateYMD(today)).prop('readonly', true).addClass('readonly-field');
+        if ($na.length) $na.hide();
+        $actual.show().prop('readonly', true).addClass('readonly-field');
+        if (!$actual.val()) $actual.val(formatDateYMD(today));
       } else {
-        $actualCell.hide();
-        $actual.val('').prop('readonly', false).removeClass('readonly-field');
+        $actual.hide().val('').prop('readonly', false).removeClass('readonly-field');
+        if ($na.length) $na.show();
+        else $cell.prepend('<span class="ms-actual-na" style="color:#adb5bd;font-size:12px;">NA</span>');
       }
       var planned = $row.find('.upd-ms-planned').val();
-      var actual = $actual.val();
+      var actual = $actual.is(':visible') ? $actual.val() : '';
       var newStyle = getMsRowStyle(newStatus, planned, actual);
       $row.attr('style', newStyle);
     });
@@ -451,14 +454,13 @@
   }
 
   function getMsRowStyle(status, planned, actual) {
-    // Status-based background + left border for milestone rows in update modal
+    // 里程碑/事项行底色 + 左边框（3状态显式配色）
     if (status === '已完成') return 'background:#d4edda;border-left:3px solid #28a745;';
     if (status === '进行中') return 'background:#fff3cd;border-left:3px solid #ffc107;';
+    // 未开始：检查是否逾期
     var p = parseDate(planned);
-    var a = parseDate(actual);
-    if (a) return 'background:#d4edda;border-left:3px solid #28a745;';
     if (p && p < today) return 'background:#f8d7da;border-left:3px solid #dc3545;';
-    return 'background:#f5f5f5;border-left:3px solid #adb5bd;';
+    return 'background:#f0f4f8;border-left:3px solid #adb5bd;';
   }
 
   function getMilestoneColor(ms) {
@@ -1420,28 +1422,25 @@
 
   function addUpdateMilestoneRow(name, planned, actual, owner, ownerEmail, status) {
     var isCI = currentUpdateIsCI;
-    var rowStyle = getMsRowStyle(status, planned, actual);
+    var effStatus = status || '未开始';
+    // 若历史数据有实际完成日期但无状态，自动推断
+    if (!isCI && !status && actual && parseDate(actual)) effStatus = '已完成';
+    var rowStyle = getMsRowStyle(effStatus, planned, actual);
+    var isCompleted = (effStatus === '已完成');
     var $row = $('<tr style="' + rowStyle + '">'
       + '<td style="vertical-align:middle;"><textarea rows="1" class="form-control form-control-sm upd-ms-name autogrow-name" placeholder="名称 / Name">' + escapeTextarea(name || '') + '</textarea></td>'
       + '<td style="vertical-align:middle;"><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></td>'
       + '<td style="vertical-align:middle;"><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></td>'
-      + '<td style="vertical-align:middle;display:none;" class="ms-actual-cell"><input type="date" class="form-control form-control-sm ms-actual" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : '') : '') + '"></td>'
-      + '<td style="vertical-align:middle;">' + ciStatusSelectHtml('upd-ms-status', status) + '</td>'
+      + '<td style="vertical-align:middle;text-align:center;" class="ms-actual-cell">'
+      + (isCompleted
+        ? '<input type="date" class="form-control form-control-sm ms-actual readonly-field" value="' + (actual ? (parseDate(actual) ? formatDateYMD(parseDate(actual)) : formatDateYMD(today)) : formatDateYMD(today)) + '" readonly>'
+        : '<span class="ms-actual-na" style="color:#adb5bd;font-size:12px;">NA</span><input type="date" class="form-control form-control-sm ms-actual" style="display:none;">')
+      + '</td>'
+      + '<td style="vertical-align:middle;">' + ciStatusSelectHtml('upd-ms-status', effStatus) + '</td>'
       + '<td style="vertical-align:middle;text-align:center;"><button type="button" class="btn btn-sm btn-outline-secondary upd-ms-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button></td>'
       + '</tr>');
     $row.find('.upd-ms-del-btn').on('click', function() { $row.remove(); });
     $('#modalMilestones').append($row);
-
-    // 新品/新自动化项目：若已有实际完成日期但无状态，自动推断为"已完成"（兼容历史数据）
-    if (!isCI && !status && actual && parseDate(actual)) {
-      $row.find('.upd-ms-status').val('已完成');
-    }
-    // 状态为"已完成"时显示实际完成日期并确保有值
-    if ($row.find('.upd-ms-status').val() === '已完成') {
-      $row.find('.ms-actual-cell').show();
-      var $act = $row.find('.ms-actual');
-      if (!$act.val()) $act.val(formatDateYMD(today));
-    }
 
     var $sel = $row.find('.upd-ms-owner');
     // owner 为空时默认填项目 Leader，避免回退成列表第一人
