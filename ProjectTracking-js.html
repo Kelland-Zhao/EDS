@@ -454,13 +454,14 @@
   }
 
   function getMsRowStyle(status, planned, actual) {
-    // 里程碑/事项行底色 + 左边框（3状态显式配色）
-    if (status === '已完成') return 'background:#d4edda;border-left:3px solid #28a745;';
-    if (status === '进行中') return 'background:#fff3cd;border-left:3px solid #ffc107;';
+    // 里程碑/事项行底色 + 左色条（3状态显式配色）
+    // 用 box-shadow:inset 替代 border-left，因为 tr 上 border 在 collapse 表格中不可靠
+    if (status === '已完成') return 'background:#d4edda;box-shadow:inset 3px 0 0 #28a745;';
+    if (status === '进行中') return 'background:#fff3cd;box-shadow:inset 3px 0 0 #ffc107;';
     // 未开始：检查是否逾期
     var p = parseDate(planned);
-    if (p && p < today) return 'background:#f8d7da;border-left:3px solid #dc3545;';
-    return 'background:#f0f4f8;border-left:3px solid #adb5bd;';
+    if (p && p < today) return 'background:#f8d7da;box-shadow:inset 3px 0 0 #dc3545;';
+    return 'background:#f0f4f8;box-shadow:inset 3px 0 0 #adb5bd;';
   }
 
   function getMilestoneColor(ms) {
