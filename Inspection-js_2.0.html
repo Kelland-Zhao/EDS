@@ -1183,8 +1183,8 @@
     // 创建表格标题
     let tableTitle = $('<h4 class="mb-3">点检任务详情 / Inspection Task Details</h4>');
 
-    // 创建表格（参考FailureReport_Manage.html的样式）
-    let table = $('<table id="inspectionTable" class="display table table-bordered table-striped table-hover" style="width:100%"></table>');
+    // 创建表格
+    let table = $('<table id="inspectionTable" class="display bilingual-table" style="width:100%"></table>');
 
     // 获取所有唯一的属性名作为表头
     let allKeys = [];
@@ -1208,30 +1208,41 @@
       }
     });
 
-    // 定义需要折叠的列（从Resource到Tool）
-    const collapsibleColumns = ['Resource', 'Frequency', 'Process', 'Method', 'Unit', 'Tool'];
-    const mainColumns = allKeys.filter(key => !collapsibleColumns.includes(key));
-    const detailColumns = allKeys.filter(key => collapsibleColumns.includes(key));
+    // 所有列完整展示（不再折叠）
+    const allColumns = allKeys;
 
-    // 创建表头（参考FailureReport_Manage.html的红色表头样式）
+    // 创建表头
     let thead = $('<thead></thead>');
     let headerRow = $('<tr></tr>');
 
     // 数据列中英文映射（键 → 中文名）
     var headerLabelMap = {
+      'Task Type': '任务类型',
+      'Line Status': '线体状态',
+      'Tools & Equip': '工具设备',
       'Resource': '资源',
+      'MachineType': '机型',
+      'Frecuency': '频次',
       'Frequency': '频次',
-      'Process': '工序',
-      'Method': '方法',
-      'Unit': '单位',
-      'Tool': '工具',
-      'Machine': '机台',
-      'Machine Type': '任务类型',
-      'MachineType': '任务类型',
-      'Workcenter': '机台号',
-      'Task': '任务',
       'Task No': '任务序号',
       'TaskNo': '任务序号',
+      'Section': '部位',
+      'No Resources': '人数',
+      'Function': '功能',
+      'Failure Mode': '故障模式',
+      'Skill Level': '技能等级',
+      'Task Description': '任务描述',
+      'Strategy': '策略',
+      'Task Status': '任务状态',
+      'Estimated Time': '预计时间',
+      'Machine': '机台',
+      'Machine Type': '任务类型',
+      'Method': '方法',
+      'Process': '工序',
+      'Tool': '工具',
+      'Unit': '单位',
+      'Workcenter': '机台号',
+      'Task': '任务',
       'Item': '点检项目',
       'No': '序号',
       'Standard': '检查标准',
@@ -1275,14 +1286,11 @@
       return cn + '<br><span style="font-size:10px;font-weight:400;opacity:0.85;">' + en + '</span>';
     }
 
-    // 添加主要数据列
-    mainColumns.forEach(key => {
+    // 添加所有数据列
+    allColumns.forEach(key => {
       var label = formatHeader(key);
-      headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">' + label + '</th>');
+      headerRow.append('<th>' + label + '</th>');
     });
-
-    // 添加折叠列组
-    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">详细信息<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Details</span></th>');
 
     // 添加操作列
     headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">结果<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Result</span></th>');
@@ -1304,21 +1312,11 @@
             let row = $('<tr></tr>');
             let rowId = 'task_' + index + '_' + objIndex;
 
-            // 添加主要数据列
-            mainColumns.forEach(key => {
+            // 添加所有数据列
+            allColumns.forEach(key => {
               let cellValue = obj[key] || '';
               row.append('<td>' + cellValue + '</td>');
             });
-
-            // 添加折叠详细信息列
-            let detailInfo = '';
-            detailColumns.forEach(key => {
-              let cellValue = obj[key] || '';
-              if (cellValue) {
-                detailInfo += '<div><strong>' + key + ':</strong> ' + cellValue + '</div>';
-              }
-            });
-            row.append('<td><button class="btn btn-sm btn-outline-info detail-toggle" data-row-id="' + rowId + '">+</button><div class="detail-content" style="display:none;">' + detailInfo + '</div></td>');
 
             // 结果列 - 单选按钮
             row.append('<td>' +
@@ -1349,10 +1347,10 @@
             row.append('<td>' +
               '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;">' +
               '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '" ' +
-              'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+              'style="font-size:0.7rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal;">' +
               '<i class="bi bi-eye"></i>预览<br>Preview</button>' +
               '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '" ' +
-              'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+              'style="font-size:0.7rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal;">' +
               '<i class="bi bi-upload"></i>上传<br>Upload</button>' +
               '</div>' +
               '<input type="hidden" class="photo-id-input" data-row-id="' + rowId + '" value="">' +
@@ -1366,21 +1364,11 @@
         let row = $('<tr></tr>');
         let rowId = 'task_' + index;
 
-        // 添加主要数据列
-        mainColumns.forEach(key => {
+        // 添加所有数据列
+        allColumns.forEach(key => {
           let cellValue = item[key] || '';
           row.append('<td>' + cellValue + '</td>');
         });
-
-        // 添加折叠详细信息列
-        let detailInfo = '';
-        detailColumns.forEach(key => {
-          let cellValue = item[key] || '';
-          if (cellValue) {
-            detailInfo += '<div><strong>' + key + ':</strong> ' + cellValue + '</div>';
-          }
-        });
-        row.append('<td><button class="btn btn-sm btn-outline-info detail-toggle" data-row-id="' + rowId + '">+</button><div class="detail-content" style="display:none;">' + detailInfo + '</div></td>');
 
         // 结果列 - 单选按钮
         row.append('<td>' +
@@ -1411,10 +1399,10 @@
         row.append('<td>' +
           '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;">' +
           '<button class="btn btn-sm btn-primary save-btn" data-row-id="' + rowId + '" ' +
-          'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+          'style="font-size:0.7rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal;">' +
           '<i class="bi bi-eye"></i>预览<br>Preview</button>' +
           '<button class="btn btn-sm btn-secondary reset-btn" data-row-id="' + rowId + '" ' +
-          'style="font-size:0.75rem;width:84px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;">' +
+          'style="font-size:0.7rem;width:64px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;white-space:normal;">' +
           '<i class="bi bi-upload"></i>上传<br>Upload</button>' +
           '</div>' +
           '<input type="hidden" class="photo-id-input" data-row-id="' + rowId + '" value="">' +
@@ -1446,8 +1434,8 @@
 
     // 初始化 DataTables
     $('#inspectionTable').DataTable({
-      responsive: true,
       pageLength: 50,
+      scrollX: true,
       language: {
         "lengthMenu": "显示 _MENU_ 条记录",
         "zeroRecords": "没有找到记录",
@@ -1500,22 +1488,6 @@
       uploadImage(rowId);
     });
 
-    // 折叠按钮事件
-    $(document).on('click', '.detail-toggle', function () {
-      let rowId = $(this).data('row-id');
-      let button = $(this);
-      let content = button.next('.detail-content');
-
-      if (content.is(':visible')) {
-        content.slideUp();
-        button.text('+');
-        button.removeClass('btn-outline-danger').addClass('btn-outline-info');
-      } else {
-        content.slideDown();
-        button.text('-');
-        button.removeClass('btn-outline-info').addClass('btn-outline-danger');
-      }
-    });
   }
 
   // 验证基础信息字段
@@ -1614,9 +1586,9 @@
         rowId = resultRadio.attr('name').replace('result_', '');
       } else {
         // 如果没有选中的单选按钮，尝试从其他元素获取rowId
-        let detailToggle = row.find('.detail-toggle');
-        if (detailToggle.length > 0) {
-          rowId = detailToggle.data('row-id');
+        let saveBtn = row.find('.save-btn');
+        if (saveBtn.length > 0) {
+          rowId = saveBtn.data('row-id');
         }
       }
 
