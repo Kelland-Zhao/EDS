@@ -1575,6 +1575,15 @@
     let totalTasks = 0;
     let completedTasks = 0;
 
+    // 从表头构建列名→索引映射（解决动态列顺序导致的属性键值错位）
+    let columnMap = {};
+    $('#inspectionTable thead th').each(function(index) {
+      let spanText = $(this).find('span').text().trim();
+      if (spanText) {
+        columnMap[spanText] = index;
+      }
+    });
+
     // 遍历所有表格行
     $('#inspectionTable tbody tr').each(function () {
       let row = $(this);
@@ -1595,18 +1604,22 @@
       if (rowId) {
         totalTasks++;
 
-        // 从表格中获取完整的任务信息
+        // 从表格中获取完整的任务信息（按列名动态匹配，不再依赖固定索引）
         let cells = row.find('td');
+        let getCell = function(key) {
+          let idx = columnMap[key];
+          return (idx !== undefined) ? cells.eq(idx).text().trim() || '' : '';
+        };
         let taskData = {
           rowId: rowId,
-          unit: cells.eq(0).text().trim() || '',           // 单元
-          parts: cells.eq(1).text().trim() || '',          // 部位及内容
-          standard: cells.eq(2).text().trim() || '',       // 检查标准
-          tool: cells.eq(3).text().trim() || '',           // 使用工具
-          method: cells.eq(4).text().trim() || '',         // 方法
-          status: cells.eq(5).text().trim() || '',         // 设备状态
-          frequency: cells.eq(6).text().trim() || '',      // 检查频率
-          pointChecker: cells.eq(7).text().trim() || '',    // 点检人
+          unit: getCell('Unit'),
+          parts: getCell('Parts'),
+          standard: getCell('Inspection Std'),
+          tool: getCell('Tool'),
+          method: getCell('Method'),
+          status: getCell('Status'),
+          frequency: getCell('Frequency'),
+          pointChecker: getCell('Resource'),
           result: $('.result-radio[name="result_' + rowId + '"]:checked').val() || '',
           remarks: $('.remarks-text[data-row-id="' + rowId + '"]').val() || '',
           resolved: $('.resolved-radio[name="resolved_' + rowId + '"]:checked').val() || '',
