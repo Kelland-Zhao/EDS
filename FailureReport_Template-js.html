@@ -1030,6 +1030,25 @@ $(document).ready(function () {
                 '<a href="' + result.fileUrl + '" target="_blank">' + result.fileName + '</a>',
               icon: 'success',
               confirmButtonText: '确定 / OK'
+            }).then(function() {
+              let sec = 10;
+              Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: isEdit ? '更新成功 / Updated' : '提交成功 / Submitted',
+                html: '<span id="closeCountdown">' + sec + '秒后跳转进度查询 / Redirect in ' + sec + 's</span>',
+                timer: 10000,
+                timerProgressBar: true,
+                showConfirmButton: false
+              });
+              const interval = setInterval(function() {
+                sec--;
+                const el = document.getElementById('closeCountdown');
+                if (el) el.textContent = sec + '秒后跳转进度查询 / Redirect in ' + sec + 's';
+                if (sec <= 0) clearInterval(interval);
+              }, 1000);
+              setTimeout(function() { window.location.href = webPage + '?v=FailureReport_Progress'; }, 10000);
             });
           } else {
             Swal.fire({ title: '提交失败 / Failed', text: result.message, icon: 'error', confirmButtonText: '确定 / OK' });
