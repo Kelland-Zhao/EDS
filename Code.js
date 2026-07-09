@@ -395,6 +395,14 @@ function getFailureReportFormData(reportId) {
       throw new Error('该报告暂无表单数据 / No form data found');
     }
     const formData = JSON.parse(jsonStr);
+    // 从 Drive 读取照片文件
+    if (formData._photoFileId) {
+      try {
+        const photoFile = DriveApp.getFileById(formData._photoFileId);
+        const photoBytes = photoFile.getBlob().getBytes();
+        formData.photo = 'data:image/jpeg;base64,' + Utilities.base64Encode(photoBytes);
+      } catch (e) { /* 照片文件不存在则忽略 */ }
+    }
     if (!formData.time_used) {
       const repairTime = String(values[rowIndex][13] || '').trim();
       if (repairTime) formData.time_used = repairTime;
@@ -442,11 +450,13 @@ function submitFailureReport(dataStr) {
     let reviewHistory = [];
     let oldPdfUrl = '';
     let oldPdfName = '';
+    let oldPhotoId = '';
     try {
       const oldJson = JSON.parse(String(values[rowIndex - 1][10] || '{}'));
       if (Array.isArray(oldJson.reviewHistory)) reviewHistory = oldJson.reviewHistory;
       oldPdfUrl = String(oldJson._pdfUrl || '');
       oldPdfName = String(oldJson._pdfFileName || '');
+      oldPhotoId = String(oldJson._photoFileId || '');
     } catch (e) { /* 旧 JSON 不存在/非法则忽略 */ }
     // 已通过报告的 PDF 在 J 列（HYPERLINK），不在 JSON
     if (!oldPdfUrl) {
@@ -455,7 +465,10 @@ function submitFailureReport(dataStr) {
     }
 
     const dataForSheet = Object.assign({}, data);
-    delete dataForSheet.photo;
+    // 照片存为独立 Drive 图片文件，JSON 仅存文件 ID（避免单元格超限）
+    if (data.photo) {
+      dataForSheet._photoFileId = ''; // 先清空，保存成功后再写入
+    }
     delete dataForSheet.fault_category;
     delete dataForSheet.fault_category_text;
     delete dataForSheet._editMode;
@@ -469,6 +482,10 @@ function submitFailureReport(dataStr) {
         const idMatch = oldPdfUrl.match(/\/d\/([^\/]+)/);
         if (idMatch) DriveApp.getFileById(idMatch[1]).setTrashed(true);
       } catch (e) { /* 旧文件不存在则忽略 */ }
+      // 删除旧照片文件
+      if (oldPhotoId) {
+        try { DriveApp.getFileById(oldPhotoId).setTrashed(true); } catch (e) { /* ignore */ }
+      }
       const vMatch = String(oldPdfName).match(/_v(\d+)\.pdf$/);
       const newVer = vMatch ? parseInt(vMatch[1]) + 1 : 2;
       pdfVersionSuffix = '_v' + newVer;
@@ -485,6 +502,16 @@ function submitFailureReport(dataStr) {
     const folder = DriveApp.getFolderById('1mMKiMFOzbpqB_V2iIQcIqF2o4ZyRRcNL');
     const pdfFile = folder.createFile(pdfBlob);
     const fileUrl = pdfFile.getUrl();
+
+    // 保存照片为独立图片文件
+    if (data.photo) {
+      try {
+        const photoBase64 = data.photo.split(',')[1] || data.photo;
+        const photoBlob = Utilities.newBlob(Utilities.base64Decode(photoBase64), 'image/jpeg', reportNo + '_photo.jpg');
+        const photoFile = folder.createFile(photoBlob);
+        dataForSheet._photoFileId = photoFile.getId();
+      } catch (e) { console.error('保存照片文件失败:', e); }
+    }
 
     const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
     const now = new Date();
