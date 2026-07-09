@@ -435,7 +435,8 @@ function submitFailureReport(dataStr) {
     const currentReviewStatus = String(values[rowIndex - 1][14] || '').trim();
     // 已落地附件（J 列）：兼容历史迁移前的老报告（空状态+有附件视同已通过）
     const hadAttachment = String(values[rowIndex - 1][9] || '').trim() !== '';
-    const isApprovedEdit = isEditMode && (currentReviewStatus === '已通过' || (!currentReviewStatus && hadAttachment));
+    const approvedStatuses = ['已通过', '审核通过', '已完成'];
+    const isApprovedEdit = isEditMode && (approvedStatuses.includes(currentReviewStatus) || (!currentReviewStatus && hadAttachment));
 
     // 读取旧 JSON 中的 reviewHistory（追加而非覆盖）与暂存 PDF 信息
     let reviewHistory = [];
