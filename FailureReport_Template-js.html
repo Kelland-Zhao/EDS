@@ -785,7 +785,7 @@ $(document).ready(function () {
         // 编辑模式：从服务器加载已有数据
         if (isEditMode && p.reportId) {
           $('#btnSubmit').text('更新 / Update');
-          $('.navbar-brand').text('编辑故障报告 / Edit Breakdown Analysis');
+          $('.navbar-brand > span').html('<span style="font-size:xx-large;font-weight:bold;">编辑故障报告</span><br><span style="font-size:14px;font-weight:400;opacity:0.85;">Edit Failure Report</span>');
 
           Swal.fire({
             title: swalTitle('加载数据中...', 'Loading Data...'),
