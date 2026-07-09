@@ -269,7 +269,12 @@
     });
 
     $('#TLMoC').click(() => {
-        let url = 'https://script.google.com/a/macros/colpal.com/s/AKfycbxpDYL02i5FaFzUDcIoW3siG2U94cvWUUnz_F5x2BO1jnrXoMGzFQH-jw9C4nvZ7FE/exec'
+        const isDev = window.location.href.indexOf('/dev') !== -1;
+        const base = 'https://script.google.com/a/macros/colpal.com/s/';
+        const tlMoCId = isDev
+          ? 'AKfycbwQQLTjqojw5DrCQlVht_krcyfT8Us21EAUfQf6f6E/dev'
+          : 'AKfycbxpDYL02i5FaFzUDcIoW3siG2U94cvWUUnz_F5x2BO1jnrXoMGzFQH-jw9C4nvZ7FE/exec';
+        let url = base + tlMoCId
             + '?jobNumber=' + encodeURIComponent(id)
             + '&pwd=' + encodeURIComponent(pwd)
             + '&name=' + encodeURIComponent(name);
