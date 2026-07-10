@@ -692,9 +692,11 @@
       var owner = ms.owner || (proj.leader ? proj.leader.replace(/\(.*\)/, '').trim() : '—');
       var dueTxt = (ms.planned && ms.planned !== 'NA') ? normalizeDate(ms.planned) : 'NA';
       var actTxt = ms.actual ? normalizeDate(ms.actual) : '—';
+      var startTxt = ms.plannedStart ? normalizeDate(ms.plannedStart) : '—';
       return '<tr style="background:' + (i % 2 === 0 ? '#fff5f5' : '#fff') + ';">'
         + '<td style="padding:6px 8px;border-bottom:1px solid #eee;">' + (ms.name || '').replace(/</g,'&lt;') + '</td>'
         + '<td style="padding:6px 8px;border-bottom:1px solid #eee;white-space:nowrap;">' + owner + '</td>'
+        + '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;white-space:nowrap;color:#555;">' + startTxt + '</td>'
         + '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;white-space:nowrap;color:' + (p && p < today && !a ? '#dc3545' : '#555') + ';">' + dueTxt + '</td>'
         + '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;white-space:nowrap;">' + actTxt + '</td>'
         + '<td style="padding:6px 8px;border-bottom:1px solid #eee;white-space:nowrap;font-weight:600;color:' + stColor + ';">' + stHtml + '</td>'
@@ -704,6 +706,7 @@
       + '<thead><tr style="background:linear-gradient(135deg,#6f42c1,#59359a);color:#fff;">'
       + '<th style="padding:8px;text-align:left;">事项 / Item</th>'
       + '<th style="padding:8px;text-align:left;">责任人 / Owner</th>'
+      + '<th style="padding:8px;text-align:left;">计划开始 / Start</th>'
       + '<th style="padding:8px;text-align:left;">计划完成 / Due</th>'
       + '<th style="padding:8px;text-align:left;">实际完成 / Actual</th>'
       + '<th style="padding:8px;text-align:left;">状态 / Status</th>'
