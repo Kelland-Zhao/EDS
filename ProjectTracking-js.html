@@ -1462,10 +1462,11 @@
 
   function updateMilestonesThead(isCI) {
     var nameLabel = isCI ? '事项<br><small>Item</small>' : '名称<br><small>Name</small>';
-    var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划日期<br><small>Planned</small>';
+    var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划完成<br><small>Planned</small>';
     $('#modalMilestonesHead').html('<tr style="background:#f8f9fa;border-bottom:2px solid #e9ecef;">'
       + '<th style="min-width:140px;">' + nameLabel + '</th>'
       + '<th style="width:110px;">责任人<br><small>Owner</small></th>'
+      + '<th style="width:115px;">计划开始<br><small>Start</small></th>'
       + '<th style="width:115px;">' + plannedLabel + '</th>'
       + '<th style="width:115px;">实际完成<br><small>Actual</small></th>'
       + '<th style="width:90px;">状态<br><small>Status</small></th>'
