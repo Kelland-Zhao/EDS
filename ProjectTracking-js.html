@@ -1421,7 +1421,7 @@
     });
   }
 
-  function addUpdateMilestoneRow(name, planned, actual, owner, ownerEmail, status) {
+  function addUpdateMilestoneRow(name, plannedStart, planned, actual, owner, ownerEmail, status) {
     var isCI = currentUpdateIsCI;
     var effStatus = status || '未开始';
     // 若历史数据有实际完成日期但无状态，自动推断
@@ -1431,6 +1431,7 @@
     var $row = $('<tr style="' + rowStyle + '">'
       + '<td style="vertical-align:middle;"><textarea rows="1" class="form-control form-control-sm upd-ms-name autogrow-name" placeholder="名称 / Name">' + escapeTextarea(name || '') + '</textarea></td>'
       + '<td style="vertical-align:middle;"><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></td>'
+      + '<td style="vertical-align:middle;"><input type="date" class="form-control form-control-sm upd-ms-start" value="' + (plannedStart ? (parseDate(plannedStart) ? formatDateYMD(parseDate(plannedStart)) : '') : '') + '" style="font-size:12px;"></td>'
       + '<td style="vertical-align:middle;"><input type="date" class="form-control form-control-sm upd-ms-planned" value="' + (planned && planned !== 'NA' ? (parseDate(planned) ? formatDateYMD(parseDate(planned)) : '') : '') + '"></td>'
       + '<td style="vertical-align:middle;text-align:center;" class="ms-actual-cell">'
       + (isCompleted
