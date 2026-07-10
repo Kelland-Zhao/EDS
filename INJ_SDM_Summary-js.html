@@ -108,8 +108,10 @@
     }
 
     function reloadTodayReport() {
+      showLoading('刷新数据中...', 'Refreshing Data...');
       google.script.run
         .withSuccessHandler(raw => {
+          Swal.close();
           const result = parseResponse(raw);
           if (!result.success || !result.todayReport) {
             resetForm();
@@ -117,7 +119,7 @@
           }
           populateForm(result.todayReport);
         })
-        .withFailureHandler(() => resetForm())
+        .withFailureHandler(() => { Swal.close(); resetForm(); })
         .getINJSDMInitData(userName, userEmail);
     }
 
