@@ -57,14 +57,14 @@
     $('#deleteProjectBtn').click(function() { deleteCurrentProject(); });
     $('#addProjectBtn').click(function() { openAddModal(); });
     $('#addSubmitBtn').click(function() { submitAddProject(); });
-    $('#addMsAddBtn').click(function() { addMilestoneRow('', formatDateYMD(today)); });
+    $('#addMsAddBtn').click(function() { addMilestoneRow('', '', formatDateYMD(today)); });
     $('#updateMsAddBtn').click(function() { addUpdateMilestoneRow('', formatDateYMD(today), ''); });
 
     $('#addTemplate').on('change', function() {
       var tpl = $(this).val();
       var names = MS_TEMPLATES[tpl] || [];
       $('#addMilestones').empty();
-      names.forEach(function(n) { addMilestoneRow(n, formatDateYMD(today)); });
+      names.forEach(function(n) { addMilestoneRow(n, '', formatDateYMD(today)); });
     });
 
     // 项目类型切换：新品/新自动化 ↔ CI/Kaizen
@@ -1475,11 +1475,12 @@
 
   // ==================== Add Project ====================
 
-  function addMilestoneRow(name, planned) {
+  function addMilestoneRow(name, plannedStart, planned) {
     var $row = $('<div class="add-ms-row">'
       + '<textarea rows="1" class="form-control form-control-sm add-ms-name autogrow-name" placeholder="里程碑名称 / Milestone Name">' + escapeTextarea(name || '') + '</textarea>'
       + '<div class="add-ms-owner-wrap"><select class="form-select form-select-sm add-ms-owner" style="width:100%;"></select></div>'
-      + '<input type="date" class="form-control form-control-sm add-ms-date" value="' + (planned || '') + '">'
+      + '<input type="date" class="form-control form-control-sm add-ms-start" value="' + (plannedStart || '') + '" style="width:135px;font-size:12px;" title="计划开始 / Start">'
+      + '<input type="date" class="form-control form-control-sm add-ms-date" value="' + (planned || '') + '" style="width:135px;font-size:12px;" title="计划完成 / Due">'
       + '<button type="button" class="btn btn-sm btn-outline-secondary add-ms-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
     $row.find('.add-ms-del-btn').on('click', function() { $row.remove(); });
