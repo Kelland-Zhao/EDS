@@ -1294,6 +1294,7 @@
     var ciMissingOwner = false;
     $('#modalMilestones tr').each(function() {
       var name = $(this).find('.upd-ms-name').val().trim();
+      var plannedStartVal = $(this).find('.upd-ms-start').val().trim();
       var plannedVal = $(this).find('.upd-ms-planned').val().trim();
       var actualVal = $(this).find('.ms-actual').val().trim();
       if (!name) return;
@@ -1305,7 +1306,7 @@
       if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
       else if (disp) { ownerName = disp; }
       if (!ownerName) ciMissingOwner = true;
-      newMsArr.push({ name: name, planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail, status: itemStatus });
+      newMsArr.push({ name: name, plannedStart: plannedStartVal ? normalizeDateInput(plannedStartVal) : '', planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail, status: itemStatus });
     });
     if (ciMissingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
     updates.milestonesReplace = newMsArr;
