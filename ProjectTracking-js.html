@@ -1576,24 +1576,26 @@
         var name = $(this).find('.ci-fu-name').val().trim();
         if (!name) return;
         var ownerDisp = $(this).find('.ci-fu-owner').val() || '';
+        var plannedStart = $(this).find('.ci-fu-start').val().trim();
         var due = $(this).find('.ci-fu-date').val().trim();
         var status = $(this).find('.ci-fu-status').val() || '未开始';
         var cache = (userListCache || []).filter(function(u) { return u.display === ownerDisp; })[0];
         if (!ownerDisp || !cache) { missingOwner = true; return; }
-        milestones.push({ name: name, planned: due || 'NA', owner: cache.name, ownerEmail: cache.email || '', status: status });
+        milestones.push({ name: name, plannedStart: plannedStart || '', planned: due || 'NA', owner: cache.name, ownerEmail: cache.email || '', status: status });
       });
       if (missingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
       if (milestones.length === 0) { Swal.fire('提示 / Notice', '请至少添加一条 follow-up 事项 / Add at least one item', 'warning'); return; }
     } else {
       $('#addMilestones .add-ms-row').each(function() {
         var name = $(this).find('.add-ms-name').val().trim();
+        var plannedStart = $(this).find('.add-ms-start').val().trim();
         var planned = $(this).find('.add-ms-date').val().trim();
         var ownerDisp = $(this).find('.add-ms-owner').val() || '';
         var cache = (userListCache || []).filter(function(u) { return u.display === ownerDisp; })[0];
         var ownerName = '', ownerEmail = '';
         if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
         else if (ownerDisp) { ownerName = ownerDisp; }
-        if (name) milestones.push({ name: name, planned: planned || 'NA', owner: ownerName, ownerEmail: ownerEmail });
+        if (name) milestones.push({ name: name, plannedStart: plannedStart || '', planned: planned || 'NA', owner: ownerName, ownerEmail: ownerEmail });
       });
     }
     var data = {
