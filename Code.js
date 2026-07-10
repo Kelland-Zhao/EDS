@@ -13014,9 +13014,10 @@ function addProject(dataStr, editorName) {
     // milestones: array of {name, planned, owner?, ownerEmail?} from frontend
     const msData = Array.isArray(data.milestones) ? data.milestones : [];
     const msJsonArr = msData.map(function(ms) {
-      if (typeof ms === 'string') return { name: ms, planned: ms || 'NA', actual: '', owner: '', ownerEmail: '' };
+      if (typeof ms === 'string') return { name: ms, plannedStart: '', planned: ms || 'NA', actual: '', owner: '', ownerEmail: '' };
       return {
         name: ms.name || '',
+        plannedStart: ms.plannedStart || '',
         planned: ms.planned || 'NA',
         actual: ms.actual || '',
         owner: ms.owner || '',
