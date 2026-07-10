@@ -481,10 +481,13 @@
     var parts = ms.name.split(' / ');
     var shortName = parts[0] || ms.name;
     var lines = [shortName];
+    if (ms.plannedStart) {
+      lines.push('计划开始: ' + normalizeDate(ms.plannedStart));
+    }
     if (ms.planned && ms.planned !== 'NA') {
-      lines.push('计划: ' + normalizeDate(ms.planned));
+      lines.push('计划完成: ' + normalizeDate(ms.planned));
     } else {
-      lines.push('计划: NA');
+      lines.push('计划完成: NA');
     }
     if (ms.actual) {
       lines.push('实际完成: ' + normalizeDate(ms.actual));
