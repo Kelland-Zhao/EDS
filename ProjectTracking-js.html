@@ -732,6 +732,7 @@
     });
     var dates = [];
     milestones.forEach(function(ms) {
+      var dps = parseDate(ms.plannedStart); if (dps) dates.push(dps);
       var dp = parseDate(ms.planned); if (dp) dates.push(dp);
       var da = parseDate(ms.actual);  if (da) dates.push(da);
     });
@@ -750,7 +751,7 @@
     var activeDaySet = {};
     for (var di = 0; di < days.length; di++) { if (inDay(today, days[di])) activeDaySet[di] = true; }
     milestones.forEach(function(ms) {
-      [parseDate(ms.planned), parseDate(ms.actual)].forEach(function(dt) {
+      [parseDate(ms.plannedStart), parseDate(ms.planned), parseDate(ms.actual)].forEach(function(dt) {
         if (!dt) return;
         for (var di2 = 0; di2 < days.length; di2++) {
           if (Math.abs((days[di2] - dt) / 86400000) <= COLLAPSE_BUFFER) activeDaySet[di2] = true;
@@ -781,8 +782,9 @@
     var barBgC = rgba(stColor, 0.1);
     var projStart = null, projEnd = null;
     milestones.forEach(function(ms) {
-      var d = parseDate(ms.planned) || parseDate(ms.actual);
-      if (d) { if (!projStart || d < projStart) projStart = d; if (!projEnd || d > projEnd) projEnd = d; }
+      [parseDate(ms.plannedStart), parseDate(ms.planned), parseDate(ms.actual)].forEach(function(d) {
+        if (d) { if (!projStart || d < projStart) projStart = d; if (!projEnd || d > projEnd) projEnd = d; }
+      });
     });
     var html = '<div class="gantt-container"><table class="gantt-table" style="font-size:10px;"><thead>';
     html += '<tr><th rowspan="2" style="min-width:80px;">里程碑 / Milestone</th>';
@@ -795,27 +797,56 @@
     html += '</tr></thead><tbody>';
     milestones.forEach(function(ms, msIdx) {
       var shortName = ms.name.split(' / ')[0];
+      var msStart = parseDate(ms.plannedStart);
+      var msEnd = parseDate(ms.planned);
+      var msColor = getMilestoneColor(ms);
       html += '<tr><td style="font-size:11px;white-space:nowrap;padding:2px 4px;">' + shortName + '</td>';
       displayCols.forEach(function(col) {
-        if (col.type === 'day') {
+        if (col.type === 'collapse') {
+          var inRange = msStart && msEnd && col.endDate >= msStart && col.startDate <= msEnd;
+          html += '<td style="min-width:12px;max-width:12px;background:' + (inRange ? rgba(msColor, 0.15) : '#f8f9fa') + ';border-left:1px dashed #dee2e6;border-right:1px dashed #dee2e6;"></td>';
+        } else {
           var d = col.dayIdx;
           var day = days[d];
-          var cellStyle = 'text-align:center;vertical-align:middle;';
+          var cellStyle = 'text-align:center;vertical-align:middle;position:relative;';
           var todayCls = inDay(today, day) ? ' class="today-col"' : '';
           if (projStart && projEnd && projEnd >= day && projStart <= day) cellStyle += 'background:' + barBg + ';';
           var cellContent = '';
+
+          // Bar rendering: if this day is within [msStart, msEnd]
+          var inBarRange = msStart && msEnd && day >= msStart && day <= msEnd;
+          if (inBarRange) {
+            var isFirst = inDay(msStart, day);
+            var isLast = inDay(msEnd, day);
+            var barStyle = 'position:absolute;top:20%;height:60%;z-index:1;background:' + rgba(msColor, 0.6) + ';';
+            if (isFirst && isLast) barStyle += 'left:2px;right:2px;border-radius:3px;';
+            else if (isFirst) barStyle += 'left:2px;right:0;border-radius:3px 0 0 3px;';
+            else if (isLast) barStyle += 'left:0;right:2px;border-radius:0 3px 3px 0;';
+            else barStyle += 'left:0;right:0;';
+            cellContent += '<span style="' + barStyle + '"></span>';
+          }
+
+          // Planned completion marker
           var msPlanned = parseDate(ms.planned);
           if (msPlanned && inDay(msPlanned, day)) {
-            var msColor = getMilestoneColor(ms);
-            var msTitle = getMilestoneTitle(ms);
-            var hasHist = historyMap && historyMap[proj.projectName + '::' + ms.name.split(' / ')[0]];
-            cellContent += (hasHist ? '<span class="hist-icon" data-project="' + proj.projectName.replace(/"/g,'&quot;') + '" data-milestone="' + ms.name.split(' / ')[0].replace(/"/g,'&quot;') + '" style="cursor:pointer;font-size:10px;color:#E60012;" title="查看变更历史">🔄</span>' : '')
-              + '<span class="ms-node" data-ms-title="' + msTitle.replace(/"/g, '&quot;') + '" style="display:inline-block;font-size:13px;color:' + msColor + ';cursor:pointer;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;">&#9670;</span>';
+            if (msStart) {
+              // New data with start date: small dot at completion
+              cellContent += '<span style="display:inline-block;font-size:8px;color:' + msColor + ';position:relative;z-index:2;">●</span>';
+            } else {
+              // Old data without start date: diamond marker (backward compat)
+              var msTitle = getMilestoneTitle(ms);
+              var hasHist = historyMap && historyMap[proj.projectName + '::' + ms.name.split(' / ')[0]];
+              cellContent += (hasHist ? '<span class="hist-icon" data-project="' + proj.projectName.replace(/"/g,'&quot;') + '" data-milestone="' + ms.name.split(' / ')[0].replace(/"/g,'&quot;') + '" style="cursor:pointer;font-size:10px;color:#E60012;position:relative;z-index:2;" title="查看变更历史">🔄</span>' : '')
+                + '<span class="ms-node" data-ms-title="' + msTitle.replace(/"/g, '&quot;') + '" style="display:inline-block;font-size:13px;color:' + msColor + ';cursor:pointer;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;position:relative;z-index:2;">&#9670;</span>';
+            }
           }
+
+          // Start date marker (only if distinct from planned end day)
+          if (msStart && inDay(msStart, day) && (!msPlanned || !inDay(msPlanned, day))) {
+            cellContent += '<span style="display:inline-block;font-size:9px;color:' + msColor + ';position:relative;z-index:2;">▶</span>';
+          }
+
           html += '<td' + todayCls + ' style="' + cellStyle + '">' + cellContent + '</td>';
-        } else {
-          var inRange = projStart && projEnd && col.endDate >= projStart && col.startDate <= projEnd;
-          html += '<td style="min-width:12px;max-width:12px;background:' + (inRange ? barBgC : '#f8f9fa') + ';border-left:1px dashed #dee2e6;border-right:1px dashed #dee2e6;"></td>';
         }
       });
       html += '</tr>';
