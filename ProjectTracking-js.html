@@ -69,7 +69,7 @@
 
     // 项目类型切换：新品/新自动化 ↔ CI/Kaizen
     $('#addType').on('change', function() { toggleAddType($(this).val()); });
-    $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', formatDateYMD(today), ''); });
+    $('#addFollowupBtn').click(function() { addFollowupRow('', '', '', '', formatDateYMD(today), ''); });
 
     // 弹窗显示后撑高已填内容的事项/里程碑文本框（隐藏时 scrollHeight 不准，须等显示）
     $('#updateModal, #addModal').on('shown.bs.modal', function() { autoGrowAll($(this)); });
@@ -1504,12 +1504,13 @@
       + '</select>';
   }
 
-  // CI follow-up 录入行（事项 + 责任人select2 + 计划完成 + 状态）
-  function addFollowupRow(name, ownerDisplay, ownerName, due, status) {
+  // CI follow-up 录入行（事项 + 责任人select2 + 计划开始 + 计划完成 + 状态）
+  function addFollowupRow(name, ownerDisplay, ownerName, plannedStart, due, status) {
     var $row = $('<div class="ci-fu-row">'
       + '<textarea rows="1" class="form-control form-control-sm ci-fu-name autogrow-name" placeholder="事项 / Item">' + escapeTextarea(name || '') + '</textarea>'
       + '<div class="ci-fu-owner-wrap"><select class="form-select form-select-sm ci-fu-owner" style="width:100%;"></select></div>'
-      + '<input type="date" class="form-control form-control-sm ci-fu-date" value="' + (due || '') + '">'
+      + '<input type="date" class="form-control form-control-sm ci-fu-start" value="' + (plannedStart || '') + '" style="width:135px;font-size:12px;" title="计划开始 / Start">'
+      + '<input type="date" class="form-control form-control-sm ci-fu-date" value="' + (due || '') + '" style="width:135px;font-size:12px;" title="计划完成 / Due">'
       + ciStatusSelectHtml('ci-fu-status', status)
       + '<button type="button" class="btn btn-sm btn-outline-secondary ci-fu-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
@@ -1533,7 +1534,7 @@
       $('#addStandardSection').addClass('d-none');
       $('#addTemplateWrap').addClass('d-none');
       $('#addCISection').removeClass('d-none');
-      if ($('#addFollowups').children().length === 0) addFollowupRow('', '', '', formatDateYMD(today), '');
+      if ($('#addFollowups').children().length === 0) addFollowupRow('', '', '', '', formatDateYMD(today), '');
     } else {
       $('#addCISection').addClass('d-none');
       $('#addTemplateWrap').removeClass('d-none');
@@ -1549,7 +1550,7 @@
     $('#addProcess').val(normalizeProcess(globalProcess) || 'INJ');
     $('#addMilestones').empty();
     $('#addFollowups').empty();
-    addFollowupRow('', '', '', formatDateYMD(today), '');
+    addFollowupRow('', '', '', '', formatDateYMD(today), '');
     toggleAddType('CI');
 
     if ($('.select2-user').hasClass('select2-hidden-accessible')) $('.select2-user').select2('destroy');
