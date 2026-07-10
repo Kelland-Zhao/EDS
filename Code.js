@@ -10870,6 +10870,7 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
       const newArr = updates.milestonesReplace.map(function(ms) {
         return {
           name: String(ms.name || ''),
+          plannedStart: String(ms.plannedStart || ''),
           planned: String(ms.planned || 'NA'),
           actual: String(ms.actual || ''),
           owner: String(ms.owner || ''),
@@ -10900,6 +10901,12 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
           if (oldP !== newP) {
             plannedChanges.push({ name: msLabel, old: oldP || 'NA', new: newP, owner: (newMs.owner || oldMs.owner || '') });
             historyRows.push({ milestone: msLabel, plannedOld: oldP || 'NA', plannedNew: newP, note: '计划日期变更' });
+          }
+          // 计划开始日期
+          const oldPS = String(oldMs.plannedStart || '').trim();
+          const newPS = String(newMs.plannedStart || '');
+          if (oldPS !== newPS) {
+            historyRows.push({ milestone: msLabel, plannedOld: oldPS || 'NA', plannedNew: newPS, note: '计划开始日期变更' });
           }
           // 名称
           if (String(oldMs.name || '').trim() !== String(newMs.name || '').trim()) {
