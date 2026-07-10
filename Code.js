@@ -13151,6 +13151,7 @@ function sendProjectCreationNotification(projectName, leader, editorName, projec
     (milestonesArr || []).forEach(function(ms, i) {
       msRows += '<tr style="background-color:' + (i % 2 === 0 ? '#fff5f5' : '#ffffff') + ';">';
       msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-weight:500;color:#2c3e50;">' + escapeHtml(ms.name) + '</td>';
+      msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-family:monospace;color:#555;">' + escapeHtml(ms.plannedStart || '') + '</td>';
       msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;font-family:monospace;color:#555;">' + escapeHtml(ms.planned || 'NA') + '</td>';
       msRows += '<td style="padding:8px 12px;border-bottom:1px solid #e9ecef;color:#2c3e50;">' + escapeHtml(ms.owner || '') + '</td>';
       if (isCI) {
@@ -13160,8 +13161,9 @@ function sendProjectCreationNotification(projectName, leader, editorName, projec
     });
 
     // 里程碑表头：CI 类型多一列"事项状态"
-    let msHeaderCols = '<th style="padding:12px;text-align:left;">名称<br><small>Name</small></th>'
-      + '<th style="padding:12px;text-align:left;">计划日期<br><small>Planned</small></th>'
+    let msHeaderCols = '<th style="padding:12px;text-align:left;min-width:80px;">名称<br><small>Name</small></th>'
+      + '<th style="padding:12px;text-align:left;">计划开始<br><small>Start</small></th>'
+      + '<th style="padding:12px;text-align:left;">计划完成<br><small>Planned</small></th>'
       + '<th style="padding:12px;text-align:left;">责任人<br><small>Owner</small></th>';
     if (isCI) {
       msHeaderCols += '<th style="padding:12px;text-align:left;">事项状态<br><small>Status</small></th>';
