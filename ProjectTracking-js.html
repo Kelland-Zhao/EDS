@@ -168,6 +168,7 @@
       $('#modalMilestones tr').each(function() {
         var r = {
           name: $(this).find('.upd-ms-name').val().trim(),
+          plannedStart: $(this).find('.upd-ms-start').val().trim(),
           planned: $(this).find('.upd-ms-planned').val(),
           actual: $(this).find('.ms-actual').val(),
           status: $(this).find('.upd-ms-status').val()
@@ -187,7 +188,7 @@
       });
       $('#modalMilestones').empty();
       rows.forEach(function(r) {
-        addUpdateMilestoneRow(r.name, r.planned, r.actual, r.owner, r.ownerEmail, r.status);
+        addUpdateMilestoneRow(r.name, r.plannedStart, r.planned, r.actual, r.owner, r.ownerEmail, r.status);
       });
       autoGrowAll($('#modalMilestones'));
     });
@@ -1225,7 +1226,7 @@
       return 0;
     });
     sortedMs.forEach(function(ms) {
-      addUpdateMilestoneRow(ms.name, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
+      addUpdateMilestoneRow(ms.name, ms.plannedStart, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
     });
 
     // 已完成项目：里程碑只读，但状态可改（用于将项目重新激活）
