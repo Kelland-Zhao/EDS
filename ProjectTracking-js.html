@@ -1522,6 +1522,7 @@
       + '<div class="add-ms-owner-wrap"><select class="form-select form-select-sm add-ms-owner" style="width:100%;"></select></div>'
       + '<input type="date" class="form-control form-control-sm add-ms-start" value="' + (plannedStart || '') + '" style="width:135px;font-size:12px;" title="计划开始 / Start">'
       + '<input type="date" class="form-control form-control-sm add-ms-date" value="' + (planned || '') + '" style="width:135px;font-size:12px;" title="计划完成 / Due">'
+      + ciStatusSelectHtml('add-ms-status', '未开始')
       + '<button type="button" class="btn btn-sm btn-outline-secondary add-ms-del-btn" title="删除 / Remove"><i class="bi bi-x"></i></button>'
       + '</div>');
     $row.find('.add-ms-del-btn').on('click', function() { $row.remove(); });
@@ -1580,6 +1581,7 @@
       $('#addCISection').addClass('d-none');
       $('#addTemplateWrap').removeClass('d-none');
       $('#addStandardSection').removeClass('d-none');
+      if ($('#addMilestones').children().length === 0) addMilestoneRow('', '', formatDateYMD(today));
     }
   }
 
@@ -1631,12 +1633,13 @@
         var name = $(this).find('.add-ms-name').val().trim();
         var plannedStart = $(this).find('.add-ms-start').val().trim();
         var planned = $(this).find('.add-ms-date').val().trim();
+        var status = $(this).find('.add-ms-status').val() || '未开始';
         var ownerDisp = $(this).find('.add-ms-owner').val() || '';
         var cache = (userListCache || []).filter(function(u) { return u.display === ownerDisp; })[0];
         var ownerName = '', ownerEmail = '';
         if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
         else if (ownerDisp) { ownerName = ownerDisp; }
-        if (name) milestones.push({ name: name, plannedStart: plannedStart || '', planned: planned || 'NA', owner: ownerName, ownerEmail: ownerEmail });
+        if (name) milestones.push({ name: name, plannedStart: plannedStart || '', planned: planned || 'NA', owner: ownerName, ownerEmail: ownerEmail, status: status });
       });
     }
     var data = {
