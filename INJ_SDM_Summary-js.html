@@ -71,6 +71,7 @@
       const name = `${type}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const workshop = Object.prototype.hasOwnProperty.call(item, 'workshop') ? item.workshop : 'TB1';
       const row = $(`<div class="item-row" data-type="${type}">
+        <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
         ${workshopChoice(name, workshop)}
         <input class="form-control machine-no" placeholder="机台号 / Machine No." value="${$('<div>').text(item.machineNo || '').html()}">
@@ -85,6 +86,7 @@
       const item = data || {};
       const name = `communication-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const row = $(`<div class="item-row communication" data-type="communication">
+        <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
         <textarea class="form-control description" rows="2" placeholder="沟通事项 / Communication">${$('<div>').text(item.description || '').html()}</textarea>
         ${ownerChoice(name, item.owners || [])}
@@ -361,6 +363,20 @@
         scUsers = result.scUsers || [];
         $('#AppContent').removeClass('d-none');
         resetForm();
+        // 初始化拖拽排序
+        function initSortable() {
+          $('.item-list').each(function() {
+            if (this._sortableInstance) this._sortableInstance.destroy();
+            this._sortableInstance = Sortable.create(this, {
+              handle: '.drag-handle',
+              animation: 150,
+              ghostClass: 'sortable-ghost',
+              chosenClass: 'sortable-chosen',
+              onEnd: function() { updateCounts(); }
+            });
+          });
+        }
+        initSortable();
         if (result.todayReport) populateForm(result.todayReport);
       })
       .withFailureHandler(error => { Swal.close(); showError(error.message || String(error), 'Failed to initialize.'); })
