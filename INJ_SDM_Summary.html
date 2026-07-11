@@ -8,6 +8,7 @@
   <?!=include("CSS");?>
   <?!=include("Kez_sweetalert2_js");?>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <style>
     body { background:#f5f6f8; color:#333; }
     
@@ -33,8 +34,8 @@
     #CommunicationCard { border-left-color:#0d6efd; }
     #CommunicationCard .card-header { background:#f0f6ff; }
     #CommunicationCard .count-badge { background:#e0edff; color:#0d47a1; }
-    .item-row { display:grid; grid-template-columns:34px minmax(130px,.8fr) minmax(150px,1fr) minmax(280px,3fr) 34px; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid #f0f0f0; }
-    .item-row.communication { grid-template-columns:34px minmax(280px,2fr) minmax(180px,1fr) 34px; }
+    .item-row { display:grid; grid-template-columns:24px 34px minmax(130px,.8fr) minmax(150px,1fr) minmax(280px,3fr) 34px; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid #f0f0f0; }
+    .item-row.communication { grid-template-columns:24px 34px minmax(280px,2fr) minmax(180px,1fr) 34px; }
     .item-num { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#f1f3f5; font-size:12px; }
     .workshop-choice, .owner-choice { display:flex; gap:4px; flex-wrap:wrap; }
     .workshop-choice input, .owner-choice input { position:absolute; width:1px; height:1px; opacity:0; }
@@ -64,7 +65,7 @@
     @media(max-width:768px) {
       input, textarea { min-height:44px; font-size:16px!important; }
       textarea { min-height:76px; }
-      .item-row, .item-row.communication { grid-template-columns:30px 1fr 44px; padding:10px; align-items:start; }
+      .item-row, .item-row.communication { grid-template-columns:24px 30px 1fr 44px; padding:10px; align-items:start; }
       .item-row > .workshop-choice, .item-row > input, .item-row > textarea, .item-row.communication > textarea, .item-row.communication > .owner-choice { grid-column:2/4; }
       .item-row .delete-item { grid-column:3; grid-row:1; width:44px; height:44px; font-size:20px; }
       .workshop-choice label, .owner-choice label { min-height:44px; display:grid; place-items:center; font-size:14px; flex:1; }
@@ -74,6 +75,10 @@
       .sticky-actions { position:sticky; bottom:0; z-index:5; margin:0 -12px; padding:10px 12px; background:rgba(245,246,248,.97); }
       .sticky-actions .btn { flex:1; min-height:48px; }
     }
+    .drag-handle { cursor: grab; user-select: none; color: #adb5bd; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+    .drag-handle:active { cursor: grabbing; }
+    .sortable-ghost { opacity: 0.4; background: #f0f0f0; }
+    .sortable-chosen { background: #f8f9fa; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
