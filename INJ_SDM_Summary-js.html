@@ -252,7 +252,7 @@
     }
 
     function renderDetail(report) {
-      const issueList = items => items.length ? `<ol>${items.map(item => `<li><strong>${item.workshop} - ${item.machineNo}</strong> ${$('<div>').text(item.description).html()}</li>`).join('')}</ol>` : '<div class="text-muted">无 / None</div>';
+      const issueList = items => items.length ? `<ol>${[...items].sort((a, b) => (a.workshop || '').localeCompare(b.workshop || '')).map(item => `<li><strong>${item.workshop} - ${item.machineNo}</strong> ${$('<div>').text(item.description).html()}</li>`).join('')}</ol>` : '<div class="text-muted">无 / None</div>';
       const communicationList = report.communication.length ? `<ol>${report.communication.map(item => `<li>${$('<div>').text(item.description).html()} <span class="text-muted">（责任人：${item.owners.join('、')}）</span></li>`).join('')}</ol>` : '<div class="text-muted">无 / None</div>';
       $('#DetailBody').html(`
         <div class="bg-light rounded p-2"><strong>填报日期：</strong>${report.reportDate}　<strong>数据日期：</strong>${dataDateText(report)}<br><small class="text-muted">最后修改：${report.updatedAt || '-'}</small></div>
