@@ -158,10 +158,11 @@ function applyProcessFilter() {
   // Apply process filter
   if (filter) {
     staff = staff.filter(function (s) {
-      const proc = (userProcessMap[s.sapID] || '').toUpperCase();
+      const staffProcess = (s.process || '').toUpperCase();
+      const proc = (userProcessMap[s.sapID] || staffProcess).toUpperCase();
       const ws = (s.workshop || '').toUpperCase();
-      // TB1/TB2 → INJ
-      if (filter === 'INJ' && (ws === 'TB1' || ws === 'TB2')) return true;
+      // TB1/TB2 → INJ (仅当工序也是 INJ 时)
+      if (filter === 'INJ' && (ws === 'TB1' || ws === 'TB2') && (staffProcess === 'INJ' || staffProcess === 'IM')) return true;
       // Handle pipe-separated multi-process
       if (proc && proc.indexOf('|') >= 0) {
         return proc.split('|').some(function (p) { return processMatch(p, filter); });

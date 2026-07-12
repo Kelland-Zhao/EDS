@@ -11540,11 +11540,16 @@ function loadUserListForSelect() {
 
 function loadTodayStaffForSelect(dateStr) {
   try {
-    // 优先从 IM 排班主数据读取当天在岗人员
-    const staffResult = JSON.parse(loadIMStaffByDate(dateStr));
-    const staff = staffResult.success ? staffResult.data : [];
+    // 优先从 AttendanceSync 读取当天在岗人员
+    let staffResult = JSON.parse(loadAttendanceSync(dateStr));
+    let staff = staffResult.success ? staffResult.data : [];
     const seen = {};
     const users = [];
+    // Fallback 1: IM 排班主数据
+    if (staff.length === 0) {
+      staffResult = JSON.parse(loadIMStaffByDate(dateStr));
+      staff = staffResult.success ? staffResult.data : [];
+    }
     staff.forEach(function (s) {
       const key = s.sapID || s.name;
       if (key && !seen[key]) {
@@ -11552,8 +11557,8 @@ function loadTodayStaffForSelect(dateStr) {
         users.push({ id: key, text: (s.name || key) + (s.workshop ? ' [' + s.workshop + ']' : '') });
       }
     });
-    // Fallback: DailyStaff table
-    if (users.length === 0) {
+    // Fallback 2: DailyStaff table
+    if (staff.length === 0) {
       const dailyResult = JSON.parse(loadDailyStaffByDate(dateStr));
       const dailyStaff = dailyResult.success ? dailyResult.data : [];
       dailyStaff.forEach(function (s) {
@@ -11638,6 +11643,46 @@ function loadTaskLogs(targetType, targetID) {
 // ============================================================
 //  任务安排模块 - 人员排班 CRUD / Task Arrangement - Staff CRUD
 // ============================================================
+
+/**
+ * 从 AttendanceSync sheet 读取指定日期的出勤数据（优先数据源）
+ * 返回格式与 loadIMStaffByDate 兼容
+ */
+function loadAttendanceSync(dateStr) {
+  try {
+    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName("AttendanceSync");
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+
+    const lastRow = ws.getLastRow();
+    if (lastRow <= 1) return JSON.stringify({ success: true, data: [] });
+
+    const data = ws.getRange(2, 1, lastRow - 1, 11).getValues();
+    const result = [];
+
+    for (let i = 0; i < data.length; i++) {
+      const rowDate = data[i][0] instanceof Date
+        ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd")
+        : String(data[i][0] || "").trim();
+      if (rowDate !== dateStr) continue;
+
+      result.push({
+        sapID: String(data[i][1] || "").trim(),
+        name: String(data[i][2] || "").trim(),
+        process: String(data[i][3] || "").trim(),
+        workshop: String(data[i][5] || "").trim(),
+        shift: String(data[i][6] || "").trim(),
+        hours: parseFloat(data[i][7]) || 0,
+        attendanceStatus: String(data[i][8] || "").trim() || "在岗",
+        workRole: String(data[i][3] || "").trim(),
+        team: String(data[i][4] || "").trim()
+      });
+    }
+
+    return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
 
 function loadDailyStaffByDate(dateStr) {
   try {
@@ -12056,10 +12101,15 @@ function loadPMTasksByDate(dateStr) {
 
 function loadTodayDashboardData(date, sapID) {
   try {
-    // Load staff from IM scheduling master data
-    const staffResult = JSON.parse(loadIMStaffByDate(date));
+    // Load staff from AttendanceSync (优先)
+    let staffResult = JSON.parse(loadAttendanceSync(date));
     let staff = staffResult.success ? staffResult.data : [];
-    // Fallback: DailyStaff table
+    // Fallback 1: IM scheduling master data
+    if (staff.length === 0) {
+      staffResult = JSON.parse(loadIMStaffByDate(date));
+      staff = staffResult.success ? staffResult.data : [];
+    }
+    // Fallback 2: DailyStaff table
     if (staff.length === 0) {
       const fallbackStaff = JSON.parse(loadDailyStaffByDate(date));
       staff = fallbackStaff.success ? fallbackStaff.data : [];
@@ -12168,12 +12218,50 @@ function loadResourceGanttData(startDate, daysCount) {
 
     const userMap = buildResourceUserMap_();
 
-    // ---- 优化: 一次性读取 IM 排班数据，不再按天循环读表 ----
+    // ---- 优先: 从 AttendanceSync 读取出勤数据 ----
     const staffByDate = {};
     const staffLookup = {};
     const dateSet = {};
     days.forEach(function (d) { dateSet[d] = true; staffByDate[d] = []; });
 
+    let hasAttendanceData = false;
+    try {
+      const attWs = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName("AttendanceSync");
+      if (attWs && attWs.getLastRow() > 1) {
+        const attData = attWs.getRange(2, 1, attWs.getLastRow() - 1, 11).getValues();
+        const seen = {};
+        for (let i = 0; i < attData.length; i++) {
+          const rowDate = attData[i][0] instanceof Date
+            ? Utilities.formatDate(attData[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd")
+            : String(attData[i][0] || "").trim();
+          if (!dateSet[rowDate]) continue;
+
+          const sapID = String(attData[i][1] || "").trim();
+          const name = String(attData[i][2] || "").trim();
+          const dedupKey = name + "_" + rowDate;
+          if (seen[dedupKey]) continue;
+          seen[dedupKey] = true;
+
+          const staffObj = {
+            sapID: sapID, name: name,
+            workshop: String(attData[i][5] || "").trim(),
+            attendanceStatus: String(attData[i][8] || "").trim() || "在岗",
+            workRole: String(attData[i][3] || "").trim(),
+            shift: String(attData[i][6] || "").trim(),
+            hours: parseFloat(attData[i][7]) || 0
+          };
+          staffByDate[rowDate].push(staffObj);
+          const key = String(sapID || name).trim();
+          if (key) staffLookup[key] = Object.assign({}, userMap[key] || {}, staffObj);
+          hasAttendanceData = true;
+        }
+      }
+    } catch (e) {
+      console.warn("AttendanceSync 读取失败: " + e.message);
+    }
+
+    // ---- 降级: 从 IM 排班读取（仅在 AttendanceSync 无数据时） ----
+    if (!hasAttendanceData) {
     // Build name→SAPID map ONCE (instead of per-day in loadIMStaffByDate)
     const userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
     const nameToSap = {};
@@ -12235,6 +12323,7 @@ function loadResourceGanttData(startDate, daysCount) {
         });
       } catch (e) {}
     });
+    } // end if (!hasAttendanceData)
 
     // ---- 优化: 用 loadAllPMTasks 一次性读取保养任务，不再按天循环 ----
     const taskMap = {};
