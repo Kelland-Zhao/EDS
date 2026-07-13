@@ -12114,6 +12114,11 @@ function loadTodayDashboardData(date, sapID) {
       const fallbackStaff = JSON.parse(loadDailyStaffByDate(date));
       staff = fallbackStaff.success ? fallbackStaff.data : [];
     }
+    // 只保留在岗人员，过滤掉病假/休息/年假等非在岗状态
+    staff = staff.filter(function(s) {
+      var status = (s.attendanceStatus || '').trim();
+      return !status || status === '在岗';
+    });
     // Load manual tasks
     const tasksData = JSON.parse(loadTasks(JSON.stringify({})));
     let allTasks = tasksData.success ? tasksData.data : [];
