@@ -12046,6 +12046,7 @@ function loadPMTasksByDate(dateStr) {
         const workshop = String(planData[i][2] || '').trim();
         const process = String(planData[i][3] || '').trim();
         const pmType = String(planData[i][8] || '').trim();
+        if (!pmType) continue; // 跳过保养类型为空的条目（模具保养停机申请，机器不做保养）
         const machineType = String(planData[i][9] || '').trim();
         taskMap[key] = {
           taskID: 'PLAN-' + aem + '-' + planDate.replace(/-/g, ''),
