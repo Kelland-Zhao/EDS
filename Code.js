@@ -4707,8 +4707,16 @@ function get_Tasklist_new() {
       .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
       .getValues();
     let head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+    // 列索引: Status = M (index 12)
+    const statusIdx = head.indexOf("Status");
+    const validStatuses = ["生效/ Effective", "待审批/ Pending", "待发放/ Wait for Dissminater"];
     let array = [];
     data.forEach((r) => {
+      // 后端预过滤：仅返回前端实际使用的状态，减少 ~70% 数据传输量
+      if (statusIdx >= 0) {
+        const s = String(r[statusIdx] || "").trim();
+        if (!validStatuses.some(function (vs) { return s === vs; })) return;
+      }
       let obj = {};
       head.forEach((h, i) => {
         obj[h] = r[i];
@@ -4716,16 +4724,9 @@ function get_Tasklist_new() {
       array.push(obj);
     });
 
-    // --- 新增的日志 ---
-    // 这会将从数据库获取到的完整任务清单打印到 Apps Script 的执行日志中
-    Logger.log(
-      "从 Tasklist_history 获取到的原始数据 (Original data from Tasklist_history):"
-    );
-    Logger.log(JSON.stringify(array, null, 2)); // 使用格式化的JSON字符串，便于查看
-
     return array;
   } catch (e) {
-    Logger.log("get_Tasklist_new 发生错误: " + e.toString()); // 增加错误日志
+    Logger.log("get_Tasklist_new 发生错误: " + e.toString());
     return ["NO", "报错：" + e.toString()];
   }
 }
