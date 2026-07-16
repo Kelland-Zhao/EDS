@@ -1246,6 +1246,19 @@
     desiredOrder.forEach((title) => {
       let colDef = { title: titleMap[title] || title, data: title, defaultContent: "" };
 
+      if (title === 'Resource') {
+        colDef.render = function (data, type, row) {
+          if (type === 'sort' || type === 'type') return data || '';
+          const val = String(data || '').trim();
+          if (val.includes('操作员') && !val.includes('技术员')) {
+            return '<span class="badge badge-opc">' + val + '</span>';
+          }
+          if (val.includes('技术员')) {
+            return '<span class="badge badge-tech">' + val + '</span>';
+          }
+          return val || '';
+        };
+      }
       if (title === '执行人员') {
         colDef.render = function (data, type, row) {
           // 兼容数组、JSON字符串、逗号分隔字符串
@@ -1333,7 +1346,7 @@
           { "width": "10%", "targets": -1 }
         ],
         order: [
-          [0, 'asc'],
+          [5, 'asc'],
           [1, 'asc']],
         pageLength: 100,
         // 添加错误处理
@@ -1352,6 +1365,21 @@
         table_tasklist.clear().draw();
         table_tasklist.rows.add(content).draw();
       }
+
+      // 显示视图切换按钮并绑定事件
+      $('#pmViewToggle').show();
+      $('#pmViewToggle .btn').off('click').on('click', function () {
+        var view = $(this).data('view');
+        $('#pmViewToggle .btn').removeClass('active');
+        $(this).addClass('active');
+        if (view === 'all') {
+          table_tasklist.search('').draw();
+        } else if (view === 'tech') {
+          table_tasklist.column(5).search('技术员', true, false).draw();
+        } else if (view === 'opc') {
+          table_tasklist.column(5).search('操作员', true, false).draw();
+        }
+      });
     } catch (error) {
       console.error('showTable函数发生错误:', error);
       // 显示用户友好的错误信息

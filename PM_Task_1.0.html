@@ -128,6 +128,30 @@
             background-color: #c50010;
             color: white;
         }
+
+        /* 分组视图切换按钮 */
+        .pm-view-toggle { margin-bottom: 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+        .pm-view-toggle .btn { font-size: 13px; border-radius: 20px; padding: 4px 16px; }
+        .pm-view-toggle .btn.active { color: #fff; }
+        .pm-view-toggle .btn-tech { border-color: #0d6efd; color: #0d6efd; }
+        .pm-view-toggle .btn-tech.active { background-color: #0d6efd; }
+        .pm-view-toggle .btn-opc { border-color: #198754; color: #198754; }
+        .pm-view-toggle .btn-opc.active { background-color: #198754; }
+        .pm-view-toggle .btn-all { border-color: #6c757d; color: #6c757d; }
+        .pm-view-toggle .btn-all.active { background-color: #6c757d; }
+
+        /* 分组标题 */
+        .pm-group-header {
+            font-size: 14px; font-weight: 700; padding: 8px 14px; border-radius: 6px;
+            margin: 16px 0 8px; display: flex; align-items: center; gap: 8px;
+        }
+        .pm-group-header.tech { background: #e7f1ff; color: #0d6efd; border-left: 4px solid #0d6efd; }
+        .pm-group-header.opc  { background: #d1f2e0; color: #198754; border-left: 4px solid #198754; }
+        .pm-group-header .badge { font-size: 12px; }
+
+        /* Resource badge */
+        .badge-tech { background-color: #0d6efd; color: #fff; font-size: 11px; }
+        .badge-opc  { background-color: #198754; color: #fff; font-size: 11px; }
     </style>
 </head>
 
@@ -268,6 +292,13 @@
                     <button type="button" class="btn btn-info" id="TestCheckboxValidationBtn" style="display: none;">测试选中框验证</button>
                 </div>
             </div>
+        </div>
+
+        <!-- 视图切换按钮 -->
+        <div class="pm-view-toggle" id="pmViewToggle" style="display:none;">
+            <button type="button" class="btn btn-outline-secondary btn-all active" data-view="all">全部 / All</button>
+            <button type="button" class="btn btn-outline-primary btn-tech" data-view="tech">技术员 / Technician</button>
+            <button type="button" class="btn btn-outline-success btn-opc" data-view="opc">操作员 / Operator</button>
         </div>
 
         <!-- 表格区域 -->

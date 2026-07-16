@@ -251,6 +251,12 @@
  function showTable(obj) {
   const tableRenderStartTime = performance.now();
   
+  if (Array.isArray(obj) && obj[0] === 'NO') {
+    Swal.close();
+    Swal.fire({ icon: 'error', title: '数据加载失败<br><span style="font-size:14px;color:#6c757d;">Data Load Failed</span>', text: obj[1] });
+    return;
+  }
+
   let head = obj.Head;
   let data = obj.Content;
   let record = JSON.parse(obj.Record_obj);
@@ -258,12 +264,12 @@
   console.log(`📊 数据统计：共加载 ${data.length} 条保养计划记录`);
   
   // 2024年新增：处理日期范围提示信息
-  // 检查是否有前一周或后三周的数据，如果没有则显示提示
+  // 检查是否有前8周或后4周的数据，如果没有则显示提示
   if (obj.DateRange) {
     showDateRangeInfo(obj.DateRange);
     let descHtml = 
-      '<div>当前显示的保养计划日期范围为<strong>前1周</strong>至<strong>后3周</strong>：' + obj.DateRange.startDate + ' 至 ' + obj.DateRange.endDate + '</div>' +
-      '<div>The PM plan date range displayed is from <strong>1 week before</strong> to <strong>3 weeks after</strong>: ' + obj.DateRange.startDate + ' to ' + obj.DateRange.endDate + '</div>';
+      '<div>当前显示的保养计划日期范围为<strong>前12周</strong>至<strong>后4周</strong>：' + obj.DateRange.startDate + ' 至 ' + obj.DateRange.endDate + '</div>' +
+      '<div>The PM plan date range displayed is from <strong>12 weeks before</strong> to <strong>4 weeks after</strong>: ' + obj.DateRange.startDate + ' to ' + obj.DateRange.endDate + '</div>';
     $('#dateRangeDescription').html(descHtml).show();
   }
   
@@ -399,7 +405,7 @@
     }
    }
   });
-  $('div.toolbar').html('<button id="resetFilters" class="btn btn-outline-secondary">重置筛选<br><small>Reset Filter</small></button>');
+  $('div.toolbar').html('<button id="resetFilters" class="btn btn-outline-secondary me-2">重置筛选<br><small>Reset Filter</small></button><button id="toggleIncomplete" class="btn btn-outline-warning">仅显示未完成<br><small>Incomplete Only</small></button>');
   $('#table thead th').css({
    'background-color': '#E60012',
    'color': 'white'
@@ -409,6 +415,23 @@
 
   $('#resetFilters').on('click', function () {
    inputKeyInfo();
+  });
+
+  var incompleteFilterActive = false;
+  $('#toggleIncomplete').on('click', function () {
+    incompleteFilterActive = !incompleteFilterActive;
+    var $btn = $(this);
+    if (incompleteFilterActive) {
+      $btn.removeClass('btn-outline-warning').addClass('btn-warning');
+      $.fn.dataTable.ext.search.push(function (settings, rowData, index) {
+        var status = String(rowData[14] || '');
+        return !status.includes('Finished') && !status.includes('已完成');
+      });
+    } else {
+      $btn.removeClass('btn-warning').addClass('btn-outline-warning');
+      $.fn.dataTable.ext.search.pop();
+    }
+    table.draw();
   });
 
   inputKeyInfo();

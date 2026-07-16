@@ -1783,23 +1783,23 @@ function getPlan_weekly() {
     let currentWeekSunday = new Date(today);
     currentWeekSunday.setDate(today.getDate() - currentDayOfWeek);
 
-    // 计算前一周的周日（上一周）
-    let lastWeekSunday = new Date(currentWeekSunday);
-    lastWeekSunday.setDate(currentWeekSunday.getDate() - 7);
+    // 计算前12周的周日
+    let twelveWeeksBefore = new Date(currentWeekSunday);
+    twelveWeeksBefore.setDate(currentWeekSunday.getDate() - 84);
 
-    // 计算后三周的周六（当前周+未来两周）
-    let threeWeeksLaterSaturday = new Date(currentWeekSunday);
-    threeWeeksLaterSaturday.setDate(currentWeekSunday.getDate() + 20); // 当前周+2周=20天
+    // 计算后4周的周六
+    let fourWeeksAfter = new Date(currentWeekSunday);
+    fourWeeksAfter.setDate(currentWeekSunday.getDate() + 27);
 
     const TIMEZONE = "Asia/Shanghai";
     const DATE_FORMAT = "yyyy-MM-dd";
-    let lastWeekSundayStr = Utilities.formatDate(
-      lastWeekSunday,
+    let startDateStr = Utilities.formatDate(
+      twelveWeeksBefore,
       TIMEZONE,
       DATE_FORMAT
     );
-    let threeWeeksLaterSaturdayStr = Utilities.formatDate(
-      threeWeeksLaterSaturday,
+    let endDateStr = Utilities.formatDate(
+      fourWeeksAfter,
       TIMEZONE,
       DATE_FORMAT
     );
@@ -1811,9 +1811,9 @@ function getPlan_weekly() {
 
     console.log(
       "筛选时间范围：",
-      lastWeekSundayStr,
+      startDateStr,
       "到",
-      threeWeeksLaterSaturdayStr
+      endDateStr
     );
 
     let filteredValues = [];
@@ -1842,17 +1842,17 @@ function getPlan_weekly() {
         }
 
         if (
-          dateStr >= lastWeekSundayStr &&
-          dateStr <= threeWeeksLaterSaturdayStr
+          dateStr >= startDateStr &&
+          dateStr <= endDateStr
         ) {
           let rowNumber = idx + 2; // 数据开始于第2行
           matchedRows.push(rowNumber);
 
-          if (dateStr >= lastWeekSundayStr && dateStr < currentWeekSundayStr) {
+          if (dateStr >= startDateStr && dateStr < currentWeekSundayStr) {
             hasLastWeekData = true;
           }
 
-          if (dateStr >= currentWeekSundayStr && dateStr <= threeWeeksLaterSaturdayStr) {
+          if (dateStr >= currentWeekSundayStr && dateStr <= endDateStr) {
             hasNextThreeWeeksData = true;
           }
         }
@@ -1912,7 +1912,7 @@ function getPlan_weekly() {
           dateStr = cell.trim();
         }
         if (!dateStr) return;
-        if (dateStr >= lastWeekSundayStr && dateStr <= threeWeeksLaterSaturdayStr) {
+        if (dateStr >= startDateStr && dateStr <= endDateStr) {
           matchedStatusRows.push(idx + 2);
         }
       });
@@ -1945,8 +1945,8 @@ function getPlan_weekly() {
       Content: array,
       Record_obj: JSON.stringify(record_obj),
       DateRange: {
-        startDate: lastWeekSundayStr,
-        endDate: threeWeeksLaterSaturdayStr,
+        startDate: startDateStr,
+        endDate: endDateStr,
         hasLastWeekData: hasLastWeekData,
         hasNextThreeWeeksData: hasNextThreeWeeksData,
       },
