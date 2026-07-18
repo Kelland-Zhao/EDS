@@ -12190,7 +12190,7 @@ function buildResourceUserMap_() {
         name: String(values[i][1] || '').trim(),
         workshop: String(values[i][13] || '').trim(),
         process: String(values[i][14] || '').trim(),
-        shift: String(values[i][50] || '').trim()
+        internalGroup: String(values[i][63] || '').trim()
       };
     }
   } catch (e) {
@@ -12200,6 +12200,17 @@ function buildResourceUserMap_() {
 }
 
 function inferResourceGroup_(person, task) {
+  // 优先使用 userID 表 BL 列直接指定的内部组别
+  if (person && person.internalGroup) {
+    const ig = person.internalGroup;
+    const defs = getResourceGroupDefs_();
+    for (let d = 0; d < defs.length; d++) {
+      if (ig === defs[d].name || ig === defs[d].key || ig === defs[d].en) return defs[d].key;
+    }
+    // 非预定义组别，将中文名作为 key 动态分组
+    return ig;
+  }
+
   const workshop = String((person && person.workshop) || (task && task.workshop) || '').toUpperCase();
   const process = String((person && person.process) || (task && task.process) || '').toUpperCase();
   const roleText = [
@@ -12373,7 +12384,11 @@ function loadResourceGanttData(startDate, daysCount) {
       members.forEach(function (memberID) {
         const person = staffLookup[memberID] || userMap[memberID] || { sapID: memberID, name: memberID };
         const groupKey = inferResourceGroup_(person, task);
-        const group = groupMap[groupKey] || groupMap.pm;
+        if (!groupMap[groupKey]) {
+          groupMap[groupKey] = { key: groupKey, name: groupKey, en: groupKey, people: {}, dailyCounts: {} };
+          days.forEach(function (d) { groupMap[groupKey].dailyCounts[d] = 0; });
+        }
+        const group = groupMap[groupKey];
         if (!group.people[memberID]) {
           group.people[memberID] = {
             sapID: memberID,
@@ -12400,14 +12415,14 @@ function loadResourceGanttData(startDate, daysCount) {
       });
     });
 
-    const groups = getResourceGroupDefs_().map(function (def) {
-      const group = groupMap[def.key];
+    const groups = Object.keys(groupMap).map(function (key) {
+      const group = groupMap[key];
       return {
         key: group.key,
         name: group.name,
         en: group.en,
         dailyCounts: group.dailyCounts,
-        people: Object.keys(group.people).map(function (key) { return group.people[key]; })
+        people: Object.keys(group.people).map(function (k) { return group.people[k]; })
       };
     });
 
