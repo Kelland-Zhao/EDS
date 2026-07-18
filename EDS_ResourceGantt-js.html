@@ -47,8 +47,8 @@ function loadResourceGantt() {
         return;
       }
       resourceData = res.data;
-      if (!activeGroupKey && resourceData.groups && resourceData.groups.length) {
-        activeGroupKey = resourceData.groups[0].key;
+      if (!activeGroupKey) {
+        activeGroupKey = 'all';
       }
       renderGroupTabs();
       renderGantt();
@@ -62,7 +62,10 @@ function loadResourceGantt() {
 
 function renderGroupTabs() {
   const groups = (resourceData && resourceData.groups) || [];
-  const html = groups.map(function (g) {
+  const totalCount = groups.reduce(function (sum, g) { return sum + (g.people || []).length; }, 0);
+  let html = '<button class="group-tab ' + (activeGroupKey === 'all' ? 'active' : '') + '" data-group="all">'
+    + '所有人 <small>(' + totalCount + ')</small><br><span style="font-size:10px;font-weight:400;">All</span></button>';
+  html += groups.map(function (g) {
     const count = (g.people || []).length;
     return '<button class="group-tab ' + (g.key === activeGroupKey ? 'active' : '') + '" data-group="' + g.key + '">'
       + g.name + ' <small>(' + count + ')</small><br><span style="font-size:10px;font-weight:400;">' + g.en + '</span></button>';
@@ -78,19 +81,46 @@ function renderGroupTabs() {
 function renderGantt() {
   if (!resourceData) return;
   const days = resourceData.days || [];
-  const group = (resourceData.groups || []).filter(function (g) { return g.key === activeGroupKey; })[0];
-  if (!group) {
+  const allGroups = resourceData.groups || [];
+
+  // ---- 所有人视图: 合并全部组 ----
+  let merged;
+  if (activeGroupKey === 'all') {
+    merged = { key: 'all', name: '所有人', en: 'All', people: {}, dailyCounts: {} };
+    days.forEach(function (d) { merged.dailyCounts[d] = 0; });
+    allGroups.forEach(function (g) {
+      (g.people || []).forEach(function (p) {
+        const key = p.sapID || p.name;
+        if (!merged.people[key]) {
+          merged.people[key] = { sapID: p.sapID, name: p.name, workshop: p.workshop, process: p.process, groupName: g.name, tasks: [] };
+        }
+        merged.people[key].tasks = merged.people[key].tasks.concat(p.tasks || []);
+      });
+      Object.keys(g.dailyCounts || {}).forEach(function (d) {
+        merged.dailyCounts[d] = (merged.dailyCounts[d] || 0) + (g.dailyCounts[d] || 0);
+      });
+    });
+  } else {
+    merged = allGroups.filter(function (g) { return g.key === activeGroupKey; })[0];
+    if (merged) {
+      // Tag each person with their group name
+      (merged.people || []).forEach(function (p) { p.groupName = merged.name; });
+    }
+  }
+
+  if (!merged) {
     $('#ganttRoot').html('<div class="empty-state">暂无数据 / No data</div>');
     return;
   }
-  const people = (group.people || []).filter(function (p) { return (p.tasks || []).length > 0; });
+
+  const people = Object.values(merged.people || {}).filter(function (p) { return (p.tasks || []).length > 0; });
   let html = '<div class="gantt-grid" style="--day-count:' + days.length + ';">';
   html += '<div class="gantt-head first">人员 / 日期</div>';
   days.forEach(function (d) { html += '<div class="gantt-head">' + shortDate(d) + '</div>'; });
 
   html += '<div class="gantt-name">组任务数<small>Task count</small></div>';
   days.forEach(function (d) {
-    const val = group.dailyCounts ? (group.dailyCounts[d] || 0) : 0;
+    const val = merged.dailyCounts ? (merged.dailyCounts[d] || 0) : 0;
     html += '<div class="gantt-count ' + (val >= 10 ? 'hot' : '') + '">' + (val || '-') + '</div>';
   });
 
@@ -101,9 +131,29 @@ function renderGantt() {
   }
 
   people.forEach(function (person) {
+    const groupLabel = person.groupName ? '<small style="color:#E60012;">' + escapeHtml(person.groupName) + '</small>' : '';
     html += '<div class="gantt-name">' + escapeHtml(person.name || person.sapID || '--')
+      + groupLabel
       + '<small>' + escapeHtml([person.workshop, person.process].filter(Boolean).join(' / ')) + '</small></div>';
     html += '<div class="person-lane">';
+
+    // 收集有任务覆盖的天（列索引）
+    const coveredDays = {};
+    (person.tasks || []).forEach(function (task) {
+      const sIdx = days.indexOf(task.start);
+      const eIdx = days.indexOf(task.end) >= 0 ? days.indexOf(task.end) : days.length - 1;
+      if (sIdx < 0 || eIdx < 0 || sIdx >= days.length) return;
+      for (let d = sIdx; d <= eIdx; d++) coveredDays[d] = true;
+    });
+
+    // 周一到周六的空白天高亮（周日=0 跳过）
+    days.forEach(function (d, idx) {
+      if (coveredDays[idx]) return;
+      const dow = new Date(d + 'T00:00:00').getDay();
+      if (dow === 0) return; // 周日跳过
+      html += '<div class="empty-day" style="grid-column:' + (idx + 1) + ';grid-row:1;"></div>';
+    });
+
     (person.tasks || []).forEach(function (task, index) {
       const startIdx = Math.max(0, days.indexOf(task.start));
       const endIdx = days.indexOf(task.end) >= 0 ? days.indexOf(task.end) : days.length - 1;
@@ -111,7 +161,7 @@ function renderGantt() {
       const cls = getTaskClass(task);
       html += '<div class="task-bar ' + cls + '" style="grid-column:' + (startIdx + 1) + ' / ' + (endIdx + 2) + ';grid-row:' + ((index % 4) + 1) + ';"'
         + ' title="' + escapeHtml(task.taskID + ' | ' + task.title + ' | ' + task.start + ' ~ ' + task.end) + '">'
-        + escapeHtml(task.taskID + ' ' + task.title) + (task.role === 'collaborator' ? ' (协作)' : '') + '</div>';
+        + escapeHtml(String(task.title || '').replace(/^PM:\s*/, '')) + (task.role === 'collaborator' ? ' (协作)' : '') + '</div>';
     });
     html += '</div>';
   });

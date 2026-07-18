@@ -12383,6 +12383,8 @@ function loadResourceGanttData(startDate, daysCount) {
 
       members.forEach(function (memberID) {
         const person = staffLookup[memberID] || userMap[memberID] || { sapID: memberID, name: memberID };
+        // BL列为空的人不在项目管理范围内，跳过
+        if (!person.internalGroup) return;
         const groupKey = inferResourceGroup_(person, task);
         if (!groupMap[groupKey]) {
           groupMap[groupKey] = { key: groupKey, name: groupKey, en: groupKey, people: {}, dailyCounts: {} };
