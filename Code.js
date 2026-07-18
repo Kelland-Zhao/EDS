@@ -11852,11 +11852,13 @@ function loadAllPMTasks(filterJSON) {
         if (planDate < cutoffStr) continue;
         var aem = String(planData[i][6] || '').trim();
         if (!aem) continue;
+        var pmType = String(planData[i][8] || '').trim();
+        if (!pmType) continue; // 跳过保养类型为空的条目（模具保养停机申请，机器不做保养）
         var key = planDate + '_' + aem;
         if (taskMap[key]) continue;
         taskMap[key] = {
-          taskID: 'PLAN-' + aem + '-' + planDate.replace(/-/g, ''),
-          title: 'PM: ' + aem + (String(planData[i][2] || '').trim() ? ' [' + String(planData[i][2] || '').trim() + ']' : '') + ' - ' + String(planData[i][8] || '').trim(),
+          taskID: 'PM-' + aem + '-' + planDate.replace(/-/g, ''),
+          title: 'PM: ' + aem + ' - ' + pmType,
           description: '工时: ' + planHours + 'h | 机型: ' + String(planData[i][9] || '').trim() + ' | 计划中 / Planned',
           taskType: '保养', priority: '中', status: '未开始',
           planStartDate: planDate, dueDate: planEndDate,
@@ -12050,7 +12052,7 @@ function loadPMTasksByDate(dateStr) {
         if (!pmType) continue; // 跳过保养类型为空的条目（模具保养停机申请，机器不做保养）
         const machineType = String(planData[i][9] || '').trim();
         taskMap[key] = {
-          taskID: 'PLAN-' + aem + '-' + planDate.replace(/-/g, ''),
+          taskID: 'PM-' + aem + '-' + planDate.replace(/-/g, ''),
           title: 'PM: ' + aem + (workshop ? ' [' + workshop + ']' : '') + ' - ' + pmType,
           description: '工时: ' + planHours + 'h | 机型: ' + machineType + ' | 计划中 / Planned',
           taskType: '保养', priority: '中', status: '未开始',
