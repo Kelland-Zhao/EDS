@@ -115,6 +115,14 @@ function renderGrid() {
   if (currentWorkshop === 'TB1') {
     $grid.addClass('tb1-layout');
   }
+  // Dispose existing ECharts instances before clearing grid
+  $grid.find('.cell-chart').each(function() {
+    var chart = $(this).data('echart');
+    if (chart) {
+      chart.dispose();
+      $(this).removeData('echart');
+    }
+  });
   $grid.empty();
 
   if (!machines.length) {
@@ -370,7 +378,7 @@ function openDetail(machine) {
     $(dom).data('echart', chart);
 
     // Resize handler
-    $('#detailModal').on('shown.bs.modal', function() {
+    $('#detailModal').off('shown.bs.modal').on('shown.bs.modal', function() {
       chart.resize();
     });
   }, 200);
