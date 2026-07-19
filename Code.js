@@ -21,6 +21,11 @@ const TASK_PERMISSION_COL = 62; // Column BK (0-indexed)
 const IM_SCHEDULING_SS_ID = "1dyS5C7r4pqYIeRT0p1zYzngt0EDCYR4hsswurAsEBYg"; // 注塑排班主数据
 const IM_SCHEDULING_SHEET = "MasterData";
 
+// 注塑周期监控模块常量 / Cycle Monitor Constants
+const CYCLE_SS_ID = "1cfJBxEKnNcwt1xH_tSRjKpD6Dv1JqOEzJxi2p7mZiZM";
+const CYCLE_ACTUAL_SHEET = "机台周期实际值";
+const CYCLE_STANDARD_SHEET = "机台周期标准";
+
 // Inspection2.0 统一记录表开关（紧急回滚设 false）
 var USE_UNIFIED_INSPECTION_SHEET = true;
 
@@ -13668,4 +13673,165 @@ function validateShiftRecordsMigration() {
   }
 
   return { oldTotal: oldTotal, newRows: newRows, match: oldTotal === newRows };
+}
+
+// ============================================================
+//  注塑周期监控模块 / Cycle Monitor Module
+// ============================================================
+
+/**
+ * 获取按车间分组的机台列表
+ * @returns {{ TB1: string[], TB2: string[] }}
+ */
+function getCycleMonitorMachineList() {
+  try {
+    var ss = SpreadsheetApp.openById(CYCLE_SS_ID);
+    var ws = ss.getSheetByName(CYCLE_STANDARD_SHEET);
+    var data = ws.getDataRange().getValues();
+    var result = { TB1: [], TB2: [] };
+    for (var i = 1; i < data.length; i++) {
+      var machineNo = String(data[i][0]).trim();
+      if (!machineNo) continue;
+      if (machineNo.indexOf("H1") === 0) {
+        result.TB1.push(machineNo);
+      } else if (machineNo.indexOf("H2") === 0) {
+        result.TB2.push(machineNo);
+      }
+    }
+    return result;
+  } catch (e) {
+    console.error("getCycleMonitorMachineList error:", e.message);
+    return { TB1: [], TB2: [], error: e.message };
+  }
+}
+
+/**
+ * 获取机台号→标准周期的映射
+ * @returns {{ [machineNo: string]: number }}
+ */
+function getCycleMonitorStandards() {
+  try {
+    var ss = SpreadsheetApp.openById(CYCLE_SS_ID);
+    var ws = ss.getSheetByName(CYCLE_STANDARD_SHEET);
+    var data = ws.getDataRange().getValues();
+    var result = {};
+    for (var i = 1; i < data.length; i++) {
+      var machineNo = String(data[i][0]).trim();
+      var standard = parseFloat(data[i][2]);
+      if (machineNo && !isNaN(standard)) {
+        result[machineNo] = standard;
+      }
+    }
+    return result;
+  } catch (e) {
+    console.error("getCycleMonitorStandards error:", e.message);
+    return { error: e.message };
+  }
+}
+
+/**
+ * 获取周期散点数据，含异常标记
+ * @param {string[]} machines — 机台号数组
+ * @param {number} days — 往前推天数（7 或 30）
+ * @returns {{ machines: Array }}
+ */
+function getCycleMonitorData(machines, days) {
+  try {
+    if (!machines || !machines.length) {
+      return { machines: [], error: "未指定机台" };
+    }
+    var ss = SpreadsheetApp.openById(CYCLE_SS_ID);
+    var ws = ss.getSheetByName(CYCLE_ACTUAL_SHEET);
+    var allData = ws.getDataRange().getValues();
+
+    // 计算日期范围
+    var today = new Date();
+    var cutoff = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
+    var cutoffStr = formatDateLocal(cutoff);
+    var todayStr = formatDateLocal(today);
+
+    // 读取标准值
+    var stdSheet = ss.getSheetByName(CYCLE_STANDARD_SHEET);
+    var stdData = stdSheet.getDataRange().getValues();
+    var standards = {};
+    for (var i = 1; i < stdData.length; i++) {
+      var m = String(stdData[i][0]).trim();
+      var s = parseFloat(stdData[i][2]);
+      if (m && !isNaN(s)) standards[m] = s;
+    }
+
+    // 按机台分组收集数据点
+    var machinesMap = {};
+    var machineSet = {};
+    machines.forEach(function(m) { machineSet[m] = true; });
+
+    for (var i = 1; i < allData.length; i++) {
+      var row = allData[i];
+      var machineNo = String(row[0]).trim();
+      if (!machineSet[machineNo]) continue;
+
+      var dataDate = String(row[5]).trim();
+      if (dataDate < cutoffStr || dataDate > todayStr) continue;
+
+      var shift = String(row[2]).trim();
+      var cycle = parseFloat(row[3]);
+      if (isNaN(cycle)) continue;
+
+      if (!machinesMap[machineNo]) {
+        machinesMap[machineNo] = [];
+      }
+
+      var std = standards[machineNo];
+      var anomaly = false;
+      var deviation = 0;
+      if (std !== undefined) {
+        deviation = cycle - std;
+        anomaly = (deviation > 3) || (deviation < -1);
+      }
+
+      machinesMap[machineNo].push({
+        date: formatDateShort(dataDate),
+        dateFull: dataDate,
+        shift: shift,
+        cycle: Math.round(cycle * 100) / 100,
+        anomaly: anomaly,
+        deviation: Math.round(deviation * 100) / 100
+      });
+    }
+
+    // 构建返回结果
+    var result = [];
+    machines.forEach(function(machineNo) {
+      var points = machinesMap[machineNo] || [];
+      var anomalyCount = points.filter(function(p) { return p.anomaly; }).length;
+      result.push({
+        name: machineNo,
+        standard: standards[machineNo] !== undefined ? standards[machineNo] : null,
+        anomalyCount: anomalyCount,
+        points: points
+      });
+    });
+
+    return { machines: result };
+  } catch (e) {
+    console.error("getCycleMonitorData error:", e.message);
+    return { machines: [], error: e.message };
+  }
+}
+
+/**
+ * 格式化日期为 YYYY-MM-DD（本地时区）
+ */
+function formatDateLocal(d) {
+  var y = d.getFullYear();
+  var m = ('0' + (d.getMonth() + 1)).slice(-2);
+  var day = ('0' + d.getDate()).slice(-2);
+  return y + '-' + m + '-' + day;
+}
+
+/**
+ * 将 YYYY-MM-DD 缩短为 MM-DD 显示
+ */
+function formatDateShort(dateStr) {
+  return dateStr.substring(5);
 }
