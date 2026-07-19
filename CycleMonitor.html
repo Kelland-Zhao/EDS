@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("CSS");?>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    html, body { margin:0; padding:0; }
+    body { background:#f5f6f8; color:#333; }
+
+    .welcome-bar {
+      background:#fff; border-left:4px solid #E60012; padding:10px 18px;
+      margin:12px 0 16px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.04);
+      display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+    }
+    .welcome-bar .greet { color:#333; font-size:16px; }
+    .welcome-bar #userName { color:#E60012; font-weight:600; }
+
+    .toolbar {
+      background:#fff; border-left:4px solid #E60012; border-radius:4px;
+      padding:10px 16px; margin:12px 0; display:flex; gap:10px;
+      align-items:center; flex-wrap:wrap; box-shadow:0 1px 3px rgba(0,0,0,.04);
+    }
+    .toolbar .form-select { width:auto; font-size:12px; }
+
+    .workshop-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+    .workshop-tab {
+      border:1px solid #dee2e6; background:#fff; color:#555; border-radius:4px;
+      padding:6px 14px; font-size:13px; font-weight:600; cursor:pointer;
+      transition: all 0.2s;
+    }
+    .workshop-tab:hover { border-color:#E60012; color:#E60012; }
+    .workshop-tab.active { background:#E60012; color:#fff; border-color:#E60012; }
+    .workshop-tab .badge-anomaly {
+      display:inline-block; background:#E74C3C; color:#fff; border-radius:10px;
+      padding:1px 7px; font-size:10px; margin-left:4px; font-weight:700;
+    }
+    .workshop-tab.active .badge-anomaly { background:#fff; color:#E60012; }
+
+    .chart-grid {
+      display:grid;
+      grid-template-columns:repeat(5, 1fr);
+      gap:10px;
+    }
+    .chart-grid.tb1-layout { grid-template-columns:repeat(3, 1fr); }
+
+    .chart-cell {
+      background:#fff; border-radius:6px; padding:8px;
+      box-shadow:0 1px 3px rgba(0,0,0,.04); cursor:pointer;
+      transition: box-shadow 0.2s;
+    }
+    .chart-cell:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+    .chart-cell .cell-title {
+      font-size:12px; font-weight:700; text-align:center;
+      margin-bottom:4px; color:#555;
+    }
+    .chart-cell .cell-title .anomaly-dot {
+      display:inline-block; width:8px; height:8px; border-radius:50%;
+      background:#E74C3C; margin-left:4px; vertical-align:middle;
+    }
+    .chart-cell .cell-chart { width:100%; height:200px; }
+    .chart-cell.empty {
+      display:flex; align-items:center; justify-content:center;
+      height:240px; color:#999; font-size:13px;
+    }
+
+    .legend-bar {
+      display:flex; gap:20px; align-items:center; flex-wrap:wrap;
+      padding:10px 16px; margin-top:12px; font-size:12px; color:#666;
+    }
+    .legend-item { display:flex; align-items:center; gap:6px; }
+    .legend-dot { width:10px; height:10px; border-radius:50%; }
+    .legend-dot.normal { background:#95A5A6; }
+    .legend-dot.anomaly { background:#E74C3C; }
+    .legend-line { width:20px; height:0; border-top:2px dashed; }
+    .legend-line.standard { border-color:#3498DB; }
+    .legend-line.limit { border-color:#E74C3C; border-top-style:dotted; }
+
+    /* Detail modal */
+    .modal-dialog.detail-modal { max-width:860px; }
+    .detail-chart { width:100%; height:520px; }
+
+    .empty-state {
+      text-align:center; padding:40px; color:#999; font-size:14px;
+    }
+
+    @media (max-width:768px) {
+      .chart-grid { grid-template-columns:repeat(2, 1fr); }
+      .chart-grid.tb1-layout { grid-template-columns:repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="container-fluid" style="max-width:1400px;">
+
+  <!-- Welcome Bar -->
+  <div class="welcome-bar">
+    <span class="greet">🏭 注塑周期监控 / <small>Cycle Monitor</small></span>
+    <span class="greet">👤 <span id="userName">--</span></span>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <label style="font-size:12px;margin:0;">时间范围 / Period:</label>
+    <select class="form-select" id="daysSelect">
+      <option value="7">最近7天 / Last 7 days</option>
+      <option value="30">最近30天 / Last 30 days</option>
+    </select>
+    <span style="font-size:11px;color:#888;" id="dateRangeLabel">--</span>
+    <span style="flex:1;"></span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBtn">
+      <i class="bi bi-arrow-clockwise"></i> 刷新 / Refresh
+    </button>
+  </div>
+
+  <!-- Workshop Tabs -->
+  <div class="workshop-tabs">
+    <button type="button" class="workshop-tab active" data-workshop="TB1">
+      TB1 <small>(H1)</small>
+      <span class="badge-anomaly" id="tb1Badge" style="display:none;">0</span>
+    </button>
+    <button type="button" class="workshop-tab" data-workshop="TB2">
+      TB2 <small>(H2)</small>
+      <span class="badge-anomaly" id="tb2Badge" style="display:none;">0</span>
+    </button>
+  </div>
+
+  <!-- Chart Grid -->
+  <div class="chart-grid tb1-layout" id="chartGrid"></div>
+
+  <!-- Legend -->
+  <div class="legend-bar">
+    <span class="legend-item"><span class="legend-dot normal"></span> 正常点 / Normal</span>
+    <span class="legend-item"><span class="legend-dot anomaly"></span> 异常点 / Anomaly</span>
+    <span class="legend-item"><span class="legend-line standard"></span> 标准线 / Standard</span>
+    <span class="legend-item"><span class="legend-line limit"></span> 上下限线 / Limits</span>
+  </div>
+
+</div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog detail-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="detailTitle">机台详情 / Machine Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-chart" id="detailChart"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<?!=include("Kez_jquery@3.6.4_js") ?>
+<?!=include("Kez_bootstrap@5.3.1_js") ?>
+<?!=include("Kez_sweetalert2_js") ?>
+<?!=include("Kez_ECharts_js") ?>
+<?!=include("CycleMonitor-js") ?>
+</body>
+</html>
