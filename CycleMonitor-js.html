@@ -339,6 +339,17 @@ function openDetail(machine) {
     var dates = machine.points.map(function(p) { return p.date; });
     var std = machine.standard;
 
+    // Adaptive Y-axis range (same logic as mini chart)
+    var yMin, yMax;
+    if (std !== null && std !== undefined) {
+      yMin = std - 7;
+      yMax = std + 10;
+    } else {
+      var cycles = machine.points.map(function(p) { return p.cycle; });
+      yMin = Math.min.apply(null, cycles) - 2;
+      yMax = Math.max.apply(null, cycles) + 2;
+    }
+
     var series = [];
 
     if (greenPts.length) {
@@ -422,6 +433,8 @@ function openDetail(machine) {
       yAxis: {
         type: 'value',
         name: '周期(秒) / Cycle(s)',
+        min: yMin,
+        max: yMax,
         axisLabel: { fontSize: 11 },
         splitLine: { lineStyle: { color: '#eee', type: 'dashed' } }
       },
