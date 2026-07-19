@@ -129,8 +129,10 @@
     }
     .legend-item { display:flex; align-items:center; gap:6px; }
     .legend-dot { width:10px; height:10px; border-radius:50%; }
-    .legend-dot.normal { background:#95A5A6; }
-    .legend-dot.anomaly { background:#E74C3C; }
+    .legend-dot.green { background:#27AE60; }
+    .legend-dot.orange { background:#F39C12; }
+    .legend-dot.red { background:#E74C3C; }
+    .legend-dot.nostd { background:#95A5A6; }
     .legend-line { width:20px; height:0; border-top:2px dashed; }
     .legend-line.standard { border-color:#3498DB; }
     .legend-line.limit { border-color:#E74C3C; border-top-style:dotted; }
@@ -222,10 +224,11 @@
 
   <!-- Legend Bar -->
   <div class="legend-bar">
-    <span class="legend-item"><span class="legend-dot normal"></span> 正常点 / Normal</span>
-    <span class="legend-item"><span class="legend-dot anomaly"></span> 异常点 / Anomaly</span>
+    <span class="legend-item"><span class="legend-dot green"></span> 偏低 / Low (-1~0)</span>
+    <span class="legend-item"><span class="legend-dot orange"></span> 偏高 / High (0~+3)</span>
+    <span class="legend-item"><span class="legend-dot red"></span> 异常 / Anomaly (&gt;+3 / &lt;-1)</span>
     <span class="legend-item"><span class="legend-line standard"></span> 标准线 / Standard</span>
-    <span class="legend-item"><span class="legend-line limit"></span> 上下限线 / Limits</span>
+    <span class="legend-item"><span class="legend-line limit"></span> 上下限 / Limits</span>
   </div>
 
 </div>

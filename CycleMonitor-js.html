@@ -190,8 +190,10 @@ function initMiniChart(dom, machine) {
   var chart = echarts.init(dom);
 
   var dates = machine.points.map(function(p) { return p.date; });
-  var normalPts = machine.points.filter(function(p) { return !p.anomaly; });
-  var anomalyPts = machine.points.filter(function(p) { return p.anomaly; });
+  var greenPts  = machine.points.filter(function(p) { return p.status === 'green'; });
+  var orangePts = machine.points.filter(function(p) { return p.status === 'orange'; });
+  var redPts    = machine.points.filter(function(p) { return p.status === 'red'; });
+  var noStdPts  = machine.points.filter(function(p) { return p.status === null; });
   var std = machine.standard;
 
   var yMin, yMax;
@@ -206,25 +208,47 @@ function initMiniChart(dom, machine) {
 
   var series = [];
 
-  // Normal points
-  if (normalPts.length) {
+  // Green: deviation within [-1, 0) — slightly below standard, acceptable
+  if (greenPts.length) {
     series.push({
-      name: '正常 / Normal',
+      name: '偏低 / Low',
       type: 'scatter',
-      data: normalPts.map(function(p) { return [p.date, p.cycle]; }),
+      data: greenPts.map(function(p) { return [p.date, p.cycle]; }),
       symbolSize: 8,
-      itemStyle: { color: '#95A5A6' }
+      itemStyle: { color: '#27AE60' }
     });
   }
 
-  // Anomaly points
-  if (anomalyPts.length) {
+  // Orange: deviation within [0, +3] — above standard, warning
+  if (orangePts.length) {
+    series.push({
+      name: '偏高 / High',
+      type: 'scatter',
+      data: orangePts.map(function(p) { return [p.date, p.cycle]; }),
+      symbolSize: 8,
+      itemStyle: { color: '#F39C12' }
+    });
+  }
+
+  // Red: deviation > +3 or < -1 — anomaly
+  if (redPts.length) {
     series.push({
       name: '异常 / Anomaly',
       type: 'scatter',
-      data: anomalyPts.map(function(p) { return [p.date, p.cycle]; }),
+      data: redPts.map(function(p) { return [p.date, p.cycle]; }),
       symbolSize: 10,
       itemStyle: { color: '#E74C3C' }
+    });
+  }
+
+  // Gray: no standard value available
+  if (noStdPts.length) {
+    series.push({
+      name: '无标准值 / No Std',
+      type: 'scatter',
+      data: noStdPts.map(function(p) { return [p.date, p.cycle]; }),
+      symbolSize: 8,
+      itemStyle: { color: '#95A5A6' }
     });
   }
 
@@ -308,30 +332,52 @@ function openDetail(machine) {
     var dom = document.getElementById('detailChart');
     var chart = echarts.init(dom);
 
-    var normalPts = machine.points.filter(function(p) { return !p.anomaly; });
-    var anomalyPts = machine.points.filter(function(p) { return p.anomaly; });
+    var greenPts  = machine.points.filter(function(p) { return p.status === 'green'; });
+    var orangePts = machine.points.filter(function(p) { return p.status === 'orange'; });
+    var redPts    = machine.points.filter(function(p) { return p.status === 'red'; });
+    var noStdPts  = machine.points.filter(function(p) { return p.status === null; });
     var dates = machine.points.map(function(p) { return p.date; });
     var std = machine.standard;
 
     var series = [];
 
-    if (normalPts.length) {
+    if (greenPts.length) {
       series.push({
-        name: '正常 / Normal',
+        name: '偏低 / Low',
         type: 'scatter',
-        data: normalPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
+        data: greenPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
         symbolSize: 10,
-        itemStyle: { color: '#95A5A6' }
+        itemStyle: { color: '#27AE60' }
       });
     }
 
-    if (anomalyPts.length) {
+    if (orangePts.length) {
+      series.push({
+        name: '偏高 / High',
+        type: 'scatter',
+        data: orangePts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
+        symbolSize: 10,
+        itemStyle: { color: '#F39C12' }
+      });
+    }
+
+    if (redPts.length) {
       series.push({
         name: '异常 / Anomaly',
         type: 'scatter',
-        data: anomalyPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
+        data: redPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
         symbolSize: 12,
         itemStyle: { color: '#E74C3C' }
+      });
+    }
+
+    if (noStdPts.length) {
+      series.push({
+        name: '无标准值 / No Std',
+        type: 'scatter',
+        data: noStdPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
+        symbolSize: 10,
+        itemStyle: { color: '#95A5A6' }
       });
     }
 

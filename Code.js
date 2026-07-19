@@ -13805,11 +13805,14 @@ function getCycleMonitorData(machines, days) {
       var dateLabel = dateShort + ' ' + shiftType;
 
       var std = standards[machineNo];
-      var anomaly = false;
+      var status = null; // 'red' | 'orange' | 'green' | null(无标准)
       var deviation = 0;
       if (std !== undefined) {
-        deviation = cycle - std;
-        anomaly = (deviation > 3) || (deviation < -1);
+        deviation = Math.round((cycle - std) * 100) / 100;
+        if (deviation < -1)      status = 'red';
+        else if (deviation < 0)  status = 'green';
+        else if (deviation <= 3) status = 'orange';
+        else                     status = 'red';
       }
 
       machinesMap[machineNo].push({
@@ -13818,8 +13821,8 @@ function getCycleMonitorData(machines, days) {
         shift: shift,
         shiftOrder: shiftOrder[shiftType] !== undefined ? shiftOrder[shiftType] : 9,
         cycle: Math.round(cycle * 100) / 100,
-        anomaly: anomaly,
-        deviation: Math.round(deviation * 100) / 100
+        status: status,
+        deviation: deviation
       });
     }
 
@@ -13832,7 +13835,7 @@ function getCycleMonitorData(machines, days) {
         if (a.dateFull !== b.dateFull) return a.dateFull < b.dateFull ? -1 : 1;
         return a.shiftOrder - b.shiftOrder;
       });
-      var anomalyCount = points.filter(function(p) { return p.anomaly; }).length;
+      var anomalyCount = points.filter(function(p) { return p.status === 'red'; }).length;
       result.push({
         name: machineNo,
         standard: standards[machineNo] !== undefined ? standards[machineNo] : null,
