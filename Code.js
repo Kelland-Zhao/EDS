@@ -154,6 +154,7 @@ function doGet(e) {
   Route.path("EDS_ResourceGantt", loadEDSResourceGantt);
   Route.path("EDS_TaskList", loadEDSTaskList);
   Route.path("EDS_MyTasks", loadEDSMyTasks);
+  Route.path("CycleMonitor", loadCycleMonitor);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
@@ -1362,6 +1363,18 @@ function loadEDSMyTasks(webPage, id, name, process) {
     intoWebType: process || ""
   })
     .setTitle("我的任务 | My Tasks")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadCycleMonitor(webPage, id, name, process) {
+  let pageUrl = webPage || getReleaseWebPage();
+  return render("CycleMonitor", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("注塑周期监控 | Cycle Monitor")
     .setFaviconUrl(webIconUrl);
 }
 
