@@ -13798,6 +13798,12 @@ function getCycleMonitorData(machines, days) {
         machinesMap[machineNo] = [];
       }
 
+      // 提取班别类型：夜/早/中
+      var shiftType = shift.charAt(0); // "夜班(07-19)" → "夜"
+      var shiftOrder = { '夜': 0, '早': 1, '中': 2 };
+      var dateShort = formatDateShort(dataDate);
+      var dateLabel = dateShort + ' ' + shiftType;
+
       var std = standards[machineNo];
       var anomaly = false;
       var deviation = 0;
@@ -13807,19 +13813,25 @@ function getCycleMonitorData(machines, days) {
       }
 
       machinesMap[machineNo].push({
-        date: formatDateShort(dataDate),
+        date: dateLabel,
         dateFull: dataDate,
         shift: shift,
+        shiftOrder: shiftOrder[shiftType] !== undefined ? shiftOrder[shiftType] : 9,
         cycle: Math.round(cycle * 100) / 100,
         anomaly: anomaly,
         deviation: Math.round(deviation * 100) / 100
       });
     }
 
-    // 构建返回结果
+    // 按日期+班次排序（夜→早→中）后构建返回结果
     var result = [];
     machines.forEach(function(machineNo) {
       var points = machinesMap[machineNo] || [];
+      // 排序：先按完整日期，再按班次顺序（夜0→早1→中2）
+      points.sort(function(a, b) {
+        if (a.dateFull !== b.dateFull) return a.dateFull < b.dateFull ? -1 : 1;
+        return a.shiftOrder - b.shiftOrder;
+      });
       var anomalyCount = points.filter(function(p) { return p.anomaly; }).length;
       result.push({
         name: machineNo,
