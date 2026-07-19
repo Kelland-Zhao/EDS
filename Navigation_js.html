@@ -43,7 +43,10 @@
       .withSuccessHandler((result) => {
         try {
           const permission = JSON.parse(result || '{}');
-          if (permission.hasPermission) $('#INJSDMCardWrap').show();
+          if (permission.hasPermission) {
+            $('#INJSDMCardWrap').show();
+            $('#CycleMonitorCardWrap').show();
+          }
         } catch (e) {
           console.error('INJ SDM permission parse error', e);
         }
@@ -367,6 +370,14 @@
             + '&Name=' + encodeURIComponent(name || '')
             + '&Process=' + encodeURIComponent(process || '')
             + '&Workshop=' + encodeURIComponent(workshop || '');
+        window.open(url);
+    });
+
+    $('#CycleMonitor').click(() => {
+        let url = siWebPage + '?v=CycleMonitor'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process);
         window.open(url);
     });
 
