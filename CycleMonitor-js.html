@@ -18,11 +18,13 @@ $(document).ready(function() {
 
   $('#refreshBtn').on('click', loadData);
 
-  // Bootstrap nav-tabs handle switching natively — no custom click handler needed
-  // Update badges when tabs are shown
-  $('#workshopTabs').on('shown.bs.tab', function() {
-    // Re-render is not needed since both grids are already rendered
-    // Just adjust any chart sizing if needed
+  // Bootstrap nav-tabs: resize ECharts when hidden tab becomes visible
+  $('#workshopTabs').on('shown.bs.tab', function(e) {
+    var targetId = $(e.target).data('bs-target'); // '#content-tb1' or '#content-tb2'
+    $(targetId).find('.cell-chart').each(function() {
+      var chart = $(this).data('echart');
+      if (chart) chart.resize();
+    });
   });
 
   loadData();
