@@ -1,0 +1,400 @@
+<script>
+const swalTitle = function(cn, en) {
+  return cn + '<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">' + en + '</span>';
+};
+
+var allMachines = { TB1: [], TB2: [] };
+var allData = [];
+var currentWorkshop = 'TB1';
+var currentDays = 7;
+
+$(document).ready(function() {
+  $('#userName').text(sessionStorage.getItem('Name') || '--');
+
+  $('#daysSelect').on('change', function() {
+    currentDays = parseInt($(this).val());
+    loadData();
+  });
+
+  $('#refreshBtn').on('click', loadData);
+
+  $('.workshop-tab').on('click', function() {
+    currentWorkshop = $(this).data('workshop');
+    $('.workshop-tab').removeClass('active');
+    $(this).addClass('active');
+    renderGrid();
+  });
+
+  loadData();
+});
+
+function loadData() {
+  Swal.fire({
+    title: swalTitle('加载中...', 'Loading...'),
+    allowOutsideClick: false,
+    didOpen: function() { Swal.showLoading(); }
+  });
+
+  // 获取机台列表和实际数据
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && !result.error) {
+        allMachines = result;
+        fetchData();
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: swalTitle('加载失败', 'Load Failed'),
+          text: (result && result.error) || '无法获取机台列表 / Cannot get machine list'
+        });
+      }
+    })
+    .getCycleMonitorMachineList();
+}
+
+function fetchData() {
+  var allMachineList = allMachines.TB1.concat(allMachines.TB2);
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      Swal.close();
+      if (result && result.machines) {
+        allData = result.machines;
+        renderGrid();
+        updateBadges();
+        updateDateRange();
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: swalTitle('数据加载失败', 'Data Load Failed'),
+          text: (result && result.error) || '未知错误 / Unknown error'
+        });
+      }
+    })
+    .getCycleMonitorData(allMachineList, currentDays);
+}
+
+function updateBadges() {
+  var counts = { TB1: 0, TB2: 0 };
+  allData.forEach(function(m) {
+    var ws = (m.name.indexOf('H1') === 0) ? 'TB1' : 'TB2';
+    if (m.anomalyCount > 0) counts[ws] += 1;
+  });
+
+  ['TB1', 'TB2'].forEach(function(ws) {
+    var badge = $('#' + ws.toLowerCase() + 'Badge');
+    var count = counts[ws];
+    if (count > 0) {
+      badge.text(count + '台异常').show();
+    } else {
+      badge.hide();
+    }
+  });
+}
+
+function updateDateRange() {
+  var today = new Date();
+  var start = new Date(today.getTime() - currentDays * 24 * 60 * 60 * 1000);
+  var fmt = function(d) {
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+  };
+  $('#dateRangeLabel').text(fmt(start) + ' ~ ' + fmt(today));
+}
+
+function renderGrid() {
+  var machines = allData.filter(function(m) {
+    return (currentWorkshop === 'TB1' && m.name.indexOf('H1') === 0) ||
+           (currentWorkshop === 'TB2' && m.name.indexOf('H2') === 0);
+  });
+
+  var $grid = $('#chartGrid');
+  $grid.removeClass('tb1-layout');
+  if (currentWorkshop === 'TB1') {
+    $grid.addClass('tb1-layout');
+  }
+  $grid.empty();
+
+  if (!machines.length) {
+    $grid.html('<div class="empty-state">暂无数据 / No data</div>');
+    return;
+  }
+
+  machines.forEach(function(machine) {
+    var $cell = $('<div class="chart-cell"></div>');
+
+    // Title
+    var titleHtml = machine.name;
+    if (machine.anomalyCount > 0) {
+      titleHtml += ' <span class="anomaly-dot"></span>';
+    }
+    if (machine.standard === null || machine.standard === undefined) {
+      titleHtml += '<br><small style="color:#E67E22;">标准值缺失</small>';
+    }
+    $cell.append('<div class="cell-title">' + titleHtml + '</div>');
+
+    if (!machine.points || !machine.points.length) {
+      $cell.append('<div class="cell-chart" style="display:flex;align-items:center;justify-content:center;color:#999;font-size:12px;">暂无数值<br>No data</div>');
+    } else {
+      var chartDiv = $('<div class="cell-chart"></div>');
+      $cell.append(chartDiv);
+    }
+
+    $cell.on('click', function() { openDetail(machine); });
+    $grid.append($cell);
+  });
+
+  // Initialize ECharts for each cell (after DOM is in place)
+  machines.forEach(function(machine, index) {
+    if (!machine.points || !machine.points.length) return;
+    var chartDom = $grid.find('.cell-chart').eq(index)[0];
+    if (!chartDom) return;
+    initMiniChart(chartDom, machine);
+  });
+}
+
+function initMiniChart(dom, machine) {
+  var chart = echarts.init(dom);
+
+  var dates = machine.points.map(function(p) { return p.date; });
+  var normalPts = machine.points.filter(function(p) { return !p.anomaly; });
+  var anomalyPts = machine.points.filter(function(p) { return p.anomaly; });
+  var std = machine.standard;
+
+  var yMin, yMax;
+  if (std !== null && std !== undefined) {
+    yMin = std - 7;
+    yMax = std + 10;
+  } else {
+    var cycles = machine.points.map(function(p) { return p.cycle; });
+    yMin = Math.min.apply(null, cycles) - 2;
+    yMax = Math.max.apply(null, cycles) + 2;
+  }
+
+  var series = [];
+
+  // Normal points
+  if (normalPts.length) {
+    series.push({
+      name: '正常 / Normal',
+      type: 'scatter',
+      data: normalPts.map(function(p) { return [p.date, p.cycle]; }),
+      symbolSize: 8,
+      itemStyle: { color: '#95A5A6' }
+    });
+  }
+
+  // Anomaly points
+  if (anomalyPts.length) {
+    series.push({
+      name: '异常 / Anomaly',
+      type: 'scatter',
+      data: anomalyPts.map(function(p) { return [p.date, p.cycle]; }),
+      symbolSize: 10,
+      itemStyle: { color: '#E74C3C' }
+    });
+  }
+
+  // Reference lines (only if standard exists)
+  if (std !== null && std !== undefined) {
+    // Standard line
+    series.push({
+      name: '标准线 / Standard',
+      type: 'line',
+      data: [[dates[0], std], [dates[dates.length - 1], std]],
+      symbol: 'none',
+      lineStyle: { color: '#3498DB', type: 'dashed', dashOffset: 0, width: 2 },
+      silent: true
+    });
+    // Upper limit
+    series.push({
+      name: '上限线 / Upper Limit',
+      type: 'line',
+      data: [[dates[0], std + 3], [dates[dates.length - 1], std + 3]],
+      symbol: 'none',
+      lineStyle: { color: '#E74C3C', type: [5, 5], width: 1.5 },
+      silent: true
+    });
+    // Lower limit
+    series.push({
+      name: '下限线 / Lower Limit',
+      type: 'line',
+      data: [[dates[0], std - 1], [dates[dates.length - 1], std - 1]],
+      symbol: 'none',
+      lineStyle: { color: '#F39C12', type: [5, 5], width: 1.5 },
+      silent: true
+    });
+  }
+
+  var option = {
+    grid: { left: 40, right: 8, top: 8, bottom: 24 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLabel: { fontSize: 9, rotate: 45 },
+      axisTick: { show: false },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      min: yMin,
+      max: yMax,
+      axisLabel: { fontSize: 9 },
+      splitLine: { lineStyle: { color: '#eee', type: 'dashed' } }
+    },
+    series: series,
+    tooltip: {
+      trigger: 'item',
+      formatter: function(params) {
+        if (params.seriesType === 'line') return '';
+        var d = params.data;
+        var machineName = machine.name;
+        var stdVal = machine.standard !== null ? machine.standard : '--';
+        return '<b>' + machineName + '</b><br/>' +
+               '日期: ' + d[0] + '<br/>' +
+               '周期: ' + d[1] + 's<br/>' +
+               '标准: ' + stdVal + 's';
+      }
+    }
+  };
+
+  chart.setOption(option);
+
+  // Store chart instance for resize
+  chart.dom = dom;
+  $(dom).data('echart', chart);
+}
+
+function openDetail(machine) {
+  $('#detailTitle').html(machine.name + ' 周期详情 / <small>Cycle Detail</small>');
+  $('#detailModal').modal('show');
+
+  // Delay chart init until modal is visible
+  setTimeout(function() {
+    var dom = document.getElementById('detailChart');
+    var chart = echarts.init(dom);
+
+    var normalPts = machine.points.filter(function(p) { return !p.anomaly; });
+    var anomalyPts = machine.points.filter(function(p) { return p.anomaly; });
+    var dates = machine.points.map(function(p) { return p.date; });
+    var std = machine.standard;
+
+    var series = [];
+
+    if (normalPts.length) {
+      series.push({
+        name: '正常 / Normal',
+        type: 'scatter',
+        data: normalPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
+        symbolSize: 10,
+        itemStyle: { color: '#95A5A6' }
+      });
+    }
+
+    if (anomalyPts.length) {
+      series.push({
+        name: '异常 / Anomaly',
+        type: 'scatter',
+        data: anomalyPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
+        symbolSize: 12,
+        itemStyle: { color: '#E74C3C' }
+      });
+    }
+
+    if (std !== null && std !== undefined) {
+      series.push({
+        name: '标准线 / Standard',
+        type: 'line',
+        data: [[dates[0], std], [dates[dates.length - 1], std]],
+        symbol: 'none',
+        lineStyle: { color: '#3498DB', type: 'dashed', width: 2 },
+        silent: true,
+        markLine: {}
+      });
+      series.push({
+        name: '上限 / Upper Limit',
+        type: 'line',
+        data: [[dates[0], std + 3], [dates[dates.length - 1], std + 3]],
+        symbol: 'none',
+        lineStyle: { color: '#E74C3C', type: [5, 5], width: 1.5 },
+        silent: true
+      });
+      series.push({
+        name: '下限 / Lower Limit',
+        type: 'line',
+        data: [[dates[0], std - 1], [dates[dates.length - 1], std - 1]],
+        symbol: 'none',
+        lineStyle: { color: '#F39C12', type: [5, 5], width: 1.5 },
+        silent: true
+      });
+    }
+
+    var option = {
+      grid: { left: 60, right: 30, top: 20, bottom: 60 },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: { fontSize: 11, rotate: 45 },
+        name: '日期 / Date',
+        nameLocation: 'center',
+        nameGap: 35
+      },
+      yAxis: {
+        type: 'value',
+        name: '周期(秒) / Cycle(s)',
+        axisLabel: { fontSize: 11 },
+        splitLine: { lineStyle: { color: '#eee', type: 'dashed' } }
+      },
+      series: series,
+      tooltip: {
+        trigger: 'item',
+        formatter: function(params) {
+          if (params.seriesType === 'line') return '';
+          var d = params.data;
+          return '<b>' + machine.name + '</b><br/>' +
+                 '日期: ' + d[0] + '<br/>' +
+                 '班别: ' + (d[2] || '--') + '<br/>' +
+                 '平均周期: ' + d[1] + 's<br/>' +
+                 '标准: ' + (machine.standard !== null ? machine.standard : '--') + 's';
+        }
+      },
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0 },
+        { type: 'slider', xAxisIndex: 0, bottom: 10 }
+      ]
+    };
+
+    chart.setOption(option);
+    $(dom).data('echart', chart);
+
+    // Resize handler
+    $('#detailModal').on('shown.bs.modal', function() {
+      chart.resize();
+    });
+  }, 200);
+
+  // Cleanup on modal hide
+  $('#detailModal').off('hidden.bs.modal').on('hidden.bs.modal', function() {
+    var dom = document.getElementById('detailChart');
+    var chart = $(dom).data('echart');
+    if (chart) {
+      chart.dispose();
+      $(dom).removeData('echart');
+    }
+  });
+}
+
+// Resize all charts on window resize
+var resizeTimer;
+$(window).on('resize', function() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function() {
+    $('.cell-chart').each(function() {
+      var chart = $(this).data('echart');
+      if (chart) chart.resize();
+    });
+  }, 200);
+});
+</script>
