@@ -13785,7 +13785,9 @@ function getCycleMonitorData(machines, days) {
       var machineNo = String(row[0]).trim();
       if (!machineSet[machineNo]) continue;
 
-      var dataDate = String(row[5]).trim();
+      var dataDate = row[5] instanceof Date
+        ? Utilities.formatDate(row[5], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+        : String(row[5]).trim();
       if (dataDate < cutoffStr || dataDate > todayStr) continue;
 
       var shift = String(row[2]).trim();
