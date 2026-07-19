@@ -58,7 +58,7 @@ function fetchData() {
   google.script.run
     .withSuccessHandler(function(result) {
       Swal.close();
-      if (result && result.machines) {
+      if (result && !result.error && result.machines) {
         allData = result.machines;
         renderGrid();
         updateBadges();

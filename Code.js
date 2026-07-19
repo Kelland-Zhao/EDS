@@ -13720,6 +13720,7 @@ function getCycleMonitorMachineList() {
 
 /**
  * 获取机台号→标准周期的映射
+ * 备用工具函数 / Utility: available for future use
  * @returns {{ [machineNo: string]: number }}
  */
 function getCycleMonitorStandards() {
@@ -13764,6 +13765,7 @@ function getCycleMonitorData(machines, days) {
     var todayStr = formatDateLocal(today);
 
     // 读取标准值
+    // TODO: getCycleMonitorStandards() 已提供相同逻辑，后续可考虑复用避免重复读取
     var stdSheet = ss.getSheetByName(CYCLE_STANDARD_SHEET);
     var stdData = stdSheet.getDataRange().getValues();
     var standards = {};
