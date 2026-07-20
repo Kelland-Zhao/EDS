@@ -11559,23 +11559,28 @@ function loadUserListForSelect() {
 
 // 人员姓名→SAPID 映射（全局缓存，2小时有效，多个函数复用）
 function getNameToSapMap_() {
-  var cache = CacheService.getScriptCache();
-  var key = 'NameToSapMap';
-  var cached = cache.get(key);
-  if (cached) return JSON.parse(cached);
+  try {
+    var cache = CacheService.getScriptCache();
+    var key = 'NameToSapMap';
+    var cached = cache.get(key);
+    if (cached) return JSON.parse(cached);
 
-  var userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
-  var map = {};
-  if (userWs) {
-    var vals = userWs.getDataRange().getValues();
-    for (var i = 2; i < vals.length; i++) {
-      var nm = String(vals[i][1] || '').trim();
-      var sid = String(vals[i][0] || '').trim();
-      if (nm && sid) map[nm] = sid;
+    var userWs = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    var map = {};
+    if (userWs) {
+      var vals = userWs.getDataRange().getValues();
+      for (var i = 2; i < vals.length; i++) {
+        var nm = String(vals[i][1] || '').trim();
+        var sid = String(vals[i][0] || '').trim();
+        if (nm && sid) map[nm] = sid;
+      }
     }
+    cache.put(key, JSON.stringify(map), 7200); // 2小时
+    return map;
+  } catch (e) {
+    console.error('getNameToSapMap_ error: ' + e.message);
+    return {}; // fallback: empty map, owners will show as SAP IDs
   }
-  cache.put(key, JSON.stringify(map), 7200); // 2小时
-  return map;
 }
 
 function loadTodayStaffForSelect(dateStr) {
@@ -11761,13 +11766,15 @@ function loadDailyStaffByDate(dateStr) {
 
 function loadTasks(filterJSON) {
   try {
-    // 缓存：按小时缓存手动任务列表
+    const filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+
+    // 缓存：按小时缓存手动任务列表（forceRefresh 时跳过缓存）
     var cache = CacheService.getScriptCache();
     var cacheKey = 'TaskList_Manual_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMddHH');
-    var cached = cache.get(cacheKey);
-    if (cached) return cached;
-
-    const filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+    if (!filter._forceRefresh) {
+      var cached = cache.get(cacheKey);
+      if (cached) return cached;
+    }
     const tasksWs = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
     const membersWs = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_MEMBERS_SHEET);
     if (!tasksWs) return JSON.stringify({ success: true, data: [] });
@@ -11867,13 +11874,15 @@ function loadTasks(filterJSON) {
 // Load all PM tasks for task list — read sheets once, filter in memory
 function loadAllPMTasks(filterJSON) {
   try {
-    // 缓存：按天缓存PM任务列表（数据量大，读3个sheet）
+    var filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+
+    // 缓存：按天缓存PM任务列表（数据量大，forceRefresh 时跳过缓存）
     var cache = CacheService.getScriptCache();
     var cacheKey = 'TaskList_PM_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMdd');
-    var cached = cache.get(cacheKey);
-    if (cached) return cached;
-
-    var filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+    if (!filter._forceRefresh) {
+      var cached = cache.get(cacheKey);
+      if (cached) return cached;
+    }
     var ss = SpreadsheetApp.openById('1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4');
     var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
@@ -11981,21 +11990,30 @@ function loadAllPMTasks(filterJSON) {
 }
 
 // 合并任务列表加载：手动任务 + PM 任务 一次调用返回，服务端去重
-function loadAllTasksForList() {
+// forceRefresh: 跳过缓存，强制从 Sheet 重新读取（创建/编辑任务后使用）
+function loadAllTasksForList(forceRefresh) {
   try {
-    // 复用各自的缓存
-    var manualResult = JSON.parse(loadTasks(JSON.stringify({})));
-    var pmResult = JSON.parse(loadAllPMTasks(JSON.stringify({})));
+    // 复用各自的缓存（forceRefresh 时传入非空 filter 强制跳过缓存）
+    var filter = forceRefresh ? JSON.stringify({ _forceRefresh: true }) : JSON.stringify({});
+    var manualResult = JSON.parse(loadTasks(filter));
+    var pmResult = JSON.parse(loadAllPMTasks(filter));
     var manualData = manualResult.success ? manualResult.data : [];
     var pmData = pmResult.success ? pmResult.data : [];
+
+    console.log('loadAllTasksForList: manual=' + manualData.length + ' tasks, pm=' + pmData.length + ' tasks, forceRefresh=' + !!forceRefresh);
+    if (!pmResult.success) {
+      console.error('loadAllPMTasks failed: ' + (pmResult.message || 'unknown'));
+    }
 
     // 服务端去重（PM taskID 优先）
     var seen = {};
     pmData.forEach(function (t) { seen[t.taskID] = true; });
     var merged = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
 
+    console.log('loadAllTasksForList: merged=' + merged.length + ' tasks');
     return JSON.stringify({ success: true, manual: manualData, pm: pmData, merged: merged });
   } catch (e) {
+    console.error('loadAllTasksForList error: ' + e.message);
     return JSON.stringify({ success: false, message: e.message });
   }
 }

@@ -318,7 +318,7 @@ function showLoading() {
   });
 }
 
-// 刷新数据 — 改用合并接口，一次调用替代两次
+// 刷新数据 — 使用合并接口，传 forceRefresh=true 跳过缓存
 function reloadData(callback) {
   google.script.run
     .withSuccessHandler(function (result) {
@@ -329,7 +329,7 @@ function reloadData(callback) {
       if (callback) callback();
     })
     .withFailureHandler(function () { if (callback) callback(); })
-    .loadAllTasksForList();
+    .loadAllTasksForList(true);
 }
 
 // 筛选 + 渲染
