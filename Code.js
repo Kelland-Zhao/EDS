@@ -10,11 +10,9 @@ const webIconUrl =
 //  任务安排模块常量 / Task Arrangement Module Constants
 // ============================================================
 const TASK_SS_ID = "1UBg1Ake18cFp6gj0jKRX1Y9GJ0VL1pY5aXK-UoCeAY0";
-const TASK_DAILY_STAFF_SHEET = "DailyStaff";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
 const TASK_TEMPLATES_SHEET = "DailyTemplates";
-const TASK_NOTIFICATIONS_SHEET = "TaskNotifications";
 const TASK_LOGS_SHEET = "TaskLogs";
 const TASK_CONFIG_SHEET = "TaskConfig";
 const TASK_PERMISSION_COL = 62; // Column BK (0-indexed)
@@ -11624,17 +11622,6 @@ function loadTodayStaffForSelect(dateStr) {
         users.push({ id: uid, text: (s.name || sapID) + (s.workshop ? ' [' + s.workshop + ']' : '') });
       }
     });
-    // Fallback 2: DailyStaff table
-    if (staff.length === 0) {
-      const dailyResult = JSON.parse(loadDailyStaffByDate(dateStr));
-      const dailyStaff = dailyResult.success ? dailyResult.data : [];
-      dailyStaff.forEach(function (s) {
-        if (s.sapID && !seen[s.sapID]) {
-          seen[s.sapID] = true;
-          users.push({ id: s.sapID, text: s.sapID + (s.shift ? ' [' + s.shift + ']' : '') });
-        }
-      });
-    }
     var result = JSON.stringify(users);
     try { staffCache.put(staffCacheKey, result, 1800); } catch (e) { /* 静默跳过 */ }
     return result;
@@ -11747,34 +11734,6 @@ function loadAttendanceSync(dateStr) {
       });
     }
 
-    return JSON.stringify({ success: true, data: result });
-  } catch (e) {
-    return JSON.stringify({ success: false, message: e.message });
-  }
-}
-
-function loadDailyStaffByDate(dateStr) {
-  try {
-    const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_DAILY_STAFF_SHEET);
-    if (!ws) return JSON.stringify({ success: true, data: [] });
-    const data = ws.getDataRange().getValues();
-    const result = [];
-    for (let i = 1; i < data.length; i++) {
-      const rowDate = data[i][1] instanceof Date
-        ? Utilities.formatDate(data[i][1], Session.getScriptTimeZone(), "yyyy-MM-dd")
-        : String(data[i][1] || '');
-      if (rowDate === dateStr) {
-        result.push({
-          staffID: String(data[i][0] || ''),
-          date: rowDate,
-          sapID: String(data[i][2] || ''),
-          attendanceStatus: String(data[i][3] || ''),
-          workRole: String(data[i][4] || ''),
-          shift: String(data[i][5] || ''),
-          remark: String(data[i][6] || '')
-        });
-      }
-    }
     return JSON.stringify({ success: true, data: result });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
@@ -12252,11 +12211,6 @@ function loadTodayDashboardData(date, sapID) {
       staffResult = JSON.parse(loadIMStaffByDate(date));
       staff = staffResult.success ? staffResult.data : [];
     }
-    // Fallback 2: DailyStaff table
-    if (staff.length === 0) {
-      const fallbackStaff = JSON.parse(loadDailyStaffByDate(date));
-      staff = fallbackStaff.success ? fallbackStaff.data : [];
-    }
     // 只保留在岗人员，过滤掉病假/休息/年假等非在岗状态
     staff = staff.filter(function(s) {
       var status = (s.attendanceStatus || '').trim();
@@ -12468,20 +12422,6 @@ function loadResourceGanttData(startDate, daysCount) {
       }
     }
 
-    // Fallback: dates with no IM data → loadDailyStaffByDate (rare cold path)
-    days.forEach(function (date) {
-      if (staffByDate[date].length > 0) return;
-      try {
-        const dailyResult = JSON.parse(loadDailyStaffByDate(date));
-        const staff = dailyResult.success ? dailyResult.data : [];
-        staffByDate[date] = staff;
-        staff.forEach(function (s) {
-          const key = String(s.sapID || s.name || '').trim();
-          if (!key) return;
-          staffLookup[key] = Object.assign({}, userMap[key] || {}, s);
-        });
-      } catch (e) {}
-    });
     } // end if (!hasAttendanceData)
 
     // ---- 优化: 用 loadAllPMTasks 一次性读取保养任务，不再按天循环 ----
