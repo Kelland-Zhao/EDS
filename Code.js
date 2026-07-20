@@ -12497,6 +12497,33 @@ function loadResourceGanttData(startDate, daysCount) {
       });
     });
 
+    // ---- 补充考勤但无任务的人员（空闲标记） ----
+    Object.keys(staffLookup).forEach(function (key) {
+      const staff = staffLookup[key];
+      // 无 internalGroup 的人不在项目管理范围内，跳过
+      if (!staff.internalGroup) return;
+      // 检查是否已在任何分组中（已有任务的人不重复添加）
+      let alreadyExists = false;
+      Object.keys(groupMap).forEach(function (gk) {
+        if (groupMap[gk].people[key]) alreadyExists = true;
+      });
+      if (alreadyExists) return;
+
+      const groupKey = inferResourceGroup_(staff, null);
+      if (!groupMap[groupKey]) {
+        groupMap[groupKey] = { key: groupKey, name: groupKey, en: groupKey, people: {}, dailyCounts: {} };
+        days.forEach(function (d) { groupMap[groupKey].dailyCounts[d] = 0; });
+      }
+      groupMap[groupKey].people[key] = {
+        sapID: key,
+        name: staff.name || key,
+        workshop: staff.workshop || '',
+        process: staff.process || '',
+        hasTasks: false,
+        tasks: []
+      };
+    });
+
     const groups = Object.keys(groupMap).map(function (key) {
       const group = groupMap[key];
       return {
