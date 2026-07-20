@@ -12296,6 +12296,9 @@ function inferResourceGroup_(person, task) {
   // 优先使用 userID 表 BL 列直接指定的内部组别
   if (person && person.internalGroup) {
     const ig = person.internalGroup;
+    // BL列值到预定义 group key 的直接映射
+    const blToGroup = { 'TB1': 'tb1', 'TB2': 'tb2' };
+    if (blToGroup[ig]) return blToGroup[ig];
     const defs = getResourceGroupDefs_();
     for (let d = 0; d < defs.length; d++) {
       if (ig === defs[d].name || ig === defs[d].key || ig === defs[d].en) return defs[d].key;
