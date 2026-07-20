@@ -125,8 +125,8 @@ function finalInit(usersData) {
       { data: 'status', render: function (d) { return '<span class="' + (STATUS_CLASS[d] || '') + '">' + (d || '') + '</span>'; } },
       { data: 'title' },
       { data: 'taskType', render: function (d, type, row) {
-        if (d === '保养' && (row.createdBy === 'PM Module' || row.createdBy === 'PM Plan')) return '保养（常规）';
-        if (d === '非常规保养') return '非常规保养';
+        if (d === '保养' && (row.createdBy === 'PM Module' || row.createdBy === 'PM Plan')) return '保养';
+        if (d === '非常规保养') return '保养（非常规）';
         return d;
       }},
       { data: 'planStartDate' },
