@@ -124,7 +124,11 @@ function finalInit(usersData) {
       { data: 'priority', render: function (d) { return '<span class="' + (PRIORITY_CLASS[d] || '') + '" style="font-size:10px;">' + (d || '') + '</span>'; } },
       { data: 'status', render: function (d) { return '<span class="' + (STATUS_CLASS[d] || '') + '">' + (d || '') + '</span>'; } },
       { data: 'title' },
-      { data: 'taskType' },
+      { data: 'taskType', render: function (d, type, row) {
+        if (d === '保养' && (row.createdBy === 'PM Module' || row.createdBy === 'PM Plan')) return '保养（常规）';
+        if (d === '非常规保养') return '非常规保养';
+        return d;
+      }},
       { data: 'planStartDate' },
       { data: 'dueDate' },
       { data: null, render: function (d, type, row) { return (row.ownerNames && row.ownerNames.length > 0 ? row.ownerNames : row.owners || []).join(', '); } },
@@ -378,7 +382,7 @@ function openTaskModal(taskID) {
     $('#editTaskID').val('');
     $('#taskTitle').val('').prop('readonly', false);
     $('#taskDescription').val('').prop('readonly', false);
-    $('#taskType').val('保养').prop('disabled', false);
+    $('#taskType').val('非常规保养').prop('disabled', false);
     $('#taskPriority').val('中').prop('disabled', false);
     $('#taskStatus').val('未开始').prop('disabled', false);
     $('#taskPlanStart').val(new Date().toISOString().split('T')[0]).prop('readonly', false);
