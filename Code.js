@@ -11558,6 +11558,22 @@ function loadUserListForSelect() {
 }
 
 // 人员姓名→SAPID 映射（全局缓存，2小时有效，多个函数复用）
+// sapID → 人名 反向映射（与 getNameToSapMap_ 互补，共用同一缓存键）
+function getSapToNameMap_() {
+  try {
+    var nameToSap = getNameToSapMap_();
+    var map = {};
+    Object.keys(nameToSap).forEach(function (name) {
+      var sid = nameToSap[name];
+      if (sid && !map[sid]) map[sid] = name;
+    });
+    return map;
+  } catch (e) {
+    console.error('getSapToNameMap_ error: ' + e.message);
+    return {};
+  }
+}
+
 function getNameToSapMap_() {
   try {
     var cache = CacheService.getScriptCache();
@@ -11788,19 +11804,42 @@ function loadTasks(filterJSON) {
       if (!taskID) continue;
       if (!memberMap[taskID]) memberMap[taskID] = { owners: [], collaborators: [], ownerNames: [], collaboratorNames: [] };
       const rawId = String(memberData[i][2] || '').trim();
-      // Parse "Name|SAPID" format (backward-compat: bare "SAPID" → name stays empty)
+      // Parse "Name|SAPID" format (backward-compat: bare "SAPID" → resolve name below)
       const pipeIdx = rawId.indexOf('|');
       const memberName = pipeIdx > 0 ? rawId.substring(0, pipeIdx) : '';
       const sapID = pipeIdx > 0 ? rawId.substring(pipeIdx + 1) : rawId;
       const role = String(memberData[i][3] || '').trim();
       if (role === 'owner') {
         memberMap[taskID].owners.push(sapID);
-        if (memberName) memberMap[taskID].ownerNames.push(memberName);
+        memberMap[taskID].ownerNames.push(memberName || null); // placeholder for resolve below
       } else if (role === 'collaborator') {
         memberMap[taskID].collaborators.push(sapID);
-        if (memberName) memberMap[taskID].collaboratorNames.push(memberName);
+        memberMap[taskID].collaboratorNames.push(memberName || null);
       }
     }
+
+    // Resolve bare SAP IDs to names for backward-compatible display
+    var sapToName = null;
+    Object.keys(memberMap).forEach(function (tid) {
+      var m = memberMap[tid];
+      // Resolve ownerNames
+      for (var j = 0; j < m.ownerNames.length; j++) {
+        if (!m.ownerNames[j]) {
+          if (!sapToName) sapToName = getSapToNameMap_();
+          m.ownerNames[j] = sapToName[m.owners[j]] || '';
+        }
+      }
+      m.ownerNames = m.ownerNames.filter(Boolean);
+      // Resolve collaboratorNames
+      for (var k = 0; k < m.collaboratorNames.length; k++) {
+        if (!m.collaboratorNames[k]) {
+          if (!sapToName) sapToName = getSapToNameMap_();
+          m.collaboratorNames[k] = sapToName[m.collaborators[k]] || '';
+        }
+      }
+      m.collaboratorNames = m.collaboratorNames.filter(Boolean);
+    });
+
     const result = [];
     for (let i = 1; i < taskData.length; i++) {
       const taskID = String(taskData[i][0] || '').trim();
