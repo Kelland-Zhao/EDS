@@ -11575,7 +11575,7 @@ function getNameToSapMap_() {
         if (nm && sid) map[nm] = sid;
       }
     }
-    cache.put(key, JSON.stringify(map), 7200); // 2小时
+    try { cache.put(key, JSON.stringify(map), 7200); } catch (e) { /* 静默跳过 */ }
     return map;
   } catch (e) {
     console.error('getNameToSapMap_ error: ' + e.message);
@@ -11619,7 +11619,7 @@ function loadTodayStaffForSelect(dateStr) {
       });
     }
     var result = JSON.stringify(users);
-    staffCache.put(staffCacheKey, result, 1800); // 30分钟缓存
+    try { staffCache.put(staffCacheKey, result, 1800); } catch (e) { /* 静默跳过 */ }
     return result;
   } catch (e) {
     return JSON.stringify({ error: e.message });
@@ -11864,7 +11864,7 @@ function loadTasks(filterJSON) {
       return (a.dueDate || '').localeCompare(b.dueDate || '');
     });
     const jsonResult = JSON.stringify({ success: true, data: result });
-    cache.put(cacheKey, jsonResult, 300); // 5分钟缓存
+    try { cache.put(cacheKey, jsonResult, 300); } catch (e) { /* 静默跳过 */ }
     return jsonResult;
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
@@ -11982,7 +11982,7 @@ function loadAllPMTasks(filterJSON) {
       });
     }
     var jsonResult = JSON.stringify({ success: true, data: allPM });
-    cache.put(cacheKey, jsonResult, 300); // 5分钟缓存
+    try { cache.put(cacheKey, jsonResult, 300); } catch (e) { /* 缓存过大时静默跳过 */ }
     return jsonResult;
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
