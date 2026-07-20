@@ -263,13 +263,13 @@
   
   console.log(`📊 数据统计：共加载 ${data.length} 条保养计划记录`);
   
-  // 2024年新增：处理日期范围提示信息
-  // 检查是否有前8周或后4周的数据，如果没有则显示提示
+  // 处理日期范围提示信息
+  // 检查是否有前20周或后4周的数据，如果没有则显示提示
   if (obj.DateRange) {
     showDateRangeInfo(obj.DateRange);
-    let descHtml = 
-      '<div>当前显示的保养计划日期范围为<strong>前12周</strong>至<strong>后4周</strong>：' + obj.DateRange.startDate + ' 至 ' + obj.DateRange.endDate + '</div>' +
-      '<div>The PM plan date range displayed is from <strong>12 weeks before</strong> to <strong>4 weeks after</strong>: ' + obj.DateRange.startDate + ' to ' + obj.DateRange.endDate + '</div>';
+    let descHtml =
+      '<div>当前显示的保养计划日期范围为<strong>前20周</strong>至<strong>后4周</strong>：' + obj.DateRange.startDate + ' 至 ' + obj.DateRange.endDate + '</div>' +
+      '<div>The PM plan date range displayed is from <strong>20 weeks before</strong> to <strong>4 weeks after</strong>: ' + obj.DateRange.startDate + ' to ' + obj.DateRange.endDate + '</div>';
     $('#dateRangeDescription').html(descHtml).show();
   }
   

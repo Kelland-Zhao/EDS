@@ -1801,9 +1801,9 @@ function getPlan_weekly() {
     let currentWeekSunday = new Date(today);
     currentWeekSunday.setDate(today.getDate() - currentDayOfWeek);
 
-    // 计算前12周的周日
-    let twelveWeeksBefore = new Date(currentWeekSunday);
-    twelveWeeksBefore.setDate(currentWeekSunday.getDate() - 84);
+    // 计算前20周的周日（覆盖到2026/3/1左右）
+    let twentyWeeksBefore = new Date(currentWeekSunday);
+    twentyWeeksBefore.setDate(currentWeekSunday.getDate() - 140);
 
     // 计算后4周的周六
     let fourWeeksAfter = new Date(currentWeekSunday);
@@ -1812,7 +1812,7 @@ function getPlan_weekly() {
     const TIMEZONE = "Asia/Shanghai";
     const DATE_FORMAT = "yyyy-MM-dd";
     let startDateStr = Utilities.formatDate(
-      twelveWeeksBefore,
+      twentyWeeksBefore,
       TIMEZONE,
       DATE_FORMAT
     );
