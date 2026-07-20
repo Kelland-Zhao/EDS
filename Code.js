@@ -11603,7 +11603,7 @@ function loadTodayStaffForSelect(dateStr) {
   try {
     // 人员列表缓存（按天，30分钟有效）
     var staffCache = CacheService.getScriptCache();
-    var staffCacheKey = 'StaffSelect_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMdd');
+    var staffCacheKey = 'StaffSelect_v2_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMdd');
     var staffCached = staffCache.get(staffCacheKey);
     if (staffCached) return staffCached;
     // 优先从 AttendanceSync 读取当天在岗人员
@@ -11787,7 +11787,7 @@ function loadTasks(filterJSON) {
 
     // 缓存：按小时缓存手动任务列表（forceRefresh 时跳过缓存）
     var cache = CacheService.getScriptCache();
-    var cacheKey = 'TaskList_Manual_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMddHH');
+    var cacheKey = 'TaskList_Manual_v2_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMddHH');
     if (!filter._forceRefresh) {
       var cached = cache.get(cacheKey);
       if (cached) return cached;
@@ -11926,7 +11926,7 @@ function loadAllPMTasks(filterJSON) {
 
     // 缓存：按天缓存PM任务列表（数据量大，forceRefresh 时跳过缓存）
     var cache = CacheService.getScriptCache();
-    var cacheKey = 'TaskList_PM_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMdd');
+    var cacheKey = 'TaskList_PM_v2_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMdd');
     if (!filter._forceRefresh) {
       var cached = cache.get(cacheKey);
       if (cached) return cached;
