@@ -509,6 +509,10 @@ function saveTaskFromModal() {
           Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
         }
       })
+      .withFailureHandler(function (error) {
+        Swal.close();
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('网络错误: ' + error.message, 'Network error: ' + error.message) });
+      })
       .createTask(JSON.stringify(taskData), JSON.stringify(members), currentSapID, currentUserName);
   }
 }

@@ -344,16 +344,21 @@ function viewTask(taskID) {
 function openTaskModal(taskData) {
   $('#taskModalTitle').text('新建任务 / New Task');
   $('#editTaskID').val('');
-  $('#taskTitle').val('');
-  $('#taskDescription').val('');
-  $('#taskType').val('保养');
-  $('#taskPriority').val('中');
-  $('#taskPlanStart').val(currentDateStr);
-  $('#taskDueDate').val('');
-  $('#taskRemark').val('');
-  $('#taskOwner').val(null).trigger('change');
-  $('#taskCollaborators').val(null).trigger('change');
+  $('#taskTitle').val('').prop('readonly', false);
+  $('#taskDescription').val('').prop('readonly', false);
+  $('#taskType').val('保养').prop('disabled', false);
+  $('#taskPriority').val('中').prop('disabled', false);
+  $('#taskStatus').val('未开始').prop('disabled', false);
+  $('#taskProcess').val('').prop('disabled', false);
+  $('#taskPlanStart').val(currentDateStr).prop('readonly', false);
+  $('#taskDueDate').val('').prop('readonly', false);
+  $('#taskRemark').val('').prop('readonly', false);
+  $('#taskOwner').val(null).trigger('change').prop('disabled', false);
+  $('#taskCollaborators').val(null).trigger('change').prop('disabled', false);
   $('#btnSaveTask').show();
+  $('#btnCompleteTask').hide();
+  $('#btnCancelTask').hide();
+  $('#taskLogsContent').html('新任务，暂无日志 / New task, no logs yet');
   $('#taskModal').modal('show');
 }
 
@@ -368,6 +373,7 @@ function saveTask() {
     description: $('#taskDescription').val().trim(),
     taskType: $('#taskType').val(),
     priority: $('#taskPriority').val(),
+    status: $('#taskStatus').val(),
     process: $('#taskProcess').val(),
     planStartDate: $('#taskPlanStart').val(),
     dueDate: $('#taskDueDate').val(),
