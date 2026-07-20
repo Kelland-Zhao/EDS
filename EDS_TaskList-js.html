@@ -380,7 +380,7 @@ function openTaskModal(taskID) {
     $('#taskDescription').val('').prop('readonly', false);
     $('#taskType').val('保养').prop('disabled', false);
     $('#taskPriority').val('中').prop('disabled', false);
-    $('#taskStatus').val('未开始').prop('disabled', true);
+    $('#taskStatus').val('未开始').prop('disabled', false);
     $('#taskPlanStart').val(new Date().toISOString().split('T')[0]).prop('readonly', false);
     $('#taskDueDate').val('').prop('readonly', false);
     $('#taskRemark').val('').prop('readonly', false);
