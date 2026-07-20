@@ -101,7 +101,7 @@ function renderGantt() {
       (g.people || []).forEach(function (p) {
         const key = p.sapID || p.name;
         if (!merged.people[key]) {
-          merged.people[key] = { sapID: p.sapID, name: p.name, workshop: p.workshop, process: p.process, groupName: g.name, tasks: [] };
+          merged.people[key] = { sapID: p.sapID, name: p.name, workshop: p.workshop, process: p.process, hasTasks: p.hasTasks, groupName: g.name, tasks: [] };
         }
         merged.people[key].tasks = merged.people[key].tasks.concat(p.tasks || []);
       });
