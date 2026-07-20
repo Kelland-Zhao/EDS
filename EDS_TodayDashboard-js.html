@@ -274,7 +274,7 @@ function applyProcessFilter() {
     overdueTasks.forEach(function (t) {
       html += '<div class="overdue-task" onclick="viewTask(\'' + t.taskID + '\')">'
         + '<div class="ot-title">' + (t.title || t.taskID) + '</div>'
-        + '<div class="ot-due">截止: ' + (t.dueDate || '--') + ' | ' + (t.priority || '') + ' | 负责人: ' + (t.owners.join(', ') || '--') + '</div>'
+        + '<div class="ot-due">截止: ' + (t.dueDate || '--') + ' | ' + (t.priority || '') + ' | 负责人: ' + ((t.ownerNames && t.ownerNames.length > 0 ? t.ownerNames : t.owners).join(', ') || '--') + '</div>'
         + '</div>';
     });
     $('#overdueList').html(html);

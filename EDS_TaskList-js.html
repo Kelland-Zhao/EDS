@@ -128,7 +128,7 @@ function finalInit(usersData) {
       { data: 'planStartDate' },
       { data: 'dueDate' },
       { data: null, render: function (d, type, row) { return (row.ownerNames && row.ownerNames.length > 0 ? row.ownerNames : row.owners || []).join(', '); } },
-      { data: 'collaborators', render: function (d) { return (d || []).join(', '); } },
+      { data: null, render: function (d, type, row) { return (row.collaboratorNames && row.collaboratorNames.length > 0 ? row.collaboratorNames : row.collaborators || []).join(', '); } },
       { data: null, orderable: false, width: '160px', render: function (d, type, row) {
         var btnStyle = 'font-size:0.7rem;width:70px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;';
         var html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';

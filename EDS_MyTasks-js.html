@@ -40,7 +40,7 @@ $(document).ready(function () {
       { data: 'priority', render: function (d) { return '<span class="' + (PRIORITY_CLASS[d] || '') + '" style="font-size:10px;">' + (d || '') + '</span>'; } },
       { data: 'status', render: function (d) { return '<span class="' + (STATUS_CLASS[d] || '') + '">' + (d || '') + '</span>'; } },
       { data: 'dueDate' },
-      { data: 'collaborators', render: function (d) { return (d || []).join(', '); } },
+      { data: null, render: function (d, type, row) { return (row.collaboratorNames && row.collaboratorNames.length > 0 ? row.collaboratorNames : row.collaborators || []).join(', '); } },
       { data: null, orderable: false, width: '120px', render: function (d, type, row) {
         let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
         html += '<button class="btn btn-sm btn-outline-primary view-task-btn" data-tid="' + row.taskID + '" style="font-size:10px;padding:2px 6px;"><i class="bi bi-eye"></i></button>';
@@ -68,7 +68,7 @@ $(document).ready(function () {
       { data: 'priority', render: function (d) { return '<span class="' + (PRIORITY_CLASS[d] || '') + '" style="font-size:10px;">' + (d || '') + '</span>'; } },
       { data: 'status', render: function (d) { return '<span class="' + (STATUS_CLASS[d] || '') + '">' + (d || '') + '</span>'; } },
       { data: 'dueDate' },
-      { data: 'owners', render: function (d) { return (d || []).join(', '); } },
+      { data: null, render: function (d, type, row) { return (row.ownerNames && row.ownerNames.length > 0 ? row.ownerNames : row.owners || []).join(', '); } },
       { data: null, orderable: false, width: '120px', render: function (d, type, row) {
         let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
         html += '<button class="btn btn-sm btn-outline-primary view-task-btn" data-tid="' + row.taskID + '" style="font-size:10px;padding:2px 6px;"><i class="bi bi-eye"></i></button>';

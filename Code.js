@@ -11601,10 +11601,11 @@ function loadTodayStaffForSelect(dateStr) {
       staff = staffResult.success ? staffResult.data : [];
     }
     staff.forEach(function (s) {
-      const key = s.sapID || s.name;
-      if (key && !seen[key]) {
-        seen[key] = true;
-        users.push({ id: key, text: (s.name || key) + (s.workshop ? ' [' + s.workshop + ']' : '') });
+      const sapID = s.sapID || s.name;
+      if (sapID && !seen[sapID]) {
+        seen[sapID] = true;
+        const uid = s.name ? s.name + '|' + sapID : sapID;
+        users.push({ id: uid, text: (s.name || sapID) + (s.workshop ? ' [' + s.workshop + ']' : '') });
       }
     });
     // Fallback 2: DailyStaff table
@@ -11780,18 +11781,24 @@ function loadTasks(filterJSON) {
     if (!tasksWs) return JSON.stringify({ success: true, data: [] });
     const taskData = tasksWs.getDataRange().getValues();
     const memberData = membersWs ? membersWs.getDataRange().getValues() : [];
-    // Build member lookup: TaskID -> { owners: [...], collaborators: [...] }
+    // Build member lookup: TaskID -> { owners: [...], collaborators: [...], ownerNames: [...], collaboratorNames: [...] }
     const memberMap = {};
     for (let i = 1; i < memberData.length; i++) {
       const taskID = String(memberData[i][1] || '').trim();
       if (!taskID) continue;
-      if (!memberMap[taskID]) memberMap[taskID] = { owners: [], collaborators: [] };
-      const sapID = String(memberData[i][2] || '').trim();
+      if (!memberMap[taskID]) memberMap[taskID] = { owners: [], collaborators: [], ownerNames: [], collaboratorNames: [] };
+      const rawId = String(memberData[i][2] || '').trim();
+      // Parse "Name|SAPID" format (backward-compat: bare "SAPID" → name stays empty)
+      const pipeIdx = rawId.indexOf('|');
+      const memberName = pipeIdx > 0 ? rawId.substring(0, pipeIdx) : '';
+      const sapID = pipeIdx > 0 ? rawId.substring(pipeIdx + 1) : rawId;
       const role = String(memberData[i][3] || '').trim();
       if (role === 'owner') {
         memberMap[taskID].owners.push(sapID);
+        if (memberName) memberMap[taskID].ownerNames.push(memberName);
       } else if (role === 'collaborator') {
         memberMap[taskID].collaborators.push(sapID);
+        if (memberName) memberMap[taskID].collaboratorNames.push(memberName);
       }
     }
     const result = [];
@@ -11830,7 +11837,7 @@ function loadTasks(filterJSON) {
         const allMembers = (mems ? mems.owners.concat(mems.collaborators) : []);
         if (allMembers.indexOf(filter.ownerSAPID) === -1) continue;
       }
-      const mems = memberMap[taskID] || { owners: [], collaborators: [] };
+      const mems = memberMap[taskID] || { owners: [], collaborators: [], ownerNames: [], collaboratorNames: [] };
       result.push({
         taskID: taskID,
         title: String(taskData[i][1] || ''),
@@ -11851,6 +11858,8 @@ function loadTasks(filterJSON) {
         process: String(taskData[i][14] || ''),
         owners: mems.owners,
         collaborators: mems.collaborators,
+        ownerNames: mems.ownerNames || [],
+        collaboratorNames: mems.collaboratorNames || [],
         createdAt: String(taskData[i][12] || ''),
         updatedAt: String(taskData[i][13] || '')
       });
