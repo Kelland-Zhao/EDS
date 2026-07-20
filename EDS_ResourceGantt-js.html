@@ -4,12 +4,21 @@ const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;
 
 let resourceData = null;
 let activeGroupKey = '';
+let showAllPersonnel = true;
 
 $(document).ready(function () {
   $('#userName').text(sessionStorage.getItem('Name') || '--');
   $('#startDate').val(formatDateYMD(new Date()));
   $('#refreshBtn').on('click', loadResourceGantt);
   $('#startDate, #daysCount').on('change', loadResourceGantt);
+  $('#toggleIdleBtn').on('click', function () {
+    showAllPersonnel = !showAllPersonnel;
+    $(this).toggleClass('active', showAllPersonnel);
+    $(this).html(showAllPersonnel
+      ? '<i class="bi bi-people-fill"></i> 全部人员<br><small>All Personnel</small>'
+      : '<i class="bi bi-person-check-fill"></i> 仅任务人员<br><small>With Tasks</small>');
+    renderGantt();
+  });
   loadResourceGantt();
 });
 
@@ -113,7 +122,16 @@ function renderGantt() {
     return;
   }
 
-  const people = Object.values(merged.people || {}).filter(function (p) { return (p.tasks || []).length > 0; });
+  let people = Object.values(merged.people || {});
+  if (!showAllPersonnel) {
+    people = people.filter(function (p) { return (p.tasks || []).length > 0; });
+  }
+  // 排序：有任务在上，空闲在下
+  people.sort(function (a, b) {
+    const aHas = (a.tasks || []).length > 0 ? 1 : 0;
+    const bHas = (b.tasks || []).length > 0 ? 1 : 0;
+    return bHas - aHas;
+  });
   let html = '<div class="gantt-grid" style="--day-count:' + days.length + ';">';
   html += '<div class="gantt-head first">人员 / 日期</div>';
   days.forEach(function (d) { html += '<div class="gantt-head">' + shortDate(d) + '</div>'; });
@@ -125,14 +143,17 @@ function renderGantt() {
   });
 
   if (people.length === 0) {
-    html += '</div><div class="empty-state">当前组暂无任务 / No tasks in this group</div>';
+    html += '</div><div class="empty-state">当前组暂无人员 / No personnel in this group</div>';
     $('#ganttRoot').html(html);
     return;
   }
 
   people.forEach(function (person) {
     const groupLabel = person.groupName ? '<small style="color:#E60012;">' + escapeHtml(person.groupName) + '</small>' : '';
+    const idleLabel = !person.hasTasks && (person.tasks || []).length === 0
+      ? ' <span style="color:#fd7e14;font-size:11px;">空闲 <small>Idle</small></span>' : '';
     html += '<div class="gantt-name">' + escapeHtml(person.name || person.sapID || '--')
+      + idleLabel
       + groupLabel
       + '<small>' + escapeHtml([person.workshop, person.process].filter(Boolean).join(' / ')) + '</small></div>';
     html += '<div class="person-lane">';
