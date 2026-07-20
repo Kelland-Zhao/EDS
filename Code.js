@@ -12476,6 +12476,7 @@ function loadResourceGanttData(startDate, daysCount) {
             name: person.name || memberID,
             workshop: person.workshop || task.workshop || '',
             process: person.process || task.process || '',
+            hasTasks: true,
             tasks: []
           };
         }
