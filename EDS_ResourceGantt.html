@@ -41,9 +41,8 @@
       padding:7px; min-height:34px; box-sizing:border-box;
     }
     .gantt-head { background:#E60012; color:#fff; font-weight:700; text-align:center; position:sticky; top:0; z-index:4; }
-    .gantt-head.first, .gantt-name { position:sticky; left:0; z-index:5; }
-    .gantt-head.first { text-align:left; }
-    .gantt-name { background:#fff; border-left:3px solid #E60012; font-weight:700; }
+    .gantt-head.first { position:sticky; top:0; left:0; z-index:6; text-align:left; }
+    .gantt-name { background:#fff; border-left:3px solid #E60012; font-weight:700; font-size:13px; position:sticky; left:0; z-index:5; }
     .gantt-name small { display:block; color:#777; font-weight:400; margin-top:2px; }
     .gantt-count { background:#f8f9fa; text-align:center; font-weight:700; color:#555; }
     .gantt-count.hot { background:#fff5f5; color:#E60012; border:1px solid #E60012; }
@@ -72,6 +71,7 @@
     .task-test { background:#6f42c1; }
     .task-done { background:#198754; }
     .task-wait { background:#0dcaf0; color:#033; }
+    .task-follow { background:#6c757d; }
     .task-bar { position:relative; }
     .task-on-leave::after {
       content:''; position:absolute; inset:0;
@@ -123,6 +123,7 @@
       <span><span class="dot" style="background:#6f42c1;"></span> 测试 / Test</span>
       <span><span class="dot" style="background:#198754;"></span> 已完成 / Done</span>
       <span><span class="dot" style="background:#0dcaf0;"></span> 等待中 / Waiting</span>
+      <span><span class="dot" style="background:#6c757d;"></span> 跟班 / On Duty</span>
       <span><span class="dot" style="background:#e9ecef;border:1px solid #ccc;"></span> 休假 / Leave</span>
     </div>
 

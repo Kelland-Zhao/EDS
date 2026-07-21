@@ -12333,6 +12333,7 @@ function loadResourceGanttData(startDate, daysCount) {
             workshop: String(attData[i][5] || "").trim(),
             attendanceStatus: String(attData[i][8] || "").trim() || "在岗",
             workRole: String(attData[i][3] || "").trim(),
+            team: String(attData[i][4] || "").trim(),
             shift: String(attData[i][6] || "").trim(),
             hours: parseFloat(attData[i][7]) || 0
           };
@@ -12460,6 +12461,8 @@ function loadResourceGanttData(startDate, daysCount) {
             name: person.name || memberID,
             workshop: person.workshop || task.workshop || '',
             process: person.process || task.process || '',
+            team: person.team || person.workRole || '',
+            shift: person.shift || '',
             hasTasks: true,
             tasks: [],
             dailyStatus: dailyStatusByPerson[memberID] || {}
@@ -12504,10 +12507,28 @@ function loadResourceGanttData(startDate, daysCount) {
         name: staff.name || key,
         workshop: staff.workshop || '',
         process: staff.process || '',
+        team: staff.team || staff.workRole || '',
+        shift: staff.shift || '',
         hasTasks: false,
         tasks: [],
         dailyStatus: dailyStatusByPerson[key] || {}
       };
+    });
+
+    // ---- 自动跟班：A/B/C 班在岗人员每天生成独立"跟班"任务 ----
+    Object.keys(groupMap).forEach(function (gk) {
+      const group = groupMap[gk];
+      Object.keys(group.people).forEach(function (pid) {
+        const person = group.people[pid];
+        const team = String(person.team || '').trim().toUpperCase();
+        if (['A', 'B', 'C'].indexOf(team) === -1) return;
+        const ds = person.dailyStatus || {};
+        days.forEach(function (d) {
+          if (ds[d] === '在岗') {
+            person.tasks.push({ taskID: 'follow-' + pid + '-' + d, title: '跟班', taskType: 'follow', priority: '', status: '', start: d, end: d, role: 'owner' });
+          }
+        });
+      });
     });
 
     const groups = Object.keys(groupMap).map(function (key) {

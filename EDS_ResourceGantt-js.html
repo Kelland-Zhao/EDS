@@ -101,7 +101,7 @@ function renderGantt() {
       (g.people || []).forEach(function (p) {
         const key = p.sapID || p.name;
         if (!merged.people[key]) {
-          merged.people[key] = { sapID: p.sapID, name: p.name, workshop: p.workshop, process: p.process, hasTasks: p.hasTasks, dailyStatus: p.dailyStatus || {}, groupName: g.name, tasks: [] };
+          merged.people[key] = { sapID: p.sapID, name: p.name, workshop: p.workshop, process: p.process, team: p.team, shift: p.shift, hasTasks: p.hasTasks, dailyStatus: p.dailyStatus || {}, groupName: g.name, tasks: [] };
         }
         merged.people[key].tasks = merged.people[key].tasks.concat(p.tasks || []);
       });
@@ -152,8 +152,17 @@ function renderGantt() {
     const groupLabel = person.groupName ? '<small style="color:#E60012;">' + escapeHtml(person.groupName) + '</small>' : '';
     const idleLabel = !person.hasTasks && (person.tasks || []).length === 0
       ? ' <span style="color:#fd7e14;font-size:11px;">空闲 <small>Idle</small></span>' : '';
+    const shiftShort = person.shift ? person.shift.replace('班','') : '';
+    const shiftBadgeColors = { '早': 'background:#fff3cd;color:#856404', '中': 'background:#d1e7dd;color:#0f5132', '夜': 'background:#cfe2ff;color:#084298' };
+    const shiftBadge = shiftShort
+      ? '<span style="' + (shiftBadgeColors[shiftShort] || 'background:#e9ecef;color:#495057') + ';padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;">' + shiftShort + '</span>'
+      : '';
+    const teamText = person.team ? '<span style="color:#0d6efd;">' + escapeHtml(person.team) + '</span>' : '';
+    const sep = teamText && shiftBadge ? ' ' : '';
+    const teamBadge = (teamText || shiftBadge) ? ' <small style="font-weight:600;">' + teamText + sep + shiftBadge + '</small>' : '';
     html += '<div class="gantt-name">' + escapeHtml(person.name || person.sapID || '--')
       + idleLabel
+      + teamBadge
       + groupLabel
       + '<small>' + escapeHtml([person.workshop, person.process].filter(Boolean).join(' / ')) + '</small></div>';
     html += '<div class="person-lane">';
@@ -218,6 +227,7 @@ function renderGantt() {
 function getTaskClass(task) {
   if (task.status === '已完成') return 'task-done';
   if (task.status === '等待中') return 'task-wait';
+  if (task.taskType === 'follow') return 'task-follow';
   const text = [task.taskType, task.title].join(' ');
   if (text.indexOf('测试') >= 0 || /TEST/i.test(text)) return 'task-test';
   if (text.indexOf('维修') >= 0 || text.indexOf('故障') >= 0) return 'task-cm';
