@@ -699,6 +699,7 @@
 
   function showTablehead(obj) {
     // 防御：服务端异常时 obj 可能为 null/undefined 或包含 error 字段
+    console.log('showTablehead received _v:', obj && obj._v);
     if (!obj || !obj.Head) {
       tableDataLoaded = true;
       if (obj && obj.error) {
