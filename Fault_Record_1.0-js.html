@@ -698,15 +698,10 @@
   }
 
   function showTablehead(obj) {
-    // 防御：服务端异常时 obj 可能为 null/undefined 或包含 error 字段
-    console.log('showTablehead received _v:', obj && obj._v);
     if (!obj || !obj.Head) {
       tableDataLoaded = true;
       if (obj && obj.error) {
-        console.error('getAllshiftData server error:', obj.message);
         Swal.fire({ icon: 'error', title: swalTitle('交接班数据加载失败', 'Shift Data Load Failed'), text: obj.message || '服务端错误' });
-      } else {
-        console.error('showTablehead: invalid data received', obj);
       }
       return;
     }
