@@ -4294,6 +4294,8 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 }
 
 function getAllshiftData() {
+  // DEBUG STUB
+  return { Head: ['编号','班次','机台号'], Content: [{编号:'TEST',班次:'早班',机台号:'#1'}], _v: 'stub' };
   try {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let ss = SpreadsheetApp.openById(id);
