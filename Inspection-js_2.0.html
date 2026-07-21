@@ -1860,8 +1860,21 @@
         }, 300000); // 5分钟超时
 
         // DIAGNOSTIC: 先发一个最简请求验证 google.script.run 通道
+        console.log('DIAG: about to call testChannel...');
+        console.log('DIAG: google.script.run type:', typeof google.script.run);
+        console.log('DIAG: testChannel type:', typeof google.script.run.testChannel);
+
+        // iPad看不到console,用alert验证执行到了这里
+        alert('DIAG: 到达testChannel调用前 / Reached before testChannel call');
+
+        // 先用setTimeout验证iPad异步回调机制
+        setTimeout(function() {
+          console.log('DIAG: setTimeout works on iPad');
+        }, 100);
+
         google.script.run
           .withSuccessHandler(function(testResult) {
+            alert('DIAG test OK: ' + testResult);
             console.log('DIAG test OK:', testResult);
             // 通道正常，继续真实提交
             google.script.run
@@ -1876,6 +1889,7 @@
               .submitInspectionResults(obj, arrPmInfoJson);
           })
           .withFailureHandler(function(testErr) {
+            alert('DIAG channel FAILED: ' + JSON.stringify(testErr));
             // 通道本身失败 — 环境问题
             clearTimeout(timeoutId);
             Swal.close();
