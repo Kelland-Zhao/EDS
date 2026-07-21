@@ -101,7 +101,7 @@ function renderGantt() {
       (g.people || []).forEach(function (p) {
         const key = p.sapID || p.name;
         if (!merged.people[key]) {
-          merged.people[key] = { sapID: p.sapID, name: p.name, workshop: p.workshop, process: p.process, hasTasks: p.hasTasks, groupName: g.name, tasks: [] };
+          merged.people[key] = { sapID: p.sapID, name: p.name, workshop: p.workshop, process: p.process, hasTasks: p.hasTasks, dailyStatus: p.dailyStatus || {}, groupName: g.name, tasks: [] };
         }
         merged.people[key].tasks = merged.people[key].tasks.concat(p.tasks || []);
       });
@@ -167,19 +167,33 @@ function renderGantt() {
       for (let d = sIdx; d <= eIdx; d++) coveredDays[d] = true;
     });
 
-    // 周一到周六的空白天高亮（周日=0 跳过）
+    // 周一到周六的空白天高亮（周日=0 跳过）；非在岗天显示休假标记
     days.forEach(function (d, idx) {
       if (coveredDays[idx]) return;
       const dow = new Date(d + 'T00:00:00').getDay();
       if (dow === 0) return; // 周日跳过
-      html += '<div class="empty-day" style="grid-column:' + (idx + 1) + ';grid-row:1;"></div>';
+      const dayStatus = (person.dailyStatus || {})[d];
+      if (dayStatus && dayStatus !== '在岗') {
+        const abbr = getStatusAbbr(dayStatus);
+        html += '<div class="empty-leave" title="' + escapeHtml(dayStatus) + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">' + abbr + '</div>';
+      } else {
+        html += '<div class="empty-day" style="grid-column:' + (idx + 1) + ';grid-row:1;"></div>';
+      }
     });
 
     (person.tasks || []).forEach(function (task, index) {
       const startIdx = Math.max(0, days.indexOf(task.start));
       const endIdx = days.indexOf(task.end) >= 0 ? days.indexOf(task.end) : days.length - 1;
       if (startIdx < 0 || endIdx < 0 || startIdx >= days.length) return;
-      const cls = getTaskClass(task);
+      let cls = getTaskClass(task);
+      // 检查任务跨度内是否有非在岗天 → 叠加斜线条纹
+      const ds = person.dailyStatus || {};
+      let onLeave = false;
+      for (let di = startIdx; di <= endIdx; di++) {
+        const s = ds[days[di]];
+        if (s && s !== '在岗') { onLeave = true; break; }
+      }
+      if (onLeave) cls += ' task-on-leave';
       html += '<div class="task-bar ' + cls + '" style="grid-column:' + (startIdx + 1) + ' / ' + (endIdx + 2) + ';grid-row:' + ((index % 4) + 1) + ';"'
         + ' title="' + escapeHtml(task.taskID + ' | ' + task.title + ' | ' + task.start + ' ~ ' + task.end) + '">'
         + escapeHtml(String(task.title || '').replace(/^PM:\s*/, '')) + (task.role === 'collaborator' ? ' (协作)' : '') + '</div>';
@@ -197,6 +211,16 @@ function getTaskClass(task) {
   if (text.indexOf('测试') >= 0 || /TEST/i.test(text)) return 'task-test';
   if (text.indexOf('维修') >= 0 || text.indexOf('故障') >= 0) return 'task-cm';
   return 'task-pm';
+}
+
+function getStatusAbbr(status) {
+  if (!status || status === '在岗') return '';
+  if (status.indexOf('休') >= 0) return '休';
+  if (status.indexOf('假') >= 0) return '假';
+  if (status.indexOf('外') >= 0) return '外';
+  if (status.indexOf('训') >= 0) return '训';
+  if (status.indexOf('差') >= 0) return '差';
+  return status.substring(0, 1);
 }
 
 function escapeHtml(value) {

@@ -60,6 +60,7 @@
       margin-bottom:2px;
     }
     .empty-day { background:#fff3cd; border-radius:4px; min-height:22px; }
+    .empty-leave { background:#e9ecef; border-radius:4px; min-height:22px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#6c757d; font-weight:700; }
     .task-bar {
       border-radius:10px; color:#fff; padding:3px 9px; white-space:nowrap;
       overflow:hidden; text-overflow:ellipsis; font-size:11px; line-height:16px;
@@ -70,6 +71,12 @@
     .task-test { background:#6f42c1; }
     .task-done { background:#198754; }
     .task-wait { background:#0dcaf0; color:#033; }
+    .task-bar { position:relative; }
+    .task-on-leave::after {
+      content:''; position:absolute; inset:0;
+      background:repeating-linear-gradient(-45deg, transparent, transparent 4px, rgba(255,255,255,.25) 4px, rgba(255,255,255,.25) 8px);
+      border-radius:inherit; pointer-events:none;
+    }
     .empty-state { color:#adb5bd; text-align:center; padding:28px 0; font-size:13px; }
     .color-legend { display:flex; gap:12px; flex-wrap:wrap; align-items:center; font-size:11px; color:#6c757d; margin-bottom:10px; }
     .color-legend .dot { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:3px; vertical-align:middle; }
@@ -115,6 +122,7 @@
       <span><span class="dot" style="background:#6f42c1;"></span> 测试 / Test</span>
       <span><span class="dot" style="background:#198754;"></span> 已完成 / Done</span>
       <span><span class="dot" style="background:#0dcaf0;"></span> 等待中 / Waiting</span>
+      <span><span class="dot" style="background:#e9ecef;border:1px solid #ccc;"></span> 休假 / Leave</span>
     </div>
 
     <div class="group-tabs" id="groupTabs"></div>

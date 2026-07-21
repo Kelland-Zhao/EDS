@@ -12397,6 +12397,17 @@ function loadResourceGanttData(startDate, daysCount) {
 
     } // end if (!hasAttendanceData)
 
+    // ---- 构建每人每天的考勤状态映射（按天区分休假/在岗） ----
+    const dailyStatusByPerson = {};
+    days.forEach(function (date) {
+      (staffByDate[date] || []).forEach(function (staff) {
+        const key = String(staff.sapID || staff.name).trim();
+        if (!key) return;
+        if (!dailyStatusByPerson[key]) dailyStatusByPerson[key] = {};
+        dailyStatusByPerson[key][date] = staff.attendanceStatus || '在岗';
+      });
+    });
+
     // ---- 优化: 用 loadAllPMTasks 一次性读取保养任务，不再按天循环 ----
     const taskMap = {};
     function addTask_(task) {
@@ -12450,7 +12461,8 @@ function loadResourceGanttData(startDate, daysCount) {
             workshop: person.workshop || task.workshop || '',
             process: person.process || task.process || '',
             hasTasks: true,
-            tasks: []
+            tasks: [],
+            dailyStatus: dailyStatusByPerson[memberID] || {}
           };
         }
         group.people[memberID].tasks.push({
@@ -12493,7 +12505,8 @@ function loadResourceGanttData(startDate, daysCount) {
         workshop: staff.workshop || '',
         process: staff.process || '',
         hasTasks: false,
-        tasks: []
+        tasks: [],
+        dailyStatus: dailyStatusByPerson[key] || {}
       };
     });
 
