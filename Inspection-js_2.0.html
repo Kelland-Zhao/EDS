@@ -1709,6 +1709,8 @@
       if (result.isConfirmed) {
         // iPad诊断：确认回调是否触发
         alert('STEP1: 确认对话框回调已触发 / Confirm callback fired');
+
+        try {
         // 显示提交进度
         Swal.fire({
           title: '正在提交... / Submitting...',
@@ -1719,8 +1721,6 @@
             Swal.showLoading();
           }
         });
-
-        try {
 
         // 构建主要对象
         let obj = {
