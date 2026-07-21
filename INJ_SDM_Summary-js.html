@@ -117,7 +117,9 @@
           Swal.close();
           const result = parseResponse(raw);
           if (!result.success || !result.todayReport) {
+            var selectedDate = $('#ReportDate').val(); // 保留用户选择的日期
             resetForm();
+            $('#ReportDate').val(selectedDate);
             return;
           }
           populateForm(result.todayReport);

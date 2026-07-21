@@ -12714,7 +12714,13 @@ function formatINJSDMDate_(value) {
   }
   const text = String(value).trim();
   const compact = text.match(/^(\d{4})(\d{2})(\d{2})$/);
-  return compact ? compact[1] + '-' + compact[2] + '-' + compact[3] : text.substring(0, 10);
+  if (compact) return compact[1] + '-' + compact[2] + '-' + compact[3];
+  // 尝试解析非 ISO 格式的日期字符串（如 "7/22/2026"、"2026/07/22" 等）
+  const parsed = new Date(text);
+  if (!isNaN(parsed.getTime())) {
+    return Utilities.formatDate(parsed, 'Asia/Hong_Kong', 'yyyy-MM-dd');
+  }
+  return text.substring(0, 10);
 }
 
 function formatINJSDMDateTime_(value) {
