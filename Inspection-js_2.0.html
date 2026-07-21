@@ -1718,6 +1718,8 @@
           }
         });
 
+        try {
+
         // 构建主要对象
         let obj = {
           code: inspectionNo(),                    // 使用inspectionNo函数生成
@@ -1868,6 +1870,18 @@
             handleSubmitError(error);
           })
           .submitInspectionResults(obj, arrPmInfoJson);
+
+        } catch(e) {
+          clearTimeout(timeoutId);
+          Swal.close();
+          console.error('Submit error:', e.message, e.stack);
+          Swal.fire({
+            icon: 'error',
+            title: '提交异常 / Submit Error',
+            text: (e && e.message) || String(e) || '未知错误 / Unknown error',
+            confirmButtonText: '确定 / OK'
+          });
+        }
       }
     });
   }
@@ -1922,13 +1936,13 @@
   function handleSubmitError(error) {
     // 先关闭加载模态框
     Swal.close();
+    console.error('handleSubmitError:', typeof error, error);
 
     Swal.fire({
       icon: 'error',
-      title: '服务器长时间未响应 / Server Timeout',
-      text: '提交过程中发生错误，请重试',
-      confirmButtonText: '确定 / OK',
-      footer: '<p>尝试点击按钮再来一次</p>'
+      title: '提交失败 / Submit Failed',
+      text: (error && error.message) || String(error) || '服务器无响应，请检查网络后重试 / Server not responding, please check network and retry',
+      confirmButtonText: '确定 / OK'
     });
   }
 
