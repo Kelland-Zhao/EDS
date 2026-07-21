@@ -4294,6 +4294,7 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 }
 
 function getAllshiftData() {
+  try {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let ss = SpreadsheetApp.openById(id);
   var head, content;
@@ -4390,6 +4391,10 @@ function getAllshiftData() {
   console.log(contentArray);
 
   return { Head: head, Content: contentArray };
+  } catch(e) {
+    console.error('getAllshiftData error:', e.message, e.stack);
+    return { error: true, message: e.message || 'Unknown error', Head: [], Content: [] };
+  }
 }
 
 function getShiftRowsByPrefix(prefix) {
