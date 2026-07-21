@@ -4301,9 +4301,14 @@ function getAllshiftData() {
   var lc = wsMerged.getLastColumn();
   var head = wsMerged.getRange(1, 1, 1, lc).getValues()[0];
   var oneRow = wsMerged.getRange(2, 1, 1, lc).getValues()[0];
-  return { Head: head, Content: [oneRow], _v: '1row-ok' };
+  // Convert Date objects to strings for serialization
+  var safeRow = oneRow.map(function(cell) {
+    if (cell instanceof Date) return Utilities.formatDate(cell, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    return cell;
+  });
+  return { Head: head, Content: [safeRow], _v: '1row-safe' };
   } catch(e) {
-    return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,50) };
+    return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,60) };
   }
 }
 
