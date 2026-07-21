@@ -4298,11 +4298,13 @@ function getAllshiftData() {
   var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   var ss = SpreadsheetApp.openById(id);
   var wsMerged = getShiftSheet(ss);
-  var lr = wsMerged.getLastRow();
   var lc = wsMerged.getLastColumn();
-  return { Head: [], Content: [], _v: 'lr-' + lr + '-lc-' + lc };
+  var head = wsMerged.getRange(1, 1, 1, lc).getValues()[0];
+  var maxRows = Math.min(wsMerged.getLastRow() - 1, 50);
+  var content = wsMerged.getRange(2, 1, maxRows, lc).getValues();
+  return { Head: head, Content: content, _v: 'step3', rows: content.length, cols: lc };
   } catch(e) {
-    return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,40) };
+    return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,50) };
   }
 }
 
