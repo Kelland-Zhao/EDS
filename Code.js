@@ -4297,7 +4297,12 @@ function getAllshiftData() {
   var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   var ss = SpreadsheetApp.openById(id);
   var wsMerged = getShiftSheet(ss);
-  return { Head: ['编号','班次'], Content: [{编号:'X',班次:'早'}], _v: 'sheet-' + (wsMerged ? 'found' : 'null') };
+  if (!wsMerged || wsMerged.getLastRow() <= 1) {
+    return { Head: [], Content: [], _v: 'empty' };
+  }
+  var head = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
+  var content = wsMerged.getRange(2, 1, Math.min(wsMerged.getLastRow() - 1, 5), wsMerged.getLastColumn()).getValues();
+  return { Head: head, Content: content, _v: 'data-ok', rows: content.length };
 }
 
 function getShiftRowsByPrefix(prefix) {
