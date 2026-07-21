@@ -4294,19 +4294,7 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 }
 
 function getAllshiftData() {
-  var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
-  var ss = SpreadsheetApp.openById(id);
-  var wsMerged = getShiftSheet(ss);
-
-  if (!wsMerged || wsMerged.getLastRow() <= 1) {
-    return { Head: [], Content: [], _v: 'empty-sheet' };
-  }
-
-  var head = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
-  var content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, wsMerged.getLastColumn()).getValues();
-
-  // DEBUG: return raw data immediately to isolate the issue
-  return { Head: head, Content: content.slice(0, 10), _v: 'raw-step1' };
+  return { Head: ['编号','班次'], Content: [{编号:'X',班次:'早'}], _v: 'bare-min' };
 }
 
 function getShiftRowsByPrefix(prefix) {
