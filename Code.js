@@ -4300,7 +4300,8 @@ function getAllshiftData() {
   var wsMerged = getShiftSheet(ss);
   var lc = wsMerged.getLastColumn();
   var head = wsMerged.getRange(1, 1, 1, lc).getValues()[0];
-  return { Head: head, Content: [], _v: 'head-' + lc + 'cols', headLen: head.length };
+  var oneRow = wsMerged.getRange(2, 1, 1, lc).getValues()[0];
+  return { Head: head, Content: [oneRow], _v: '1row-ok' };
   } catch(e) {
     return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,50) };
   }
