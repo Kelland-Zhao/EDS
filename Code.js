@@ -4298,8 +4298,9 @@ function getAllshiftData() {
   var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   var ss = SpreadsheetApp.openById(id);
   var wsMerged = getShiftSheet(ss);
-  var cellA1 = wsMerged.getRange(1, 1).getValue();
-  return { Head: [], Content: [], _v: 'A1-' + String(cellA1).substring(0,20) };
+  var lc = wsMerged.getLastColumn();
+  var head = wsMerged.getRange(1, 1, 1, lc).getValues()[0];
+  return { Head: head, Content: [], _v: 'head-' + lc + 'cols', headLen: head.length };
   } catch(e) {
     return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,50) };
   }
