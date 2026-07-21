@@ -4294,106 +4294,19 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 }
 
 function getAllshiftData() {
-  try {
-  let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
-  let ss = SpreadsheetApp.openById(id);
-  var head, content;
-  if (USE_MERGED_SHIFT_SHEET) {
-    var wsMerged = getShiftSheet(ss);
-    if (wsMerged && wsMerged.getLastRow() > 1) {
-      head = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
-      content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, wsMerged.getLastColumn()).getValues();
-    } else {
-      head = [];
-      content = [];
-    }
-  } else {
-    var sheetName = [
-      "Shift_INJ_TB1",
-      "Shift_INJ_TB2",
-      "Shift_TF_TB1",
-      "Shift_TF_TB2",
-      "Shift_PK_TB1",
-      "Shift_PK_TB2",
-    ];
-    head = ss
-      .getSheetByName(sheetName[0])
-      .getRange(1, 1, 1, ss.getSheetByName(sheetName[0]).getLastColumn())
-      .getValues()[0];
-    content = [];
-    sheetName.forEach((name) => {
-      var ws = ss.getSheetByName(name);
-      var lastRow = ws.getLastRow();
-      if (lastRow > 1) {
-        var values = ws
-          .getRange(2, 1, lastRow - 1, ws.getLastColumn())
-          .getValues();
-        content = content.concat(values);
-      }
-    });
+  var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
+  var ss = SpreadsheetApp.openById(id);
+  var wsMerged = getShiftSheet(ss);
+
+  if (!wsMerged || wsMerged.getLastRow() <= 1) {
+    return { Head: [], Content: [], _v: 'empty-sheet' };
   }
 
-  let currentDate = new Date();
-  let date30DaysAgo = new Date(
-    currentDate.getTime() - 30 * 24 * 60 * 60 * 1000
-  );
+  var head = wsMerged.getRange(1, 1, 1, wsMerged.getLastColumn()).getValues()[0];
+  var content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, wsMerged.getLastColumn()).getValues();
 
-  // 优化方案：先按状态分类，再按时间筛选，避免重复
-  let unresolvedItems = content.filter((row) => {
-    let status = row[head.indexOf("状态")];
-    // 支持多种未解决状态的匹配
-    return (
-      status === "未解决" ||
-      status === "Unsolved" ||
-      status === "未解决/ Unsolved" ||
-      (typeof status === "string" && status.includes("未解决"))
-    );
-  });
-
-  // 筛选已解决条目，再按时间范围筛选
-  let resolvedItems = content.filter((row) => {
-    let status = row[head.indexOf("状态")];
-    // 排除未解决状态，筛选已解决条目
-    let isResolved = !(
-      status === "未解决" ||
-      status === "Unsolved" ||
-      status === "未解决/ Unsolved" ||
-      (typeof status === "string" && status.includes("未解决"))
-    );
-
-    if (isResolved) {
-      // 对已解决条目按时间筛选（30天内）
-      let itemDate = new Date(row[head.indexOf("提交日期")]);
-      return itemDate >= date30DaysAgo && itemDate <= currentDate;
-    }
-    return false;
-  });
-
-  // 合并数据：未解决条目（不受时间限制）+ 已解决条目（30天内）
-  let filteredData = [...unresolvedItems, ...resolvedItems];
-
-  let contentArray = filteredData.map((row) => {
-    let contentObj = {};
-    head.forEach((columnName, index) => {
-      contentObj[columnName] = row[index];
-    });
-    return contentObj;
-  });
-  // contentArray[0]['提交日期'] ='TEST';
-  contentArray.forEach((r) => {
-    if (r["提交日期"] && typeof r["提交日期"].toISOString === 'function') {
-      r["提交日期"] = r["提交日期"].toISOString();
-    } else {
-      r["提交日期"] = r["提交日期"] || '';
-    }
-  });
-
-  console.log(contentArray);
-
-  return { Head: head, Content: contentArray, _v: '2026-07-21-trycatch' };
-  } catch(e) {
-    return { error: true, message: String(e), Head: [], Content: [], _v: '2026-07-21-catch' };
-  }
+  // DEBUG: return raw data immediately to isolate the issue
+  return { Head: head, Content: content.slice(0, 10), _v: 'raw-step1' };
 }
 
 function getShiftRowsByPrefix(prefix) {
