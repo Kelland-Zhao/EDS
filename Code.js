@@ -3843,6 +3843,10 @@ function upload_PointCheck(obj, arrPmInfoJson) {
   }
 }
 
+function testChannel() {
+  return "OK";
+}
+
 function submitInspectionResults(obj, arrPmInfoJson) {
   console.log("🚀 submitInspectionResults 开始执行");
   console.log("📊 接收到的数据:", {

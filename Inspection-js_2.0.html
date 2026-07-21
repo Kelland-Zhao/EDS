@@ -1859,17 +1859,35 @@
           });
         }, 300000); // 5分钟超时
 
-        // 调用后端函数提交数据
+        // DIAGNOSTIC: 先发一个最简请求验证 google.script.run 通道
         google.script.run
-          .withSuccessHandler((result) => {
-            clearTimeout(timeoutId); // 清除超时定时器
-            handleSubmitSuccess(result);
+          .withSuccessHandler(function(testResult) {
+            console.log('DIAG test OK:', testResult);
+            // 通道正常，继续真实提交
+            google.script.run
+              .withSuccessHandler((result) => {
+                clearTimeout(timeoutId);
+                handleSubmitSuccess(result);
+              })
+              .withFailureHandler((error) => {
+                clearTimeout(timeoutId);
+                handleSubmitError(error);
+              })
+              .submitInspectionResults(obj, arrPmInfoJson);
           })
-          .withFailureHandler((error) => {
-            clearTimeout(timeoutId); // 清除超时定时器
-            handleSubmitError(error);
+          .withFailureHandler(function(testErr) {
+            // 通道本身失败 — 环境问题
+            clearTimeout(timeoutId);
+            Swal.close();
+            console.error('DIAG channel FAILED:', JSON.stringify(testErr));
+            Swal.fire({
+              icon: 'error',
+              title: '通信失败 / Connection Failed',
+              text: 'google.script.run 通道异常: ' + String(testErr),
+              confirmButtonText: '确定 / OK'
+            });
           })
-          .submitInspectionResults(obj, arrPmInfoJson);
+          .testChannel();
 
         } catch(e) {
           clearTimeout(timeoutId);
