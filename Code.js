@@ -4294,14 +4294,22 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 }
 
 function getAllshiftData() {
+  try {
   var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   var ss = SpreadsheetApp.openById(id);
   var wsMerged = getShiftSheet(ss);
-  if (!wsMerged) {
-    return { Head: [], Content: [], _v: 'ws-null' };
+  if (!wsMerged || wsMerged.getLastRow() <= 1) {
+    return { Head: [], Content: [], _v: 'empty' };
   }
-  var lr = wsMerged.getLastRow();
-  return { Head: [], Content: [], _v: 'lastrow-' + lr };
+  var lastCol = wsMerged.getLastColumn();
+  var head = wsMerged.getRange(1, 1, 1, lastCol).getValues()[0];
+  // 只读前100行测试数据量问题
+  var maxRows = Math.min(wsMerged.getLastRow() - 1, 100);
+  var content = wsMerged.getRange(2, 1, maxRows, lastCol).getValues();
+  return { Head: head, Content: content, _v: 'data-100rows', rows: content.length, cols: lastCol };
+  } catch(e) {
+    return { error: true, message: String(e), Head: [], Content: [], _v: 'catch-' + String(e).substring(0,30) };
+  }
 }
 
 function getShiftRowsByPrefix(prefix) {
