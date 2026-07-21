@@ -4380,7 +4380,11 @@ function getAllshiftData() {
   });
   // contentArray[0]['提交日期'] ='TEST';
   contentArray.forEach((r) => {
-    r["提交日期"] = r["提交日期"].toISOString();
+    if (r["提交日期"] && typeof r["提交日期"].toISOString === 'function') {
+      r["提交日期"] = r["提交日期"].toISOString();
+    } else {
+      r["提交日期"] = r["提交日期"] || '';
+    }
   });
 
   console.log(contentArray);
@@ -4442,7 +4446,11 @@ function getShiftRowsByPrefix(prefix) {
   });
 
   contentArray.forEach((r) => {
-    r["提交日期"] = r["提交日期"].toISOString();
+    if (r["提交日期"] && typeof r["提交日期"].toISOString === 'function') {
+      r["提交日期"] = r["提交日期"].toISOString();
+    } else {
+      r["提交日期"] = r["提交日期"] || '';
+    }
   });
 
   console.log("getShiftRowsByPrefix prefix:", prefix, "rows:", contentArray.length);

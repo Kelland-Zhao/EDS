@@ -29,7 +29,11 @@
     });
 
     google.script.run.withSuccessHandler(showSelectItem).SelectItem();
-    google.script.run.withSuccessHandler(showTablehead).getAllshiftData();
+    google.script.run.withSuccessHandler(showTablehead).withFailureHandler(function(err) {
+      tableDataLoaded = true;
+      console.error('getAllshiftData failed:', err.message);
+      Swal.fire({ icon: 'error', title: swalTitle('交接班数据加载失败', 'Shift Data Load Failed'), text: err.message || '请刷新重试 / Please refresh' });
+    }).getAllshiftData();
     google.script.run.withSuccessHandler(showFailureProcessConfig).getFailureProcessConfigData();
 
   });
@@ -694,6 +698,12 @@
   }
 
   function showTablehead(obj) {
+    // 防御：服务端异常时 obj 可能为 null/undefined
+    if (!obj || !obj.Head) {
+      tableDataLoaded = true;
+      console.error('showTablehead: invalid data received', obj);
+      return;
+    }
     // 设置表格数据加载完成状态
     tableDataLoaded = true;
     let name = global_Name;
