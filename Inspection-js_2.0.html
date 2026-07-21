@@ -1293,7 +1293,7 @@
     });
 
     // 添加操作列
-    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">结果<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Result</span></th>');
+    headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">结果<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Result</span><br><button type="button" class="btn btn-sm btn-light mt-1" style="font-size:10px;padding:2px 6px;" onclick="$(\'input.result-radio[id^=normal_]\').prop(\'checked\',true).trigger(\'change\')" title="全部设为正常 / Set all to Normal">全选正常</button></th>');
     headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">备注<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Remarks</span></th>');
     headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">是否解决<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Resolved</span></th>');
     headerRow.append('<th style="background-color: #E60012 !important; color: white !important;">操作<br><span style="font-size:10px;font-weight:400;opacity:0.85;">Actions</span></th>');
