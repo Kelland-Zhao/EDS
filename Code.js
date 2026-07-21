@@ -12778,15 +12778,15 @@ function groupINJSDMReports_(rows) {
   return Object.keys(map).map(function (key) { return map[key]; });
 }
 
-function getINJSDMInitData(userName, userEmail) {
+function getINJSDMInitData(userName, userEmail, reportDate) {
   try {
     const permission = getINJSDMPermission_(userName, userEmail);
     if (!permission.hasPermission) {
       return JSON.stringify({ success: true, hasPermission: false, scUsers: [], todayReport: null });
     }
-    const today = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
+    const targetDate = reportDate || Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
     const reports = groupINJSDMReports_(readINJSDMRows_());
-    const todayReport = reports.filter(function (report) { return report.reportDate === today; })[0] || null;
+    const todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
     return JSON.stringify({
       success: true,
       hasPermission: true,

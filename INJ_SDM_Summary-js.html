@@ -111,6 +111,7 @@
 
     function reloadTodayReport() {
       showLoading('刷新数据中...', 'Refreshing Data...');
+      var reportDate = $('#ReportDate').val();
       google.script.run
         .withSuccessHandler(raw => {
           Swal.close();
@@ -122,7 +123,7 @@
           populateForm(result.todayReport);
         })
         .withFailureHandler(() => { Swal.close(); resetForm(); })
-        .getINJSDMInitData(userName, userEmail);
+        .getINJSDMInitData(userName, userEmail, reportDate);
     }
 
     function populateForm(report) {
@@ -315,6 +316,7 @@
     });
 
     $('#CancelEdit').on('click', resetForm);
+    $('#ReportDate').on('change', reloadTodayReport);
     $('#HistoryTab').on('shown.bs.tab', loadHistory);
 
     $(document).on('click', '.view-report', function () {
