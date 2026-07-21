@@ -4295,9 +4295,14 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 
 function getAllshiftData() {
   try {
-    throw new Error("test-error-123");
+  var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
+  var ss = SpreadsheetApp.openById(id);
+  var wsMerged = getShiftSheet(ss);
+  var lr = wsMerged.getLastRow();
+  var lc = wsMerged.getLastColumn();
+  return { Head: [], Content: [], _v: 'lr-' + lr + '-lc-' + lc };
   } catch(e) {
-    return { Head: [], Content: [], _v: 'catch-works', msg: String(e) };
+    return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,40) };
   }
 }
 
