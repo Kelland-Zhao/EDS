@@ -4296,7 +4296,8 @@ function uploadPhotoFileToGoogleDrive_Inspection2(data, file) {
 function getAllshiftData() {
   var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   var ss = SpreadsheetApp.openById(id);
-  return { Head: ['编号','班次'], Content: [{编号:'X',班次:'早'}], _v: 'openById-ok' };
+  var wsMerged = getShiftSheet(ss);
+  return { Head: ['编号','班次'], Content: [{编号:'X',班次:'早'}], _v: 'sheet-' + (wsMerged ? 'found' : 'null') };
 }
 
 function getShiftRowsByPrefix(prefix) {
