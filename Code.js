@@ -4298,17 +4298,59 @@ function getAllshiftData() {
   var id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   var ss = SpreadsheetApp.openById(id);
   var wsMerged = getShiftSheet(ss);
-  var lc = wsMerged.getLastColumn();
-  var head = wsMerged.getRange(1, 1, 1, lc).getValues()[0];
-  var oneRow = wsMerged.getRange(2, 1, 1, lc).getValues()[0];
-  // Convert Date objects to strings for serialization
-  var safeRow = oneRow.map(function(cell) {
+
+  if (!wsMerged || wsMerged.getLastRow() <= 1) {
+    return { Head: [], Content: [], _v: 'empty' };
+  }
+
+  var lastCol = wsMerged.getLastColumn();
+  var head = wsMerged.getRange(1, 1, 1, lastCol).getValues()[0];
+  var content = wsMerged.getRange(2, 1, wsMerged.getLastRow() - 1, lastCol).getValues();
+
+  // Convert Date objects to strings (GAS google.script.run cannot serialize Date)
+  function safeCell(cell) {
     if (cell instanceof Date) return Utilities.formatDate(cell, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    if (cell === true) return 'TRUE';
+    if (cell === false) return 'FALSE';
     return cell;
+  }
+
+  var currentDate = new Date();
+  var date30DaysAgo = new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  var statusIdx = head.indexOf("状态");
+  var dateIdx = head.indexOf("提交日期");
+
+  var unresolvedItems = content.filter(function(row) {
+    var status = row[statusIdx];
+    return status === "未解决" || status === "Unsolved" || status === "未解决/ Unsolved" ||
+      (typeof status === "string" && status.indexOf("未解决") !== -1);
   });
-  return { Head: head, Content: [safeRow], _v: '1row-safe' };
+
+  var resolvedItems = content.filter(function(row) {
+    var status = row[statusIdx];
+    var isResolved = !(status === "未解决" || status === "Unsolved" || status === "未解决/ Unsolved" ||
+      (typeof status === "string" && status.indexOf("未解决") !== -1));
+    if (isResolved && dateIdx >= 0) {
+      var itemDate = row[dateIdx] instanceof Date ? row[dateIdx] : new Date(row[dateIdx]);
+      return itemDate >= date30DaysAgo && itemDate <= currentDate;
+    }
+    return false;
+  });
+
+  var filteredData = unresolvedItems.concat(resolvedItems);
+
+  var contentArray = filteredData.map(function(row) {
+    var obj = {};
+    head.forEach(function(col, i) { obj[col] = safeCell(row[i]); });
+    return obj;
+  });
+
+  console.log('getAllshiftData: total=' + content.length + ' filtered=' + contentArray.length);
+
+  return { Head: head, Content: contentArray, _v: '2026-07-21-fixed' };
   } catch(e) {
-    return { Head: [], Content: [], _v: 'catch-' + String(e).substring(0,60) };
+    return { error: true, message: String(e), Head: [], Content: [], _v: 'catch-' + String(e).substring(0,50) };
   }
 }
 
