@@ -4392,8 +4392,7 @@ function getAllshiftData() {
 
   return { Head: head, Content: contentArray, _v: '2026-07-21-trycatch' };
   } catch(e) {
-    console.error('getAllshiftData error:', e.message, e.stack);
-    return { error: true, message: e.message || 'Unknown error', Head: [], Content: [], _v: '2026-07-21-catch' };
+    return { error: true, message: String(e), Head: [], Content: [], _v: '2026-07-21-catch' };
   }
 }
 
