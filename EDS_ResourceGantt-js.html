@@ -177,7 +177,7 @@ function renderGantt() {
         const abbr = getStatusAbbr(dayStatus);
         html += '<div class="empty-leave" title="' + escapeHtml(dayStatus) + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">' + abbr + '</div>';
       } else {
-        html += '<div class="empty-day" style="grid-column:' + (idx + 1) + ';grid-row:1;"></div>';
+        html += '<div class="empty-day" style="grid-column:' + (idx + 1) + ';grid-row:1;">空</div>';
       }
     });
 
@@ -197,6 +197,17 @@ function renderGantt() {
       html += '<div class="task-bar ' + cls + '" style="grid-column:' + (startIdx + 1) + ' / ' + (endIdx + 2) + ';grid-row:' + ((index % 4) + 1) + ';"'
         + ' title="' + escapeHtml(task.taskID + ' | ' + task.title + ' | ' + task.start + ' ~ ' + task.end) + '">'
         + escapeHtml(String(task.title || '').replace(/^PM:\s*/, '')) + (task.role === 'collaborator' ? ' (协作)' : '') + '</div>';
+    });
+
+    // 任务覆盖天的休假徽章（覆盖在任务条上方，精确定位到天）
+    days.forEach(function (d, idx) {
+      const dayStatus = (person.dailyStatus || {})[d];
+      if (!dayStatus || dayStatus === '在岗') return;
+      if (!coveredDays[idx]) return; // 已在前面 empty-leave 处理
+      const dow = new Date(d + 'T00:00:00').getDay();
+      if (dow === 0) return;
+      const abbr = getStatusAbbr(dayStatus);
+      html += '<div class="task-leave-badge" title="' + escapeHtml(dayStatus) + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">' + abbr + '</div>';
     });
     html += '</div>';
   });
