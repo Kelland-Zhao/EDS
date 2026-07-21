@@ -1707,6 +1707,8 @@
       cancelButtonColor: '#6c757d'
     }).then((result) => {
       if (result.isConfirmed) {
+        // iPad诊断：确认回调是否触发
+        alert('STEP1: 确认对话框回调已触发 / Confirm callback fired');
         // 显示提交进度
         Swal.fire({
           title: '正在提交... / Submitting...',
@@ -1865,7 +1867,7 @@
         console.log('DIAG: testChannel type:', typeof google.script.run.testChannel);
 
         // iPad看不到console,用alert验证执行到了这里
-        alert('DIAG: 到达testChannel调用前 / Reached before testChannel call');
+        alert('STEP2: 到达testChannel调用前 / Before testChannel call');
 
         // 先用setTimeout验证iPad异步回调机制
         setTimeout(function() {
@@ -1904,6 +1906,7 @@
           .testChannel();
 
         } catch(e) {
+          alert('STEP-CATCH: 异常捕获 / Exception caught: ' + (e && e.message || String(e)));
           clearTimeout(timeoutId);
           Swal.close();
           console.error('Submit error:', e.message, e.stack);
