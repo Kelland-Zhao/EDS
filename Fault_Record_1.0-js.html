@@ -14,6 +14,7 @@
   
   // 页面加载状态跟踪
   let pageLoadComplete = false;
+  let pageLoadFailed = false;
   let selectItemLoaded = false;
   let tableDataLoaded = false;
   let failureProcessLoaded = false;
@@ -31,7 +32,8 @@
     google.script.run.withSuccessHandler(showSelectItem).SelectItem();
     google.script.run.withSuccessHandler(showTablehead).withFailureHandler(function(err) {
       tableDataLoaded = true;
-      console.log('FAILURE_HANDLER fired:', typeof err, JSON.stringify(err));
+      pageLoadFailed = true;
+      Swal.close();
       Swal.fire({ icon: 'error', title: swalTitle('交接班数据加载失败', 'Shift Data Load Failed'), text: (err && err.message) || String(err) || '请刷新重试 / Please refresh' });
     }).getAllshiftData();
     google.script.run.withSuccessHandler(showFailureProcessConfig).getFailureProcessConfigData();
@@ -56,14 +58,16 @@
   function checkPageLoadComplete() {
     if (selectItemLoaded && tableDataLoaded && failureProcessLoaded && !pageLoadComplete) {
       pageLoadComplete = true;
-      Swal.close();
-      Swal.fire({
-        title: swalTitle('页面加载完成', 'Page Loaded'),
-        text: '请填写交接班记录和故障信息 / Please fill in handover records and fault info',
-        icon: 'success',
-        timer: 3000,
-        showConfirmButton: false
-      });
+      if (!pageLoadFailed) {
+        Swal.close();
+        Swal.fire({
+          title: swalTitle('页面加载完成', 'Page Loaded'),
+          text: '请填写交接班记录和故障信息 / Please fill in handover records and fault info',
+          icon: 'success',
+          timer: 3000,
+          showConfirmButton: false
+        });
+      }
     }
   }
 
@@ -701,6 +705,8 @@
     if (!obj || !obj.Head) {
       tableDataLoaded = true;
       if (obj && obj.error) {
+        pageLoadFailed = true;
+        Swal.close();
         Swal.fire({ icon: 'error', title: swalTitle('交接班数据加载失败', 'Shift Data Load Failed'), text: obj.message || '服务端错误' });
       }
       return;
