@@ -1707,9 +1707,6 @@
       cancelButtonColor: '#6c757d'
     }).then((result) => {
       if (result.isConfirmed) {
-        // iPad诊断：确认回调是否触发
-        alert('STEP1: 确认对话框回调已触发 / Confirm callback fired');
-
         try {
         // 显示提交进度
         Swal.fire({
@@ -1731,7 +1728,7 @@
           frequency: $("#frequency").val(),       // 频次
           pointChecker: $("#inspectorType").val(), // 点检人（inspectorType）
           ownner: $('#employeeName').val(),        // 检查人（姓名）
-          date: dayjs(new Date()).format("YYYY/MM/DD-HH:mm"), // 检查日期时间
+          date: (function(d){ return d.getFullYear()+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+('0'+d.getDate()).slice(-2)+'-'+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); })(new Date()), // 检查日期时间
           workcenter: $("#workcenter").val(),     // 机台号
           checkTeam: $('#shift').val()             // 班次
         };
@@ -1861,52 +1858,19 @@
           });
         }, 300000); // 5分钟超时
 
-        // DIAGNOSTIC: 先发一个最简请求验证 google.script.run 通道
-        console.log('DIAG: about to call testChannel...');
-        console.log('DIAG: google.script.run type:', typeof google.script.run);
-        console.log('DIAG: testChannel type:', typeof google.script.run.testChannel);
-
-        // iPad看不到console,用alert验证执行到了这里
-        alert('STEP2: 到达testChannel调用前 / Before testChannel call');
-
-        // 先用setTimeout验证iPad异步回调机制
-        setTimeout(function() {
-          console.log('DIAG: setTimeout works on iPad');
-        }, 100);
-
+        // 调用后端函数提交数据
         google.script.run
-          .withSuccessHandler(function(testResult) {
-            alert('DIAG test OK: ' + testResult);
-            console.log('DIAG test OK:', testResult);
-            // 通道正常，继续真实提交
-            google.script.run
-              .withSuccessHandler((result) => {
-                clearTimeout(timeoutId);
-                handleSubmitSuccess(result);
-              })
-              .withFailureHandler((error) => {
-                clearTimeout(timeoutId);
-                handleSubmitError(error);
-              })
-              .submitInspectionResults(obj, arrPmInfoJson);
-          })
-          .withFailureHandler(function(testErr) {
-            alert('DIAG channel FAILED: ' + JSON.stringify(testErr));
-            // 通道本身失败 — 环境问题
+          .withSuccessHandler((result) => {
             clearTimeout(timeoutId);
-            Swal.close();
-            console.error('DIAG channel FAILED:', JSON.stringify(testErr));
-            Swal.fire({
-              icon: 'error',
-              title: '通信失败 / Connection Failed',
-              text: 'google.script.run 通道异常: ' + String(testErr),
-              confirmButtonText: '确定 / OK'
-            });
+            handleSubmitSuccess(result);
           })
-          .testChannel();
+          .withFailureHandler((error) => {
+            clearTimeout(timeoutId);
+            handleSubmitError(error);
+          })
+          .submitInspectionResults(obj, arrPmInfoJson);
 
         } catch(e) {
-          alert('STEP-CATCH: 异常捕获 / Exception caught: ' + (e && e.message || String(e)));
           clearTimeout(timeoutId);
           Swal.close();
           console.error('Submit error:', e.message, e.stack);
