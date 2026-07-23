@@ -96,6 +96,8 @@ function renderGroupTabs() {
 function renderGantt() {
   if (!resourceData) return;
   const days = resourceData.days || [];
+  const todayStr = formatDateYMD(new Date());
+  const todayIdx = days.indexOf(todayStr);
   const allGroups = resourceData.groups || [];
 
   // ---- 所有人视图: 合并全部组 ----
@@ -140,12 +142,14 @@ function renderGantt() {
   });
   let html = '<div class="gantt-grid" style="--day-count:' + days.length + ';">';
   html += '<div class="gantt-head first">人员 / 日期</div>';
-  days.forEach(function (d) { html += '<div class="gantt-head">' + shortDate(d) + '</div>'; });
+  days.forEach(function (d, idx) {
+    html += '<div class="gantt-head' + (idx === todayIdx ? ' today-col' : '') + '">' + shortDate(d) + '</div>';
+  });
 
   html += '<div class="gantt-name">组任务数<small>Task count</small></div>';
-  days.forEach(function (d) {
+  days.forEach(function (d, idx) {
     const val = merged.dailyCounts ? (merged.dailyCounts[d] || 0) : 0;
-    html += '<div class="gantt-count ' + (val >= 10 ? 'hot' : '') + '">' + (val || '-') + '</div>';
+    html += '<div class="gantt-count' + (val >= 10 ? ' hot' : '') + (idx === todayIdx ? ' today-col' : '') + '">' + (val || '-') + '</div>';
   });
 
   if (people.length === 0) {
@@ -192,11 +196,12 @@ function renderGantt() {
       const dow = new Date(d + 'T00:00:00').getDay();
       if (dow === 0) return; // 周日跳过
       const dayStatus = (person.dailyStatus || {})[d];
+      const todayClass = idx === todayIdx ? ' today-col' : '';
       if (dayStatus && dayStatus !== '在岗') {
         const abbr = getStatusAbbr(dayStatus);
-        html += '<div class="empty-leave" title="' + escapeHtml(dayStatus) + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">' + abbr + '</div>';
+        html += '<div class="empty-leave' + todayClass + '" title="' + escapeHtml(dayStatus) + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">' + abbr + '</div>';
       } else {
-        html += '<div class="empty-day" style="grid-column:' + (idx + 1) + ';grid-row:1;">空</div>';
+        html += '<div class="empty-day' + todayClass + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">空</div>';
       }
     });
 
@@ -228,7 +233,7 @@ function renderGantt() {
       const dow = new Date(d + 'T00:00:00').getDay();
       if (dow === 0) return;
       const abbr = getStatusAbbr(dayStatus);
-      html += '<div class="task-leave-badge" title="' + escapeHtml(dayStatus) + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">' + abbr + '</div>';
+      html += '<div class="task-leave-badge' + (idx === todayIdx ? ' today-col' : '') + '" title="' + escapeHtml(dayStatus) + '" style="grid-column:' + (idx + 1) + ';grid-row:1;">' + abbr + '</div>';
     });
     html += '</div>';
   });
