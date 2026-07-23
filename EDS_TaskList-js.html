@@ -176,11 +176,13 @@ function finalInit(usersData) {
     }
   });
 
-  // 3. 设置默认筛选：显示"进行中"
+  // 3. 设置默认筛选：状态=全部, 任务类型=非常规保养
   $('.pf-btn[data-process]').removeClass('active');
   $('.pf-btn[data-process=""]').addClass('active');
   $('.pf-btn[data-status]').removeClass('active');
-  $('.pf-btn[data-status="进行中"]').addClass('active');
+  $('.pf-btn[data-status=""]').addClass('active');
+  $('.pf-btn[data-tasktype]').removeClass('active');
+  $('.pf-btn[data-tasktype="非常规保养"]').addClass('active');
   applyFiltersAndRender();
 
   // 4. 绑定所有交互事件
@@ -449,6 +451,10 @@ function fillTaskForm(task) {
   $('#editTaskID').val(task.taskID);
   $('#taskTitle').val(task.title).prop('readonly', !canEdit);
   $('#taskDescription').val(task.description).prop('readonly', !canEdit);
+  // 如果 taskType 不在下拉框中（如PM "保养"），先添加为临时选项
+  if ($('#taskType option[value="' + task.taskType + '"]').length === 0) {
+    $('#taskType').prepend('<option value="' + task.taskType + '">' + task.taskType + '</option>');
+  }
   $('#taskType').val(task.taskType).prop('disabled', !canEdit);
   $('#taskPriority').val(task.priority).prop('disabled', !canEdit);
   $('#taskStatus').val(task.status).prop('disabled', !canEdit && !isAdmin && !isSupervisor);
