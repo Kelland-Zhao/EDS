@@ -228,6 +228,7 @@ function getTaskClass(task) {
   if (task.status === '已完成') return 'task-done';
   if (task.status === '等待中') return 'task-wait';
   if (task.taskType === 'follow') return 'task-follow';
+  if (task.taskType === '非常规保养') return 'task-nonroutine';
   const text = [task.taskType, task.title].join(' ');
   if (text.indexOf('测试') >= 0 || /TEST/i.test(text)) return 'task-test';
   if (text.indexOf('维修') >= 0 || text.indexOf('故障') >= 0) return 'task-cm';
