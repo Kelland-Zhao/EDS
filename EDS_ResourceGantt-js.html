@@ -220,7 +220,7 @@ function renderGantt() {
         if (s && s !== '在岗') { onLeave = true; break; }
       }
       if (onLeave) cls += ' task-on-leave';
-      html += '<div class="task-bar ' + cls + '" style="grid-column:' + (startIdx + 1) + ' / ' + (endIdx + 2) + ';grid-row:' + ((index % 4) + 1) + ';"'
+      html += '<div class="task-bar ' + cls + '" style="grid-column:' + (startIdx + 1) + ' / ' + (endIdx + 2) + ';grid-row:' + (index + 1) + ';"'
         + ' title="' + escapeHtml(task.taskID + ' | ' + task.title + ' | ' + task.start + ' ~ ' + task.end) + '">'
         + escapeHtml(String(task.title || '').replace(/^PM:\s*/, '')) + (task.role === 'collaborator' ? ' (协作)' : '') + '</div>';
     });
