@@ -8,7 +8,13 @@ let showAllPersonnel = true;
 
 $(document).ready(function () {
   $('#userName').text(sessionStorage.getItem('Name') || '--');
-  $('#startDate').val(formatDateYMD(new Date()));
+  // Default to Monday of current week
+  var now = new Date();
+  var dow = now.getDay();
+  var daysFromMonday = dow === 0 ? 6 : dow - 1;
+  var monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday);
+  $('#startDate').val(formatDateYMD(monday));
   $('#refreshBtn').on('click', loadResourceGantt);
   $('#startDate, #daysCount').on('change', loadResourceGantt);
   $('#toggleIdleBtn').on('click', function () {
