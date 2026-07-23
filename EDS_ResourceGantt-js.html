@@ -172,7 +172,13 @@ function renderGantt() {
     (person.tasks || []).forEach(function (task) {
       const sIdx = days.indexOf(task.start);
       const eIdx = days.indexOf(task.end) >= 0 ? days.indexOf(task.end) : days.length - 1;
-      if (sIdx < 0 || eIdx < 0 || sIdx >= days.length) return;
+      if (sIdx < 0 || eIdx < 0 || sIdx >= days.length) {
+        console.warn('[Gantt] Task date not in range:', person.name, task.taskID,
+          'start="' + task.start + '" sIdx=' + sIdx,
+          'end="' + task.end + '" eIdx=' + eIdx,
+          'days[0]="' + days[0] + '" days[' + (days.length - 1) + ']="' + days[days.length - 1] + '"');
+        return;
+      }
       for (let d = sIdx; d <= eIdx; d++) coveredDays[d] = true;
     });
 
