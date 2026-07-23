@@ -349,7 +349,12 @@ function openTaskModal(taskData) {
   $('#taskType').val('非常规保养').prop('disabled', false);
   $('#taskPriority').val('中').prop('disabled', false);
   $('#taskStatus').val('未开始').prop('disabled', false);
-  $('#taskProcess').val('').prop('disabled', false);
+  // 工序下拉框
+  var processOptions = ['', 'INJ', 'TF', 'PK'];
+  var processLabels = { '': '-- / Auto', 'INJ': '注塑 / INJ', 'TF': '植磨毛 / TF', 'PK': '包装 / PK' };
+  $('#taskProcess').html(processOptions.map(function (v) { return '<option value="' + v + '">' + processLabels[v] + '</option>'; }).join(''));
+  var userProcess = (sessionStorage.getItem('Process') || '').toUpperCase();
+  $('#taskProcess').val(['INJ','TF','PK'].indexOf(userProcess) >= 0 ? userProcess : '').prop('disabled', false);
   $('#taskPlanStart').val(currentDateStr).prop('readonly', false);
   $('#taskDueDate').val('').prop('readonly', false);
   $('#taskRemark').val('').prop('readonly', false);
@@ -363,23 +368,45 @@ function openTaskModal(taskData) {
 }
 
 function saveTask() {
-  const title = $('#taskTitle').val().trim();
-  if (!title) {
-    Swal.fire({ icon: 'warning', title: swalTitle('提示', 'Info'), html: swalHtml('请输入任务标题', 'Please enter task title') });
+  var title = $('#taskTitle').val().trim();
+  var description = $('#taskDescription').val().trim();
+  var taskType = $('#taskType').val();
+  var priority = $('#taskPriority').val();
+  var process = $('#taskProcess').val();
+  var planStartDate = $('#taskPlanStart').val();
+  var dueDate = $('#taskDueDate').val();
+  var ownerVal = $('#taskOwner').val();
+
+  // 必填验证（除备注外）
+  var missing = [];
+  if (!title) missing.push('任务标题 / Title');
+  if (!description) missing.push('任务描述 / Description');
+  if (!taskType) missing.push('任务类型 / Type');
+  if (!priority) missing.push('优先级 / Priority');
+  if (!process) missing.push('工序 / Process');
+  if (!planStartDate) missing.push('计划开始 / Plan Start');
+  if (!dueDate) missing.push('截止日期 / Due Date');
+  if (!ownerVal) missing.push('负责人 / Owner');
+  if (missing.length > 0) {
+    Swal.fire({
+      icon: 'warning',
+      title: swalTitle('请填写必填项', 'Required fields missing'),
+      html: swalHtml(missing.join('<br>'), missing.join('<br>'))
+    });
     return;
   }
-  const taskData = {
+
+  var taskData = {
     title: title,
-    description: $('#taskDescription').val().trim(),
-    taskType: $('#taskType').val(),
-    priority: $('#taskPriority').val(),
+    description: description,
+    taskType: taskType,
+    priority: priority,
     status: $('#taskStatus').val(),
-    process: $('#taskProcess').val(),
-    planStartDate: $('#taskPlanStart').val(),
-    dueDate: $('#taskDueDate').val(),
+    process: process,
+    planStartDate: planStartDate,
+    dueDate: dueDate,
     remark: $('#taskRemark').val().trim()
   };
-  const ownerVal = $('#taskOwner').val();
   const collabVals = $('#taskCollaborators').val() || [];
   const members = [];
   if (ownerVal) {
