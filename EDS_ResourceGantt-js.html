@@ -43,7 +43,7 @@ function shortDate(dateStr) {
 
 function loadResourceGantt() {
   const start = $('#startDate').val();
-  const days = $('#daysCount').val() || '7';
+  const days = $('#daysCount').val() || '14';
   if (!start) return;
   $('#ganttRoot').html('<div class="empty-state">加载中... / Loading...</div>');
   Swal.fire({
