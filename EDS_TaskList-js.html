@@ -13,6 +13,7 @@ let currentPermission = '';
 let currentSapID = '';
 let currentUserName = '';
 let allTasksCache = [];
+let select2DataAll = [];  // cache for resolveSelect2Id
 
 // ============================================================
 //  页面加载入口 — 3个服务端调用并行发起
@@ -98,6 +99,7 @@ $(document).ready(function () {
 function finalInit(usersData) {
   // 1. Select2 初始化
   var select2Data = Array.isArray(usersData) ? usersData.map(function (u) { return { id: u.id, text: u.text }; }) : [];
+  select2DataAll = select2Data;  // cache for resolveSelect2Id
   $('#taskOwner').select2({
     data: select2Data,
     placeholder: '选择负责人 / Select Owner',
@@ -316,6 +318,22 @@ function buildUrl(page) {
     + '&Workshop=' + encodeURIComponent(sessionStorage.getItem('Workshop') || '');
 }
 
+// Select2 option id format is "Name|SAPID" — resolve bare SAP ID back to that format
+function resolveSelect2Id(sapID) {
+  if (!sapID) return null;
+  // Try exact match first
+  for (var i = 0; i < select2DataAll.length; i++) {
+    var optId = select2DataAll[i].id;
+    if (optId === sapID) return sapID;
+    if (optId.indexOf('|' + sapID) !== -1) return optId;
+    // Also check if the id IS the sapID (backward-compat)
+    var pipeIdx = optId.indexOf('|');
+    if (pipeIdx > 0 && optId.substring(pipeIdx + 1) === sapID) return optId;
+  }
+  // Fallback: return sapID as-is (may still match if Select2 data uses bare IDs)
+  return sapID;
+}
+
 function showLoading() {
   Swal.fire({
     title: swalTitle('处理中...', 'Processing...'),
@@ -427,13 +445,17 @@ function fillTaskForm(task) {
   $('#taskRemark').val(task.remark).prop('readonly', !canEdit);
 
   if (task.owners && task.owners.length > 0) {
-    $('#taskOwner').val(task.owners[0]).trigger('change');
+    var ownerId = resolveSelect2Id(task.owners[0]);
+    if (ownerId) $('#taskOwner').val(ownerId).trigger('change');
+    else $('#taskOwner').val(null).trigger('change');
   } else {
     $('#taskOwner').val(null).trigger('change');
   }
   $('#taskOwner').prop('disabled', !canEdit && !isAdmin && !isSupervisor);
   if (task.collaborators && task.collaborators.length > 0) {
-    $('#taskCollaborators').val(task.collaborators).trigger('change');
+    var collabIds = task.collaborators.map(function (sid) { return resolveSelect2Id(sid); }).filter(Boolean);
+    if (collabIds.length > 0) $('#taskCollaborators').val(collabIds).trigger('change');
+    else $('#taskCollaborators').val(null).trigger('change');
   } else {
     $('#taskCollaborators').val(null).trigger('change');
   }
@@ -487,6 +509,13 @@ function saveTaskFromModal() {
   };
   var newStatus = $('#taskStatus').val();
 
+  // Collect members (owner + collaborators) — used by both create and update
+  var ownerVal = $('#taskOwner').val();
+  var collabVals = $('#taskCollaborators').val() || [];
+  var members = [];
+  if (ownerVal) members.push({ sapID: ownerVal, memberRole: 'owner' });
+  collabVals.forEach(function (v) { members.push({ sapID: v, memberRole: 'collaborator' }); });
+
   showLoading();
 
   if (tid) {
@@ -500,13 +529,8 @@ function saveTaskFromModal() {
           Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
         }
       })
-      .updateTask(JSON.stringify(taskData), currentSapID, currentUserName);
+      .updateTask(JSON.stringify(taskData), JSON.stringify(members), currentSapID, currentUserName);
   } else {
-    var ownerVal = $('#taskOwner').val();
-    var collabVals = $('#taskCollaborators').val() || [];
-    var members = [];
-    if (ownerVal) members.push({ sapID: ownerVal, memberRole: 'owner' });
-    collabVals.forEach(function (v) { members.push({ sapID: v, memberRole: 'collaborator' }); });
     taskData.status = newStatus;
 
     google.script.run

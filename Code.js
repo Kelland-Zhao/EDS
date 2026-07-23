@@ -12619,9 +12619,10 @@ function saveTaskMembers_(taskID, members, operatorSAPID) {
   });
 }
 
-function updateTask(taskJSON, operatorSAPID, operatorName) {
+function updateTask(taskJSON, membersJSON, operatorSAPID, operatorName) {
   try {
     const task = typeof taskJSON === 'string' ? JSON.parse(taskJSON) : taskJSON;
+    const members = typeof membersJSON === 'string' ? JSON.parse(membersJSON) : (membersJSON || []);
     const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
     if (!ws) return JSON.stringify({ success: false, message: 'Tasks sheet not found' });
     const data = ws.getDataRange().getValues();
@@ -12652,6 +12653,10 @@ function updateTask(taskJSON, operatorSAPID, operatorName) {
     ws.getRange(rowIndex, 8).setValue(task.dueDate || data[rowIndex - 1][7]);
     ws.getRange(rowIndex, 12).setValue(task.remark !== undefined ? task.remark : data[rowIndex - 1][11]);
     ws.getRange(rowIndex, 14).setValue(now);
+    // Sync members if provided
+    if (members.length > 0) {
+      saveTaskMembers_(task.taskID, members, operatorSAPID);
+    }
     writeTaskLog_('updateTask', 'Task', task.taskID, beforeJSON, JSON.stringify(task).substring(0, 500), operatorSAPID, operatorName);
     return JSON.stringify({ success: true, message: '任务已更新 / Task updated' });
   } catch (e) {
