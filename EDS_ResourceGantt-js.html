@@ -170,15 +170,13 @@ function renderGantt() {
     // 收集有任务覆盖的天（列索引）
     const coveredDays = {};
     (person.tasks || []).forEach(function (task) {
-      const sIdx = days.indexOf(task.start);
-      const eIdx = days.indexOf(task.end) >= 0 ? days.indexOf(task.end) : days.length - 1;
-      if (sIdx < 0 || eIdx < 0 || sIdx >= days.length) {
-        console.warn('[Gantt] Task date not in range:', person.name, task.taskID,
-          'start="' + task.start + '" sIdx=' + sIdx,
-          'end="' + task.end + '" eIdx=' + eIdx,
-          'days[0]="' + days[0] + '" days[' + (days.length - 1) + ']="' + days[days.length - 1] + '"');
-        return;
-      }
+      const rawSIdx = days.indexOf(task.start);
+      const rawEIdx = days.indexOf(task.end);
+      // Clamp: start before range → 0; end after range → last day
+      const sIdx = rawSIdx < 0 ? 0 : rawSIdx;
+      const eIdx = rawEIdx < 0 ? days.length - 1 : rawEIdx;
+      // Skip only if task is entirely outside range (start after range or end before range)
+      if (sIdx >= days.length || eIdx < 0) return;
       for (let d = sIdx; d <= eIdx; d++) coveredDays[d] = true;
     });
 
@@ -197,9 +195,11 @@ function renderGantt() {
     });
 
     (person.tasks || []).forEach(function (task, index) {
-      const startIdx = Math.max(0, days.indexOf(task.start));
-      const endIdx = days.indexOf(task.end) >= 0 ? days.indexOf(task.end) : days.length - 1;
-      if (startIdx < 0 || endIdx < 0 || startIdx >= days.length) return;
+      const rawStart = days.indexOf(task.start);
+      const rawEnd = days.indexOf(task.end);
+      const startIdx = rawStart < 0 ? 0 : rawStart;
+      const endIdx = rawEnd < 0 ? days.length - 1 : rawEnd;
+      if (startIdx >= days.length || endIdx < 0) return;
       let cls = getTaskClass(task);
       // 检查任务跨度内是否有非在岗天 → 叠加斜线条纹
       const ds = person.dailyStatus || {};
