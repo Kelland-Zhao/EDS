@@ -12653,6 +12653,7 @@ function updateTask(taskJSON, membersJSON, operatorSAPID, operatorName) {
     ws.getRange(rowIndex, 8).setValue(task.dueDate || data[rowIndex - 1][7]);
     ws.getRange(rowIndex, 12).setValue(task.remark !== undefined ? task.remark : data[rowIndex - 1][11]);
     ws.getRange(rowIndex, 14).setValue(now);
+    ws.getRange(rowIndex, 15).setValue(task.process !== undefined ? task.process : data[rowIndex - 1][14]);
     // Sync members if provided
     if (members.length > 0) {
       saveTaskMembers_(task.taskID, members, operatorSAPID);
