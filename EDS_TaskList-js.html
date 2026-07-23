@@ -505,25 +505,55 @@ function fillTaskForm(task) {
 function saveTaskFromModal() {
   var tid = $('#editTaskID').val();
   var title = $('#taskTitle').val().trim();
-  if (!title) {
-    Swal.fire({ icon: 'warning', title: swalTitle('提示', 'Info'), html: swalHtml('请输入任务标题', 'Please enter task title') });
-    return;
+  var description = $('#taskDescription').val().trim();
+  var taskType = $('#taskType').val();
+  var priority = $('#taskPriority').val();
+  var process = $('#taskProcess').val();
+  var planStartDate = $('#taskPlanStart').val();
+  var dueDate = $('#taskDueDate').val();
+  var ownerVal = $('#taskOwner').val();
+
+  // 新建任务必填验证（仅新建时，编辑不强制）
+  if (!tid) {
+    var missing = [];
+    if (!title) missing.push('任务标题 / Title');
+    if (!description) missing.push('任务描述 / Description');
+    if (!taskType) missing.push('任务类型 / Type');
+    if (!priority) missing.push('优先级 / Priority');
+    if (!process) missing.push('工序 / Process');
+    if (!planStartDate) missing.push('计划开始 / Plan Start');
+    if (!dueDate) missing.push('截止日期 / Due Date');
+    if (!ownerVal) missing.push('负责人 / Owner');
+    if (missing.length > 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: swalTitle('请填写必填项', 'Required fields missing'),
+        html: swalHtml(missing.join('<br>'), missing.join('<br>'))
+      });
+      return;
+    }
+  } else {
+    // 编辑时至少标题不能为空
+    if (!title) {
+      Swal.fire({ icon: 'warning', title: swalTitle('提示', 'Info'), html: swalHtml('请输入任务标题', 'Please enter task title') });
+      return;
+    }
   }
+
   var taskData = {
     taskID: tid,
     title: title,
-    description: $('#taskDescription').val().trim(),
-    taskType: $('#taskType').val(),
-    priority: $('#taskPriority').val(),
-    process: $('#taskProcess').val(),
-    planStartDate: $('#taskPlanStart').val(),
-    dueDate: $('#taskDueDate').val(),
+    description: description,
+    taskType: taskType,
+    priority: priority,
+    process: process,
+    planStartDate: planStartDate,
+    dueDate: dueDate,
     remark: $('#taskRemark').val().trim()
   };
   var newStatus = $('#taskStatus').val();
 
   // Collect members (owner + collaborators) — used by both create and update
-  var ownerVal = $('#taskOwner').val();
   var collabVals = $('#taskCollaborators').val() || [];
   var members = [];
   if (ownerVal) members.push({ sapID: ownerVal, memberRole: 'owner' });
