@@ -186,11 +186,15 @@ function finalInit(usersData) {
 //  事件绑定（集中管理，避免重复绑定）
 // ============================================================
 function bindEvents() {
-  // Process & Status filter buttons
+  // Process, Status & TaskType filter buttons
   $(document).on('click', '.pf-btn', function () {
-    var group = $(this).data('process') !== undefined ? 'process' : 'status';
+    var $btn = $(this);
+    var group;
+    if ($btn.data('process') !== undefined) group = 'process';
+    else if ($btn.data('status') !== undefined) group = 'status';
+    else group = 'tasktype';
     $('.pf-btn[data-' + group + ']').removeClass('active');
-    $(this).addClass('active');
+    $btn.addClass('active');
     applyFiltersAndRender();
   });
 
@@ -340,6 +344,7 @@ function reloadData(callback) {
 function applyFiltersAndRender() {
   var process = $('.pf-btn.active[data-process]').data('process') || undefined;
   var status = $('.pf-btn.active[data-status]').data('status') || undefined;
+  var tasktype = $('.pf-btn.active[data-tasktype]').data('tasktype') || undefined;
   var search = $('#filterSearch').val().trim().toLowerCase();
   var filtered = allTasksCache;
   if (status) {
@@ -351,6 +356,9 @@ function applyFiltersAndRender() {
       if (process === 'INJ') return pc === 'INJ' || pc === 'IM';
       return pc === process;
     });
+  }
+  if (tasktype) {
+    filtered = filtered.filter(function (t) { return t.taskType === tasktype; });
   }
   if (search) {
     filtered = filtered.filter(function (t) {
