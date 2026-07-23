@@ -117,6 +117,16 @@ function finalInit(usersData) {
     dropdownParent: $('#taskDetailModal')
   });
 
+  // 工序下拉框
+  var processOptions = [
+    { value: '', text: '-- / Auto' },
+    { value: 'INJ', text: '注塑 / INJ' },
+    { value: 'TF', text: '植磨毛 / TF' },
+    { value: 'PK', text: '包装 / PK' }
+  ];
+  var processHtml = processOptions.map(function (o) { return '<option value="' + o.value + '">' + o.text + '</option>'; }).join('');
+  $('#taskProcess').html(processHtml);
+
   // 2. DataTable 初始化
   taskTable = $('#taskTable').DataTable({
     pageLength: 25,
@@ -414,6 +424,8 @@ function openTaskModal(taskID) {
     $('#taskPlanStart').val(new Date().toISOString().split('T')[0]).prop('readonly', false);
     $('#taskDueDate').val('').prop('readonly', false);
     $('#taskRemark').val('').prop('readonly', false);
+    var userProcess = (sessionStorage.getItem('Process') || '').toUpperCase();
+    $('#taskProcess').val(['INJ','TF','PK'].indexOf(userProcess) >= 0 ? userProcess : '').prop('disabled', false);
     $('#taskOwner').val(null).trigger('change').prop('disabled', false);
     $('#taskCollaborators').val(null).trigger('change').prop('disabled', false);
     $('#btnSaveTask').show();
@@ -443,6 +455,7 @@ function fillTaskForm(task) {
   $('#taskPlanStart').val(task.planStartDate).prop('readonly', !canEdit);
   $('#taskDueDate').val(task.dueDate).prop('readonly', !canEdit);
   $('#taskRemark').val(task.remark).prop('readonly', !canEdit);
+  $('#taskProcess').val(task.process || '').prop('disabled', !canEdit);
 
   if (task.owners && task.owners.length > 0) {
     var ownerId = resolveSelect2Id(task.owners[0]);
