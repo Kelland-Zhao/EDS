@@ -1,0 +1,366 @@
+<script>
+// ============================================================
+//  新品测试工艺参数 JS / NPI Process Record JS
+// ============================================================
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+// Template structure extracted from 注塑/注胶产品工艺卡通用模板
+// Each section maps to rows in column A of the template
+const TEMPLATE_SECTIONS = [
+  { id: 'productInfo', title: '产品信息<br><small>Product Info</small>', rows: [
+    {row:9, label:'产品名称<br><small>Product Name</small>'},
+    {row:12, label:'机型<br><small>Machine Model</small>'},
+    {row:15, label:'模具编号<br><small>Mold No.</small>'}
+  ]},
+  { id: 'barrel', title: '炮筒模块<br><small>Barrel Module</small>', subSections: [
+    { id:'barrelA', title:'A炮筒<br><small>Barrel A</small>', rows:[
+      {row:26, label:'注射 p<br><small>Injection p</small>'},
+      {row:29, label:'注射 v<br><small>Injection v</small>'},
+      {row:32, label:'注射 s<br><small>Injection s</small>'},
+      {row:35, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+    ]},
+    { id:'barrelB', title:'B炮筒<br><small>Barrel B</small>', rows:[
+      {row:41, label:'注射 p<br><small>Injection p</small>'},
+      {row:44, label:'注射 v<br><small>Injection v</small>'},
+      {row:47, label:'注射 s<br><small>Injection s</small>'},
+      {row:50, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+    ]},
+    { id:'barrelC', title:'C炮筒<br><small>Barrel C</small>', rows:[
+      {row:56, label:'注射 p<br><small>Injection p</small>'},
+      {row:59, label:'注射 v<br><small>Injection v</small>'},
+      {row:62, label:'注射 s<br><small>Injection s</small>'},
+      {row:65, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+    ]},
+    { id:'barrelD', title:'D炮筒<br><small>Barrel D</small>', rows:[
+      {row:71, label:'注射 p<br><small>Injection p</small>'},
+      {row:74, label:'注射 v<br><small>Injection v</small>'},
+      {row:77, label:'注射 s<br><small>Injection s</small>'},
+      {row:80, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+    ]}
+  ]},
+  { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', rows: [
+    {row:87, label:'序号<br><small>Seq</small>'},
+    {row:89, label:'位置<br><small>Position</small>'},
+    {row:91, label:'温度<br><small>Temperature</small>'}
+  ]},
+  { id: 'clamping', title: '开合模及顶出模块<br><small>Clamping & Ejection</small>', rows: [
+    {row:96, label:'合模<br><small>Clamping</small>', subRows:[
+      {row:103, label:'p'},
+      {row:106, label:'v'},
+      {row:109, label:'s'}
+    ]}
+  ]},
+  { id: 'auxEquip', title: '配套设备信息<br><small>Auxiliary Equipment</small>', rows: [
+    {row:114, label:'类别<br><small>Category</small>'},
+    {row:116, label:'是否使用<br><small>In Use</small>'},
+    {row:118, label:'温度<br><small>Temperature</small>'},
+    {row:120, label:'速度<br><small>Speed</small>'}
+  ]},
+  { id: 'remarks', title: '特殊要求及备注<br><small>Special Requirements</small>', rows: [
+    {row:122, label:'备注<br><small>Remarks</small>', isTextarea:true}
+  ]}
+];
+
+let currentTask = null;
+let currentRecord = null;
+let allTasks = [];
+let fieldKeyMap = {}; // Maps section-row-column → index in 196-array
+
+$(document).ready(function () {
+  $('#userName').text(sessionStorage.getItem('Name') || '--');
+  $('#name').text(sessionStorage.getItem('Name') || '--');
+  var perm = sessionStorage.getItem('EDSTaskPermission') || '';
+  var permLabels = { 'admin': '管理员 / Admin', 'supervisor': '主管 / Supervisor', 'employee': '员工 / Employee' };
+  $('#userLevelBadge').removeClass('bg-secondary').addClass(perm === 'admin' ? 'bg-danger' : (perm === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary')).text(permLabels[perm] || '');
+
+  $('#btnBackDashboard').on('click', function (e) {
+    e.preventDefault();
+    var siWebPage = sessionStorage.getItem('siWebPage') || '';
+    window.open(siWebPage + '?v=Navigation'
+      + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || '')
+      + '&Name=' + encodeURIComponent(sessionStorage.getItem('Name') || '')
+      + '&Process=' + encodeURIComponent(sessionStorage.getItem('Process') || '')
+      + '&Workshop=' + encodeURIComponent(sessionStorage.getItem('Workshop') || ''));
+  });
+
+  buildFieldIndex();
+  renderAccordion();
+  loadTaskList();
+
+  $('#taskSelect').on('change', function () { var tid = $(this).val(); if (tid) selectTask(tid); else clearForm(); });
+  $('#btnNewTask').on('click', function () { $('#newPlanDate').val(new Date().toISOString().split('T')[0]); $('#newTaskModal').modal('show'); });
+  $('#btnCreateTask').on('click', createTask);
+  $('#btnSaveDraft').on('click', saveRecord);
+  $('#btnSubmit').on('click', submitRecord);
+});
+
+// Build a flat index: key = "section_row_subcol" → position in 196-element array
+function buildFieldIndex() {
+  var pos = 0;
+  TEMPLATE_SECTIONS.forEach(function (sec) {
+    if (sec.subSections) {
+      sec.subSections.forEach(function (sub) {
+        (sub.rows || []).forEach(function (r) {
+          if (r.subCols) {
+            r.subCols.forEach(function (sc) {
+              fieldKeyMap[sec.id + '_' + sub.id + '_' + r.row + '_' + sc] = pos++;
+            });
+          } else if (r.subRows) {
+            r.subRows.forEach(function (sr) {
+              fieldKeyMap[sec.id + '_' + sub.id + '_' + r.row + '_' + sr.row] = pos++;
+            });
+          } else {
+            fieldKeyMap[sec.id + '_' + sub.id + '_' + r.row] = pos++;
+          }
+        });
+      });
+    } else if (sec.rows) {
+      sec.rows.forEach(function (r) {
+        if (r.subCols) {
+          r.subCols.forEach(function (sc) {
+            fieldKeyMap[sec.id + '_' + r.row + '_' + sc] = pos++;
+          });
+        } else if (r.subRows) {
+          r.subRows.forEach(function (sr) {
+            fieldKeyMap[sec.id + '_' + r.row + '_' + sr.row] = pos++;
+          });
+        } else {
+          fieldKeyMap[sec.id + '_' + r.row] = pos++;
+        }
+      });
+    }
+  });
+  // Add remaining free-text slots up to 196
+  while (pos < 196) {
+    fieldKeyMap['_free_' + (pos)] = pos;
+    pos++;
+  }
+}
+
+function renderAccordion() {
+  var html = '';
+  TEMPLATE_SECTIONS.forEach(function (sec, idx) {
+    var isFirst = idx === 0;
+    html += '<div class="accordion-item">';
+    html += '<h2 class="accordion-header">';
+    html += '<button class="accordion-button' + (isFirst ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_' + sec.id + '">' + sec.title + '</button>';
+    html += '</h2>';
+    html += '<div id="collapse_' + sec.id + '" class="accordion-collapse collapse' + (isFirst ? ' show' : '') + '" data-bs-parent="#paramAccordion">';
+    html += '<div class="accordion-body">';
+    html += renderSectionBody(sec);
+    html += '</div></div></div>';
+  });
+  $('#paramAccordion').html(html);
+}
+
+function renderSectionBody(sec) {
+  var html = '';
+  if (sec.subSections) {
+    sec.subSections.forEach(function (sub) {
+      html += '<div class="mb-3"><strong style="font-size:12px;">' + sub.title + '</strong>';
+      html += '<div class="row g-2 mt-1">';
+      (sub.rows || []).forEach(function (r) {
+        html += renderFieldRow(sec.id + '_' + sub.id, r);
+      });
+      html += '</div></div>';
+    });
+  } else if (sec.rows) {
+    html += '<div class="row g-2">';
+    sec.rows.forEach(function (r) {
+      html += renderFieldRow(sec.id, r);
+    });
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderFieldRow(prefix, r) {
+  var html = '';
+  if (r.subCols) {
+    html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label><div class="row g-1">';
+    r.subCols.forEach(function (sc) {
+      html += '<div class="col-4 col-md-2"><input type="text" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sc + '" placeholder="' + sc + '"></div>';
+    });
+    html += '</div></div>';
+  } else if (r.subRows) {
+    html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label><div class="row g-1">';
+    r.subRows.forEach(function (sr) {
+      html += '<div class="col-3 col-md-2"><input type="text" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sr.row + '" placeholder="' + sr.label + '"></div>';
+    });
+    html += '</div></div>';
+  } else if (r.isTextarea) {
+    html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label>';
+    html += '<textarea class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '" rows="3"></textarea></div>';
+  } else {
+    html += '<div class="col-6 col-md-4 col-lg-3">';
+    html += '<label class="form-label-sm">' + r.label + '</label>';
+    html += '<input type="text" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '">';
+    html += '</div>';
+  }
+  return html;
+}
+
+function loadTaskList(callback) {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      allTasks = r.success ? r.data : [];
+      var html = '<option value="">-- 选择或新建 / Select or Create --</option>';
+      allTasks.forEach(function (t) {
+        html += '<option value="' + t.taskID + '">' + t.taskID + ' | ' + (t.productName || t.moldNo || '--') + '</option>';
+      });
+      $('#taskSelect').html(html);
+      if (callback) callback();
+    })
+    .loadNPITestTaskList();
+}
+
+function selectTask(taskID) {
+  currentTask = allTasks.find(function (t) { return t.taskID === taskID; });
+  if (!currentTask) return;
+  var info = [];
+  if (currentTask.productName) info.push('<span class="task-info-item">产品<br><small>Product</small>: ' + currentTask.productName + '</span>');
+  if (currentTask.moldNo) info.push('<span class="task-info-item">模具<br><small>Mold</small>: ' + currentTask.moldNo + '</span>');
+  if (currentTask.machineNo) info.push('<span class="task-info-item">机台<br><small>Machine</small>: ' + currentTask.machineNo + '</span>');
+  if (currentTask.status) info.push('<span class="task-info-item">状态<br><small>Status</small>: ' + currentTask.status + '</span>');
+  $('#taskInfo').html(info.join(' '));
+  $('#paramFormCard, #historyCard').show();
+
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      currentRecord = r.success ? r.data : null;
+      if (currentRecord) {
+        fillFormFields(currentRecord.fields);
+        var submitted = currentRecord.status === '已提交';
+        $('#btnSaveDraft, #btnSubmit').prop('disabled', submitted);
+        $('#saveStatus').text(submitted ? '已提交 / Submitted' : '草稿 / Draft');
+      } else {
+        clearFormFields();
+        $('#btnSaveDraft, #btnSubmit').prop('disabled', false);
+        $('#saveStatus').text('新记录 / New Record');
+      }
+      loadHistory(taskID);
+    })
+    .loadNPIProcessRecord(taskID);
+}
+
+function fillFormFields(fields) {
+  $('.npi-field').each(function () {
+    var key = $(this).data('key');
+    var pos = fieldKeyMap[key];
+    $(this).val(pos !== undefined && fields && fields[pos] ? fields[pos] : '');
+  });
+}
+
+function clearFormFields() { $('.npi-field').val(''); }
+
+function collectFormFields() {
+  var fields = new Array(196).fill('');
+  $('.npi-field').each(function () {
+    var key = $(this).data('key');
+    var pos = fieldKeyMap[key];
+    if (pos !== undefined) fields[pos] = $(this).val() || '';
+  });
+  return fields;
+}
+
+function clearForm() {
+  currentTask = null; currentRecord = null;
+  $('#taskInfo').html(''); $('#paramFormCard, #historyCard').hide(); clearFormFields();
+}
+
+function createTask() {
+  var taskData = {
+    source: $('#newSource').val(), productName: $('#newProductName').val().trim(),
+    moldNo: $('#newMoldNo').val().trim(), machineNo: $('#newMachineNo').val().trim(),
+    material: $('#newMaterial').val().trim(), planDate: $('#newPlanDate').val(),
+    remark: $('#newRemark').val().trim()
+  };
+  if (!taskData.productName && !taskData.moldNo) {
+    Swal.fire({ icon: 'warning', title: swalTitle('提示','Info'), html: swalHtml('请至少填写产品名称或模具编号','Please fill at least product name or mold no.') });
+    return;
+  }
+  Swal.fire({ title: swalTitle('创建中...','Creating...'), html: swalHtml('正在创建测试任务','Creating test task'), allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
+  google.script.run
+    .withSuccessHandler(function (result) {
+      Swal.close();
+      var r = JSON.parse(result || '{}');
+      if (r.success) {
+        $('#newTaskModal').modal('hide');
+        loadTaskList(function () { $('#taskSelect').val(r.taskID); selectTask(r.taskID); });
+      } else {
+        Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(r.message,'') });
+      }
+    })
+    .createNPITestTask(JSON.stringify(taskData), sessionStorage.getItem('ID') || '');
+}
+
+function saveRecord() {
+  if (!currentTask) { Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先选择测试任务','Please select a test task first') }); return; }
+  var recordData = {
+    recordID: currentRecord ? currentRecord.recordID : null,
+    testTaskID: currentTask.taskID,
+    fields: collectFormFields(),
+    operatorSAPID: sessionStorage.getItem('ID') || ''
+  };
+  Swal.fire({ title: swalTitle('保存中...','Saving...'), html: swalHtml('正在保存工艺参数','Saving process parameters'), allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
+  google.script.run
+    .withSuccessHandler(function (result) {
+      Swal.close();
+      var r = JSON.parse(result || '{}');
+      if (r.success) {
+        if (r.recordID) currentRecord = { recordID: r.recordID, status: '草稿', fields: recordData.fields };
+        $('#saveStatus').text('已保存 / Saved @ ' + new Date().toLocaleTimeString());
+        loadHistory(currentTask.taskID);
+      } else { Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(r.message,'') }); }
+    })
+    .saveNPIProcessRecord(JSON.stringify(recordData));
+}
+
+function submitRecord() {
+  if (!currentRecord || !currentRecord.recordID) { Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先保存草稿','Please save draft first') }); return; }
+  Swal.fire({
+    title: swalTitle('确认提交','Confirm Submit'), html: swalHtml('提交后不可修改，确认提交？','Cannot modify after submit. Confirm?'),
+    icon:'warning', showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ title: swalTitle('提交中...','Submitting...'), html: swalHtml('正在提交','Submitting'), allowOutsideClick:false, showConfirmButton:false, didOpen: function(){Swal.showLoading();} });
+    google.script.run
+      .withSuccessHandler(function (result) {
+        Swal.close();
+        var res = JSON.parse(result || '{}');
+        if (res.success) {
+          $('#saveStatus').text('已提交 / Submitted');
+          $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
+          loadHistory(currentTask.taskID);
+        } else { Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(res.message,'') }); }
+      })
+      .submitNPIProcessRecord(currentRecord.recordID);
+  });
+}
+
+function loadHistory(testTaskID) {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      var versions = r.success ? r.data : [];
+      var html = '';
+      versions.forEach(function (v) {
+        var isActive = currentRecord && currentRecord.recordID === v.recordID;
+        var statusBadge = v.status === '已提交'
+          ? '<span style="color:#198754;font-weight:700;">已提交 / Submitted</span>'
+          : '<span style="color:#fd7e14;">草稿 / Draft</span>';
+        var latestBadge = v.isLatest ? ' <span class="badge bg-primary" style="font-size:9px;">最新 Latest</span>' : '';
+        html += '<div class="version-list-item' + (isActive ? ' active' : '') + '">';
+        html += '<span>' + v.recordID + latestBadge + '</span>';
+        html += '<span>' + statusBadge + '</span>';
+        html += '<span style="color:#adb5bd;font-size:11px;">' + (v.updatedAt || '') + '</span>';
+        html += '</div>';
+      });
+      $('#historyList').html(html || '<div style="color:#adb5bd;font-size:12px;padding:12px;">暂无记录 / No records</div>');
+    })
+    .loadNPIProcessRecordHistory(testTaskID);
+}
+</script>

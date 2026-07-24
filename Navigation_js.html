@@ -439,5 +439,19 @@
         window.open(url);
         $('#failureReportModal').modal('hide');
     });
+
+    // ---- NPI 新品测试 ----
+    $('#NPITestArrangement').on('click', () => {
+        $('#npiModal').modal('show');
+    });
+    $('#NPI_ProcessRecord_Btn').on('click', () => {
+        let url = siWebPage + '?v=NPI_ProcessRecord'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#npiModal').modal('hide');
+    });
   });
 </script>

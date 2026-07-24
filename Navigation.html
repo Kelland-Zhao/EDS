@@ -231,6 +231,14 @@
           <div class="title-en">Cycle Monitor</div>
         </button>
       </div>
+      <!-- NPI 新品测试 -->
+      <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="NPITestArrangement">
+          <i class="bi bi-box-seam icon"></i>
+          <div class="title-cn">新品测试</div>
+          <div class="title-en">NPI Test</div>
+        </button>
+      </div>
     </div>
 
     <!-- 故障与改善 -->
@@ -584,6 +592,58 @@
 <?!=include("Kez_bootstrap@5.3.1_js") ?>
 <?!=include("Kez_sweetalert2_js") ?>
 <?!=include("Navigation_js") ?>
+
+
+  <!-- NPI Test Modal -->
+  <div class="modal fade" id="npiModal" tabindex="-1" aria-labelledby="npiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="npiModalLabel">新品测试 / NPI Test</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body modal-domain-daily">
+          <div class="d-grid gap-2">
+            <button class="modal-card-btn" type="button" id="NPI_ProcessRecord_Btn">
+              <i class="bi bi-clipboard-data mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">工艺参数记录</div>
+                <div class="title-en">Process Record</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+            <button class="modal-card-btn" type="button" disabled>
+              <i class="bi bi-calendar-week mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">测试排期</div>
+                <div class="title-en">Test Scheduling</div>
+              </div>
+              <span class="badge bg-secondary" style="font-size:9px;margin-left:8px;">即将推出<br>Coming Soon</span>
+            </button>
+            <button class="modal-card-btn" type="button" disabled>
+              <i class="bi bi-box2 mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">样品管理</div>
+                <div class="title-en">Sample Management</div>
+              </div>
+              <span class="badge bg-secondary" style="font-size:9px;margin-left:8px;">即将推出<br>Coming Soon</span>
+            </button>
+            <button class="modal-card-btn" type="button" disabled>
+              <i class="bi bi-file-earmark-text mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">测试报告</div>
+                <div class="title-en">Test Report</div>
+              </div>
+              <span class="badge bg-secondary" style="font-size:9px;margin-left:8px;">即将推出<br>Coming Soon</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
 
 
 </html>

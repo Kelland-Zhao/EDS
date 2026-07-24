@@ -10,6 +10,7 @@ const webIconUrl =
 //  任务安排模块常量 / Task Arrangement Module Constants
 // ============================================================
 const TASK_SS_ID = "1UBg1Ake18cFp6gj0jKRX1Y9GJ0VL1pY5aXK-UoCeAY0";
+const NPI_SS_ID = "1092k9V4BT-WhD9GPoF6sRQC2TtdZfdjeRe8pK6v1rmQ";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
 const TASK_TEMPLATES_SHEET = "DailyTemplates";
@@ -153,6 +154,7 @@ function doGet(e) {
   Route.path("EDS_TaskList", loadEDSTaskList);
   Route.path("EDS_MyTasks", loadEDSMyTasks);
   Route.path("CycleMonitor", loadCycleMonitor);
+  Route.path("NPI_ProcessRecord", loadNPIProcessRecord);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
@@ -1373,6 +1375,18 @@ function loadCycleMonitor(webPage, id, name, process) {
     intoWebType: process || ""
   })
     .setTitle("注塑周期监控 | Cycle Monitor")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadNPIProcessRecord(webPage, id, name, process) {
+  var pageUrl = webPage || getReleaseWebPage();
+  return render("NPI_ProcessRecord", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("新品测试工艺参数 | NPI Process Record")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -13974,4 +13988,185 @@ function formatDateLocal(d) {
  */
 function formatDateShort(dateStr) {
   return dateStr.substring(5);
+}
+
+// ============================================================
+//  NPI 新品测试管理 / NPI Test Management
+// ============================================================
+
+function createNPITestTask(taskDataJSON, operatorSAPID) {
+  try {
+    var taskData = typeof taskDataJSON === 'string' ? JSON.parse(taskDataJSON) : taskDataJSON;
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
+    if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
+
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var data = ws.getDataRange().getValues();
+    var todayCount = 0;
+    for (var i = 1; i < data.length; i++) {
+      var tid = String(data[i][0] || '');
+      if (tid.indexOf('NPI-' + dateStr.replace(/-/g, '')) === 0) todayCount++;
+    }
+    var seq = ('000' + (todayCount + 1)).slice(-4);
+    var taskID = 'NPI-' + dateStr.replace(/-/g, '') + '-' + seq;
+
+    ws.appendRow([
+      taskID,
+      taskData.source || 'urgent',
+      '待确认',
+      taskData.productName || '',
+      taskData.moldNo || '',
+      taskData.machineNo || '',
+      taskData.material || '',
+      taskData.reqDept || '',
+      taskData.reqPerson || operatorSAPID,
+      taskData.planDate || dateStr,
+      '待确认', '', '', '', '',
+      taskData.remark || '',
+      now, now
+    ]);
+    return JSON.stringify({ success: true, taskID: taskID, message: "任务已创建 / Task created" });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function loadNPITestTaskList() {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var data = ws.getDataRange().getValues();
+    var result = [];
+    for (var i = 1; i < data.length; i++) {
+      if (!String(data[i][0] || '').trim()) continue;
+      result.push({
+        taskID: String(data[i][0] || ''),
+        source: String(data[i][1] || ''),
+        status: String(data[i][2] || ''),
+        productName: String(data[i][3] || ''),
+        moldNo: String(data[i][4] || ''),
+        machineNo: String(data[i][5] || ''),
+        material: String(data[i][6] || ''),
+        reqDept: String(data[i][7] || ''),
+        reqPerson: String(data[i][8] || ''),
+        planDate: data[i][9] instanceof Date ? Utilities.formatDate(data[i][9], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(data[i][9] || ''),
+        confirmStatus: String(data[i][10] || ''),
+        tester: String(data[i][12] || ''),
+        remark: String(data[i][15] || ''),
+        createdAt: String(data[i][16] || '')
+      });
+    }
+    return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function saveNPIProcessRecord(recordJSON) {
+  try {
+    var record = typeof recordJSON === 'string' ? JSON.parse(recordJSON) : recordJSON;
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
+    if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var data = ws.getDataRange().getValues();
+    var rowIndex = -1;
+
+    if (record.recordID) {
+      for (var i = 1; i < data.length; i++) {
+        if (String(data[i][0] || '').trim() === record.recordID) {
+          rowIndex = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (rowIndex > 0) {
+      // Update existing draft
+      var fields = record.fields || [];
+      for (var j = 0; j < fields.length && j < 196; j++) {
+        ws.getRange(rowIndex, j + 4).setValue(fields[j] !== undefined ? String(fields[j]) : '');
+      }
+      ws.getRange(rowIndex, 6).setValue(now);
+    } else {
+      // New record
+      var seq = ('000' + (Date.now() % 10000)).slice(-4);
+      var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
+      var row = [recordID, record.testTaskID || '', '草稿', true];
+      var fields = record.fields || [];
+      for (var k = 0; k < 196; k++) {
+        row.push(fields[k] !== undefined ? String(fields[k]) : '');
+      }
+      row.push(now, now, record.operatorSAPID || '');
+      ws.appendRow(row);
+      record.recordID = recordID;
+    }
+
+    return JSON.stringify({ success: true, recordID: record.recordID || record.recordID_ || '', message: "已保存 / Saved" });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function submitNPIProcessRecord(recordID) {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
+    if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
+    var data = ws.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === recordID) {
+        ws.getRange(i + 1, 3).setValue('已提交');
+        ws.getRange(i + 1, 6).setValue(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"));
+        return JSON.stringify({ success: true, message: "已提交 / Submitted" });
+      }
+    }
+    return JSON.stringify({ success: false, message: "记录未找到 / Record not found" });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function loadNPIProcessRecord(testTaskID) {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
+    if (!ws) return JSON.stringify({ success: false, data: null });
+    var data = ws.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][1] || '').trim() === testTaskID && String(data[i][3] || '').trim() === 'true') {
+        var row = data[i];
+        var fields = [];
+        for (var j = 4; j < 200; j++) fields.push(row[j] !== undefined ? String(row[j] || '') : '');
+        return JSON.stringify({ success: true, data: {
+          recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
+          isLatest: String(row[3] || '') === 'true', fields: fields,
+          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || '')
+        }});
+      }
+    }
+    return JSON.stringify({ success: true, data: null });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function loadNPIProcessRecordHistory(testTaskID) {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var data = ws.getDataRange().getValues();
+    var result = [];
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][1] || '').trim() === testTaskID) {
+        result.push({
+          recordID: String(data[i][0] || ''), status: String(data[i][2] || ''),
+          isLatest: String(data[i][3] || '') === 'true',
+          updatedAt: String(data[i][201] || ''), createdBy: String(data[i][202] || '')
+        });
+      }
+    }
+    return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
 }

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("Kez_datatables@1.11.5_css");?>
+  <?!=include("kez_Datatables_css");?>
+  <?!=include("Kez_Select2@4.0.13_css");?>
+  <?!=include("CSS");?>
+  <?!=include("Kez_sweetalert2_js");?>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    html,body { margin:0; padding:0; } body { background:#f5f6f8; color:#333; }
+    .welcome-bar { background:#fff; border-left:4px solid #E60012; padding:10px 18px; margin:12px 0 18px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.04); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .welcome-bar .greet { color:#333; font-size:16px; }
+    .welcome-bar .greet #name { color:#E60012; font-weight:600; }
+    .section-card { background:#fff; border-radius:8px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; }
+    .accordion-button { font-size:13px; font-weight:600; padding:8px 12px; }
+    .accordion-button:not(.collapsed) { background:#fff3f3; color:#E60012; }
+    .accordion-body { padding:12px; }
+    .form-label-sm { font-size:11px; font-weight:600; color:#495057; margin-bottom:2px; line-height:1.3; }
+    .form-control-sm, .form-select-sm { font-size:12px; padding:4px 8px; }
+    .version-list-item { padding:8px 12px; border-bottom:1px solid #eee; cursor:pointer; font-size:12px; display:flex; justify-content:space-between; align-items:center; }
+    .version-list-item:hover { background:#f8f9fa; }
+    .version-list-item.active { background:#fff3f3; border-left:3px solid #E60012; }
+    .task-info-item { display:inline-block; padding:2px 8px; background:#f0f0f0; border-radius:4px; font-size:11px; margin-right:6px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-nav">
+    <div class="container-fluid">
+      <a class="navbar-brand" style="display:flex;align-items:center;gap:12px;text-decoration:none;">
+        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+PHN2ZyB3aWR0aD0iODcxbW0iIGhlaWdodD0iNDI4bW0iIHZpZXdCb3g9IjAgMCA4NzEuMDAwMDEgNDI4IiB2ZXJzaW9uPSIxLjEiIGlkPSJzdmc4IiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczpzdmc9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiIHhtbG5zOmNjPSJodHRwOi8vY3JlYXRpdmVjb21tb25zLm9yZy9ucyMiIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyI+PGRlZnMgaWQ9ImRlZnMyIj48Y2xpcFBhdGggaWQ9ImNsaXBQYXRoMjk5OSIgY2xpcFBhdGhVbml0cz0idXNlclNwYWNlT25Vc2UiPjxwYXRoIGlkPSJwYXRoMzAwMSIgZD0iTSAwLDAgSCA2MTIgViA2ODQgSCAwIFoiIC8+PC9jbGlwUGF0aD48Y2xpcFBhdGggaWQ9ImNsaXBQYXRoMzAxMSIgY2xpcFBhdGhVbml0cz0idXNlclNwYWNlT25Vc2UiPjxwYXRoIGlkPSJwYXRoMzAxMyIgZD0iTSAtMTcuMzUsNjY1LjM1IEggMTY1LjUzIFYgNjEwLjYzIEggLTE3LjM1IFoiIC8+PC9jbGlwUGF0aD48bWFzayBpZD0ibWFzazMwMTUiIGhlaWdodD0iMSIgd2lkdGg9IjEiIHk9IjAiIHg9IjAiIG1hc2tVbml0cz0idXNlclNwYWNlT25Vc2UiPjxnIGlkPSJnMzAxNyI+PGcgaWQ9ImczMDE5IiBjbGlwLXBhdGg9InVybCgjY2xpcFBhdGgzMDExKSI+PGcgaWQ9ImczMDIxIj48ZyBpZD0iZzMwMjMiIHRyYW5zZm9ybT0ibWF0cml4KDE4Mi44ODAwMSwwLDAsNTQuNzIwMDA1LC0xNy4zNDk5ODgsNjEwLjYzKSI+PGltYWdlIGlkPSJpbWFnZTMwMjUiIHhsaW5rOmhyZWY9ImRhdGE6aW1hZ2UvcG5nO2Jhc2U2NCxpVkJPUncwS0dnb0FBQUFOU1VoRVVnQUFBVEVBQUFCY0NBWUFBQUFHZUlKWUFBQUFCSE5DU1ZRSUNBZ0lmQWhraUFBQURCZEpSRUZVZUp6dG5XdHo0c3dPaE9VYkVKTGQvZjgvY3krWWl3MmNEMi8xbkxiUUdKTkFJS0dmS2hjRUc3TnNGVjB0amFRcHpPeG9JeFJGWVdabXgrUG9aVUlJY1JjS095TmlRZ2p4eU5TM3VDbmNtNWtjbkJEaXRwUzN1S21FU3dqeFdad05KOWxWbmIzWkJkY0tJWjZYcVVabnluVmhPT25GaVAvR2MvOFl2Uy8zbWhEaU9ZQUkrUVhDcVk5VE9Kc1RLNG9pZTVpWmxXVjVzYkFKSVo0REwwYkg0ekVkWm1hSHcySHdHcCtMM2g5eEltSTVGd2JoZ21pVjVY" alt="Colgate" style="height:60px;">
+        <span style="color:white;font-family:Arial,Helvetica,sans-serif;line-height:1.2;">
+          <span style="font-size:xx-large;font-weight:bold;">新品测试工艺参数</span><br>
+          <span style="font-size:14px;font-weight:400;opacity:0.85;">NPI Process Record</span>
+        </span>
+      </a>
+      <div class="d-flex align-items-center gap-3">
+        <span id="userLevelBadge" class="badge bg-secondary">--</span>
+        <span id="userName" class="text-white fw-bold">--</span>
+        <a class="btn btn-sm btn-outline-primary" href="#" id="btnBackDashboard">
+          <i class="bi bi-arrow-left"></i> 返回<br><small>Back</small>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-3">
+    <div class="welcome-bar">
+      <div class="greet">
+        <span id="name"></span>，记录新品测试工艺参数 / Record NPI Test Process Parameters
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-title">测试任务<br><small style="font-weight:400;color:#888;">Test Task</small></div>
+      <div class="row align-items-end g-2">
+        <div class="col-md-5">
+          <label class="form-label-sm">选择任务<br><small>Select Task</small></label>
+          <select id="taskSelect" class="form-select form-select-sm">
+            <option value="">-- 选择或新建 / Select or Create --</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-sm btn-outline-primary w-100" id="btnNewTask">
+            <i class="bi bi-plus-lg"></i> 新建任务<br><small>New Task</small>
+          </button>
+        </div>
+        <div class="col-md-4" id="taskInfo" style="font-size:12px;color:#6c757d;"></div>
+      </div>
+    </div>
+
+    <div class="section-card" id="paramFormCard" style="display:none;">
+      <div class="section-title">工艺参数<br><small style="font-weight:400;color:#888;">Process Parameters</small></div>
+      <div class="accordion" id="paramAccordion"></div>
+      <div class="mt-3 d-flex gap-2 align-items-center">
+        <button class="btn btn-sm btn-outline-secondary" id="btnSaveDraft">
+          <i class="bi bi-save"></i> 保存草稿<br><small>Save Draft</small>
+        </button>
+        <button class="btn btn-sm btn-primary" id="btnSubmit">
+          <i class="bi bi-check-lg"></i> 提交<br><small>Submit</small>
+        </button>
+        <span id="saveStatus" style="font-size:11px;color:#198754;line-height:2.5;"></span>
+      </div>
+    </div>
+
+    <div class="section-card" id="historyCard" style="display:none;">
+      <div class="section-title">版本历史<br><small style="font-weight:400;color:#888;">Version History</small></div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="newTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">新建测试任务 / New Test Task</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label-sm">产品名称<br><small>Product Name</small></label>
+              <input type="text" class="form-control form-control-sm" id="newProductName">
+            </div>
+            <div class="col-6">
+              <label class="form-label-sm">模具编号<br><small>Mold No.</small></label>
+              <input type="text" class="form-control form-control-sm" id="newMoldNo">
+            </div>
+            <div class="col-6">
+              <label class="form-label-sm">机台编号<br><small>Machine No.</small></label>
+              <input type="text" class="form-control form-control-sm" id="newMachineNo">
+            </div>
+            <div class="col-6">
+              <label class="form-label-sm">物料<br><small>Material</small></label>
+              <input type="text" class="form-control form-control-sm" id="newMaterial">
+            </div>
+            <div class="col-6">
+              <label class="form-label-sm">来源<br><small>Source</small></label>
+              <select class="form-select form-select-sm" id="newSource">
+                <option value="weekly">周计划<br><small>Weekly</small></option>
+                <option value="urgent">紧急<br><small>Urgent</small></option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label-sm">计划日期<br><small>Plan Date</small></label>
+              <input type="date" class="form-control form-control-sm" id="newPlanDate">
+            </div>
+            <div class="col-12">
+              <label class="form-label-sm">备注<br><small>Remark</small></label>
+              <input type="text" class="form-control form-control-sm" id="newRemark">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
+          <button type="button" class="btn btn-sm btn-primary" id="btnCreateTask">创建 / Create</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <?!=include("NPI_ProcessRecord_js") ?>
+  <?!=include("Kez_jquery@3.6.4_js") ?>
+  <?!=include("Kez_datatables@1.13.6_js") ?>
+  <?!=include("Kez_bootstrap@5.3.1_js") ?>
+  <?!=include("Kez_Select2@4.0.13_js") ?>
+</body>
+</html>
