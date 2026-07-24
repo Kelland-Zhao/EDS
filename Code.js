@@ -14103,7 +14103,7 @@ function saveNPIProcessRecord(recordJSON) {
       record.recordID = recordID;
     }
 
-    return JSON.stringify({ success: true, recordID: record.recordID || record.recordID_ || '', message: "已保存 / Saved" });
+    return JSON.stringify({ success: true, recordID: record.recordID || '', message: "已保存 / Saved" });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
@@ -14127,7 +14127,7 @@ function submitNPIProcessRecord(recordID) {
   }
 }
 
-function loadNPIProcessRecord(testTaskID) {
+function loadNPIProcessRecordData(testTaskID) {
   try {
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
     if (!ws) return JSON.stringify({ success: false, data: null });
