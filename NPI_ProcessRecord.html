@@ -21,7 +21,7 @@
     .welcome-bar .perm-info { font-size:12px; color:#6c757d; }
     .welcome-bar .perm-info .badge { font-size:11px; vertical-align:middle; }
     .section-card { background:#fff; border-radius:8px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
-    .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; display:flex; justify-content:space-between; align-items:center; }
+    .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
     .section-title .toolbar { display:flex; align-items:center; gap:8px; }
     .section-title .toolbar .btn { font-size:13px; }
     .section-title .toolbar .btn span { display:flex; flex-direction:column; align-items:center; line-height:1.2; }
@@ -35,18 +35,23 @@
     .version-list-item:hover { background:#f8f9fa; }
     .version-list-item.active { background:#fff3f3; border-left:3px solid #E60012; }
     .task-info-item { display:inline-block; padding:2px 8px; background:#f0f0f0; border-radius:4px; font-size:11px; margin-right:6px; }
-    /* Select2 紧凑化 — 与 form-control-sm 高度对齐 */
-    .select2-container--bootstrap .select2-selection--single { height:28px; padding:0 !important; font-size:12px; display:flex; align-items:center; }
-    .select2-container--bootstrap .select2-selection--single .select2-selection__rendered { line-height:28px; padding:0 22px 0 8px; color:#333; width:100%; }
-    .select2-container--bootstrap .select2-selection--single .select2-selection__placeholder { line-height:28px; color:#adb5bd; }
-    .select2-container--bootstrap .select2-selection--single .select2-selection__arrow { height:26px; top:1px; }
+    /* Select2 紧凑化 — 覆盖 CSS.html 的 38px 全局设定 */
+    .select2-container--bootstrap .select2-selection--single { height:28px !important; padding:0 !important; font-size:12px; display:flex !important; align-items:center; }
+    .select2-container--bootstrap .select2-selection--single .select2-selection__rendered { line-height:28px !important; padding:0 22px 0 8px !important; color:#333; }
+    .select2-container--bootstrap .select2-selection--single .select2-selection__placeholder { line-height:28px !important; color:#adb5bd; }
+    .select2-container--bootstrap .select2-selection--single .select2-selection__arrow { height:26px !important; }
     .select2-container--bootstrap.select2-container--focus .select2-selection,
-    .select2-container--bootstrap.select2-container--open .select2-selection { border-color:#E60012; box-shadow:0 0 0 0.15rem rgba(230,0,18,0.15); }
+    .select2-container--bootstrap.select2-container--open .select2-selection { border-color:#E60012 !important; box-shadow:0 0 0 0.15rem rgba(230,0,18,0.15) !important; }
+    /* 也覆盖 default 主题的 38px */
+    .select2-container--default .select2-selection--single { height:28px !important; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { line-height:28px !important; }
+    .select2-container--default .select2-selection--single .select2-selection__arrow { height:26px !important; }
     /* 移动端响应式 */
     @media (max-width:768px) {
-      .navbar-brand span { font-size:14px !important; }
-      .navbar-brand span span { font-size:large !important; }
-      .navbar-brand img { height:40px !important; }
+      .navbar-brand { flex-wrap:wrap; max-width:70vw; }
+      .navbar-brand span { font-size:12px !important; }
+      .navbar-brand span span { font-size:16px !important; }
+      .navbar-brand img { height:32px !important; }
     }
   </style>
 </head>
