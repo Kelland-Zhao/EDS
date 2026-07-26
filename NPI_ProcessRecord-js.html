@@ -211,11 +211,11 @@ function renderHotRunner(sec) {
   for (var i = 1; i <= n; i++) {
     html += '<div class="row g-1 mb-1 hot-runner-row">';
     html += '<div class="col-2"><input type="text" class="form-control form-control-sm npi-field" data-key="hotRunner_seq_' + i + '" value="' + i + '" readonly style="background:#e9ecef;"></div>';
-    html += '<div class="col-4"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '"><option value="">-- / Select --</option>';
+    html += '<div class="col-4"><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '" onchange="onHotRunnerPosChange(this,' + i + ')"><option value="">-- / Select --</option>';
     HOT_RUNNER_POSITIONS.forEach(function (p) {
       html += '<option value="' + p.v + '">' + p.t + '</option>';
     });
-    html += '</select></div>';
+    html += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosDown(' + i + ')" title="复制到下方所有行 / Copy to all rows below" type="button"><i class="bi bi-arrow-down"></i></button></div></div>';
     html += '<div class="col-4"><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C"></div>';
     html += '<div class="col-2"></div></div>';
   }
@@ -232,14 +232,26 @@ function addHotRunnerRow() {
   var btnRow = $('#hotRunnerContainer > .mt-2');
   var newRow = $('<div class="row g-1 mb-1 hot-runner-row"></div>');
   newRow.append('<div class="col-2"><input type="text" class="form-control form-control-sm npi-field" data-key="hotRunner_seq_' + i + '" value="' + i + '" readonly style="background:#e9ecef;"></div>');
-  var selHtml = '<div class="col-4"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '"><option value="">-- / Select --</option>';
-  HOT_RUNNER_POSITIONS.forEach(function (p) { selHtml += '<option value="' + p + '">' + p + '</option>'; });
-  selHtml += '</select></div>';
+  var selHtml = '<div class="col-4"><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '"><option value="">-- / Select --</option>';
+  HOT_RUNNER_POSITIONS.forEach(function (p) { selHtml += '<option value="' + p.v + '">' + p.t + '</option>'; });
+  selHtml += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosDown(' + i + ')" title="复制到下方所有行 / Copy to all rows below" type="button"><i class="bi bi-arrow-down"></i></button></div></div>';
   newRow.append(selHtml);
   newRow.append('<div class="col-4"><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C"></div>');
   newRow.append('<div class="col-2"></div>');
   newRow.insertBefore(btnRow);
   rebuildFieldIndex();
+}
+
+function copyHotRunnerPosDown(fromIdx) {
+  var sel = $('[data-key="hotRunner_pos_' + fromIdx + '"]');
+  var val = sel.val();
+  if (!val) return;
+  $('#hotRunnerContainer .hot-runner-row').each(function () {
+    var rowIdx = parseInt($(this).find('[data-key^="hotRunner_pos_"]').data('key').replace('hotRunner_pos_', ''));
+    if (rowIdx > fromIdx) {
+      $(this).find('[data-key="hotRunner_pos_' + rowIdx + '"]').val(val);
+    }
+  });
 }
 
 function removeHotRunnerRow() {
