@@ -113,6 +113,7 @@ let currentTask = null;
 let currentRecord = null;
 let allTasks = [];
 let fieldKeyMap = {}; // Maps section-row-column → index in 196-array
+let barrelEnabled = { barrelA: false, barrelB: false, barrelC: false, barrelD: false };
 
 $(document).ready(function () {
   var perm = sessionStorage.getItem('EDSTaskPermission') || '';
@@ -211,8 +212,16 @@ function renderAccordion() {
 function renderSectionBody(sec) {
   var html = '';
   if (sec.subSections) {
+    var barrelClasses = { barrelA:'barrel-a', barrelB:'barrel-b', barrelC:'barrel-c', barrelD:'barrel-d' };
     sec.subSections.forEach(function (sub) {
-      html += '<div class="mb-3"><strong style="font-size:12px;">' + sub.title + '</strong>';
+      var bc = barrelClasses[sub.id] || '';
+      var isBarrel = !!bc;
+      html += '<div class="mb-3 ' + bc + (isBarrel ? ' barrel-disabled' : '') + '" id="section_' + sub.id + '">';
+      if (isBarrel) {
+        html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + sub.id + '" onchange="toggleBarrel(\'' + sub.id + '\')"> <strong style="font-size:12px;">' + sub.title + '</strong></label>';
+      } else {
+        html += '<strong style="font-size:12px;">' + sub.title + '</strong>';
+      }
       html += '<div class="row g-2 mt-1">';
       (sub.rows || []).forEach(function (r) {
         html += renderFieldRow(sec.id + '_' + sub.id, r);
@@ -329,6 +338,18 @@ function fillFormFields(fields) {
   });
 }
 
+function toggleBarrel(barrelId) {
+  barrelEnabled[barrelId] = !barrelEnabled[barrelId];
+  var section = $('#section_' + barrelId);
+  if (barrelEnabled[barrelId]) {
+    section.removeClass('barrel-disabled');
+  } else {
+    section.addClass('barrel-disabled');
+    // Clear inputs when disabling
+    section.find('.npi-field').val('');
+  }
+}
+
 function clearFormFields() { $('.npi-field').val(''); }
 
 function collectFormFields() {
@@ -344,6 +365,12 @@ function collectFormFields() {
 function clearForm() {
   currentTask = null; currentRecord = null;
   $('#taskInfo').html(''); $('#paramFormCard, #historyCard').hide(); clearFormFields();
+  // Reset barrel toggles
+  ['barrelA','barrelB','barrelC','barrelD'].forEach(function (id) {
+    barrelEnabled[id] = false;
+    $('#toggle_' + id).prop('checked', false);
+    $('#section_' + id).addClass('barrel-disabled');
+  });
 }
 
 function createTask() {

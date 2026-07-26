@@ -46,6 +46,14 @@
     .select2-container--default .select2-selection--single { height:28px !important; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height:28px !important; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height:26px !important; }
+    /* 炮筒颜色区分 */
+    .barrel-a { border-left:4px solid #0d6efd; background:#f0f4ff; padding:10px; border-radius:4px; margin-bottom:8px; }
+    .barrel-b { border-left:4px solid #198754; background:#f0faf4; padding:10px; border-radius:4px; margin-bottom:8px; }
+    .barrel-c { border-left:4px solid #fd7e14; background:#fff8f0; padding:10px; border-radius:4px; margin-bottom:8px; }
+    .barrel-d { border-left:4px solid #6f42c1; background:#f8f4ff; padding:10px; border-radius:4px; margin-bottom:8px; }
+    .barrel-disabled input, .barrel-disabled select, .barrel-disabled textarea { opacity:.5; pointer-events:none; background:#e9ecef !important; }
+    .barrel-toggle { font-size:12px; cursor:pointer; user-select:none; display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+    .barrel-toggle input { width:16px; height:16px; cursor:pointer; }
     /* S行半列偏移 — 落在V列间隙之间 */
     .ms-col-1 { margin-left:12.5%; }
     @media (max-width:768px) { .ms-col-1 { margin-left:16.66%; } }
