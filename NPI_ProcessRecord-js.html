@@ -10,8 +10,13 @@ const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;
 const TEMPLATE_SECTIONS = [
   { id: 'productInfo', title: '产品信息<br><small>Product Info</small>', rows: [
     {row:9, label:'产品名称<br><small>Product Name</small>'},
+    {row:10, label:'工艺卡编号<br><small>Process Card No.</small>'},
+    {row:11, label:'适用SKU<br><small>Applicable SKU</small>'},
     {row:12, label:'机型<br><small>Machine Model</small>'},
-    {row:15, label:'模具编号<br><small>Mold No.</small>'}
+    {row:13, label:'成型周期标准<br><small>Cycle Time Std</small>'},
+    {row:14, label:'总周期标准<br><small>Total Cycle Std</small>'},
+    {row:15, label:'模具编号<br><small>Mold No.</small>'},
+    {row:16, label:'模穴数<br><small>Cavity Count</small>'}
   ]},
   { id: 'barrel', title: '炮筒模块<br><small>Barrel Module</small>', subSections: [
     { id:'barrelA', title:'A炮筒<br><small>Barrel A</small>', rows:[
