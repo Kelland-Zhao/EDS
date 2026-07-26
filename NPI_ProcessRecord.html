@@ -20,7 +20,11 @@
     .welcome-bar .perm-info { font-size:12px; color:#6c757d; }
     .welcome-bar .perm-info .badge { font-size:11px; vertical-align:middle; }
     .section-card { background:#fff; border-radius:8px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
-    .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; }
+    .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; display:flex; justify-content:space-between; align-items:center; }
+    .section-title .toolbar { display:flex; align-items:center; gap:8px; }
+    .section-title .toolbar .btn { font-size:13px; }
+    .section-title .toolbar .btn span { display:flex; flex-direction:column; align-items:center; line-height:1.2; }
+    .section-title .toolbar .btn small { font-size:9px; color:inherit; opacity:0.7; }
     .accordion-button { font-size:13px; font-weight:600; padding:8px 12px; }
     .accordion-button:not(.collapsed) { background:#fff3f3; color:#E60012; }
     .accordion-body { padding:12px; }
@@ -58,7 +62,15 @@
     </div>
 
     <div class="section-card">
-      <div class="section-title">测试任务<br><small style="font-weight:400;color:#888;">Test Task</small></div>
+      <div class="section-title">
+        <span>测试任务<br><small style="font-weight:400;color:#888;">Test Task</small></span>
+        <div class="toolbar">
+          <button class="btn btn-outline-primary" id="btnNewTask">
+            <i class="bi bi-plus-circle"></i>
+            <span>新建任务<br><small>New Task</small></span>
+          </button>
+        </div>
+      </div>
       <div class="row align-items-end g-2">
         <div class="col-md-5">
           <label class="form-label-sm">选择任务<br><small>Select Task</small></label>
@@ -66,12 +78,7 @@
             <option value="">-- 选择或新建 / Select or Create --</option>
           </select>
         </div>
-        <div class="col-md-3">
-          <button class="btn btn-sm btn-outline-primary w-100" id="btnNewTask">
-            <i class="bi bi-plus-lg"></i> 新建任务<br><small>New Task</small>
-          </button>
-        </div>
-        <div class="col-md-4" id="taskInfo" style="font-size:12px;color:#6c757d;"></div>
+        <div class="col-md-7" id="taskInfo" style="font-size:12px;color:#6c757d;"></div>
       </div>
     </div>
 
