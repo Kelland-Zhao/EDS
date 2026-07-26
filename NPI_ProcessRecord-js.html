@@ -305,6 +305,7 @@ function createTask() {
         var r2 = JSON.parse(result || '{}');
         if (r2.success) {
           $('#newTaskModal').modal('hide');
+          Swal.fire({ icon:'success', title:swalTitle('创建成功','Task Created'), html:swalHtml('任务 ' + r2.taskID + ' 已创建', 'Task ' + r2.taskID + ' created'), timer:3000, showConfirmButton:false });
           loadTaskList(function () { $('#taskSelect').val(r2.taskID); selectTask(r2.taskID); });
         } else {
           Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(r2.message,'') });
