@@ -20,67 +20,67 @@ const TEMPLATE_SECTIONS = [
   ]},
   { id: 'barrel', title: '炮筒模块<br><small>Barrel Module</small>', subSections: [
     { id:'barrelA', title:'A炮筒<br><small>Barrel A</small>', rows:[
-      {row:35, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:26, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:29, label:'注射 V<br><small>Injection V (%)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:32, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:36, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', subCols:['1','2','3']},
-      {row:37, label:'保压 V<br><small>Holding V (%)</small>', type:'number', subCols:['1','2','3']},
-      {row:38, label:'保压 T<br><small>Holding T (s)</small>', type:'number', subCols:['T1','T2'], offsetClass:'ms-col-1'},
+      {row:35, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
+      {row:26, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:29, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:32, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
+      {row:36, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:37, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:38, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
       {row:39, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
       {row:40, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
       {row:41, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'},
-      {row:42, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', subCols:['1','2','3']},
-      {row:43, label:'储料 V<br><small>Charge V (%)</small>', type:'number', subCols:['1','2','3']},
-      {row:44, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', subCols:['S1','S2'], offsetClass:'ms-col-1'},
+      {row:42, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:43, label:'储料 V<br><small>Charge V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:44, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'ms-col-1'},
       {row:45, label:'储料量<br><small>Charge Stroke (mm)</small>', type:'number'},
       {row:46, label:'松退行程<br><small>Suck-Back Stroke (mm)</small>', type:'number'},
       {row:47, label:'背压<br><small>Back Pressure (bar)</small>', type:'number'}
     ]},
     { id:'barrelB', title:'B炮筒<br><small>Barrel B</small>', rows:[
-      {row:50, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:41, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:44, label:'注射 V<br><small>Injection V (%)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:47, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:51, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', subCols:['1','2','3']},
-      {row:52, label:'保压 V<br><small>Holding V (%)</small>', type:'number', subCols:['1','2','3']},
-      {row:53, label:'保压 T<br><small>Holding T (s)</small>', type:'number', subCols:['T1','T2'], offsetClass:'ms-col-1'},
+      {row:50, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
+      {row:41, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:44, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:47, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
+      {row:51, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:52, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:53, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
       {row:54, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
       {row:55, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
       {row:56, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'},
-      {row:57, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', subCols:['1','2','3']},
-      {row:58, label:'储料 V<br><small>Charge V (%)</small>', type:'number', subCols:['1','2','3']},
-      {row:59, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', subCols:['S1','S2'], offsetClass:'ms-col-1'},
+      {row:57, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:58, label:'储料 V<br><small>Charge V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:59, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'ms-col-1'},
       {row:60, label:'储料量<br><small>Charge Stroke (mm)</small>', type:'number'},
       {row:61, label:'松退行程<br><small>Suck-Back Stroke (mm)</small>', type:'number'},
       {row:62, label:'背压<br><small>Back Pressure (bar)</small>', type:'number'}
     ]},
     { id:'barrelC', title:'C炮筒<br><small>Barrel C</small>', rows:[
-      {row:65, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:56, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:59, label:'注射 V<br><small>Injection V (%)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:62, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:66, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', subCols:['1','2','3']},
-      {row:67, label:'保压 V<br><small>Holding V (%)</small>', type:'number', subCols:['1','2','3']},
-      {row:68, label:'保压 T<br><small>Holding T (s)</small>', type:'number', subCols:['T1','T2'], offsetClass:'ms-col-1'},
+      {row:65, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
+      {row:56, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:59, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:62, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
+      {row:66, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:67, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:68, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
       {row:69, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
       {row:70, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
       {row:71, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'},
-      {row:72, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', subCols:['1','2','3']},
-      {row:73, label:'储料 V<br><small>Charge V (%)</small>', type:'number', subCols:['1','2','3']},
-      {row:74, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', subCols:['S1','S2'], offsetClass:'ms-col-1'},
+      {row:72, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:73, label:'储料 V<br><small>Charge V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:74, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'ms-col-1'},
       {row:75, label:'储料量<br><small>Charge Stroke (mm)</small>', type:'number'},
       {row:76, label:'松退行程<br><small>Suck-Back Stroke (mm)</small>', type:'number'},
       {row:77, label:'背压<br><small>Back Pressure (bar)</small>', type:'number'}
     ]},
     { id:'barrelD', title:'D炮筒<br><small>Barrel D</small>', rows:[
-      {row:80, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:71, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:74, label:'注射 V<br><small>Injection V (%)</small>', type:'number', subCols:['1','2','3','4']},
-      {row:77, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:81, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', subCols:['1','2','3']},
-      {row:82, label:'保压 V<br><small>Holding V (%)</small>', type:'number', subCols:['1','2','3']},
-      {row:83, label:'保压 T<br><small>Holding T (s)</small>', type:'number', subCols:['T1','T2'], offsetClass:'ms-col-1'},
+      {row:80, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
+      {row:71, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:74, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
+      {row:77, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
+      {row:81, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:82, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
+      {row:83, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
       {row:84, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
       {row:85, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
       {row:86, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'}
@@ -243,10 +243,15 @@ function renderFieldRow(prefix, r) {
   if (r.subCols) {
     var colType = r.type || 'text';
     var offset = r.offsetClass || '';
-    html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label><div class="row g-1' + (offset ? ' ' + offset : '') + '">';
+    var minSeg = r.minSeg || 1;
+    var maxSeg = r.maxSeg || 12;
+    var segPrefix = r.segPrefix || '';
+    html += '<div class="col-12" id="row_' + prefix + '_' + r.row + '"><label class="form-label-sm">' + r.label + '</label><div class="row g-1 align-items-end' + (offset ? ' ' + offset : '') + '">';
     r.subCols.forEach(function (sc) {
-      html += '<div class="col-4 col-md-2"><input type="' + colType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sc + '" placeholder="' + sc + '"' + (colType === 'number' ? ' step="any"' : '') + '></div>';
+      html += '<div class="col-4 col-md-2 seg-cell"><input type="' + colType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sc + '" placeholder="' + sc + '"' + (colType === 'number' ? ' step="any"' : '') + '></div>';
     });
+    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="addSegment(\'' + prefix + '\',' + r.row + ',' + minSeg + ',' + maxSeg + ',\'' + colType + '\',\'' + segPrefix + '\')" title="增加一段 / Add"><i class="bi bi-plus"></i></button></div>';
+    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="removeSegment(\'' + prefix + '\',' + r.row + ',' + minSeg + ',\'' + colType + '\')" title="减少一段 / Remove"><i class="bi bi-dash"></i></button></div>';
     html += '</div></div>';
   } else if (r.subRows) {
     html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label><div class="row g-1">';
@@ -338,6 +343,27 @@ function fillFormFields(fields) {
   });
 }
 
+function addSegment(prefix, row, minSeg, maxSeg, colType, segPrefix) {
+  var rowId = 'row_' + prefix + '_' + row;
+  var rowEl = $('#' + rowId + ' .row');
+  var segCount = rowEl.find('.seg-cell').length;
+  if (segCount >= maxSeg) return;
+  var segNum = segCount + 1;
+  var segLabel = segPrefix + segNum;
+  var btnCol = rowEl.find('.col-auto').first();
+  var newCell = $('<div class="col-4 col-md-2 seg-cell"><input type="' + colType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + row + '_' + segLabel + '" placeholder="' + segLabel + '"' + (colType === 'number' ? ' step="any"' : '') + '></div>');
+  newCell.insertBefore(btnCol);
+  rebuildFieldIndex();
+}
+
+function removeSegment(prefix, row, minSeg, colType) {
+  var rowId = 'row_' + prefix + '_' + row;
+  var cells = $('#' + rowId + ' .seg-cell');
+  if (cells.length <= minSeg) return;
+  cells.last().remove();
+  rebuildFieldIndex();
+}
+
 function toggleBarrel(barrelId) {
   barrelEnabled[barrelId] = !barrelEnabled[barrelId];
   var section = $('#section_' + barrelId);
@@ -345,8 +371,22 @@ function toggleBarrel(barrelId) {
     section.removeClass('barrel-disabled');
   } else {
     section.addClass('barrel-disabled');
-    // Clear inputs when disabling
     section.find('.npi-field').val('');
+  }
+}
+
+function rebuildFieldIndex() {
+  fieldKeyMap = {};
+  var pos = 0;
+  // Walk all npi-fields in DOM order and assign positions
+  $('.npi-field').each(function () {
+    var key = $(this).data('key');
+    if (key) fieldKeyMap[key] = pos++;
+  });
+  // Pad to 196
+  while (pos < 196) {
+    fieldKeyMap['_free_' + pos] = pos;
+    pos++;
   }
 }
 
