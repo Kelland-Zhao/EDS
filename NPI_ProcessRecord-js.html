@@ -72,17 +72,8 @@ $(document).ready(function () {
   $('#name').text(sessionStorage.getItem('Name') || '--');
   var perm = sessionStorage.getItem('EDSTaskPermission') || '';
   var permLabels = { 'admin': '管理员 / Admin', 'supervisor': '主管 / Supervisor', 'employee': '员工 / Employee' };
-  $('#userLevelBadge').removeClass('bg-secondary').addClass(perm === 'admin' ? 'bg-danger' : (perm === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary')).text(permLabels[perm] || '');
-
-  $('#btnBackDashboard').on('click', function (e) {
-    e.preventDefault();
-    var siWebPage = sessionStorage.getItem('siWebPage') || '';
-    window.open(siWebPage + '?v=Navigation'
-      + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || '')
-      + '&Name=' + encodeURIComponent(sessionStorage.getItem('Name') || '')
-      + '&Process=' + encodeURIComponent(sessionStorage.getItem('Process') || '')
-      + '&Workshop=' + encodeURIComponent(sessionStorage.getItem('Workshop') || ''));
-  });
+  var label = permLabels[perm] || ('员工 / Employee');
+  $('#userLevelBadge').removeClass('bg-secondary bg-danger bg-warning').addClass(perm === 'admin' ? 'bg-danger' : (perm === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary')).text(label);
 
   buildFieldIndex();
   renderAccordion();
