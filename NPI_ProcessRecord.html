@@ -16,6 +16,9 @@
     .welcome-bar { background:#fff; border-left:4px solid #E60012; padding:10px 18px; margin:12px 0 18px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.04); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
     .welcome-bar .greet { color:#333; font-size:16px; }
     .welcome-bar .greet #name { color:#E60012; font-weight:600; }
+    .welcome-bar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+    .welcome-bar .perm-info { font-size:12px; color:#6c757d; }
+    .welcome-bar .perm-info .badge { font-size:11px; vertical-align:middle; }
     .section-card { background:#fff; border-radius:8px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
     .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; }
     .accordion-button { font-size:13px; font-weight:600; padding:8px 12px; }
@@ -40,7 +43,6 @@
         </span>
       </a>
       <div class="d-flex align-items-center gap-3">
-        <span id="userLevelBadge" class="badge bg-secondary">--</span>
         <span id="userName" class="text-white fw-bold">--</span></div>
     </div>
   </nav>
@@ -49,6 +51,9 @@
     <div class="welcome-bar">
       <div class="greet">
         <span id="name"><?= intoWebName ?></span>，记录新品测试工艺参数 / Record NP Test Process Parameters
+      </div>
+      <div class="perm-info">
+        <span id="userLevelBadge" class="badge bg-secondary">加载中... / Loading...</span>
       </div>
     </div>
 

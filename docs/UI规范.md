@@ -182,7 +182,9 @@
 </style>
 ```
 
-**权限版**（欢迎文字 + 右侧权限徽章，适合有角色区分的页面）：
+**权限版**（欢迎文字 + 右侧权限徽章，**所有有角色区分的页面强制使用此版本**）：
+
+> **强制规则：** 权限徽章 `#userLevelBadge` 必须放在 welcome-bar 右侧（`.perm-info` 容器内），禁止放在 navbar 或其他位置。参考实现：`FailureReport_Manage.html`。
 
 ```html
 <div class="welcome-bar">
