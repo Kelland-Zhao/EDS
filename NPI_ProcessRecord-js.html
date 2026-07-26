@@ -218,7 +218,7 @@ function renderSectionBody(sec) {
       var isBarrel = !!bc;
       html += '<div class="mb-3 ' + bc + (isBarrel ? ' barrel-disabled' : '') + '" id="section_' + sub.id + '">';
       if (isBarrel) {
-        html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + sub.id + '" onchange="toggleBarrel(\'' + sub.id + '\')"> <strong style="font-size:12px;">' + sub.title + '</strong></label>';
+        html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + sub.id + '" onchange="toggleBarrel(\'' + sub.id + '\')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + sub.title + '</strong></label>';
       } else {
         html += '<strong style="font-size:12px;">' + sub.title + '</strong>';
       }
