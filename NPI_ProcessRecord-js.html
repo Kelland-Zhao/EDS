@@ -86,11 +86,7 @@ const TEMPLATE_SECTIONS = [
       {row:86, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'}
     ]}
   ]},
-  { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', rows: [
-    {row:87, label:'序号<br><small>Seq</small>'},
-    {row:89, label:'位置<br><small>Position</small>'},
-    {row:91, label:'温度<br><small>Temperature</small>'}
-  ]},
+  { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', hotRunner:true, hotRunnerCount:12, hotRunnerMin:1, hotRunnerMax:20},
   { id: 'clamping', title: '开合模及顶出模块<br><small>Clamping & Ejection</small>', rows: [
     {row:96, label:'合模<br><small>Clamping</small>', subRows:[
       {row:103, label:'p'},
@@ -193,6 +189,66 @@ function buildFieldIndex() {
   }
 }
 
+var HOT_RUNNER_POSITIONS = [
+  {v:'流道板',t:'流道板 / Manifold'},
+  {v:'主灌嘴',t:'主灌嘴 / Main Nozzle'},
+  {v:'底板',t:'底板 / Bottom Plate'},
+  {v:'手按位',t:'手按位 / Manual Zone'},
+  {v:'头胶',t:'头胶 / Front Glue'},
+  {v:'尾胶',t:'尾胶 / Rear Glue'},
+  {v:'舌苔',t:'舌苔 / Tongue'},
+  {v:'其他',t:'其他 / Other'}
+];
+
+function renderHotRunner(sec) {
+  var n = sec.hotRunnerCount || 12;
+  var html = '<div id="hotRunnerContainer">';
+  html += '<div class="row g-1 fw-bold mb-1" style="font-size:11px;color:#495057;">';
+  html += '<div class="col-2">序号<br><small>Seq</small></div>';
+  html += '<div class="col-4">位置<br><small>Position</small></div>';
+  html += '<div class="col-4">温度<br><small>Temp (°C)</small></div>';
+  html += '<div class="col-2"></div></div>';
+  for (var i = 1; i <= n; i++) {
+    html += '<div class="row g-1 mb-1 hot-runner-row">';
+    html += '<div class="col-2"><input type="text" class="form-control form-control-sm npi-field" data-key="hotRunner_seq_' + i + '" value="' + i + '" readonly style="background:#e9ecef;"></div>';
+    html += '<div class="col-4"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '"><option value="">-- / Select --</option>';
+    HOT_RUNNER_POSITIONS.forEach(function (p) {
+      html += '<option value="' + p.v + '">' + p.t + '</option>';
+    });
+    html += '</select></div>';
+    html += '<div class="col-4"><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C"></div>';
+    html += '<div class="col-2"></div></div>';
+  }
+  html += '<div class="mt-2"><button class="btn btn-sm btn-outline-secondary me-1" onclick="addHotRunnerRow()"><i class="bi bi-plus"></i> 增加一行<br><small>Add Row</small></button>';
+  html += '<button class="btn btn-sm btn-outline-secondary" onclick="removeHotRunnerRow()"><i class="bi bi-dash"></i> 减少一行<br><small>Remove Row</small></button></div>';
+  html += '</div>';
+  return html;
+}
+
+function addHotRunnerRow() {
+  var rows = $('#hotRunnerContainer .hot-runner-row');
+  if (rows.length >= 20) return;
+  var i = rows.length + 1;
+  var btnRow = $('#hotRunnerContainer > .mt-2');
+  var newRow = $('<div class="row g-1 mb-1 hot-runner-row"></div>');
+  newRow.append('<div class="col-2"><input type="text" class="form-control form-control-sm npi-field" data-key="hotRunner_seq_' + i + '" value="' + i + '" readonly style="background:#e9ecef;"></div>');
+  var selHtml = '<div class="col-4"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '"><option value="">-- / Select --</option>';
+  HOT_RUNNER_POSITIONS.forEach(function (p) { selHtml += '<option value="' + p + '">' + p + '</option>'; });
+  selHtml += '</select></div>';
+  newRow.append(selHtml);
+  newRow.append('<div class="col-4"><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C"></div>');
+  newRow.append('<div class="col-2"></div>');
+  newRow.insertBefore(btnRow);
+  rebuildFieldIndex();
+}
+
+function removeHotRunnerRow() {
+  var rows = $('#hotRunnerContainer .hot-runner-row');
+  if (rows.length <= 1) return;
+  rows.last().remove();
+  rebuildFieldIndex();
+}
+
 function renderAccordion() {
   var html = '';
   TEMPLATE_SECTIONS.forEach(function (sec, idx) {
@@ -228,6 +284,8 @@ function renderSectionBody(sec) {
       });
       html += '</div></div>';
     });
+  } else if (sec.hotRunner) {
+    html += renderHotRunner(sec);
   } else if (sec.rows) {
     html += '<div class="row g-2">';
     sec.rows.forEach(function (r) {
