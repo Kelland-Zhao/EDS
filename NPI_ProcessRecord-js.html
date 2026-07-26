@@ -68,7 +68,6 @@ let allTasks = [];
 let fieldKeyMap = {}; // Maps section-row-column → index in 196-array
 
 $(document).ready(function () {
-  $('#userName').text(sessionStorage.getItem('Name') || '--');
   var perm = sessionStorage.getItem('EDSTaskPermission') || '';
   var permLabels = { 'admin': '管理员 / Admin', 'supervisor': '主管 / Supervisor', 'employee': '员工 / Employee' };
   var label = permLabels[perm] || ('员工 / Employee');
