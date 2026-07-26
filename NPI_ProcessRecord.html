@@ -46,6 +46,9 @@
     .select2-container--default .select2-selection--single { height:28px !important; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height:28px !important; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height:26px !important; }
+    /* S行半列偏移 — 落在V列间隙之间 */
+    .ms-col-1 { margin-left:12.5%; }
+    @media (max-width:768px) { .ms-col-1 { margin-left:16.66%; } }
     /* 移动端响应式 */
     @media (max-width:768px) {
       .navbar-brand { flex-wrap:wrap; max-width:70vw; }
