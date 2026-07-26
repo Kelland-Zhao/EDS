@@ -289,19 +289,29 @@ function createTask() {
     Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项','Required fields missing'), html: swalHtml(missing.join('<br>'), missing.join('<br>')) });
     return;
   }
-  Swal.fire({ title: swalTitle('创建中...','Creating...'), html: swalHtml('正在创建测试任务','Creating test task'), allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
-  google.script.run
-    .withSuccessHandler(function (result) {
-      Swal.close();
-      var r = JSON.parse(result || '{}');
-      if (r.success) {
-        $('#newTaskModal').modal('hide');
-        loadTaskList(function () { $('#taskSelect').val(r.taskID); selectTask(r.taskID); });
-      } else {
-        Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(r.message,'') });
-      }
-    })
-    .createNPITestTask(JSON.stringify(taskData), sessionStorage.getItem('ID') || '');
+  Swal.fire({
+    title: swalTitle('确认创建', 'Confirm Create'),
+    html: swalHtml('确认创建此测试任务？', 'Confirm to create this test task?'),
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '确认 / Confirm',
+    cancelButtonText: '取消 / Cancel'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({ title: swalTitle('创建中...','Creating...'), html: swalHtml('正在创建测试任务','Creating test task'), allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
+    google.script.run
+      .withSuccessHandler(function (result) {
+        Swal.close();
+        var r2 = JSON.parse(result || '{}');
+        if (r2.success) {
+          $('#newTaskModal').modal('hide');
+          loadTaskList(function () { $('#taskSelect').val(r2.taskID); selectTask(r2.taskID); });
+        } else {
+          Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(r2.message,'') });
+        }
+      })
+      .createNPITestTask(JSON.stringify(taskData), sessionStorage.getItem('ID') || '');
+  });
 }
 
 function saveRecord() {
