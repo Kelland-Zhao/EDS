@@ -14011,18 +14011,27 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
     var seq = ('000' + (todayCount + 1)).slice(-4);
     var taskID = 'NPI-' + dateStr.replace(/-/g, '') + '-' + seq;
 
+    // 来源中英双语映射
+    var sourceMap = { 'weekly': '周计划 Weekly', 'urgent': '紧急 Urgent' };
+    var sourceBilingual = sourceMap[taskData.source] || (taskData.source || '紧急 Urgent');
+
+    // 操作人姓名|工号
+    var sapToName = getSapToNameMap_();
+    var operatorName = sapToName[operatorSAPID] || '';
+    var operatorId = operatorName ? operatorName + '|' + operatorSAPID : operatorSAPID;
+
     ws.appendRow([
       taskID,
-      taskData.source || 'urgent',
-      '待确认',
+      sourceBilingual,
+      '待确认 Pending',
       taskData.productName || '',
       taskData.moldNo || '',
       taskData.machineNo || '',
       taskData.material || '',
       taskData.reqDept || '',
-      taskData.reqPerson || operatorSAPID,
+      operatorId,
       taskData.planDate || dateStr,
-      '待确认', '', '', '', '',
+      '待确认 Pending', '', '', '', '',
       taskData.remark || '',
       now, now
     ]);
