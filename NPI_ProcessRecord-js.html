@@ -20,28 +20,16 @@ const TEMPLATE_SECTIONS = [
   ]},
   { id: 'barrel', title: '炮筒模块<br><small>Barrel Module</small>', subSections: [
     { id:'barrelA', title:'A炮筒<br><small>Barrel A</small>', rows:[
-      {row:26, label:'注射 p<br><small>Injection p</small>'},
-      {row:29, label:'注射 v<br><small>Injection v</small>'},
-      {row:32, label:'注射 s<br><small>Injection s</small>'},
-      {row:35, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+      {row:35, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']}
     ]},
     { id:'barrelB', title:'B炮筒<br><small>Barrel B</small>', rows:[
-      {row:41, label:'注射 p<br><small>Injection p</small>'},
-      {row:44, label:'注射 v<br><small>Injection v</small>'},
-      {row:47, label:'注射 s<br><small>Injection s</small>'},
-      {row:50, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+      {row:50, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']}
     ]},
     { id:'barrelC', title:'C炮筒<br><small>Barrel C</small>', rows:[
-      {row:56, label:'注射 p<br><small>Injection p</small>'},
-      {row:59, label:'注射 v<br><small>Injection v</small>'},
-      {row:62, label:'注射 s<br><small>Injection s</small>'},
-      {row:65, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+      {row:65, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']}
     ]},
     { id:'barrelD', title:'D炮筒<br><small>Barrel D</small>', rows:[
-      {row:71, label:'注射 p<br><small>Injection p</small>'},
-      {row:74, label:'注射 v<br><small>Injection v</small>'},
-      {row:77, label:'注射 s<br><small>Injection s</small>'},
-      {row:80, label:'料筒温度<br><small>Barrel Temp</small>', subCols:['1','2','3','4','5','6','7','8','9','10']}
+      {row:80, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', subCols:['1段','2段','3段','4段','5段','6段']}
     ]}
   ]},
   { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', rows: [
@@ -190,9 +178,10 @@ function renderSectionBody(sec) {
 function renderFieldRow(prefix, r) {
   var html = '';
   if (r.subCols) {
+    var colType = r.type || 'text';
     html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label><div class="row g-1">';
     r.subCols.forEach(function (sc) {
-      html += '<div class="col-4 col-md-2"><input type="text" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sc + '" placeholder="' + sc + '"></div>';
+      html += '<div class="col-4 col-md-2"><input type="' + colType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sc + '" placeholder="' + sc + '"' + (colType === 'number' ? ' step="any"' : '') + '></div>';
     });
     html += '</div></div>';
   } else if (r.subRows) {
