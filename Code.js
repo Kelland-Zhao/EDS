@@ -11,6 +11,7 @@ const webIconUrl =
 // ============================================================
 const TASK_SS_ID = "1UBg1Ake18cFp6gj0jKRX1Y9GJ0VL1pY5aXK-UoCeAY0";
 const NPI_SS_ID = "1092k9V4BT-WhD9GPoF6sRQC2TtdZfdjeRe8pK6v1rmQ";
+const NPI_WORKCENTER_SS_ID = "12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
 const TASK_TEMPLATES_SHEET = "DailyTemplates";
@@ -14036,6 +14037,22 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
       now, now
     ]);
     return JSON.stringify({ success: true, taskID: taskID, message: "任务已创建 / Task created" });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function loadNPIWorkcenterList() {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_WORKCENTER_SS_ID).getSheetByName("Workcenter");
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var data = ws.getDataRange().getValues();
+    var result = [];
+    for (var i = 1; i < data.length; i++) {
+      var wc = String(data[i][0] || '').trim();
+      if (wc) result.push({ id: wc, text: wc });
+    }
+    return JSON.stringify({ success: true, data: result });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }

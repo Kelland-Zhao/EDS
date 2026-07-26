@@ -86,6 +86,15 @@ $(document).ready(function () {
   buildFieldIndex();
   renderAccordion();
   loadTaskList();
+  loadWorkcenterList();
+
+  // Init Select2 for machine select in modal
+  $('#newMachineNo').select2({
+    placeholder: '选择机台 / Select Machine',
+    allowClear: true,
+    width: '100%',
+    dropdownParent: $('#newTaskModal')
+  });
 
   $('#taskSelect').on('change', function () { var tid = $(this).val(); if (tid) selectTask(tid); else clearForm(); });
   $('#btnNewTask').on('click', function () { $('#newPlanDate').val(new Date().toISOString().split('T')[0]); $('#newTaskModal').modal('show'); });
@@ -214,6 +223,23 @@ function loadTaskList(callback) {
       if (callback) callback();
     })
     .loadNPITestTaskList();
+}
+
+function loadWorkcenterList() {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      var data = r.success ? r.data : [];
+      var currentVal = $('#newMachineNo').val();
+      $('#newMachineNo').empty();
+      $('#newMachineNo').append('<option value="">-- 选择机台 / Select Machine --</option>');
+      data.forEach(function (wc) {
+        $('#newMachineNo').append('<option value="' + wc.id + '">' + wc.text + '</option>');
+      });
+      if (currentVal) $('#newMachineNo').val(currentVal);
+      $('#newMachineNo').trigger('change');
+    })
+    .loadNPIWorkcenterList();
 }
 
 function selectTask(taskID) {
