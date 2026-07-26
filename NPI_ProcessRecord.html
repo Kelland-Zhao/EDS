@@ -59,6 +59,15 @@
     .barrel-toggle input:checked + .toggle-switch { background:#34c759; }
     .barrel-toggle input:checked + .toggle-switch::after { left:18px; }
     .seg-btn { width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:14px; font-size:14px; line-height:1; }
+    /* 热流道位置颜色区分 */
+    select.hr-pos-manifold, option[value="流道板"] { background:#dbeafe; }
+    select.hr-pos-nozzle, option[value="主灌嘴"] { background:#d1fae5; }
+    select.hr-pos-bottom, option[value="底板"] { background:#fef3c7; }
+    select.hr-pos-manual, option[value="手按位"] { background:#fce7f3; }
+    select.hr-pos-front, option[value="头胶"] { background:#ede9fe; }
+    select.hr-pos-rear, option[value="尾胶"] { background:#fee2e2; }
+    select.hr-pos-tongue, option[value="舌苔"] { background:#e0e7ff; }
+    select.hr-pos-other, option[value="其他"] { background:#f3f4f6; }
     /* S行半列偏移 — 落在V列间隙之间 */
     .ms-col-1 { margin-left:12.5%; }
     @media (max-width:768px) { .ms-col-1 { margin-left:16.66%; } }

@@ -190,14 +190,14 @@ function buildFieldIndex() {
 }
 
 var HOT_RUNNER_POSITIONS = [
-  {v:'流道板',t:'流道板 / Manifold'},
-  {v:'主灌嘴',t:'主灌嘴 / Main Nozzle'},
-  {v:'底板',t:'底板 / Bottom Plate'},
-  {v:'手按位',t:'手按位 / Manual Zone'},
-  {v:'头胶',t:'头胶 / Front Glue'},
-  {v:'尾胶',t:'尾胶 / Rear Glue'},
-  {v:'舌苔',t:'舌苔 / Tongue'},
-  {v:'其他',t:'其他 / Other'}
+  {v:'流道板',t:'流道板 / Manifold',c:'hr-pos-manifold'},
+  {v:'主灌嘴',t:'主灌嘴 / Main Nozzle',c:'hr-pos-nozzle'},
+  {v:'底板',t:'底板 / Bottom Plate',c:'hr-pos-bottom'},
+  {v:'手按位',t:'手按位 / Manual Zone',c:'hr-pos-manual'},
+  {v:'头胶',t:'头胶 / Front Glue',c:'hr-pos-front'},
+  {v:'尾胶',t:'尾胶 / Rear Glue',c:'hr-pos-rear'},
+  {v:'舌苔',t:'舌苔 / Tongue',c:'hr-pos-tongue'},
+  {v:'其他',t:'其他 / Other',c:'hr-pos-other'}
 ];
 
 function renderHotRunner(sec) {
@@ -211,7 +211,7 @@ function renderHotRunner(sec) {
   for (var i = 1; i <= n; i++) {
     html += '<div class="row g-1 mb-1 hot-runner-row">';
     html += '<div class="col-2"><input type="text" class="form-control form-control-sm npi-field" data-key="hotRunner_seq_' + i + '" value="' + i + '" readonly style="background:#e9ecef;"></div>';
-    html += '<div class="col-4"><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '" onchange="onHotRunnerPosChange(this,' + i + ')"><option value="">-- / Select --</option>';
+    html += '<div class="col-4"><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field hr-pos-select" data-key="hotRunner_pos_' + i + '" onchange="updateHRPosColor(this)"><option value="">-- / Select --</option>';
     HOT_RUNNER_POSITIONS.forEach(function (p) {
       html += '<option value="' + p.v + '">' + p.t + '</option>';
     });
@@ -232,7 +232,7 @@ function addHotRunnerRow() {
   var btnRow = $('#hotRunnerContainer > .mt-2');
   var newRow = $('<div class="row g-1 mb-1 hot-runner-row"></div>');
   newRow.append('<div class="col-2"><input type="text" class="form-control form-control-sm npi-field" data-key="hotRunner_seq_' + i + '" value="' + i + '" readonly style="background:#e9ecef;"></div>');
-  var selHtml = '<div class="col-4"><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field" data-key="hotRunner_pos_' + i + '"><option value="">-- / Select --</option>';
+  var selHtml = '<div class="col-4"><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field hr-pos-select" data-key="hotRunner_pos_' + i + '" onchange="updateHRPosColor(this)"><option value="">-- / Select --</option>';
   HOT_RUNNER_POSITIONS.forEach(function (p) { selHtml += '<option value="' + p.v + '">' + p.t + '</option>'; });
   selHtml += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosDown(' + i + ')" title="复制到下方所有行 / Copy to all rows below" type="button"><i class="bi bi-arrow-down"></i></button></div></div>';
   newRow.append(selHtml);
@@ -240,6 +240,13 @@ function addHotRunnerRow() {
   newRow.append('<div class="col-2"></div>');
   newRow.insertBefore(btnRow);
   rebuildFieldIndex();
+}
+
+function updateHRPosColor(sel) {
+  var val = sel.value;
+  var colors = { '流道板':'hr-pos-manifold', '主灌嘴':'hr-pos-nozzle', '底板':'hr-pos-bottom', '手按位':'hr-pos-manual', '头胶':'hr-pos-front', '尾胶':'hr-pos-rear', '舌苔':'hr-pos-tongue', '其他':'hr-pos-other' };
+  sel.className = sel.className.replace(/hr-pos-\w+/g, '').replace(/\s+/g,' ').trim();
+  if (colors[val]) { sel.classList.add(colors[val]); }
 }
 
 function copyHotRunnerPosDown(fromIdx) {
