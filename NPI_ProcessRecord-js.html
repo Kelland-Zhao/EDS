@@ -278,8 +278,15 @@ function createTask() {
     material: $('#newMaterial').val().trim(), planDate: $('#newPlanDate').val(),
     remark: $('#newRemark').val().trim()
   };
-  if (!taskData.productName && !taskData.moldNo) {
-    Swal.fire({ icon: 'warning', title: swalTitle('提示','Info'), html: swalHtml('请至少填写产品名称或模具编号','Please fill at least product name or mold no.') });
+  // 必填验证（除备注外）
+  var missing = [];
+  if (!taskData.productName) missing.push('产品名称 / Product Name');
+  if (!taskData.moldNo) missing.push('模具编号 / Mold No.');
+  if (!taskData.machineNo) missing.push('机台编号 / Machine No.');
+  if (!taskData.material) missing.push('物料 / Material');
+  if (!taskData.planDate) missing.push('计划日期 / Plan Date');
+  if (missing.length > 0) {
+    Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项','Required fields missing'), html: swalHtml(missing.join('<br>'), missing.join('<br>')) });
     return;
   }
   Swal.fire({ title: swalTitle('创建中...','Creating...'), html: swalHtml('正在创建测试任务','Creating test task'), allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
