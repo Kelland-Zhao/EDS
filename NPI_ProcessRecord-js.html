@@ -86,7 +86,7 @@ const TEMPLATE_SECTIONS = [
       {row:86, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'}
     ]}
   ]},
-  { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', hotRunner:true, hotRunnerCount:12, hotRunnerMin:1, hotRunnerMax:20},
+  { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', hotRunner:true, hotRunnerCount:12, hotRunnerMin:1},
   { id: 'clamping', title: '开合模及顶出模块<br><small>Clamping & Ejection</small>', rows: [
     {row:96, label:'合模<br><small>Clamping</small>', subRows:[
       {row:103, label:'p'},
@@ -200,56 +200,85 @@ var HOT_RUNNER_POSITIONS = [
   {v:'其他',t:'其他 / Other',c:'hr-pos-other'}
 ];
 
+function hotRunnerCount() {
+  return $('#hotRunnerContainer').find('[data-key^="hotRunner_temp_"]').length;
+}
+
 function renderHotRunner(sec) {
   var n = sec.hotRunnerCount || 12;
-  var html = '<div id="hotRunnerContainer" style="overflow-x:auto;">';
-  html += '<div class="d-flex align-items-center gap-2 flex-wrap mb-2"><input type="number" id="hotRunnerBatchCount" value="1" min="1" max="20" style="width:60px;" class="form-control form-control-sm"><span style="font-size:12px;color:#6c757d;">点位<br><small>Zones</small></span><button class="btn btn-sm btn-outline-secondary" onclick="addHotRunnerCol()"><i class="bi bi-plus"></i> 增加<br><small>Add</small></button><button class="btn btn-sm btn-outline-secondary" onclick="removeHotRunnerCol()"><i class="bi bi-dash"></i> 减少<br><small>Remove</small></button></div>';
-  html += '<table class="table table-sm table-bordered" style="font-size:12px;margin-bottom:8px;">';
-  // Header row: column numbers 1..n
-  html += '<thead><tr style="background:#f8f9fa;"><th style="width:80px;">序号<br><small>Seq</small></th>';
-  for (var i = 1; i <= n; i++) {
-    html += '<th style="text-align:center;min-width:90px;">' + i + '</th>';
+  var maxColsPerRow = 12;
+  var groups = Math.ceil(n / maxColsPerRow);
+
+  var html = '<div id="hotRunnerContainer">';
+  // Batch controls above all groups
+  html += '<div class="d-flex align-items-center gap-2 flex-wrap mb-2">';
+  html += '<input type="number" id="hotRunnerBatchCount" value="1" min="1" style="width:60px;" class="form-control form-control-sm">';
+  html += '<span style="font-size:12px;color:#6c757d;">点位<br><small>Zones</small></span>';
+  html += '<button class="btn btn-sm btn-outline-secondary" onclick="addHotRunnerCol()"><i class="bi bi-plus"></i> 增加<br><small>Add</small></button>';
+  html += '<button class="btn btn-sm btn-outline-secondary" onclick="removeHotRunnerCol()"><i class="bi bi-dash"></i> 减少<br><small>Remove</small></button>';
+  html += '</div>';
+
+  for (var g = 0; g < groups; g++) {
+    var start = g * maxColsPerRow + 1;
+    var end = Math.min(start + maxColsPerRow - 1, n);
+
+    html += '<div class="hot-runner-group" style="overflow-x:auto;margin-bottom:12px;">';
+    html += '<table class="table table-sm table-bordered" style="font-size:12px;margin-bottom:0;">';
+    // Header row: column numbers start..end
+    html += '<thead><tr style="background:#f8f9fa;"><th style="width:80px;">序号<br><small>Seq</small></th>';
+    for (var i = start; i <= end; i++) {
+      html += '<th style="text-align:center;min-width:90px;">' + i + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+    // Position row
+    html += '<tr><td style="font-weight:600;background:#f8f9fa;">位置<br><small>Position</small></td>';
+    for (var i = start; i <= end; i++) {
+      html += '<td><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field hr-pos-select" data-key="hotRunner_pos_' + i + '" onchange="updateHRPosColor(this)"><option value="">-- / Select --</option>';
+      HOT_RUNNER_POSITIONS.forEach(function (p) {
+        html += '<option value="' + p.v + '">' + p.t + '</option>';
+      });
+      html += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosRight(' + i + ',' + n + ')" title="复制到右侧所有列 / Copy to all columns to the right" type="button" style="font-size:10px;"><i class="bi bi-arrow-right"></i></button></div></td>';
+    }
+    html += '</tr>';
+    // Temperature row
+    html += '<tr><td style="font-weight:600;background:#f8f9fa;">温度<br><small>Temp (°C)</small></td>';
+    for (var i = start; i <= end; i++) {
+      html += '<td><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C" style="width:70px;margin:0 auto;display:block;"></td>';
+    }
+    html += '</tr></tbody></table>';
+    html += '</div>';
   }
-  html += '</tr></thead><tbody>';
-  // Position row
-  html += '<tr><td style="font-weight:600;background:#f8f9fa;">位置<br><small>Position</small></td>';
-  for (var i = 1; i <= n; i++) {
-    html += '<td><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field hr-pos-select" data-key="hotRunner_pos_' + i + '" onchange="updateHRPosColor(this)"><option value="">-- / Select --</option>';
-    HOT_RUNNER_POSITIONS.forEach(function (p) {
-      html += '<option value="' + p.v + '">' + p.t + '</option>';
-    });
-    html += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosRight(' + i + ',' + n + ')" title="复制到右侧所有列 / Copy to all columns to the right" type="button" style="font-size:10px;"><i class="bi bi-arrow-right"></i></button></div></td>';
-  }
-  html += '</tr>';
-  // Temperature row
-  html += '<tr><td style="font-weight:600;background:#f8f9fa;">温度<br><small>Temp (°C)</small></td>';
-  for (var i = 1; i <= n; i++) {
-    html += '<td><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C" style="width:70px;margin:0 auto;display:block;"></td>';
-  }
-  html += '</tr></tbody></table>';
   html += '</div>';
   return html;
 }
 
-function addHotRunnerCol() {
-  var headerRow = $('#hotRunnerContainer thead tr');
-  var colCount = headerRow.find('th').length - 1;
-  var batch = parseInt($('#hotRunnerBatchCount').val()) || 1;
-  if (colCount + batch > 20) batch = 20 - colCount;
-  if (batch <= 0) return;
-  for (var k = 0; k < batch; k++) {
-    var i = colCount + k + 1;
-    headerRow.append('<th style="text-align:center;min-width:90px;">' + i + '</th>');
-    var posTd = $('<td></td>');
-    var selHtml = '<div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field hr-pos-select" data-key="hotRunner_pos_' + i + '" onchange="updateHRPosColor(this)"><option value="">-- / Select --</option>';
-    HOT_RUNNER_POSITIONS.forEach(function (p) { selHtml += '<option value="' + p.v + '">' + p.t + '</option>'; });
-    selHtml += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosRight(' + i + ',' + (colCount + batch) + ')" title="复制到右侧所有列" type="button" style="font-size:10px;"><i class="bi bi-arrow-right"></i></button></div>';
-    posTd.html(selHtml);
-    $('#hotRunnerContainer tbody tr').first().append(posTd);
-    var tempTd = $('<td><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C" style="width:70px;margin:0 auto;display:block;"></td>');
-    $('#hotRunnerContainer tbody tr').last().append(tempTd);
+function reRenderHotRunner(newN) {
+  // Save all current field values before re-rendering
+  var saved = {};
+  $('#hotRunnerContainer').find('.npi-field').each(function () {
+    var key = $(this).data('key');
+    if (key) saved[key] = $(this).val();
+  });
+  // Re-render with new count
+  var sec = { hotRunner: true, hotRunnerCount: newN, hotRunnerMin: 1 };
+  $('#hotRunnerContainer').replaceWith(renderHotRunner(sec));
+  // Restore values that still exist
+  for (var key in saved) {
+    $('[data-key="' + key + '"]').val(saved[key]);
   }
+  // Restore position colors
+  $('.hr-pos-select').each(function () { updateHRPosColor(this); });
+  // Sync template definition
+  var hrSec = TEMPLATE_SECTIONS.find(function (s) { return s.id === 'hotRunner'; });
+  if (hrSec) hrSec.hotRunnerCount = newN;
   rebuildFieldIndex();
+}
+
+function addHotRunnerCol() {
+  var n = hotRunnerCount();
+  var batch = parseInt($('#hotRunnerBatchCount').val()) || 1;
+  if (batch <= 0) return;
+  reRenderHotRunner(n + batch);
 }
 
 function updateHRPosColor(sel) {
@@ -269,18 +298,11 @@ function copyHotRunnerPosRight(fromIdx, totalN) {
 }
 
 function removeHotRunnerCol() {
-  var headerRow = $('#hotRunnerContainer thead tr');
-  var colCount = headerRow.find('th').length - 1;
+  var n = hotRunnerCount();
   var batch = parseInt($('#hotRunnerBatchCount').val()) || 1;
-  if (colCount - batch < 1) batch = colCount - 1;
+  if (n - batch < 1) batch = n - 1;
   if (batch <= 0) return;
-  for (var k = 0; k < batch; k++) {
-    headerRow.find('th').last().remove();
-    $('#hotRunnerContainer tbody tr').each(function () {
-      $(this).find('td').last().remove();
-    });
-  }
-  rebuildFieldIndex();
+  reRenderHotRunner(n - batch);
 }
 
 function renderAccordion() {
