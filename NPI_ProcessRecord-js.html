@@ -226,8 +226,11 @@ function renderHotRunner(sec) {
     html += '<td><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C" style="width:70px;margin:0 auto;display:block;"></td>';
   }
   html += '</tr></tbody></table>';
-  html += '<div><button class="btn btn-sm btn-outline-secondary me-1" onclick="addHotRunnerCol()"><i class="bi bi-plus"></i> 增加一列<br><small>Add Column</small></button>';
-  html += '<button class="btn btn-sm btn-outline-secondary" onclick="removeHotRunnerCol()"><i class="bi bi-dash"></i> 减少一列<br><small>Remove Column</small></button></div>';
+  html += '<div class="d-flex align-items-center gap-2 flex-wrap mt-2">';
+  html += '<input type="number" id="hotRunnerBatchCount" value="1" min="1" max="20" style="width:60px;" class="form-control form-control-sm">';
+  html += '<span style="font-size:12px;color:#6c757d;">点位<br><small>Zones</small></span>';
+  html += '<button class="btn btn-sm btn-outline-secondary" onclick="addHotRunnerCol()"><i class="bi bi-plus"></i> 增加<br><small>Add</small></button>';
+  html += '<button class="btn btn-sm btn-outline-secondary" onclick="removeHotRunnerCol()"><i class="bi bi-dash"></i> 减少<br><small>Remove</small></button></div>';
   html += '</div>';
   return html;
 }
