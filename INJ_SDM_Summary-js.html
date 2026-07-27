@@ -8,6 +8,7 @@
     let scUsers = [];
     let historyRecords = [];
     let historyCommItems = [];
+    let historyItemIds = new Set();
     let editingReportId = '';
     let commActionLock = false;
     let showClosedFilter = false;
@@ -149,6 +150,7 @@
           Swal.close();
           const result = parseResponse(raw);
           historyCommItems = result.historyCommItems || [];
+          historyItemIds = new Set(historyCommItems.map(function (item) { return item.itemId; }).filter(Boolean));
           if (!result.success || !result.todayReport) {
             var selectedDate = $('#ReportDate').val();
             resetForm();
@@ -246,10 +248,11 @@
         const description = $(this).find('.description').val().trim();
         const owners = $(this).find('.owner-choice input:checked').map(function () { return this.value; }).get();
         const isClosed = $(this).hasClass('comm-closed');
-        const isHistory = $(this).hasClass('comm-history');
+        const rowItemId = $(this).data('item-id') || '';
+        const isHistoryItem = historyItemIds.has(rowItemId);
         if (!description && !owners.length) return;
         if (isClosed) return; // Closed items not included in save
-        if (isHistory) return; // Historical items handled individually via close/followUp buttons
+        if (isHistoryItem) return; // Historical items (incl. follow-up) handled individually, not re-saved
         if (!description) mark($(this).find('.description'), `沟通事项第 ${index + 1} 条缺少事项内容`);
         if (!owners.length) mark($(this).find('.owner-choice'), `沟通事项第 ${index + 1} 条请选择责任人`, true);
         if (description && owners.length) payload.communication.push({ description, owners });
@@ -604,6 +607,7 @@
         }
         scUsers = result.scUsers || [];
         historyCommItems = result.historyCommItems || [];
+        historyItemIds = new Set(historyCommItems.map(function (item) { return item.itemId; }).filter(Boolean));
         $('#AppContent').removeClass('d-none');
         resetForm();
         // 初始化拖拽排序
