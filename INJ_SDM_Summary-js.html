@@ -104,7 +104,6 @@
           <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
       } else if (status === 'HISTORY') {
         statusClass = 'comm-history';
-        statusHtml = '<span class="comm-status-label">⏳ 历史跟进<br><small>History</small></span>';
         actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
           <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
       } else {
