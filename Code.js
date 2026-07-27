@@ -153,6 +153,7 @@ function doGet(e) {
   Route.path("closeINJSDMItem", closeINJSDMItem);
   Route.path("followUpINJSDMItem", followUpINJSDMItem);
   Route.path("reopenINJSDMItem", reopenINJSDMItem);
+  Route.path("batchUpdateINJSDMItems", batchUpdateINJSDMItems);
   Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
   Route.path("EDS_ResourceGantt", loadEDSResourceGantt);
   Route.path("EDS_TaskList", loadEDSTaskList);
@@ -13116,6 +13117,43 @@ function reopenINJSDMItem(itemId, userName, userEmail) {
     }
     if (!found) return JSON.stringify({ success: false, message: 'Item not found or is not closed' });
     return JSON.stringify({ success: true, itemId: itemId });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+function batchUpdateINJSDMItems(itemIdsJSON, newStatus, userName, userEmail) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
+      return JSON.stringify({ success: false, permissionDenied: true, message: 'Permission denied' });
+    }
+    if (!itemIdsJSON || !newStatus) return JSON.stringify({ success: false, message: 'Missing parameters' });
+    var itemIds = [];
+    try { itemIds = JSON.parse(itemIdsJSON); } catch (e) { return JSON.stringify({ success: false, message: 'Invalid itemIds JSON' }); }
+    if (!Array.isArray(itemIds) || !itemIds.length) return JSON.stringify({ success: false, message: 'No itemIds provided' });
+    if (['CLOSED', 'FOLLOW_UP', 'ACTIVE'].indexOf(newStatus) === -1) {
+      return JSON.stringify({ success: false, message: 'Invalid status: ' + newStatus });
+    }
+    const ws = getINJSDMSheet_();
+    const rows = readINJSDMRows_();
+    const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+    const idSet = {};
+    itemIds.forEach(function (id) { idSet[id] = true; });
+    var updated = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var id = String(rows[i][4] || '');
+      var currentStatus = String(rows[i][13] || '');
+      if (idSet[id] && (currentStatus === 'ACTIVE' || currentStatus === 'FOLLOW_UP')) {
+        ws.getRange(i + 3, 14).setValue(newStatus);
+        ws.getRange(i + 3, 13).setValue(now);
+        updated++;
+      }
+    }
+    return JSON.stringify({ success: true, updated: updated, total: itemIds.length });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
   } finally {

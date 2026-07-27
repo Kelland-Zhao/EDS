@@ -418,6 +418,28 @@
     $(document).on('change', '#CommunicationCard .comm-checkbox', function () {
       updateCommBatchToolbar();
     });
+    function execBatchAction(actionLabel, actionTitle, itemIds, newStatus) {
+      commActionLock = true;
+      $('#CommBatchToolbar').find('.batch-count').html('⏳ 批量' + actionTitle + '中... / Processing ' + itemIds.length + ' items...');
+      google.script.run
+        .withSuccessHandler(raw => {
+          commActionLock = false;
+          updateCommBatchToolbar();
+          var r = parseResponse(raw);
+          if (r.success) {
+            showSuccess('已' + actionTitle + ' ' + r.updated + ' 条沟通事项。', r.updated + ' communication items ' + actionLabel + '.');
+            reloadTodayReport();
+          } else {
+            showError(r.message || '操作失败', 'Operation failed');
+          }
+        })
+        .withFailureHandler(err => {
+          commActionLock = false;
+          updateCommBatchToolbar();
+          showError(err.message || String(err), 'Operation failed');
+        })
+        .batchUpdateINJSDMItems(JSON.stringify(itemIds), newStatus, userName, userEmail);
+    }
     $(document).on('click', '.batch-close-comm', function () {
       var checked = $('#CommunicationCard .comm-checkbox:checked');
       if (!checked.length) return;
@@ -426,33 +448,11 @@
       if (!itemIds.length) { showError('所选项目缺少 ID，请先保存后再操作。', 'Selected items need to be saved first.'); return; }
       Swal.fire({
         icon:'question', title:swalTitle('批量关闭','Batch Close'),
-        html:swalHtml(`确认关闭选中的 ${itemIds.length} 条沟通事项？<br>关闭后不再跨天带出。`, `Close ${itemIds.length} selected communication items? They will no longer be carried forward.`),
+        html:swalHtml(`确认关闭选中的 ${itemIds.length} 条沟通事项？<br>关闭后不再跨天带出。`, `Close ${itemIds.length} selected items? They will no longer be carried forward.`),
         showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
       }).then(result => {
         if (!result.isConfirmed) return;
-        commActionLock = true;
-        var done = 0, failed = 0;
-        $('#CommBatchToolbar').find('.batch-count').html('⏳ 处理中... ' + done + '/' + itemIds.length + ' Processing');
-        function processNext(idx) {
-          if (idx >= itemIds.length) {
-            commActionLock = false;
-            updateCommBatchToolbar();
-            if (failed > 0) showError('关闭完成：' + done + ' 条成功，' + failed + ' 条失败。', 'Batch close: ' + done + ' succeeded, ' + failed + ' failed.');
-            else showSuccess('已关闭 ' + done + ' 条沟通事项。', done + ' communication items closed.');
-            reloadTodayReport();
-            return;
-          }
-          google.script.run
-            .withSuccessHandler(raw => {
-              var r = parseResponse(raw);
-              if (r.success) done++; else failed++;
-              $('#CommBatchToolbar').find('.batch-count').html('⏳ 处理中... ' + done + '/' + itemIds.length + ' Processing');
-              processNext(idx + 1);
-            })
-            .withFailureHandler(function () { failed++; processNext(idx + 1); })
-            .closeINJSDMItem(itemIds[idx], userName, userEmail);
-        }
-        processNext(0);
+        execBatchAction('closed', '关闭', itemIds, 'CLOSED');
       });
     });
     $(document).on('click', '.batch-followup-comm', function () {
@@ -463,33 +463,11 @@
       if (!itemIds.length) { showError('所选项目缺少 ID，请先保存后再操作。', 'Selected items need to be saved first.'); return; }
       Swal.fire({
         icon:'question', title:swalTitle('批量继续跟进','Batch Follow Up'),
-        html:swalHtml(`确认将选中的 ${itemIds.length} 条沟通事项标记为继续跟进？<br>该事项将持续跨天带出。`, `Mark ${itemIds.length} selected items for continued follow-up? They will continue to appear on subsequent days.`),
+        html:swalHtml(`确认将选中的 ${itemIds.length} 条沟通事项标记为继续跟进？<br>该事项将持续跨天带出。`, `Mark ${itemIds.length} selected items for continued follow-up?`),
         showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
       }).then(result => {
         if (!result.isConfirmed) return;
-        commActionLock = true;
-        var done = 0, failed = 0;
-        $('#CommBatchToolbar').find('.batch-count').html('⏳ 处理中... ' + done + '/' + itemIds.length + ' Processing');
-        function processNext(idx) {
-          if (idx >= itemIds.length) {
-            commActionLock = false;
-            updateCommBatchToolbar();
-            if (failed > 0) showError('跟进完成：' + done + ' 条成功，' + failed + ' 条失败。', 'Batch follow-up: ' + done + ' succeeded, ' + failed + ' failed.');
-            else showSuccess('已标记 ' + done + ' 条继续跟进。', done + ' items marked for follow-up.');
-            reloadTodayReport();
-            return;
-          }
-          google.script.run
-            .withSuccessHandler(raw => {
-              var r = parseResponse(raw);
-              if (r.success) done++; else failed++;
-              $('#CommBatchToolbar').find('.batch-count').html('⏳ 处理中... ' + done + '/' + itemIds.length + ' Processing');
-              processNext(idx + 1);
-            })
-            .withFailureHandler(function () { failed++; processNext(idx + 1); })
-            .followUpINJSDMItem(itemIds[idx], userName, userEmail);
-        }
-        processNext(0);
+        execBatchAction('marked for follow-up', '继续跟进', itemIds, 'FOLLOW_UP');
       });
     });
     $(document).on('click', '.show-bulk', function () { $(this).closest('.issue-card').find('.bulk-panel').addClass('open').find('textarea').focus(); });
