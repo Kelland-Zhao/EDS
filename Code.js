@@ -150,6 +150,8 @@ function doGet(e) {
   Route.path("FailureReport_Review", loadFailureReport_Review);
   Route.path("ProjectTracking", loadProjectTracking);
   Route.path("INJ_SDM_Summary", loadINJSDMSummary);
+  Route.path("closeINJSDMItem", closeINJSDMItem);
+  Route.path("followUpINJSDMItem", followUpINJSDMItem);
   Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
   Route.path("EDS_ResourceGantt", loadEDSResourceGantt);
   Route.path("EDS_TaskList", loadEDSTaskList);
@@ -12812,7 +12814,7 @@ function groupINJSDMReports_(rows) {
   const map = {};
   rows.forEach(function (row) {
     const item = rowToINJSDMItem_(row);
-    if (item.status !== 'ACTIVE' || !item.reportId) return;
+    if ((item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') || !item.reportId) return;
     if (!map[item.reportId]) {
       map[item.reportId] = {
         reportId: item.reportId,
@@ -12833,7 +12835,7 @@ function groupINJSDMReports_(rows) {
     } else if (item.category === 'OUTSTANDING') {
       report.outstanding.push({ itemId: item.itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
     } else if (item.category === 'COMMUNICATION') {
-      report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners });
+      report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate });
     }
   });
   return Object.keys(map).map(function (key) { return map[key]; });
@@ -12843,16 +12845,42 @@ function getINJSDMInitData(userName, userEmail, reportDate) {
   try {
     const permission = getINJSDMPermission_(userName, userEmail);
     if (!permission.hasPermission) {
-      return JSON.stringify({ success: true, hasPermission: false, scUsers: [], todayReport: null });
+      return JSON.stringify({ success: true, hasPermission: false, scUsers: [], todayReport: null, historyCommItems: [] });
     }
     const targetDate = reportDate || Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
-    const reports = groupINJSDMReports_(readINJSDMRows_());
+    const allRows = readINJSDMRows_();
+    const reports = groupINJSDMReports_(allRows);
     const todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
+
+    // Collect historical ACTIVE communication items (cross-day carry-over)
+    var historyCommItems = [];
+    var todayItemIds = {};
+    if (todayReport) {
+      todayReport.communication.forEach(function (c) { if (c.itemId) todayItemIds[c.itemId] = true; });
+    }
+    allRows.forEach(function (row) {
+      var item = rowToINJSDMItem_(row);
+      if (item.category !== 'COMMUNICATION') return;
+      if (item.status !== 'ACTIVE') return; // only carry forward ACTIVE items
+      if (formatINJSDMDate_(row[1]) >= targetDate) return; // not historical
+      if (todayItemIds[item.itemId]) return; // already in today's report
+      historyCommItems.push({
+        itemId: item.itemId,
+        description: item.description,
+        owners: item.owners,
+        reportDate: item.reportDate,
+        itemStatus: 'HISTORY'
+      });
+    });
+    // Sort by reportDate ascending (oldest first)
+    historyCommItems.sort(function (a, b) { return a.reportDate.localeCompare(b.reportDate); });
+
     return JSON.stringify({
       success: true,
       hasPermission: true,
       scUsers: getINJSCUsers_(),
-      todayReport: todayReport
+      todayReport: todayReport,
+      historyCommItems: historyCommItems
     });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
@@ -12908,7 +12936,7 @@ function saveINJSDMReport(payload, userName, userEmail) {
     let previousSnapshot = null;
 
     rows.forEach(function (row, index) {
-      if (formatINJSDMDate_(row[1]) === data.reportDate && String(row[13] || '') === 'ACTIVE') {
+      if (formatINJSDMDate_(row[1]) === data.reportDate && (String(row[13] || '') === 'ACTIVE' || String(row[13] || '') === 'FOLLOW_UP')) {
         existingActive.push(index + 3);
         reportId = reportId || String(row[0] || '');
         createdAt = createdAt || formatINJSDMDateTime_(row[11]);
@@ -12935,18 +12963,22 @@ function saveINJSDMReport(payload, userName, userEmail) {
 
     const output = [];
     let sequence = 1;
-    function addItem(category, item) {
-      const itemId = 'ITM-' + data.reportDate.replace(/-/g, '') + '-' + ('000' + sequence++).slice(-3) + '-' + Utilities.getUuid().substring(0, 4);
+    function addItem(category, item, itemStatus) {
+      const finalStatus = itemStatus || 'ACTIVE';
+      const itemId = item.itemId || ('ITM-' + data.reportDate.replace(/-/g, '') + '-' + ('000' + sequence++).slice(-3) + '-' + Utilities.getUuid().substring(0, 4));
       const owners = Array.isArray(item.owners) ? item.owners : [];
       output.push([
         reportId, data.reportDate, data.dataStartDate, data.dataEndDate, itemId, category,
         String(item.workshop || ''), String(item.machineNo || ''), String(item.description || '').trim(),
-        owners.join('、'), JSON.stringify(owners), createdAt, now, 'ACTIVE', historyJSON
+        owners.join('、'), JSON.stringify(owners), createdAt, now, finalStatus, historyJSON
       ]);
     }
     data.major.forEach(function (item) { addItem('MAJOR', item); });
     data.outstanding.forEach(function (item) { addItem('OUTSTANDING', item); });
-    data.communication.forEach(function (item) { addItem('COMMUNICATION', item); });
+    data.communication.forEach(function (item) {
+      var catStatus = item.itemStatus === 'FOLLOW_UP' ? 'FOLLOW_UP' : 'ACTIVE';
+      addItem('COMMUNICATION', item, catStatus);
+    });
 
     ws.getRange(ws.getLastRow() + 1, 1, output.length, 15).setValues(output);
     return JSON.stringify({ success: true, reportId: reportId, updated: existingActive.length > 0 });
@@ -12990,12 +13022,70 @@ function deleteINJSDMReport(reportId, userName, userEmail) {
     const historyJSON = JSON.stringify([{ changedAt: now, action: 'DELETE', before: snapshot }]);
     let count = 0;
     rows.forEach(function (row, index) {
-      if (String(row[0] || '') === reportId && String(row[13] || '') === 'ACTIVE') {
+      if (String(row[0] || '') === reportId && (String(row[13] || '') === 'ACTIVE' || String(row[13] || '') === 'FOLLOW_UP')) {
         ws.getRange(index + 3, 13, 1, 3).setValues([[now, 'DELETED', historyJSON]]);
         count++;
       }
     });
     return JSON.stringify({ success: true, deletedRows: count });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+function closeINJSDMItem(itemId, userName, userEmail) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
+      return JSON.stringify({ success: false, permissionDenied: true, message: 'Permission denied' });
+    }
+    if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
+    const ws = getINJSDMSheet_();
+    const rows = readINJSDMRows_();
+    const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+    var found = false;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][4] || '') === itemId && String(rows[i][13] || '') === 'ACTIVE') {
+        ws.getRange(i + 3, 13).setValue('CLOSED');
+        ws.getRange(i + 3, 12).setValue(now);
+        found = true;
+        break;
+      }
+    }
+    if (!found) return JSON.stringify({ success: false, message: 'Item not found or already closed' });
+    return JSON.stringify({ success: true, itemId: itemId });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+function followUpINJSDMItem(itemId, userName, userEmail) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
+      return JSON.stringify({ success: false, permissionDenied: true, message: 'Permission denied' });
+    }
+    if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
+    const ws = getINJSDMSheet_();
+    const rows = readINJSDMRows_();
+    const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+    var found = false;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][4] || '') === itemId && (String(rows[i][13] || '') === 'ACTIVE' || String(rows[i][13] || '') === 'FOLLOW_UP')) {
+        ws.getRange(i + 3, 13).setValue('FOLLOW_UP');
+        ws.getRange(i + 3, 12).setValue(now);
+        found = true;
+        break;
+      }
+    }
+    if (!found) return JSON.stringify({ success: false, message: 'Item not found or already closed' });
+    return JSON.stringify({ success: true, itemId: itemId });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
   } finally {

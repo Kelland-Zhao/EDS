@@ -7,6 +7,7 @@
     const userEmail = sessionStorage.getItem('Email') || '';
     let scUsers = [];
     let historyRecords = [];
+    let historyCommItems = [];
     let editingReportId = '';
 
     $('#name').text(userName);
@@ -85,13 +86,46 @@
     function addCommunicationRow(data) {
       const item = data || {};
       const name = `communication-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const row = $(`<div class="item-row communication" data-type="communication">
+      const status = item.itemStatus || '';
+      var actionsHtml = '';
+      var statusClass = '';
+      var statusHtml = '';
+      if (status === 'CLOSED') {
+        statusClass = 'comm-closed';
+        statusHtml = '<span class="comm-status">✓ 已关闭<br><small>Closed</small></span>';
+      } else if (status === 'FOLLOW_UP') {
+        statusClass = 'comm-followup';
+        statusHtml = '<span class="comm-status">↻ 跟进中<br><small>Following</small></span>';
+        actionsHtml = `<div class="comm-actions">
+          <button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
+          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>
+        </div>`;
+      } else if (status === 'HISTORY') {
+        statusClass = 'comm-history';
+        statusHtml = '<span class="comm-status">⏳ 历史跟进<br><small>History</small></span>';
+        actionsHtml = `<div class="comm-actions">
+          <button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
+          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>
+        </div>`;
+      } else {
+        // New or active item — show action buttons
+        actionsHtml = `<div class="comm-actions">
+          <button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
+          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>
+        </div>`;
+      }
+      var actionsCol = statusHtml || actionsHtml;
+      const row = $(`<div class="item-row communication ${statusClass}" data-type="communication" data-item-id="${item.itemId || ''}">
         <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
-        <textarea class="form-control description" rows="2" placeholder="沟通事项 / Communication">${$('<div>').text(item.description || '').html()}</textarea>
+        <textarea class="form-control description" rows="2" placeholder="沟通事项 / Communication" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
         ${ownerChoice(name, item.owners || [])}
+        <div class="comm-actions-wrapper">${actionsCol}</div>
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
       </div>`);
+      if (status === 'CLOSED') {
+        row.find('.owner-choice input').prop('disabled', true);
+      }
       $('#CommunicationCard .item-list').append(row);
       updateCounts();
     }
@@ -116,10 +150,15 @@
         .withSuccessHandler(raw => {
           Swal.close();
           const result = parseResponse(raw);
+          historyCommItems = result.historyCommItems || [];
           if (!result.success || !result.todayReport) {
-            var selectedDate = $('#ReportDate').val(); // 保留用户选择的日期
+            var selectedDate = $('#ReportDate').val();
             resetForm();
             $('#ReportDate').val(selectedDate);
+            if (historyCommItems.length) {
+              $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
+              historyCommItems.forEach(item => addCommunicationRow(item));
+            }
             return;
           }
           populateForm(result.todayReport);
@@ -137,6 +176,11 @@
       (report.major.length ? report.major : [{}]).forEach(item => addIssueRow('major', item));
       (report.outstanding.length ? report.outstanding : [{}]).forEach(item => addIssueRow('outstanding', item));
       (report.communication.length ? report.communication : [{}]).forEach(item => addCommunicationRow(item));
+      // Historical carry-over items
+      if (historyCommItems.length) {
+        $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
+        historyCommItems.forEach(item => addCommunicationRow(item));
+      }
       $('#CancelEdit').removeClass('d-none');
       $('#SaveReport').html('<i class="bi bi-save"></i> 更新 / Update');
       clearValidation();
@@ -203,7 +247,11 @@
       $('#CommunicationCard .item-row').each(function (index) {
         const description = $(this).find('.description').val().trim();
         const owners = $(this).find('.owner-choice input:checked').map(function () { return this.value; }).get();
+        const isClosed = $(this).hasClass('comm-closed');
+        const isHistory = $(this).hasClass('comm-history');
         if (!description && !owners.length) return;
+        if (isClosed) return; // Closed items not included in save
+        if (isHistory) return; // Historical items handled individually via close/followUp buttons
         if (!description) mark($(this).find('.description'), `沟通事项第 ${index + 1} 条缺少事项内容`);
         if (!owners.length) mark($(this).find('.owner-choice'), `沟通事项第 ${index + 1} 条请选择责任人`, true);
         if (description && owners.length) payload.communication.push({ description, owners });
@@ -284,6 +332,53 @@
       type === 'communication' ? addCommunicationRow({}) : addIssueRow(type, {});
     });
     $(document).on('click', '.delete-item', function () { $(this).closest('.item-row').remove(); updateCounts(); });
+    $(document).on('click', '.close-comm-item', function () {
+      const row = $(this).closest('.item-row');
+      const itemId = row.data('item-id') || $(this).data('id');
+      const desc = row.find('.description').val().trim() || '(空)';
+      Swal.fire({
+        icon:'question', title:swalTitle('确认关闭','Confirm Close'),
+        html:swalHtml(`确认关闭此沟通事项？<br>「${$('<div>').text(desc).html()}」<br>关闭后不再跨天带出。`, `Close this communication item? It will no longer be carried forward.`),
+        showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
+      }).then(result => {
+        if (!result.isConfirmed) return;
+        if (!itemId) { row.addClass('comm-closed').find('.comm-actions-wrapper').html('<span class="comm-status">✓ 已关闭<br><small>Closed</small></span>'); row.find('.description,.owner-choice input').prop('disabled', true); return; }
+        google.script.run
+          .withSuccessHandler(raw => {
+            const r = parseResponse(raw);
+            if (r.success) {
+              row.addClass('comm-closed').find('.comm-actions-wrapper').html('<span class="comm-status">✓ 已关闭<br><small>Closed</small></span>');
+              row.find('.description,.owner-choice input').prop('disabled', true);
+              row.removeClass('comm-followup comm-history');
+            } else showError(r.message || '操作失败', 'Operation failed');
+          })
+          .withFailureHandler(err => showError(err.message || String(err), 'Operation failed'))
+          .closeINJSDMItem(itemId, userName, userEmail);
+      });
+    });
+    $(document).on('click', '.followup-comm-item', function () {
+      const row = $(this).closest('.item-row');
+      const itemId = row.data('item-id') || $(this).data('id');
+      const desc = row.find('.description').val().trim() || '(空)';
+      Swal.fire({
+        icon:'question', title:swalTitle('确认继续跟进','Confirm Follow Up'),
+        html:swalHtml(`确认此沟通事项需要延期跟进？<br>「${$('<div>').text(desc).html()}」<br>该事项将持续跨天带出。`, `Confirm this item needs continued follow-up? It will continue to appear on subsequent days.`),
+        showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
+      }).then(result => {
+        if (!result.isConfirmed) return;
+        if (!itemId) { row.addClass('comm-followup').find('.comm-actions-wrapper').html('<span class="comm-status">↻ 跟进中<br><small>Following</small></span>'); row.removeClass('comm-history'); return; }
+        google.script.run
+          .withSuccessHandler(raw => {
+            const r = parseResponse(raw);
+            if (r.success) {
+              row.addClass('comm-followup').find('.comm-actions-wrapper').html('<span class="comm-status">↻ 跟进中<br><small>Following</small></span>');
+              row.removeClass('comm-history');
+            } else showError(r.message || '操作失败', 'Operation failed');
+          })
+          .withFailureHandler(err => showError(err.message || String(err), 'Operation failed'))
+          .followUpINJSDMItem(itemId, userName, userEmail);
+      });
+    });
     $(document).on('click', '.show-bulk', function () { $(this).closest('.issue-card').find('.bulk-panel').addClass('open').find('textarea').focus(); });
     $(document).on('click', '.cancel-bulk', function () { $(this).closest('.bulk-panel').removeClass('open'); });
     $(document).on('click', '.import-bulk', function () {
@@ -365,6 +460,7 @@
           return;
         }
         scUsers = result.scUsers || [];
+        historyCommItems = result.historyCommItems || [];
         $('#AppContent').removeClass('d-none');
         resetForm();
         // 初始化拖拽排序
@@ -381,7 +477,12 @@
           });
         }
         initSortable();
-        if (result.todayReport) populateForm(result.todayReport);
+        if (result.todayReport) {
+          populateForm(result.todayReport);
+        } else if (historyCommItems.length) {
+          $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
+          historyCommItems.forEach(item => addCommunicationRow(item));
+        }
       })
       .withFailureHandler(error => { Swal.close(); showError(error.message || String(error), 'Failed to initialize.'); })
       .getINJSDMInitData(userName, userEmail);
