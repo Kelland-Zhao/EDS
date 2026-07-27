@@ -12866,11 +12866,11 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
     allRows.forEach(function (row) {
       var item = rowToINJSDMItem_(row);
       if (item.category !== 'COMMUNICATION') return;
-      if (!showClosed && item.status !== 'ACTIVE') return; // only carry forward ACTIVE items normally
-      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'CLOSED') return; // when showing closed, also include CLOSED
+      if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return; // carry forward ACTIVE and FOLLOW_UP
+      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return; // also include CLOSED when filter on
       if (formatINJSDMDate_(row[1]) >= targetDate) return; // not historical
       if (todayItemIds[item.itemId]) return; // already in today's report
-      var itemStatus = item.status === 'CLOSED' ? 'CLOSED' : 'HISTORY';
+      var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : (item.status === 'FOLLOW_UP') ? 'FOLLOW_UP' : 'HISTORY';
       historyCommItems.push({
         itemId: item.itemId,
         description: item.description,
