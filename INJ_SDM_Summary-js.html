@@ -329,12 +329,19 @@
       commActionLock = true;
       row.find('.comm-actions button').prop('disabled', true);
       $('.comm-actions button').not(row.find('.comm-actions button')).prop('disabled', true);
-      row.find('.comm-status-label').hide();
-      row.find('.comm-actions').prepend('<span class="comm-status-label text-muted">⏳ 处理中<br><small>Processing</small></span>');
+      // Show blocking loading modal
+      Swal.fire({
+        title: swalTitle('处理中...', 'Processing...'),
+        html: swalHtml('请稍候，正在提交。', 'Please wait, submitting.'),
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: function () { Swal.showLoading(); }
+      });
     }
     function actionUnlock() {
       commActionLock = false;
       $('.comm-actions button').prop('disabled', false);
+      Swal.close();
     }
     function restoreButtons(row, itemId, btns) {
       row.find('.comm-actions-wrapper-cell').html(btns);
