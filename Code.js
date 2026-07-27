@@ -12812,11 +12812,13 @@ function rowToINJSDMItem_(row) {
   };
 }
 
-function groupINJSDMReports_(rows) {
+function groupINJSDMReports_(rows, includeClosed) {
   const map = {};
   rows.forEach(function (row) {
     const item = rowToINJSDMItem_(row);
-    if ((item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') || !item.reportId) return;
+    var validStatus = item.status === 'ACTIVE' || item.status === 'FOLLOW_UP';
+    if (includeClosed) validStatus = validStatus || item.status === 'CLOSED';
+    if (!validStatus || !item.reportId) return;
     if (!map[item.reportId]) {
       map[item.reportId] = {
         reportId: item.reportId,
@@ -12843,15 +12845,16 @@ function groupINJSDMReports_(rows) {
   return Object.keys(map).map(function (key) { return map[key]; });
 }
 
-function getINJSDMInitData(userName, userEmail, reportDate) {
+function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
   try {
     const permission = getINJSDMPermission_(userName, userEmail);
     if (!permission.hasPermission) {
       return JSON.stringify({ success: true, hasPermission: false, scUsers: [], todayReport: null, historyCommItems: [] });
     }
     const targetDate = reportDate || Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
+    const showClosed = includeClosed === true || includeClosed === 'true';
     const allRows = readINJSDMRows_();
-    const reports = groupINJSDMReports_(allRows);
+    const reports = groupINJSDMReports_(allRows, showClosed);
     const todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
 
     // Collect historical ACTIVE communication items (cross-day carry-over)
@@ -12863,15 +12866,17 @@ function getINJSDMInitData(userName, userEmail, reportDate) {
     allRows.forEach(function (row) {
       var item = rowToINJSDMItem_(row);
       if (item.category !== 'COMMUNICATION') return;
-      if (item.status !== 'ACTIVE') return; // only carry forward ACTIVE items
+      if (!showClosed && item.status !== 'ACTIVE') return; // only carry forward ACTIVE items normally
+      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'CLOSED') return; // when showing closed, also include CLOSED
       if (formatINJSDMDate_(row[1]) >= targetDate) return; // not historical
       if (todayItemIds[item.itemId]) return; // already in today's report
+      var itemStatus = item.status === 'CLOSED' ? 'CLOSED' : 'HISTORY';
       historyCommItems.push({
         itemId: item.itemId,
         description: item.description,
         owners: item.owners,
         reportDate: item.reportDate,
-        itemStatus: 'HISTORY'
+        itemStatus: itemStatus
       });
     });
     // Sort by reportDate ascending (oldest first)
