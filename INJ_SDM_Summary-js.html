@@ -93,9 +93,7 @@
       var statusClass = '';
       var actionsHtml = '';
       if (status === 'CLOSED') {
-        statusClass = 'comm-closed';
-        statusHtml = '<span class="comm-status-label">✓ 已关闭<br><small>Closed</small></span>';
-        actionsHtml = `<button class="btn btn-sm btn-outline-secondary reopen-comm-item" data-id="${item.itemId || ''}" title="重新打开 / Reopen">↩ 重开<br><small>Reopen</small></button>`;
+        return; // closed items should never be rendered
       } else if (status === 'FOLLOW_UP') {
         statusClass = 'comm-followup';
         statusHtml = '<span class="comm-status-label">↻ 跟进中<br><small>Following</small></span>';
@@ -339,7 +337,6 @@
     function restoreButtons(row, itemId, btns) {
       row.find('.comm-actions-wrapper-cell').html(btns);
     }
-    function closedView(itemId) { return `<span class="comm-status-label">✓ 已关闭<br><small>Closed</small></span><div class="comm-actions"><button class="btn btn-sm btn-outline-secondary reopen-comm-item" data-id="${itemId}" title="重新打开 / Reopen">↩ 重开<br><small>Reopen</small></button></div>`; }
     function followUpView(itemId) { return `<span class="comm-status-label">↻ 跟进中<br><small>Following</small></span><div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
     function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
     $(document).on('click', '.add-item', function () {
@@ -358,16 +355,14 @@
         showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
       }).then(result => {
         if (!result.isConfirmed) return;
-        if (!itemId) { row.addClass('comm-closed').find('.comm-actions-wrapper-cell').html(closedView('')); row.find('.description,.owner-choice input').prop('disabled', true); return; }
+        if (!itemId) { row.remove(); updateCounts(); return; }
         actionLockRow(row);
         google.script.run
           .withSuccessHandler(raw => {
             actionUnlock();
             const r = parseResponse(raw);
             if (r.success) {
-              row.addClass('comm-closed').find('.comm-actions-wrapper-cell').html(closedView(itemId));
-              row.find('.description,.owner-choice input').prop('disabled', true);
-              row.removeClass('comm-followup comm-history');
+              row.slideUp(200, function () { row.remove(); updateCounts(); });
             } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); }
           })
           .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); })
@@ -398,32 +393,6 @@
           })
           .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); })
           .followUpINJSDMItem(itemId, userName, userEmail);
-      });
-    });
-    $(document).on('click', '.reopen-comm-item', function () {
-      if (commActionLock) { Swal.fire({ icon:'warning', title:swalTitle('请稍候','Please Wait'), html:swalHtml('上一操作仍在处理中，请稍后再试。','Previous action is still in progress. Please wait.'), timer:2000, showConfirmButton:false }); return; }
-      const row = $(this).closest('.item-row');
-      const itemId = row.data('item-id') || $(this).data('id');
-      const desc = row.find('.description').val().trim() || '(空)';
-      Swal.fire({
-        icon:'question', title:swalTitle('确认重新打开','Confirm Reopen'),
-        html:swalHtml(`确认重新打开此沟通事项？<br>「${$('<div>').text(desc).html()}」<br>该事项将恢复为活跃状态。`, `Reopen this communication item? It will be restored to active status.`),
-        showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
-      }).then(result => {
-        if (!result.isConfirmed) return;
-        if (!itemId) { row.removeClass('comm-closed').find('.comm-actions-wrapper-cell').html(activeView('')); row.find('.description,.owner-choice input').prop('disabled', false); return; }
-        actionLockRow(row);
-        google.script.run
-          .withSuccessHandler(raw => {
-            actionUnlock();
-            const r = parseResponse(raw);
-            if (r.success) {
-              row.removeClass('comm-closed').find('.comm-actions-wrapper-cell').html(activeView(itemId));
-              row.find('.description,.owner-choice input').prop('disabled', false);
-            } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(closedView(itemId)); }
-          })
-          .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(closedView(itemId)); })
-          .reopenINJSDMItem(itemId, userName, userEmail);
       });
     });
     // ---- Batch selection for communication items ----
