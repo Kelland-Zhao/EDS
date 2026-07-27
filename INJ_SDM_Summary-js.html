@@ -430,12 +430,10 @@
     function updateCommBatchToolbar() {
       var checked = $('#CommunicationCard .comm-checkbox:checked').length;
       var total = $('#CommunicationCard .comm-checkbox').length;
-      if (checked > 0) {
-        $('#CommBatchToolbar').addClass('show').find('.batch-count').text('已选 ' + checked + ' / ' + total + ' 项  Selected');
-      } else {
-        $('#CommBatchToolbar').removeClass('show');
-      }
-      $('#CommSelectAll').prop('indeterminate', checked > 0 && checked < total);
+      var hasSelection = checked > 0;
+      $('#CommBatchToolbar').find('.batch-count').text('已选 ' + checked + ' / ' + total + ' 项  Selected');
+      $('#CommBatchToolbar').find('.batch-close-comm, .batch-followup-comm').prop('disabled', !hasSelection);
+      $('#CommSelectAll').prop('indeterminate', hasSelection && checked < total);
       $('#CommSelectAll').prop('checked', checked === total && total > 0);
     }
     $(document).on('change', '#CommShowClosed', function () {
