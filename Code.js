@@ -13050,8 +13050,8 @@ function closeINJSDMItem(itemId, userName, userEmail) {
     var found = false;
     for (var i = 0; i < rows.length; i++) {
       if (String(rows[i][4] || '') === itemId && String(rows[i][13] || '') === 'ACTIVE') {
-        ws.getRange(i + 3, 13).setValue('CLOSED');
-        ws.getRange(i + 3, 12).setValue(now);
+        ws.getRange(i + 3, 14).setValue('CLOSED');
+        ws.getRange(i + 3, 13).setValue(now);
         found = true;
         break;
       }
@@ -13079,8 +13079,8 @@ function followUpINJSDMItem(itemId, userName, userEmail) {
     var found = false;
     for (var i = 0; i < rows.length; i++) {
       if (String(rows[i][4] || '') === itemId && (String(rows[i][13] || '') === 'ACTIVE' || String(rows[i][13] || '') === 'FOLLOW_UP')) {
-        ws.getRange(i + 3, 13).setValue('FOLLOW_UP');
-        ws.getRange(i + 3, 12).setValue(now);
+        ws.getRange(i + 3, 14).setValue('FOLLOW_UP');
+        ws.getRange(i + 3, 13).setValue(now);
         found = true;
         break;
       }
@@ -13108,8 +13108,8 @@ function reopenINJSDMItem(itemId, userName, userEmail) {
     var found = false;
     for (var i = 0; i < rows.length; i++) {
       if (String(rows[i][4] || '') === itemId && String(rows[i][13] || '') === 'CLOSED') {
-        ws.getRange(i + 3, 13).setValue('ACTIVE');
-        ws.getRange(i + 3, 12).setValue(now);
+        ws.getRange(i + 3, 14).setValue('ACTIVE');
+        ws.getRange(i + 3, 13).setValue(now);
         found = true;
         break;
       }
