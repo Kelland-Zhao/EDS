@@ -362,7 +362,10 @@
             actionUnlock();
             const r = parseResponse(raw);
             if (r.success) {
-              row.slideUp(200, function () { row.remove(); updateCounts(); });
+              // Reload from server to confirm the item is actually closed
+              row.remove();
+              updateCounts();
+              reloadTodayReport();
             } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); }
           })
           .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); })
