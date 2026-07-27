@@ -420,22 +420,38 @@
     });
     function execBatchAction(actionLabel, actionTitle, itemIds, newStatus) {
       commActionLock = true;
-      $('#CommBatchToolbar').find('.batch-count').html('⏳ 批量' + actionTitle + '中... / Processing ' + itemIds.length + ' items...');
+      // Disable all batch controls during operation
+      $('#CommBatchToolbar button').prop('disabled', true);
+      $('#CommunicationCard .comm-checkbox, #CommSelectAll').prop('disabled', true);
+      // Show loading overlay
+      Swal.fire({
+        title: swalTitle('批量' + actionTitle + '中...', 'Batch ' + actionTitle + '...'),
+        html: swalHtml('正在处理 ' + itemIds.length + ' 条沟通事项，请稍候。', 'Processing ' + itemIds.length + ' items, please wait.'),
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: function () { Swal.showLoading(); }
+      });
       google.script.run
         .withSuccessHandler(raw => {
+          Swal.close();
           commActionLock = false;
           updateCommBatchToolbar();
+          $('#CommBatchToolbar button').prop('disabled', false);
+          $('#CommunicationCard .comm-checkbox, #CommSelectAll').prop('disabled', false);
           var r = parseResponse(raw);
           if (r.success) {
-            showSuccess('已' + actionTitle + ' ' + r.updated + ' 条沟通事项。', r.updated + ' communication items ' + actionLabel + '.');
+            showSuccess('已' + actionTitle + ' ' + r.updated + ' 条。', r.updated + ' items ' + actionLabel + '.');
             reloadTodayReport();
           } else {
             showError(r.message || '操作失败', 'Operation failed');
           }
         })
         .withFailureHandler(err => {
+          Swal.close();
           commActionLock = false;
           updateCommBatchToolbar();
+          $('#CommBatchToolbar button').prop('disabled', false);
+          $('#CommunicationCard .comm-checkbox, #CommSelectAll').prop('disabled', false);
           showError(err.message || String(err), 'Operation failed');
         })
         .batchUpdateINJSDMItems(JSON.stringify(itemIds), newStatus, userName, userEmail);
