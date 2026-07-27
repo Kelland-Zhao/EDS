@@ -152,6 +152,7 @@ function doGet(e) {
   Route.path("INJ_SDM_Summary", loadINJSDMSummary);
   Route.path("closeINJSDMItem", closeINJSDMItem);
   Route.path("followUpINJSDMItem", followUpINJSDMItem);
+  Route.path("reopenINJSDMItem", reopenINJSDMItem);
   Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
   Route.path("EDS_ResourceGantt", loadEDSResourceGantt);
   Route.path("EDS_TaskList", loadEDSTaskList);
@@ -13085,6 +13086,35 @@ function followUpINJSDMItem(itemId, userName, userEmail) {
       }
     }
     if (!found) return JSON.stringify({ success: false, message: 'Item not found or already closed' });
+    return JSON.stringify({ success: true, itemId: itemId });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+function reopenINJSDMItem(itemId, userName, userEmail) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
+      return JSON.stringify({ success: false, permissionDenied: true, message: 'Permission denied' });
+    }
+    if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
+    const ws = getINJSDMSheet_();
+    const rows = readINJSDMRows_();
+    const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+    var found = false;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][4] || '') === itemId && String(rows[i][13] || '') === 'CLOSED') {
+        ws.getRange(i + 3, 13).setValue('ACTIVE');
+        ws.getRange(i + 3, 12).setValue(now);
+        found = true;
+        break;
+      }
+    }
+    if (!found) return JSON.stringify({ success: false, message: 'Item not found or is not closed' });
     return JSON.stringify({ success: true, itemId: itemId });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });

@@ -88,40 +88,34 @@
       const item = data || {};
       const name = `communication-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const status = item.itemStatus || '';
-      var actionsHtml = '';
-      var statusClass = '';
       var statusHtml = '';
+      var statusClass = '';
+      var actionsHtml = '';
       if (status === 'CLOSED') {
         statusClass = 'comm-closed';
-        statusHtml = '<span class="comm-status">✓ 已关闭<br><small>Closed</small></span>';
+        statusHtml = '<span class="comm-status-label">✓ 已关闭<br><small>Closed</small></span>';
+        actionsHtml = `<button class="btn btn-sm btn-outline-secondary reopen-comm-item" data-id="${item.itemId || ''}" title="重新打开 / Reopen">↩ 重开<br><small>Reopen</small></button>`;
       } else if (status === 'FOLLOW_UP') {
         statusClass = 'comm-followup';
-        statusHtml = '<span class="comm-status">↻ 跟进中<br><small>Following</small></span>';
-        actionsHtml = `<div class="comm-actions">
-          <button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
-          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>
-        </div>`;
+        statusHtml = '<span class="comm-status-label">↻ 跟进中<br><small>Following</small></span>';
+        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
+          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
       } else if (status === 'HISTORY') {
         statusClass = 'comm-history';
-        statusHtml = '<span class="comm-status">⏳ 历史跟进<br><small>History</small></span>';
-        actionsHtml = `<div class="comm-actions">
-          <button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
-          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>
-        </div>`;
+        statusHtml = '<span class="comm-status-label">⏳ 历史跟进<br><small>History</small></span>';
+        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
+          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
       } else {
-        // New or active item — show action buttons
-        actionsHtml = `<div class="comm-actions">
-          <button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
-          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>
-        </div>`;
+        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
+          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
       }
-      var actionsCol = statusHtml || actionsHtml;
+      var actionsCol = `<div class="comm-actions-wrapper-cell">${statusHtml}<div class="comm-actions">${actionsHtml}</div></div>`;
       const row = $(`<div class="item-row communication ${statusClass}" data-type="communication" data-item-id="${item.itemId || ''}">
         <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
         <textarea class="form-control description" rows="2" placeholder="沟通事项 / Communication" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
         ${ownerChoice(name, item.owners || [])}
-        <div class="comm-actions-wrapper">${actionsCol}</div>
+        ${actionsCol}
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
       </div>`);
       if (status === 'CLOSED') {
@@ -328,7 +322,23 @@
         .getINJSDMHistory('', '', userName, userEmail);
     }
 
-    $(document).on('click', '.add-item', function () {
+    function actionLockRow(row) {
+      commActionLock = true;
+      row.find('.comm-actions button').prop('disabled', true);
+      $('.comm-actions button').not(row.find('.comm-actions button')).prop('disabled', true);
+      row.find('.comm-status-label').hide();
+      row.find('.comm-actions').prepend('<span class="comm-status-label text-muted">⏳ 处理中<br><small>Processing</small></span>');
+    }
+    function actionUnlock() {
+      commActionLock = false;
+      $('.comm-actions button').prop('disabled', false);
+    }
+    function restoreButtons(row, itemId, btns) {
+      row.find('.comm-actions-wrapper-cell').html(btns);
+    }
+    function closedView(itemId) { return `<span class="comm-status-label">✓ 已关闭<br><small>Closed</small></span><div class="comm-actions"><button class="btn btn-sm btn-outline-secondary reopen-comm-item" data-id="${itemId}" title="重新打开 / Reopen">↩ 重开<br><small>Reopen</small></button></div>`; }
+    function followUpView(itemId) { return `<span class="comm-status-label">↻ 跟进中<br><small>Following</small></span><div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
+    function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
       const type = $(this).data('type');
       type === 'communication' ? addCommunicationRow({}) : addIssueRow(type, {});
     });
@@ -344,29 +354,19 @@
         showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
       }).then(result => {
         if (!result.isConfirmed) return;
-        if (!itemId) { row.addClass('comm-closed').find('.comm-actions-wrapper').html('<span class="comm-status">✓ 已关闭<br><small>Closed</small></span>'); row.find('.description,.owner-choice input').prop('disabled', true); return; }
-        commActionLock = true;
-        row.find('.comm-actions-wrapper').html('<span class="comm-status text-muted">⏳ 处理中<br><small>Processing</small></span>');
-        row.find('.close-comm-item, .followup-comm-item').prop('disabled', true);
-        // Disable all other action buttons
-        $('.close-comm-item, .followup-comm-item').not(row.find('.close-comm-item, .followup-comm-item')).prop('disabled', true);
+        if (!itemId) { row.addClass('comm-closed').find('.comm-actions-wrapper-cell').html(closedView('')); row.find('.description,.owner-choice input').prop('disabled', true); return; }
+        actionLockRow(row);
         google.script.run
           .withSuccessHandler(raw => {
-            commActionLock = false;
-            $('.close-comm-item, .followup-comm-item').prop('disabled', false);
+            actionUnlock();
             const r = parseResponse(raw);
             if (r.success) {
-              row.addClass('comm-closed').find('.comm-actions-wrapper').html('<span class="comm-status">✓ 已关闭<br><small>Closed</small></span>');
+              row.addClass('comm-closed').find('.comm-actions-wrapper-cell').html(closedView(itemId));
               row.find('.description,.owner-choice input').prop('disabled', true);
               row.removeClass('comm-followup comm-history');
-            } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper').html(`<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}">↻ 跟进<br><small>Follow</small></button></div>`); }
+            } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); }
           })
-          .withFailureHandler(err => {
-            commActionLock = false;
-            $('.close-comm-item, .followup-comm-item').prop('disabled', false);
-            showError(err.message || String(err), 'Operation failed');
-            row.find('.comm-actions-wrapper').html(`<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}">↻ 跟进<br><small>Follow</small></button></div>`);
-          })
+          .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); })
           .closeINJSDMItem(itemId, userName, userEmail);
       });
     });
@@ -381,30 +381,46 @@
         showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
       }).then(result => {
         if (!result.isConfirmed) return;
-        if (!itemId) { row.addClass('comm-followup').find('.comm-actions-wrapper').html('<span class="comm-status">↻ 跟进中<br><small>Following</small></span>'); row.removeClass('comm-history'); return; }
-        commActionLock = true;
-        row.find('.comm-actions-wrapper').html('<span class="comm-status text-muted">⏳ 处理中<br><small>Processing</small></span>');
-        row.find('.close-comm-item, .followup-comm-item').prop('disabled', true);
-        $('.close-comm-item, .followup-comm-item').not(row.find('.close-comm-item, .followup-comm-item')).prop('disabled', true);
+        if (!itemId) { row.addClass('comm-followup').find('.comm-actions-wrapper-cell').html(followUpView('')); row.removeClass('comm-history'); return; }
+        actionLockRow(row);
         google.script.run
           .withSuccessHandler(raw => {
-            commActionLock = false;
-            $('.close-comm-item, .followup-comm-item').prop('disabled', false);
+            actionUnlock();
             const r = parseResponse(raw);
             if (r.success) {
-              row.addClass('comm-followup').find('.comm-actions-wrapper').html('<span class="comm-status">↻ 跟进中<br><small>Following</small></span>');
+              row.addClass('comm-followup').find('.comm-actions-wrapper-cell').html(followUpView(itemId));
               row.removeClass('comm-history');
-            } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper').html(`<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}">↻ 跟进<br><small>Follow</small></button></div>`); }
+            } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); }
           })
-          .withFailureHandler(err => {
-            commActionLock = false;
-            $('.close-comm-item, .followup-comm-item').prop('disabled', false);
-            showError(err.message || String(err), 'Operation failed');
-            row.find('.comm-actions-wrapper').html(`<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}">↻ 跟进<br><small>Follow</small></button></div>`);
-          })
+          .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); })
           .followUpINJSDMItem(itemId, userName, userEmail);
       });
     });
+    $(document).on('click', '.reopen-comm-item', function () {
+      if (commActionLock) { Swal.fire({ icon:'warning', title:swalTitle('请稍候','Please Wait'), html:swalHtml('上一操作仍在处理中，请稍后再试。','Previous action is still in progress. Please wait.'), timer:2000, showConfirmButton:false }); return; }
+      const row = $(this).closest('.item-row');
+      const itemId = row.data('item-id') || $(this).data('id');
+      const desc = row.find('.description').val().trim() || '(空)';
+      Swal.fire({
+        icon:'question', title:swalTitle('确认重新打开','Confirm Reopen'),
+        html:swalHtml(`确认重新打开此沟通事项？<br>「${$('<div>').text(desc).html()}」<br>该事项将恢复为活跃状态。`, `Reopen this communication item? It will be restored to active status.`),
+        showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
+      }).then(result => {
+        if (!result.isConfirmed) return;
+        if (!itemId) { row.removeClass('comm-closed').find('.comm-actions-wrapper-cell').html(activeView('')); row.find('.description,.owner-choice input').prop('disabled', false); return; }
+        actionLockRow(row);
+        google.script.run
+          .withSuccessHandler(raw => {
+            actionUnlock();
+            const r = parseResponse(raw);
+            if (r.success) {
+              row.removeClass('comm-closed').find('.comm-actions-wrapper-cell').html(activeView(itemId));
+              row.find('.description,.owner-choice input').prop('disabled', false);
+            } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(closedView(itemId)); }
+          })
+          .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(closedView(itemId)); })
+          .reopenINJSDMItem(itemId, userName, userEmail);
+      });
     $(document).on('click', '.show-bulk', function () { $(this).closest('.issue-card').find('.bulk-panel').addClass('open').find('textarea').focus(); });
     $(document).on('click', '.cancel-bulk', function () { $(this).closest('.bulk-panel').removeClass('open'); });
     $(document).on('click', '.import-bulk', function () {
