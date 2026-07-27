@@ -339,6 +339,7 @@
     function closedView(itemId) { return `<span class="comm-status-label">✓ 已关闭<br><small>Closed</small></span><div class="comm-actions"><button class="btn btn-sm btn-outline-secondary reopen-comm-item" data-id="${itemId}" title="重新打开 / Reopen">↩ 重开<br><small>Reopen</small></button></div>`; }
     function followUpView(itemId) { return `<span class="comm-status-label">↻ 跟进中<br><small>Following</small></span><div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
     function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
+    $(document).on('click', '.add-item', function () {
       const type = $(this).data('type');
       type === 'communication' ? addCommunicationRow({}) : addIssueRow(type, {});
     });
@@ -421,6 +422,7 @@
           .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(closedView(itemId)); })
           .reopenINJSDMItem(itemId, userName, userEmail);
       });
+    });
     $(document).on('click', '.show-bulk', function () { $(this).closest('.issue-card').find('.bulk-panel').addClass('open').find('textarea').focus(); });
     $(document).on('click', '.cancel-bulk', function () { $(this).closest('.bulk-panel').removeClass('open'); });
     $(document).on('click', '.import-bulk', function () {
