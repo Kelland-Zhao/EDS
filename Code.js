@@ -151,7 +151,6 @@ function doGet(e) {
   Route.path("ProjectTracking", loadProjectTracking);
   Route.path("INJ_SDM_Summary", loadINJSDMSummary);
   Route.path("closeINJSDMItem", closeINJSDMItem);
-  Route.path("followUpINJSDMItem", followUpINJSDMItem);
   Route.path("reopenINJSDMItem", reopenINJSDMItem);
   Route.path("batchUpdateINJSDMItems", batchUpdateINJSDMItems);
   Route.path("debugINJSDMRawData", debugINJSDMRawData);
@@ -12817,7 +12816,7 @@ function groupINJSDMReports_(rows, includeClosed) {
   const map = {};
   rows.forEach(function (row) {
     const item = rowToINJSDMItem_(row);
-    var validStatus = item.status === 'ACTIVE' || item.status === 'FOLLOW_UP';
+    var validStatus = item.status === 'ACTIVE';
     if (includeClosed) validStatus = validStatus || item.status === 'CLOSED';
     if (!validStatus || !item.reportId) return;
     if (!map[item.reportId]) {
@@ -12867,11 +12866,11 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
     allRows.forEach(function (row) {
       var item = rowToINJSDMItem_(row);
       if (item.category !== 'COMMUNICATION') return;
-      if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return; // carry forward ACTIVE and FOLLOW_UP
-      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return; // also include CLOSED when filter on
+      if (!showClosed && item.status !== 'ACTIVE') return; // carry forward ACTIVE
+      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'CLOSED') return; // also include CLOSED when filter on
       if (formatINJSDMDate_(row[1]) >= targetDate) return; // not historical
       if (todayItemIds[item.itemId]) return; // already in today's report
-      var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : (item.status === 'FOLLOW_UP') ? 'FOLLOW_UP' : 'HISTORY';
+      var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
       historyCommItems.push({
         itemId: item.itemId,
         description: item.description,
@@ -12944,7 +12943,7 @@ function saveINJSDMReport(payload, userName, userEmail) {
     let previousSnapshot = null;
 
     rows.forEach(function (row, index) {
-      if (formatINJSDMDate_(row[1]) === data.reportDate && (String(row[13] || '') === 'ACTIVE' || String(row[13] || '') === 'FOLLOW_UP')) {
+      if (formatINJSDMDate_(row[1]) === data.reportDate && String(row[13] || '') === 'ACTIVE') {
         existingActive.push(index + 3);
         reportId = reportId || String(row[0] || '');
         createdAt = createdAt || formatINJSDMDateTime_(row[11]);
@@ -12983,10 +12982,7 @@ function saveINJSDMReport(payload, userName, userEmail) {
     }
     data.major.forEach(function (item) { addItem('MAJOR', item); });
     data.outstanding.forEach(function (item) { addItem('OUTSTANDING', item); });
-    data.communication.forEach(function (item) {
-      var catStatus = item.itemStatus === 'FOLLOW_UP' ? 'FOLLOW_UP' : 'ACTIVE';
-      addItem('COMMUNICATION', item, catStatus);
-    });
+    data.communication.forEach(function (item) { addItem('COMMUNICATION', item); });
 
     ws.getRange(ws.getLastRow() + 1, 1, output.length, 15).setValues(output);
     return JSON.stringify({ success: true, reportId: reportId, updated: existingActive.length > 0 });
@@ -13054,7 +13050,7 @@ function deleteINJSDMReport(reportId, userName, userEmail) {
     const historyJSON = JSON.stringify([{ changedAt: now, action: 'DELETE', before: snapshot }]);
     let count = 0;
     rows.forEach(function (row, index) {
-      if (String(row[0] || '') === reportId && (String(row[13] || '') === 'ACTIVE' || String(row[13] || '') === 'FOLLOW_UP')) {
+      if (String(row[0] || '') === reportId && String(row[13] || '') === 'ACTIVE') {
         ws.getRange(index + 3, 13, 1, 3).setValues([[now, 'DELETED', historyJSON]]);
         count++;
       }
@@ -13082,35 +13078,6 @@ function closeINJSDMItem(itemId, userName, userEmail) {
     for (var i = 0; i < rows.length; i++) {
       if (String(rows[i][4] || '') === itemId && String(rows[i][13] || '') === 'ACTIVE') {
         ws.getRange(i + 3, 14).setValue('CLOSED');
-        ws.getRange(i + 3, 13).setValue(now);
-        found = true;
-        break;
-      }
-    }
-    if (!found) return JSON.stringify({ success: false, message: 'Item not found or already closed' });
-    return JSON.stringify({ success: true, itemId: itemId });
-  } catch (e) {
-    return JSON.stringify({ success: false, message: e.toString() });
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
-  }
-}
-
-function followUpINJSDMItem(itemId, userName, userEmail) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000);
-    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
-      return JSON.stringify({ success: false, permissionDenied: true, message: 'Permission denied' });
-    }
-    if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
-    const ws = getINJSDMSheet_();
-    const rows = readINJSDMRows_();
-    const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
-    var found = false;
-    for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i][4] || '') === itemId && (String(rows[i][13] || '') === 'ACTIVE' || String(rows[i][13] || '') === 'FOLLOW_UP')) {
-        ws.getRange(i + 3, 14).setValue('FOLLOW_UP');
         ws.getRange(i + 3, 13).setValue(now);
         found = true;
         break;
@@ -13165,7 +13132,7 @@ function batchUpdateINJSDMItems(itemIdsJSON, newStatus, userName, userEmail) {
     var itemIds = [];
     try { itemIds = JSON.parse(itemIdsJSON); } catch (e) { return JSON.stringify({ success: false, message: 'Invalid itemIds JSON' }); }
     if (!Array.isArray(itemIds) || !itemIds.length) return JSON.stringify({ success: false, message: 'No itemIds provided' });
-    if (['CLOSED', 'FOLLOW_UP', 'ACTIVE'].indexOf(newStatus) === -1) {
+    if (['CLOSED', 'ACTIVE'].indexOf(newStatus) === -1) {
       return JSON.stringify({ success: false, message: 'Invalid status: ' + newStatus });
     }
     const ws = getINJSDMSheet_();

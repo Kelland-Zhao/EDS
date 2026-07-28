@@ -98,18 +98,8 @@
         statusClass = 'comm-closed';
         statusHtml = '<span class="comm-status-label">✓ 已关闭<br><small>Closed</small></span>';
         actionsHtml = `<button class="btn btn-sm btn-outline-secondary reopen-comm-item" data-id="${item.itemId || ''}" title="重新打开 / Reopen">↩ 重开<br><small>Reopen</small></button>`;
-      } else if (status === 'FOLLOW_UP') {
-        statusClass = 'comm-followup';
-        statusHtml = '<span class="comm-status-label">↻ 跟进中<br><small>Following</small></span>';
-        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
-          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
-      } else if (status === 'HISTORY') {
-        statusClass = 'comm-history';
-        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
-          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
       } else {
-        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>
-          <button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${item.itemId || ''}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button>`;
+        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>`;
       }
       var actionsCol = `<div class="comm-actions-wrapper-cell">${statusHtml}<div class="comm-actions">${actionsHtml}</div></div>`;
       var disabledAttr = status === 'CLOSED' ? ' disabled' : '';
@@ -349,8 +339,7 @@
     function restoreButtons(row, itemId, btns) {
       row.find('.comm-actions-wrapper-cell').html(btns);
     }
-    function followUpView(itemId) { return `<span class="comm-status-label">↻ 跟进中<br><small>Following</small></span><div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
-    function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button><button class="btn btn-sm btn-outline-warning followup-comm-item" data-id="${itemId}" title="继续跟进 / Follow Up">↻ 跟进<br><small>Follow</small></button></div>`; }
+    function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button></div>`; }
     $(document).on('click', '.add-item', function () {
       const type = $(this).data('type');
       type === 'communication' ? addCommunicationRow({}) : addIssueRow(type, {});
@@ -384,32 +373,6 @@
           .closeINJSDMItem(itemId, userName, userEmail);
       });
     });
-    $(document).on('click', '.followup-comm-item', function () {
-      if (commActionLock) { Swal.fire({ icon:'warning', title:swalTitle('请稍候','Please Wait'), html:swalHtml('上一操作仍在处理中，请稍后再试。','Previous action is still in progress. Please wait.'), timer:2000, showConfirmButton:false }); return; }
-      const row = $(this).closest('.item-row');
-      const itemId = row.data('item-id') || $(this).data('id');
-      const desc = row.find('.description').val().trim() || '(空)';
-      Swal.fire({
-        icon:'question', title:swalTitle('确认继续跟进','Confirm Follow Up'),
-        html:swalHtml(`确认此沟通事项需要延期跟进？<br>「${$('<div>').text(desc).html()}」<br>该事项将持续跨天带出。`, `Confirm this item needs continued follow-up? It will continue to appear on subsequent days.`),
-        showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
-      }).then(result => {
-        if (!result.isConfirmed) return;
-        if (!itemId) { row.addClass('comm-followup').find('.comm-actions-wrapper-cell').html(followUpView('')); row.removeClass('comm-history'); return; }
-        actionLockRow(row);
-        google.script.run
-          .withSuccessHandler(raw => {
-            actionUnlock();
-            const r = parseResponse(raw);
-            if (r.success) {
-              row.addClass('comm-followup').find('.comm-actions-wrapper-cell').html(followUpView(itemId));
-              row.removeClass('comm-history');
-            } else { showError(r.message || '操作失败', 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); }
-          })
-          .withFailureHandler(err => { actionUnlock(); showError(err.message || String(err), 'Operation failed'); row.find('.comm-actions-wrapper-cell').html(activeView(itemId)); })
-          .followUpINJSDMItem(itemId, userName, userEmail);
-      });
-    });
     $(document).on('click', '.reopen-comm-item', function () {
       if (commActionLock) { Swal.fire({ icon:'warning', title:swalTitle('请稍候','Please Wait'), html:swalHtml('上一操作仍在处理中，请稍后再试。','Previous action is still in progress. Please wait.'), timer:2000, showConfirmButton:false }); return; }
       const row = $(this).closest('.item-row');
@@ -441,7 +404,7 @@
       var total = $('#CommunicationCard .comm-checkbox').length;
       var hasSelection = checked > 0;
       $('#CommBatchToolbar').find('.batch-count').text('已选 ' + checked + ' / ' + total + ' 项  Selected');
-      $('#CommBatchToolbar').find('.batch-close-comm, .batch-followup-comm').prop('disabled', !hasSelection);
+      $('#CommBatchToolbar').find('.batch-close-comm').prop('disabled', !hasSelection);
       $('#CommSelectAll').prop('indeterminate', hasSelection && checked < total);
       $('#CommSelectAll').prop('checked', checked === total && total > 0);
     }
@@ -457,14 +420,12 @@
     $(document).on('change', '#CommunicationCard .comm-checkbox', function () {
       updateCommBatchToolbar();
     });
-    function execBatchAction(actionLabel, actionTitle, itemIds, newStatus) {
+    function execBatchClose(itemIds) {
       commActionLock = true;
-      // Disable all batch controls during operation
       $('#CommBatchToolbar button').prop('disabled', true);
       $('#CommunicationCard .comm-checkbox, #CommSelectAll').prop('disabled', true);
-      // Show loading overlay
       Swal.fire({
-        title: swalTitle('批量' + actionTitle + '中...', 'Batch ' + actionTitle + '...'),
+        title: swalTitle('批量关闭中...', 'Batch Closing...'),
         html: swalHtml('正在处理 ' + itemIds.length + ' 条沟通事项，请稍候。', 'Processing ' + itemIds.length + ' items, please wait.'),
         allowOutsideClick: false,
         showConfirmButton: false,
@@ -479,7 +440,7 @@
           $('#CommunicationCard .comm-checkbox, #CommSelectAll').prop('disabled', false);
           var r = parseResponse(raw);
           if (r.success) {
-            showSuccess('已' + actionTitle + ' ' + r.updated + ' 条。', r.updated + ' items ' + actionLabel + '.');
+            showSuccess('已关闭 ' + r.updated + ' 条。', r.updated + ' items closed.');
             reloadTodayReport();
           } else {
             showError(r.message || '操作失败', 'Operation failed');
@@ -493,7 +454,7 @@
           $('#CommunicationCard .comm-checkbox, #CommSelectAll').prop('disabled', false);
           showError(err.message || String(err), 'Operation failed');
         })
-        .batchUpdateINJSDMItems(JSON.stringify(itemIds), newStatus, userName, userEmail);
+        .batchUpdateINJSDMItems(JSON.stringify(itemIds), 'CLOSED', userName, userEmail);
     }
     $(document).on('click', '.batch-close-comm', function () {
       var checked = $('#CommunicationCard .comm-checkbox:checked');
@@ -507,22 +468,7 @@
         showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
       }).then(result => {
         if (!result.isConfirmed) return;
-        execBatchAction('closed', '关闭', itemIds, 'CLOSED');
-      });
-    });
-    $(document).on('click', '.batch-followup-comm', function () {
-      var checked = $('#CommunicationCard .comm-checkbox:checked');
-      if (!checked.length) return;
-      if (commActionLock) { Swal.fire({ icon:'warning', title:swalTitle('请稍候','Please Wait'), html:swalHtml('上一操作仍在处理中，请稍后再试。','Previous action is still in progress. Please wait.'), timer:2000, showConfirmButton:false }); return; }
-      var itemIds = checked.closest('.item-row').map(function () { return $(this).data('item-id'); }).get().filter(Boolean);
-      if (!itemIds.length) { showError('所选项目缺少 ID，请先保存后再操作。', 'Selected items need to be saved first.'); return; }
-      Swal.fire({
-        icon:'question', title:swalTitle('批量继续跟进','Batch Follow Up'),
-        html:swalHtml(`确认将选中的 ${itemIds.length} 条沟通事项标记为继续跟进？<br>该事项将持续跨天带出。`, `Mark ${itemIds.length} selected items for continued follow-up?`),
-        showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
-      }).then(result => {
-        if (!result.isConfirmed) return;
-        execBatchAction('marked for follow-up', '继续跟进', itemIds, 'FOLLOW_UP');
+        execBatchClose(itemIds);
       });
     });
     $(document).on('click', '.show-bulk', function () { $(this).closest('.issue-card').find('.bulk-panel').addClass('open').find('textarea').focus(); });
