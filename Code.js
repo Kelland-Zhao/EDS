@@ -153,6 +153,7 @@ function doGet(e) {
   Route.path("closeINJSDMItem", closeINJSDMItem);
   Route.path("reopenINJSDMItem", reopenINJSDMItem);
   Route.path("batchUpdateINJSDMItems", batchUpdateINJSDMItems);
+  Route.path("getOAuthToken", getOAuthToken_);
   Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
   Route.path("EDS_ResourceGantt", loadEDSResourceGantt);
   Route.path("EDS_TaskList", loadEDSTaskList);
@@ -12786,7 +12787,16 @@ function readINJSDMRows_() {
   const ws = getINJSDMSheet_();
   const lastRow = ws.getLastRow();
   if (lastRow < 3) return [];
-  return ws.getRange(3, 1, lastRow - 2, 15).getValues();
+  return ws.getRange(3, 1, lastRow - 2, 16).getValues();
+}
+
+function getOAuthToken_() {
+  try {
+    var token = ScriptApp.getOAuthToken();
+    return JSON.stringify({ success: true, token: token });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  }
 }
 
 function rowToINJSDMItem_(row) {
@@ -12807,7 +12817,8 @@ function rowToINJSDMItem_(row) {
     createdAt: formatINJSDMDateTime_(row[11]),
     updatedAt: formatINJSDMDateTime_(row[12]),
     status: String(row[13] || ''),
-    editHistoryJSON: String(row[14] || '[]')
+    editHistoryJSON: String(row[14] || '[]'),
+    attachmentsJSON: String(row[15] || '[]')
   };
 }
 
@@ -12839,9 +12850,13 @@ function groupINJSDMReports_(rows, includeClosed) {
     } else if (item.category === 'OUTSTANDING') {
       report.outstanding.push({ itemId: item.itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
     } else if (item.category === 'COMMUNICATION') {
-      report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate });
+      var commAttachments = [];
+      try { commAttachments = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+      report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate, attachments: commAttachments });
     } else if (item.category === 'TODO') {
-      report.todo.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate });
+      var todoAttachments = [];
+      try { todoAttachments = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+      report.todo.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate, attachments: todoAttachments });
     }
   });
   return Object.keys(map).map(function (key) { return map[key]; });
@@ -12876,7 +12891,9 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
         if (formatINJSDMDate_(row[1]) >= targetDate) return;
         if (todayCommIds[item.itemId]) return;
         var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
-        historyCommItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: itemStatus });
+        var commAtts = [];
+        try { commAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+        historyCommItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: itemStatus, attachments: commAtts });
       } else if (item.category === 'TODO') {
         // Personal todos: only show current user's items
         if (!item.owners || item.owners.indexOf(userName) === -1) return;
@@ -12885,7 +12902,9 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
         if (formatINJSDMDate_(row[1]) >= targetDate) return;
         if (todayTodoIds[item.itemId]) return;
         var todoStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
-        historyTodoItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: todoStatus });
+        var todoAtts = [];
+        try { todoAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+        historyTodoItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: todoStatus, attachments: todoAtts });
       }
     });
     historyCommItems.sort(function (a, b) { return a.reportDate.localeCompare(b.reportDate); });
@@ -12989,10 +13008,11 @@ function saveINJSDMReport(payload, userName, userEmail) {
       const finalStatus = itemStatus || 'ACTIVE';
       const itemId = item.itemId || ('ITM-' + data.reportDate.replace(/-/g, '') + '-' + ('000' + sequence++).slice(-3) + '-' + Utilities.getUuid().substring(0, 4));
       const owners = Array.isArray(item.owners) ? item.owners : [];
+      const attachments = Array.isArray(item.attachments) ? JSON.stringify(item.attachments) : '[]';
       output.push([
         reportId, data.reportDate, data.dataStartDate, data.dataEndDate, itemId, category,
         String(item.workshop || ''), String(item.machineNo || ''), String(item.description || '').trim(),
-        owners.join('、'), JSON.stringify(owners), createdAt, now, finalStatus, historyJSON
+        owners.join('、'), JSON.stringify(owners), createdAt, now, finalStatus, historyJSON, attachments
       ]);
     }
     data.major.forEach(function (item) { addItem('MAJOR', item); });
@@ -13003,7 +13023,7 @@ function saveINJSDMReport(payload, userName, userEmail) {
       addItem('TODO', item);
     });
 
-    ws.getRange(ws.getLastRow() + 1, 1, output.length, 15).setValues(output);
+    ws.getRange(ws.getLastRow() + 1, 1, output.length, 16).setValues(output);
     return JSON.stringify({ success: true, reportId: reportId, updated: existingActive.length > 0 });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });

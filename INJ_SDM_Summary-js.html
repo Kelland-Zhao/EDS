@@ -116,9 +116,11 @@
         ${ownerChoice(name, item.owners || [])}
         ${actionsCol}
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
+        <div class="attachments-area">${renderAttachments(item.attachments || [])}<button class="btn btn-sm btn-outline-secondary btn-attach pick-attachment" type="button" title="添加附件 / Attach File"><i class="bi bi-paperclip"></i></button></div>
       </div>`);
       if (status === 'CLOSED') {
         row.find('.owner-choice input').prop('disabled', true);
+        row.find('.btn-attach').prop('disabled', true);
       }
       $('#CommunicationCard .item-list').append(row);
       updateCounts();
@@ -147,7 +149,11 @@
         <textarea class="form-control description" rows="2" placeholder="待办事项 / To-Do" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
         ${actionsCol}
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
+        <div class="attachments-area">${renderAttachments(item.attachments || [])}<button class="btn btn-sm btn-outline-secondary btn-attach pick-attachment" type="button" title="添加附件 / Attach File"><i class="bi bi-paperclip"></i></button></div>
       </div>`);
+      if (status === 'CLOSED') {
+        row.find('.btn-attach').prop('disabled', true);
+      }
       $('#TodoCard .item-list').append(row);
       updateCounts();
     }
@@ -291,7 +297,8 @@
         if (isHistoryItem) return; // Historical items (incl. follow-up) handled individually, not re-saved
         if (!description) mark($(this).find('.description'), `沟通事项第 ${index + 1} 条缺少事项内容`);
         if (!owners.length) mark($(this).find('.owner-choice'), `沟通事项第 ${index + 1} 条请选择责任人`, true);
-        if (description && owners.length) payload.communication.push({ description, owners });
+        var commAtts = []; $(this).find('.attach-chip').each(function () { var a = $(this).find('a'); if (a.length) commAtts.push({ id: a.attr('href').match(/\/d\/(.+)\//)?.[1] || '', name: a.text().replace(/^📄 /,''), url: a.attr('href') }); });
+        if (description && owners.length) payload.communication.push({ description, owners, attachments: commAtts });
       });
 
       $('#TodoCard .item-row').each(function (index) {
@@ -302,7 +309,8 @@
         if (!description) return;
         if (isClosed) return;
         if (isHistoryItem) return;
-        payload.todo.push({ description });
+        var todoAtts = []; $(this).find('.attach-chip').each(function () { var a = $(this).find('a'); if (a.length) todoAtts.push({ id: a.attr('href').match(/\/d\/(.+)\//)?.[1] || '', name: a.text().replace(/^📄 /,''), url: a.attr('href') }); });
+        payload.todo.push({ description, attachments: todoAtts });
       });
 
       if (!payload.major.length && !payload.outstanding.length && !payload.communication.length && !payload.todo.length) {
@@ -394,6 +402,58 @@
       Swal.close();
     }
     function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button></div>`; }
+    function renderAttachments(attachments) {
+      if (!attachments || !attachments.length) return '';
+      return attachments.map(function (a, idx) {
+        return '<span class="attach-chip"><a href="' + a.url + '" target="_blank" title="' + $('<div>').text(a.name).html() + '">📄 ' + $('<div>').text(a.name).html() + '</a><span class="remove-attach" data-idx="' + idx + '" title="移除 / Remove">×</span></span>';
+      }).join('');
+    }
+    $(document).on('click', '.remove-attach', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $(this).closest('.attach-chip').remove();
+    });
+    // Google Picker setup
+    var pickerApiLoaded = false;
+    var oauthToken = '';
+    function loadGooglePicker() {
+      if (pickerApiLoaded) return;
+      gapi.load('picker', { callback: function () { pickerApiLoaded = true; }, onerror: function () { console.log('Picker load failed'); } });
+    }
+    // Load picker API
+    var pickerScript = document.createElement('script');
+    pickerScript.src = 'https://apis.google.com/js/api.js';
+    pickerScript.onload = loadGooglePicker;
+    document.head.appendChild(pickerScript);
+
+    $(document).on('click', '.pick-attachment', function () {
+      var btn = $(this);
+      var row = btn.closest('.item-row');
+      if (!pickerApiLoaded) { Swal.fire({ icon:'warning', title:swalTitle('加载中','Loading'), html:swalHtml('Google Picker 正在加载，请稍后再试。','Google Picker is still loading. Please try again.'), timer:2000, showConfirmButton:false }); return; }
+      google.script.run
+        .withSuccessHandler(function (raw) {
+          var r = parseResponse(raw);
+          if (!r.success || !r.token) { showError('获取授权失败','Failed to get OAuth token'); return; }
+          oauthToken = r.token;
+          var picker = new google.picker.PickerBuilder()
+            .addView(new google.picker.DocsView().setIncludeFolders(true))
+            .setOAuthToken(oauthToken)
+            .setDeveloperKey('AIzaSyC__PLACEHOLDER__KEY')
+            .setAppId('PLACEHOLDER_PROJECT_NUMBER')
+            .setCallback(function (data) {
+              if (data.action === google.picker.Action.PICKED) {
+                var doc = data.docs[0];
+                var attach = { id: doc.id, name: doc.name, url: doc.url };
+                var area = row.find('.attachments-area');
+                var newChip = $('<span class="attach-chip"><a href="' + doc.url + '" target="_blank">📄 ' + $('<div>').text(doc.name).html() + '</a><span class="remove-attach" title="移除 / Remove">×</span></span>');
+                area.find('.btn-attach').before(newChip);
+              }
+            })
+            .build();
+          picker.setVisible(true);
+        })
+        .getOAuthToken();
+    });
     $(document).on('click', '.add-item', function () {
       const type = $(this).data('type');
       type === 'communication' ? addCommunicationRow({}) : type === 'todo' ? addTodoRow({}) : addIssueRow(type, {});
