@@ -336,9 +336,6 @@
       $('.comm-actions button').prop('disabled', false);
       Swal.close();
     }
-    function restoreButtons(row, itemId, btns) {
-      row.find('.comm-actions-wrapper-cell').html(btns);
-    }
     function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button></div>`; }
     $(document).on('click', '.add-item', function () {
       const type = $(this).data('type');

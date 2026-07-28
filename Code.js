@@ -153,7 +153,6 @@ function doGet(e) {
   Route.path("closeINJSDMItem", closeINJSDMItem);
   Route.path("reopenINJSDMItem", reopenINJSDMItem);
   Route.path("batchUpdateINJSDMItems", batchUpdateINJSDMItems);
-  Route.path("debugINJSDMRawData", debugINJSDMRawData);
   Route.path("EDS_TodayDashboard", loadEDSTodayDashboard);
   Route.path("EDS_ResourceGantt", loadEDSResourceGantt);
   Route.path("EDS_TaskList", loadEDSTaskList);
@@ -12990,30 +12989,6 @@ function saveINJSDMReport(payload, userName, userEmail) {
     return JSON.stringify({ success: false, message: e.toString() });
   } finally {
     try { lock.releaseLock(); } catch (e) {}
-  }
-}
-
-function debugINJSDMRawData(userName, userEmail) {
-  try {
-    if (!getINJSDMPermission_(userName, userEmail).hasPermission) {
-      return JSON.stringify({ success: false, message: 'Permission denied' });
-    }
-    const rows = readINJSDMRows_();
-    const items = rows.map(function (row, index) {
-      return {
-        sheetRow: index + 3,
-        reportId: String(row[0] || ''),
-        reportDate: formatINJSDMDate_(row[1]),
-        itemId: String(row[4] || ''),
-        category: String(row[5] || ''),
-        description: String(row[8] || '').substring(0, 60),
-        status: String(row[13] || ''),
-        updatedAt: formatINJSDMDateTime_(row[12])
-      };
-    });
-    return JSON.stringify({ success: true, totalRows: rows.length, items: items });
-  } catch (e) {
-    return JSON.stringify({ success: false, message: e.toString() });
   }
 }
 
