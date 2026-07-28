@@ -112,7 +112,7 @@
         <input type="checkbox" class="comm-checkbox"${disabledAttr}>
         <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
-        <textarea class="form-control description" rows="2" placeholder="沟通事项 / Communication" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
+        <textarea class="form-control description" rows="1" placeholder="沟通事项 / Communication" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
         ${ownerChoice(name, item.owners || [])}
         ${actionsCol}
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
@@ -144,7 +144,7 @@
         <input type="checkbox" class="comm-checkbox"${disabledAttr}>
         <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
-        <textarea class="form-control description" rows="2" placeholder="待办事项 / To-Do" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
+        <textarea class="form-control description" rows="1" placeholder="待办事项 / To-Do" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
         ${actionsCol}
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
       </div>`);

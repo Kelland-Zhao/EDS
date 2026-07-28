@@ -37,19 +37,19 @@
     #TodoCard { border-left-color:#198754; }
     #TodoCard .card-header { background:#f0fff4; }
     #TodoCard .count-badge { background:#d1fae5; color:#0d6832; }
-    .item-row { display:grid; grid-template-columns:24px 34px minmax(130px,.8fr) minmax(150px,1fr) minmax(280px,3fr) 34px; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid #f0f0f0; }
-    .item-row.communication { grid-template-columns:22px 24px 34px minmax(260px,2fr) minmax(160px,1fr) 90px 34px; }
-    .item-row.todo { grid-template-columns:22px 24px 34px minmax(350px,3fr) 90px 34px; }
-    .comm-actions { display:flex; flex-direction:column; gap:3px; }
-    .comm-actions .btn { font-size:10px; padding:2px 4px; line-height:1.3; }
-    .comm-status-label { display:block; font-size:10px; text-align:center; white-space:nowrap; margin-bottom:3px; padding:2px 4px; border-radius:3px; }
+    .item-row { display:grid; grid-template-columns:20px 28px minmax(130px,.8fr) minmax(150px,1fr) minmax(280px,3fr) 28px; gap:5px; align-items:center; padding:5px 8px; border-bottom:1px solid #f0f0f0; }
+    .item-row.communication { grid-template-columns:18px 20px 28px minmax(220px,1.5fr) minmax(140px,1fr) 60px 28px; }
+    .item-row.todo { grid-template-columns:18px 20px 28px minmax(280px,2.5fr) 60px 28px; }
+    .comm-actions { display:flex; flex-direction:column; gap:1px; }
+    .comm-actions .btn { font-size:9px; padding:1px 3px; line-height:1.2; min-height:20px; }
+    .comm-status-label { display:block; font-size:9px; text-align:center; white-space:nowrap; margin-bottom:1px; padding:1px 3px; border-radius:2px; }
     .comm-closed { opacity:0.55; }
     .comm-closed .description { text-decoration:line-through; }
     .comm-closed .comm-status-label { color:#198754; background:#d1fae5; font-weight:600; }
     .comm-history { border-left:3px solid #6f42c1; }
     .comm-history .comm-status-label { color:#5a32a3; background:#ede9fe; font-weight:600; }
-    .comm-actions-wrapper-cell { display:flex; flex-direction:column; gap:2px; }
-    .history-divider { padding:8px 12px; background:#f8f4ff; border-top:1px solid #d4c5e8; border-bottom:1px solid #d4c5e8; font-size:11px; color:#6f42c1; font-weight:600; text-align:center; }
+    .comm-actions-wrapper-cell { display:flex; flex-direction:column; gap:1px; }
+    .history-divider { padding:4px 12px; background:#f8f4ff; border-top:1px solid #d4c5e8; border-bottom:1px solid #d4c5e8; font-size:11px; color:#6f42c1; font-weight:600; text-align:center; }
     .comm-checkbox { width:16px; height:16px; cursor:pointer; accent-color:#E60012; }
     .comm-select-all { width:16px; height:16px; cursor:pointer; accent-color:#E60012; margin-right:8px; }
     .batch-toolbar { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#fff; border-bottom:2px solid #e9ecef; flex-wrap:wrap; }
@@ -61,14 +61,18 @@
     .toggle-switch::after { content:''; position:absolute; width:18px; height:18px; left:2px; top:2px; background:#fff; border-radius:50%; transition:transform .25s; box-shadow:0 1px 2px rgba(0,0,0,.15); }
     .filter-toggle input:checked + .toggle-switch { background:#6c757d; }
     .filter-toggle input:checked + .toggle-switch::after { transform:translateX(18px); }
-    .item-num { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#f1f3f5; font-size:12px; }
-    .workshop-choice, .owner-choice { display:flex; gap:4px; flex-wrap:wrap; }
+    .item-num { width:22px; height:22px; display:grid; place-items:center; border-radius:50%; background:#f1f3f5; font-size:10px; }
+    .workshop-choice, .owner-choice { display:flex; gap:2px; flex-wrap:wrap; }
     .workshop-choice input, .owner-choice input { position:absolute; width:1px; height:1px; opacity:0; }
-    .workshop-choice label, .owner-choice label { margin:0; min-width:62px; padding:7px 9px; border:1px solid #ced4da; border-radius:5px; background:#fff; text-align:center; font-size:12px; cursor:pointer; }
+    .workshop-choice label, .owner-choice label { margin:0; min-width:48px; padding:2px 5px; border:1px solid #ced4da; border-radius:3px; background:#fff; text-align:center; font-size:10px; cursor:pointer; }
     .workshop-choice input:checked + label, .owner-choice input:checked + label { color:#fff; background:#E60012; border-color:#E60012; }
-    .delete-item { width:30px; height:30px; padding:0; border:1px solid #dee2e6; border-radius:5px; background:#fff; color:#dc3545; }
+    .delete-item { width:22px; height:22px; padding:0; border:1px solid #dee2e6; border-radius:3px; background:#fff; color:#dc3545; font-size:12px; }
     .delete-item:hover { color:#fff; background:#dc3545; }
-    .add-actions { display:flex; gap:7px; padding:10px 12px 12px; }
+    .add-actions { display:flex; gap:5px; padding:5px 8px 6px; }
+    .batch-toolbar { display:flex; align-items:center; gap:6px; padding:5px 8px; background:#fff; border-bottom:2px solid #e9ecef; flex-wrap:wrap; }
+    .batch-toolbar .batch-count { font-size:11px; font-weight:600; color:#333; }
+    .batch-toolbar .btn { font-size:10px; }
+    .filter-toggle { display:flex; align-items:center; gap:6px; font-size:10px; color:#6c757d; white-space:nowrap; }
     .bulk-panel { display:none; margin:0 12px 12px; padding:11px; background:#f8f9fa; border:1px solid #e9ecef; border-radius:7px; }
     .bulk-panel.open { display:block; }
     .bulk-note { color:#6c757d; font-size:11px; margin:6px 0 9px; }
@@ -90,8 +94,8 @@
     @media(max-width:768px) {
       input, textarea { min-height:44px; font-size:16px!important; }
       textarea { min-height:76px; }
-      .item-row, .item-row.communication { grid-template-columns:24px 30px 1fr 44px; padding:10px; align-items:start; }
-      .item-row > .workshop-choice, .item-row > input, .item-row > textarea, .item-row.communication > textarea, .item-row.communication > .owner-choice, .item-row.communication > .comm-actions { grid-column:2/4; }
+      .item-row, .item-row.communication, .item-row.todo { grid-template-columns:20px 24px 1fr 40px; padding:8px; align-items:start; }
+      .item-row > .workshop-choice, .item-row > input, .item-row > textarea, .item-row.communication > textarea, .item-row.communication > .owner-choice, .item-row.communication > .comm-actions, .item-row.todo > textarea, .item-row.todo > .comm-actions { grid-column:2/4; }
       .item-row .delete-item { grid-column:3; grid-row:1; width:44px; height:44px; font-size:20px; }
       .workshop-choice label, .owner-choice label { min-height:44px; display:grid; place-items:center; font-size:14px; flex:1; }
       .owner-choice { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
