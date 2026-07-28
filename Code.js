@@ -12816,7 +12816,7 @@ function groupINJSDMReports_(rows, includeClosed) {
   const map = {};
   rows.forEach(function (row) {
     const item = rowToINJSDMItem_(row);
-    var validStatus = item.status === 'ACTIVE';
+    var validStatus = item.status === 'ACTIVE' || item.status === 'FOLLOW_UP'; // FOLLOW_UP treated as ACTIVE (backward compat)
     if (includeClosed) validStatus = validStatus || item.status === 'CLOSED';
     if (!validStatus || !item.reportId) return;
     if (!map[item.reportId]) {
@@ -12866,8 +12866,8 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
     allRows.forEach(function (row) {
       var item = rowToINJSDMItem_(row);
       if (item.category !== 'COMMUNICATION') return;
-      if (!showClosed && item.status !== 'ACTIVE') return; // carry forward ACTIVE
-      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'CLOSED') return; // also include CLOSED when filter on
+      if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return; // carry forward ACTIVE (incl legacy FOLLOW_UP)
+      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return; // also include CLOSED when filter on
       if (formatINJSDMDate_(row[1]) >= targetDate) return; // not historical
       if (todayItemIds[item.itemId]) return; // already in today's report
       var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
@@ -12943,7 +12943,7 @@ function saveINJSDMReport(payload, userName, userEmail) {
     let previousSnapshot = null;
 
     rows.forEach(function (row, index) {
-      if (formatINJSDMDate_(row[1]) === data.reportDate && String(row[13] || '') === 'ACTIVE') {
+      if (formatINJSDMDate_(row[1]) === data.reportDate && (String(row[13] || '') === 'ACTIVE' || String(row[13] || '') === 'FOLLOW_UP')) {
         existingActive.push(index + 3);
         reportId = reportId || String(row[0] || '');
         createdAt = createdAt || formatINJSDMDateTime_(row[11]);
@@ -13050,7 +13050,7 @@ function deleteINJSDMReport(reportId, userName, userEmail) {
     const historyJSON = JSON.stringify([{ changedAt: now, action: 'DELETE', before: snapshot }]);
     let count = 0;
     rows.forEach(function (row, index) {
-      if (String(row[0] || '') === reportId && String(row[13] || '') === 'ACTIVE') {
+      if (String(row[0] || '') === reportId && (String(row[13] || '') === 'ACTIVE' || String(row[13] || '') === 'FOLLOW_UP')) {
         ws.getRange(index + 3, 13, 1, 3).setValues([[now, 'DELETED', historyJSON]]);
         count++;
       }
@@ -13076,7 +13076,7 @@ function closeINJSDMItem(itemId, userName, userEmail) {
     const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
     var found = false;
     for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i][4] || '') === itemId && String(rows[i][13] || '') === 'ACTIVE') {
+      if (String(rows[i][4] || '') === itemId && (String(rows[i][13] || '') === 'ACTIVE' || String(rows[i][13] || '') === 'FOLLOW_UP')) {
         ws.getRange(i + 3, 14).setValue('CLOSED');
         ws.getRange(i + 3, 13).setValue(now);
         found = true;
@@ -13144,7 +13144,7 @@ function batchUpdateINJSDMItems(itemIdsJSON, newStatus, userName, userEmail) {
     for (var i = 0; i < rows.length; i++) {
       var id = String(rows[i][4] || '');
       var currentStatus = String(rows[i][13] || '');
-      if (idSet[id] && (currentStatus === 'ACTIVE' || currentStatus === 'FOLLOW_UP')) {
+      if (idSet[id] && (currentStatus === 'ACTIVE' || currentStatus === 'FOLLOW_UP')) { // close both ACTIVE and legacy FOLLOW_UP
         ws.getRange(i + 3, 14).setValue(newStatus);
         ws.getRange(i + 3, 13).setValue(now);
         updated++;
