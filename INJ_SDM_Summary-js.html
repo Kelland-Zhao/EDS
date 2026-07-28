@@ -9,9 +9,12 @@
     let historyRecords = [];
     let historyCommItems = [];
     let historyItemIds = new Set();
+    let historyTodoItems = [];
+    let historyTodoItemIds = new Set();
     let editingReportId = '';
     let commActionLock = false;
     let showClosedFilter = false;
+    let showTodoClosedFilter = false;
 
     $('#name').text(userName);
 
@@ -45,6 +48,7 @@
     function cardFor(type) {
       if (type === 'major') return $('#MajorCard');
       if (type === 'outstanding') return $('#OutstandingCard');
+      if (type === 'todo') return $('#TodoCard');
       return $('#CommunicationCard');
     }
 
@@ -54,6 +58,7 @@
         $(this).find('.item-num').each(function (index) { $(this).text(index + 1); });
       });
       updateCommBatchToolbar();
+      updateTodoBatchToolbar();
     }
 
     function workshopChoice(name, selected) {
@@ -119,6 +124,34 @@
       updateCounts();
     }
 
+    function addTodoRow(data) {
+      const item = data || {};
+      const name = `todo-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const status = item.itemStatus || '';
+      var statusHtml = '';
+      var statusClass = '';
+      var actionsHtml = '';
+      if (status === 'CLOSED') {
+        statusClass = 'comm-closed';
+        statusHtml = '<span class="comm-status-label">✓ 已完成<br><small>Done</small></span>';
+        actionsHtml = `<button class="btn btn-sm btn-outline-secondary reopen-comm-item" data-id="${item.itemId || ''}" title="重开 / Reopen">↩ 重开<br><small>Reopen</small></button>`;
+      } else {
+        actionsHtml = `<button class="btn btn-sm btn-outline-success close-comm-item" data-id="${item.itemId || ''}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button>`;
+      }
+      var actionsCol = `<div class="comm-actions-wrapper-cell">${statusHtml}<div class="comm-actions">${actionsHtml}</div></div>`;
+      var disabledAttr = status === 'CLOSED' ? ' disabled' : '';
+      const row = $(`<div class="item-row todo ${statusClass}" data-type="todo" data-item-id="${item.itemId || ''}">
+        <input type="checkbox" class="comm-checkbox"${disabledAttr}>
+        <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
+        <span class="item-num"></span>
+        <textarea class="form-control description" rows="2" placeholder="待办事项 / To-Do" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
+        ${actionsCol}
+        <button type="button" class="delete-item" title="删除 / Delete">×</button>
+      </div>`);
+      $('#TodoCard .item-list').append(row);
+      updateCounts();
+    }
+
     function resetForm() {
       editingReportId = '';
       $('#ReportDate').val(formatLocalDate(today));
@@ -127,6 +160,7 @@
       addIssueRow('major', {});
       addIssueRow('outstanding', {});
       addCommunicationRow({});
+      addTodoRow({});
       $('#CancelEdit').addClass('d-none');
       $('#SaveReport').html('<i class="bi bi-save"></i> 保存 / Save');
       clearValidation();
@@ -141,6 +175,8 @@
           const result = parseResponse(raw);
           historyCommItems = result.historyCommItems || [];
           historyItemIds = new Set(historyCommItems.map(function (item) { return item.itemId; }).filter(Boolean));
+          historyTodoItems = result.historyTodoItems || [];
+          historyTodoItemIds = new Set(historyTodoItems.map(function (item) { return item.itemId; }).filter(Boolean));
           if (!result.success || !result.todayReport) {
             var selectedDate = $('#ReportDate').val();
             resetForm();
@@ -149,12 +185,16 @@
               $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
               historyCommItems.forEach(item => addCommunicationRow(item));
             }
+            if (historyTodoItems.length) {
+              $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
+              historyTodoItems.forEach(item => addTodoRow(item));
+            }
             return;
           }
           populateForm(result.todayReport);
         })
         .withFailureHandler(() => { Swal.close(); resetForm(); })
-        .getINJSDMInitData(userName, userEmail, reportDate, showClosedFilter);
+        .getINJSDMInitData(userName, userEmail, reportDate, showClosedFilter || showTodoClosedFilter);
     }
 
     function populateForm(report) {
@@ -166,10 +206,15 @@
       (report.major.length ? report.major : [{}]).forEach(item => addIssueRow('major', item));
       (report.outstanding.length ? report.outstanding : [{}]).forEach(item => addIssueRow('outstanding', item));
       (report.communication.length ? report.communication : [{}]).forEach(item => addCommunicationRow(item));
+      (report.todo.length ? report.todo : [{}]).forEach(item => addTodoRow(item));
       // Historical carry-over items
       if (historyCommItems.length) {
         $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
         historyCommItems.forEach(item => addCommunicationRow(item));
+      }
+      if (historyTodoItems.length) {
+        $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
+        historyTodoItems.forEach(item => addTodoRow(item));
       }
       $('#CancelEdit').removeClass('d-none');
       $('#SaveReport').html('<i class="bi bi-save"></i> 更新 / Update');
@@ -199,7 +244,8 @@
         dataEndDate: $('#DataEndDate').val(),
         major: [],
         outstanding: [],
-        communication: []
+        communication: [],
+        todo: []
       };
       const mark = (element, message, choice) => {
         $(element).addClass(choice ? 'invalid-choice' : 'invalid-field');
@@ -248,7 +294,18 @@
         if (description && owners.length) payload.communication.push({ description, owners });
       });
 
-      if (!payload.major.length && !payload.outstanding.length && !payload.communication.length) {
+      $('#TodoCard .item-row').each(function (index) {
+        const description = $(this).find('.description').val().trim();
+        const isClosed = $(this).hasClass('comm-closed');
+        const rowItemId = $(this).data('item-id') || '';
+        const isHistoryItem = historyTodoItemIds.has(rowItemId);
+        if (!description) return;
+        if (isClosed) return;
+        if (isHistoryItem) return;
+        payload.todo.push({ description });
+      });
+
+      if (!payload.major.length && !payload.outstanding.length && !payload.communication.length && !payload.todo.length) {
         errors.push('请至少填写一条完整事项');
       }
       if (errors.length) {
@@ -339,7 +396,7 @@
     function activeView(itemId) { return `<div class="comm-actions"><button class="btn btn-sm btn-outline-success close-comm-item" data-id="${itemId}" title="关闭 / Close">✓ 关闭<br><small>Close</small></button></div>`; }
     $(document).on('click', '.add-item', function () {
       const type = $(this).data('type');
-      type === 'communication' ? addCommunicationRow({}) : addIssueRow(type, {});
+      type === 'communication' ? addCommunicationRow({}) : type === 'todo' ? addTodoRow({}) : addIssueRow(type, {});
     });
     $(document).on('click', '.delete-item', function () { $(this).closest('.item-row').remove(); updateCounts(); });
     $(document).on('click', '.close-comm-item', function () {
@@ -468,6 +525,64 @@
         execBatchClose(itemIds);
       });
     });
+    // ---- Batch selection for todo items ----
+    function updateTodoBatchToolbar() {
+      var checked = $('#TodoCard .comm-checkbox:checked').length;
+      var total = $('#TodoCard .comm-checkbox').length;
+      var hasSelection = checked > 0;
+      $('#TodoBatchToolbar').find('.batch-count').text('已选 ' + checked + ' / ' + total + ' 项  Selected');
+      $('#TodoBatchToolbar').find('.batch-close-todo').prop('disabled', !hasSelection);
+      $('#TodoSelectAll').prop('indeterminate', hasSelection && checked < total);
+      $('#TodoSelectAll').prop('checked', checked === total && total > 0);
+    }
+    $(document).on('change', '#TodoShowClosed', function () {
+      showTodoClosedFilter = this.checked;
+      reloadTodayReport();
+    });
+    $(document).on('change', '#TodoSelectAll', function () {
+      var checked = this.checked;
+      $('#TodoCard .comm-checkbox:not(:disabled)').prop('checked', checked);
+      updateTodoBatchToolbar();
+    });
+    $(document).on('change', '#TodoCard .comm-checkbox', function () {
+      updateTodoBatchToolbar();
+    });
+    $(document).on('click', '.batch-close-todo', function () {
+      var checked = $('#TodoCard .comm-checkbox:checked');
+      if (!checked.length) return;
+      if (commActionLock) { Swal.fire({ icon:'warning', title:swalTitle('请稍候','Please Wait'), html:swalHtml('上一操作仍在处理中，请稍后再试。','Previous action is still in progress. Please wait.'), timer:2000, showConfirmButton:false }); return; }
+      var itemIds = checked.closest('.item-row').map(function () { return $(this).data('item-id'); }).get().filter(Boolean);
+      if (!itemIds.length) { showError('所选项目缺少 ID，请先保存后再操作。', 'Selected items need to be saved first.'); return; }
+      Swal.fire({
+        icon:'question', title:swalTitle('批量关闭','Batch Close'),
+        html:swalHtml(`确认关闭选中的 ${itemIds.length} 条待办事项？<br>关闭后不再跨天带出。`, `Close ${itemIds.length} selected to-do items?`),
+        showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
+      }).then(result => {
+        if (!result.isConfirmed) return;
+        commActionLock = true;
+        $('#TodoBatchToolbar button').prop('disabled', true);
+        $('#TodoCard .comm-checkbox, #TodoSelectAll').prop('disabled', true);
+        Swal.fire({ title: swalTitle('批量关闭中...','Batch Closing...'), html: swalHtml('正在处理 ' + itemIds.length + ' 条待办事项，请稍候。','Processing ' + itemIds.length + ' items, please wait.'), allowOutsideClick: false, showConfirmButton: false, didOpen: function () { Swal.showLoading(); } });
+        google.script.run
+          .withSuccessHandler(raw => {
+            Swal.close(); commActionLock = false;
+            updateTodoBatchToolbar();
+            $('#TodoBatchToolbar button').prop('disabled', false);
+            $('#TodoCard .comm-checkbox, #TodoSelectAll').prop('disabled', false);
+            var r = parseResponse(raw);
+            if (r.success) { showSuccess('已关闭 ' + r.updated + ' 条。', r.updated + ' items closed.'); reloadTodayReport(); }
+            else showError(r.message || '操作失败', 'Operation failed');
+          })
+          .withFailureHandler(err => {
+            Swal.close(); commActionLock = false;
+            updateTodoBatchToolbar();
+            $('#TodoBatchToolbar button').prop('disabled', false);
+            $('#TodoCard .comm-checkbox, #TodoSelectAll').prop('disabled', false);
+            showError(err.message || String(err), 'Operation failed');
+          })
+          .batchUpdateINJSDMItems(JSON.stringify(itemIds), 'CLOSED', userName, userEmail);
+      });
+    });
     $(document).on('click', '.show-bulk', function () { $(this).closest('.issue-card').find('.bulk-panel').addClass('open').find('textarea').focus(); });
     $(document).on('click', '.cancel-bulk', function () { $(this).closest('.bulk-panel').removeClass('open'); });
     $(document).on('click', '.import-bulk', function () {
@@ -551,6 +666,8 @@
         scUsers = result.scUsers || [];
         historyCommItems = result.historyCommItems || [];
         historyItemIds = new Set(historyCommItems.map(function (item) { return item.itemId; }).filter(Boolean));
+        historyTodoItems = result.historyTodoItems || [];
+        historyTodoItemIds = new Set(historyTodoItems.map(function (item) { return item.itemId; }).filter(Boolean));
         $('#AppContent').removeClass('d-none');
         resetForm();
         // 初始化拖拽排序
@@ -569,9 +686,15 @@
         initSortable();
         if (result.todayReport) {
           populateForm(result.todayReport);
-        } else if (historyCommItems.length) {
-          $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
-          historyCommItems.forEach(item => addCommunicationRow(item));
+        } else {
+          if (historyCommItems.length) {
+            $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
+            historyCommItems.forEach(item => addCommunicationRow(item));
+          }
+          if (historyTodoItems.length) {
+            $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
+            historyTodoItems.forEach(item => addTodoRow(item));
+          }
         }
       })
       .withFailureHandler(error => { Swal.close(); showError(error.message || String(error), 'Failed to initialize.'); })

@@ -34,8 +34,12 @@
     #CommunicationCard { border-left-color:#0d6efd; }
     #CommunicationCard .card-header { background:#f0f6ff; }
     #CommunicationCard .count-badge { background:#e0edff; color:#0d47a1; }
+    #TodoCard { border-left-color:#198754; }
+    #TodoCard .card-header { background:#f0fff4; }
+    #TodoCard .count-badge { background:#d1fae5; color:#0d6832; }
     .item-row { display:grid; grid-template-columns:24px 34px minmax(130px,.8fr) minmax(150px,1fr) minmax(280px,3fr) 34px; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid #f0f0f0; }
     .item-row.communication { grid-template-columns:22px 24px 34px minmax(260px,2fr) minmax(160px,1fr) 90px 34px; }
+    .item-row.todo { grid-template-columns:22px 24px 34px minmax(350px,3fr) 90px 34px; }
     .comm-actions { display:flex; flex-direction:column; gap:3px; }
     .comm-actions .btn { font-size:10px; padding:2px 4px; line-height:1.3; }
     .comm-status-label { display:block; font-size:10px; text-align:center; white-space:nowrap; margin-bottom:3px; padding:2px 4px; border-radius:3px; }
@@ -163,6 +167,12 @@
             <div class="batch-toolbar" id="CommBatchToolbar"><span class="batch-count">已选 0 项 / 0 Selected</span><button class="btn btn-sm btn-outline-success batch-close-comm"><i class="bi bi-check-lg"></i> 批量关闭 / Batch Close</button><span style="flex:1;"></span><label class="filter-toggle"><input type="checkbox" id="CommShowClosed"><span class="toggle-switch"></span> 显示已关闭 / Show Closed</label></div>
             <div class="item-list"></div>
             <div class="add-actions"><button class="btn btn-outline-danger btn-sm add-item" data-type="communication">＋ 新增沟通事项 / Add</button></div>
+          </div>
+          <div class="card issue-card" id="TodoCard">
+            <div class="card-header"><div><div class="issue-title-cn">待办事项</div><div class="issue-title-en">To-Do Items</div></div><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="comm-select-all" title="全选 / Select All" id="TodoSelectAll"><span class="count-badge">0</span></div></div>
+            <div class="batch-toolbar" id="TodoBatchToolbar"><span class="batch-count">已选 0 项 / 0 Selected</span><button class="btn btn-sm btn-outline-success batch-close-todo"><i class="bi bi-check-lg"></i> 批量关闭 / Batch Close</button><span style="flex:1;"></span><label class="filter-toggle"><input type="checkbox" id="TodoShowClosed"><span class="toggle-switch"></span> 显示已完成 / Show Done</label></div>
+            <div class="item-list"></div>
+            <div class="add-actions"><button class="btn btn-outline-success btn-sm add-item" data-type="todo">＋ 新增待办 / Add To-Do</button></div>
           </div>
           <div class="sticky-actions"><button id="CancelEdit" class="btn btn-secondary d-none">取消编辑 / Cancel</button><button id="SaveReport" class="btn btn-primary"><i class="bi bi-save"></i> 保存 / Save</button></div>
         </section>

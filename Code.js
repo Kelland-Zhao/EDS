@@ -12828,7 +12828,8 @@ function groupINJSDMReports_(rows, includeClosed) {
         updatedAt: item.updatedAt,
         major: [],
         outstanding: [],
-        communication: []
+        communication: [],
+        todo: []
       };
     }
     const report = map[item.reportId];
@@ -12839,6 +12840,8 @@ function groupINJSDMReports_(rows, includeClosed) {
       report.outstanding.push({ itemId: item.itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
     } else if (item.category === 'COMMUNICATION') {
       report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate });
+    } else if (item.category === 'TODO') {
+      report.todo.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate });
     }
   });
   return Object.keys(map).map(function (key) { return map[key]; });
@@ -12856,37 +12859,45 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
     const reports = groupINJSDMReports_(allRows, showClosed);
     const todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
 
-    // Collect historical ACTIVE communication items (cross-day carry-over)
+    // Collect historical ACTIVE communication & todo items (cross-day carry-over)
     var historyCommItems = [];
-    var todayItemIds = {};
+    var historyTodoItems = [];
+    var todayCommIds = {};
+    var todayTodoIds = {};
     if (todayReport) {
-      todayReport.communication.forEach(function (c) { if (c.itemId) todayItemIds[c.itemId] = true; });
+      todayReport.communication.forEach(function (c) { if (c.itemId) todayCommIds[c.itemId] = true; });
+      todayReport.todo.forEach(function (t) { if (t.itemId) todayTodoIds[t.itemId] = true; });
     }
     allRows.forEach(function (row) {
       var item = rowToINJSDMItem_(row);
-      if (item.category !== 'COMMUNICATION') return;
-      if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return; // carry forward ACTIVE (incl legacy FOLLOW_UP)
-      if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return; // also include CLOSED when filter on
-      if (formatINJSDMDate_(row[1]) >= targetDate) return; // not historical
-      if (todayItemIds[item.itemId]) return; // already in today's report
-      var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
-      historyCommItems.push({
-        itemId: item.itemId,
-        description: item.description,
-        owners: item.owners,
-        reportDate: item.reportDate,
-        itemStatus: itemStatus
-      });
+      if (item.category === 'COMMUNICATION') {
+        if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return;
+        if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return;
+        if (formatINJSDMDate_(row[1]) >= targetDate) return;
+        if (todayCommIds[item.itemId]) return;
+        var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
+        historyCommItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: itemStatus });
+      } else if (item.category === 'TODO') {
+        // Personal todos: only show current user's items
+        if (!item.owners || item.owners.indexOf(userName) === -1) return;
+        if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return;
+        if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return;
+        if (formatINJSDMDate_(row[1]) >= targetDate) return;
+        if (todayTodoIds[item.itemId]) return;
+        var todoStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
+        historyTodoItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: todoStatus });
+      }
     });
-    // Sort by reportDate ascending (oldest first)
     historyCommItems.sort(function (a, b) { return a.reportDate.localeCompare(b.reportDate); });
+    historyTodoItems.sort(function (a, b) { return a.reportDate.localeCompare(b.reportDate); });
 
     return JSON.stringify({
       success: true,
       hasPermission: true,
       scUsers: getINJSCUsers_(),
       todayReport: todayReport,
-      historyCommItems: historyCommItems
+      historyCommItems: historyCommItems,
+      historyTodoItems: historyTodoItems
     });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
@@ -12905,7 +12916,8 @@ function validateINJSDMPayload_(payload) {
   const major = Array.isArray(payload.major) ? payload.major : [];
   const outstanding = Array.isArray(payload.outstanding) ? payload.outstanding : [];
   const communication = Array.isArray(payload.communication) ? payload.communication : [];
-  if (!major.length && !outstanding.length && !communication.length) throw new Error('At least one item is required');
+  const todo = Array.isArray(payload.todo) ? payload.todo : [];
+  if (!major.length && !outstanding.length && !communication.length && !todo.length) throw new Error('At least one item is required');
 
   major.concat(outstanding).forEach(function (item) {
     if (['TB1', 'TB2'].indexOf(String(item.workshop || '')) === -1) throw new Error('Workshop is required');
@@ -12916,13 +12928,17 @@ function validateINJSDMPayload_(payload) {
     if (!String(item.description || '').trim()) throw new Error('Communication description is required');
     if (!Array.isArray(item.owners) || !item.owners.length) throw new Error('Communication owner is required');
   });
+  todo.forEach(function (item) {
+    if (!String(item.description || '').trim()) throw new Error('Todo description is required');
+  });
   return {
     reportDate: reportDate,
     dataStartDate: startDate,
     dataEndDate: endDate,
     major: major,
     outstanding: outstanding,
-    communication: communication
+    communication: communication,
+    todo: todo
   };
 }
 
@@ -12982,6 +12998,10 @@ function saveINJSDMReport(payload, userName, userEmail) {
     data.major.forEach(function (item) { addItem('MAJOR', item); });
     data.outstanding.forEach(function (item) { addItem('OUTSTANDING', item); });
     data.communication.forEach(function (item) { addItem('COMMUNICATION', item); });
+    data.todo.forEach(function (item) {
+      item.owners = [userName]; // personal todo, auto-assign to current user
+      addItem('TODO', item);
+    });
 
     ws.getRange(ws.getLastRow() + 1, 1, output.length, 15).setValues(output);
     return JSON.stringify({ success: true, reportId: reportId, updated: existingActive.length > 0 });
