@@ -12866,46 +12866,75 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
     }
     const targetDate = reportDate || Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
     const showClosed = includeClosed === true || includeClosed === 'true';
-    // Read last 180 days (~5400 rows) instead of all data
-    var recent = readRecentINJSDMRows_(180);
-    var allRows = recent.rows;
-    var reports = groupINJSDMReports_(allRows, showClosed);
-    var todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
 
-    // Collect historical items (single pass, reusing items from allRows)
+    // Single pass: read ~90 days, build todayReport + collect history in one loop
+    var recent = readRecentINJSDMRows_(90);
+    var allRows = recent.rows;
+    var todayMap = {}; // reportId -> report object (only today)
     var historyCommItems = [];
     var historyTodoItems = [];
-    var todayCommIds = {};
-    var todayTodoIds = {};
-    if (todayReport) {
-      todayReport.communication.forEach(function (c) { if (c.itemId) todayCommIds[c.itemId] = true; });
-      todayReport.todo.forEach(function (t) { if (t.itemId) todayTodoIds[t.itemId] = true; });
-    }
-    var todayReportIds = {}; // track which itemIds appear in today's report of any category
-    if (todayReport) {
-      todayReport.major.forEach(function (m) { if (m.itemId) todayReportIds[m.itemId] = true; });
-      todayReport.outstanding.forEach(function (o) { if (o.itemId) todayReportIds[o.itemId] = true; });
-      todayReport.communication.forEach(function (c) { if (c.itemId) todayReportIds[c.itemId] = true; });
-      todayReport.todo.forEach(function (t) { if (t.itemId) todayReportIds[t.itemId] = true; });
-    }
-    allRows.forEach(function (row) {
+    var todayItemIds = {}; // all itemIds in today's report (for history dedup)
+
+    var rowsLen = allRows.length;
+    for (var i = 0; i < rowsLen; i++) {
+      var row = allRows[i];
       var item = rowToINJSDMItem_(row);
+      var status = item.status;
+      var category = item.category;
+      var reportId = item.reportId;
+      if (!reportId) continue;
+      var valid = (status === 'ACTIVE' || status === 'FOLLOW_UP');
+      if (showClosed) valid = valid || status === 'CLOSED';
+      if (!valid) continue;
+
       var itemDate = formatINJSDMDate_(row[1]);
-      if (itemDate >= targetDate) return; // skip today and future
-      if (todayReportIds[item.itemId]) return; // already in today's report
-      if (item.category === 'COMMUNICATION') {
-        if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return;
-        if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return;
-        var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
-        historyCommItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: itemStatus });
-      } else if (item.category === 'TODO') {
-        if (!item.owners || item.owners.indexOf(userName) === -1) return;
-        if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return;
-        if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return;
-        var todoStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
-        historyTodoItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: todoStatus });
+      var isToday = itemDate === targetDate;
+      var itemId = item.itemId;
+
+      if (isToday) {
+        // Build today's report (only today)
+        if (!todayMap[reportId]) {
+          todayMap[reportId] = {
+            reportId: reportId, reportDate: itemDate,
+            dataStartDate: item.dataStartDate, dataEndDate: item.dataEndDate,
+            createdAt: item.createdAt, updatedAt: item.updatedAt,
+            major: [], outstanding: [], communication: [], todo: []
+          };
+        }
+        var r = todayMap[reportId];
+        if (item.updatedAt) r.updatedAt = item.updatedAt;
+        if (itemId) todayItemIds[itemId] = true;
+        if (category === 'MAJOR') {
+          r.major.push({ itemId: itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
+        } else if (category === 'OUTSTANDING') {
+          r.outstanding.push({ itemId: itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
+        } else if (category === 'COMMUNICATION') {
+          var commAtts = []; try { commAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+          r.communication.push({ itemId: itemId, description: item.description, owners: item.owners, itemStatus: status, reportDate: itemDate, attachments: commAtts });
+        } else if (category === 'TODO') {
+          var todoAtts = []; try { todoAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+          r.todo.push({ itemId: itemId, description: item.description, owners: item.owners, itemStatus: status, reportDate: itemDate, attachments: todoAtts });
+        }
+      } else if (itemDate < targetDate && !todayItemIds[itemId]) {
+        // Collect historical carry-over items
+        if (category === 'COMMUNICATION') {
+          if (!showClosed && status !== 'ACTIVE' && status !== 'FOLLOW_UP') continue;
+          if (showClosed && status !== 'ACTIVE' && status !== 'FOLLOW_UP' && status !== 'CLOSED') continue;
+          var itemStatus = (status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
+          var hAtts = []; try { hAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+          historyCommItems.push({ itemId: itemId, description: item.description, owners: item.owners, reportDate: itemDate, itemStatus: itemStatus, attachments: hAtts });
+        } else if (category === 'TODO') {
+          if (!item.owners || item.owners.indexOf(userName) === -1) continue;
+          if (!showClosed && status !== 'ACTIVE' && status !== 'FOLLOW_UP') continue;
+          if (showClosed && status !== 'ACTIVE' && status !== 'FOLLOW_UP' && status !== 'CLOSED') continue;
+          var todoStatus = (status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
+          var tAtts = []; try { tAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
+          historyTodoItems.push({ itemId: itemId, description: item.description, owners: item.owners, reportDate: itemDate, itemStatus: todoStatus, attachments: tAtts });
+        }
       }
-    });
+    }
+    var todayReportKeys = Object.keys(todayMap);
+    var todayReport = todayReportKeys.length ? todayMap[todayReportKeys[0]] : null;
     historyCommItems.sort(function (a, b) { return a.reportDate.localeCompare(b.reportDate); });
     historyTodoItems.sort(function (a, b) { return a.reportDate.localeCompare(b.reportDate); });
 
