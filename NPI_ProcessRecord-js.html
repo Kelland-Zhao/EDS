@@ -131,12 +131,7 @@ const TEMPLATE_SECTIONS = [
       {row:111, label:'顶针回退 S<br><small>Ejector Retract S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'me-col-1'}
     ]}
   ]},
-  { id: 'auxEquip', title: '配套设备信息<br><small>Auxiliary Equipment</small>', rows: [
-    {row:114, label:'类别<br><small>Category</small>'},
-    {row:116, label:'是否使用<br><small>In Use</small>'},
-    {row:118, label:'温度<br><small>Temperature</small>'},
-    {row:120, label:'速度<br><small>Speed</small>'}
-  ]},
+  { id: 'auxEquip', title: '配套设备信息<br><small>Auxiliary Equipment</small>', auxEquip:true },
   { id: 'remarks', title: '特殊要求及备注<br><small>Special Requirements</small>', rows: [
     {row:122, label:'备注<br><small>Remarks</small>', isTextarea:true}
   ]}
@@ -147,6 +142,7 @@ let currentRecord = null;
 let allTasks = [];
 let fieldKeyMap = {}; // Maps section-row-column → index in 196-array
 let barrelEnabled = { barrelA: false, barrelB: false, barrelC: false, barrelD: false };
+let hotRunnerEnabled = false;
 
 $(document).ready(function () {
   var perm = sessionStorage.getItem('EDSTaskPermission') || '';
@@ -230,6 +226,109 @@ var HOT_RUNNER_POSITIONS = [
   {v:'舌苔',t:'舌苔 / Tongue',c:'hr-pos-tongue'},
   {v:'其他',t:'其他 / Other',c:'hr-pos-other'}
 ];
+
+var EQUIPMENT_TYPES = [
+  { id:'moldTemp', cn:'模温机', en:'Mold Temp Controller', fields:[
+    {key:'setTemp', cn:'设定温度', en:'Set Temp (°C)', type:'number'},
+    {key:'actualTemp', cn:'实际温度', en:'Actual Temp (°C)', type:'number'}
+  ]},
+  { id:'chiller', cn:'冷水机', en:'Chiller', fields:[
+    {key:'setTemp', cn:'设定温度', en:'Set Temp (°C)', type:'number'},
+    {key:'actualTemp', cn:'实际温度', en:'Actual Temp (°C)', type:'number'}
+  ]},
+  { id:'crusher', cn:'粉碎机', en:'Crusher', fields:[
+    {key:'inUse', cn:'是否使用', en:'In Use'},
+    {key:'speed', cn:'速度', en:'Speed', type:'number'}
+  ]},
+  { id:'dryer', cn:'烘干机', en:'Dryer', fields:[
+    {key:'setTemp', cn:'设定温度', en:'Set Temp (°C)', type:'number'},
+    {key:'actualTemp', cn:'实际温度', en:'Actual Temp (°C)', type:'number'},
+    {key:'time', cn:'干燥时间', en:'Drying Time (h)', type:'number'}
+  ]},
+  { id:'robot3', cn:'三轴机械手', en:'3-Axis Robot', fields:[
+    {key:'program', cn:'程序名称', en:'Program Name'},
+    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'}
+  ]},
+  { id:'robot6', cn:'六轴机械手', en:'6-Axis Robot', fields:[
+    {key:'program', cn:'程序名称', en:'Program Name'},
+    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'}
+  ]},
+  { id:'conveyor', cn:'传送带', en:'Conveyor', fields:[
+    {key:'speed', cn:'速度', en:'Speed', type:'number'}
+  ]}
+];
+var activeEquipment = []; // [{typeId, enabled, fields: {key: val}}]
+
+function renderAuxEquip() {
+  var html = '<div id="auxEquipContainer">';
+  // Add device dropdown + button
+  html += '<div class="d-flex align-items-center gap-2 mb-2"><select id="auxEquipSelect" class="form-select form-select-sm" style="width:auto;">';
+  html += '<option value="">-- 选择设备 / Select Device --</option>';
+  EQUIPMENT_TYPES.forEach(function (eq) {
+    html += '<option value="' + eq.id + '">' + eq.cn + ' / ' + eq.en + '</option>';
+  });
+  html += '</select><button class="btn btn-sm btn-outline-secondary" onclick="addEquipment()"><i class="bi bi-plus"></i> 添加 / Add</button></div>';
+  // Active equipment cards
+  html += '<div id="auxEquipList"></div>';
+  html += '</div>';
+  return html;
+}
+
+function addEquipment() {
+  var sel = $('#auxEquipSelect').val();
+  if (!sel) return;
+  var eq = EQUIPMENT_TYPES.find(function (e) { return e.id === sel; });
+  if (!eq) return;
+  // Check if already added
+  if (activeEquipment.some(function (a) { return a.typeId === sel; })) {
+    Swal.fire({ icon:'warning', title:swalTitle('已添加','Already Added'), html:swalHtml(eq.cn + ' 已存在。', eq.en + ' already exists.'), timer:1500, showConfirmButton:false });
+    return;
+  }
+  var fields = {};
+  eq.fields.forEach(function (f) { fields[f.key] = ''; });
+  activeEquipment.push({ typeId: sel, enabled: true, fields: fields });
+  renderEquipCards();
+}
+
+function removeEquipment(idx) {
+  activeEquipment.splice(idx, 1);
+  renderEquipCards();
+  rebuildFieldIndex();
+}
+
+function toggleEquipment(idx) {
+  activeEquipment[idx].enabled = !activeEquipment[idx].enabled;
+  var card = $('#equipCard_' + idx);
+  if (activeEquipment[idx].enabled) {
+    card.removeClass('barrel-disabled');
+  } else {
+    card.addClass('barrel-disabled');
+    card.find('.npi-field').val('');
+  }
+}
+
+function renderEquipCards() {
+  var html = '';
+  activeEquipment.forEach(function (ae, idx) {
+    var eq = EQUIPMENT_TYPES.find(function (e) { return e.id === ae.typeId; });
+    if (!eq) return;
+    var disabledClass = ae.enabled ? '' : ' barrel-disabled';
+    html += '<div class="equip-card mb-2' + disabledClass + '" id="equipCard_' + idx + '">';
+    html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+    html += '<label class="barrel-toggle mb-0"><input type="checkbox" ' + (ae.enabled ? 'checked' : '') + ' onchange="toggleEquipment(' + idx + ')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + eq.cn + ' <small style="color:#888;">' + eq.en + '</small></strong></label>';
+    html += '<button class="btn btn-sm btn-outline-danger" onclick="removeEquipment(' + idx + ')" title="移除 / Remove" style="font-size:10px;padding:1px 6px;">× 移除<br><small>Remove</small></button>';
+    html += '</div>';
+    html += '<div class="row g-1">';
+    eq.fields.forEach(function (f) {
+      html += '<div class="col-6 col-md-4 col-lg-3"><label class="form-label-sm">' + f.cn + '<br><small>' + f.en + '</small></label>';
+      html += '<input type="' + (f.type || 'text') + '" class="form-control form-control-sm npi-field" data-key="auxEquip_' + idx + '_' + f.key + '"' + (f.type === 'number' ? ' step="any" min="0"' : '') + '>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+  $('#auxEquipList').html(html);
+  rebuildFieldIndex();
+}
 
 function hotRunnerCount() {
   return $('#hotRunnerContainer').find('[data-key^="hotRunner_temp_"]').length;
@@ -371,8 +470,12 @@ function renderSectionBody(sec) {
       });
       html += '</div></div>';
     });
+  } else if (sec.auxEquip) {
+    html += renderAuxEquip();
   } else if (sec.hotRunner) {
+    html += '<div class="mb-3" id="section_hotRunner"><label class="barrel-toggle"><input type="checkbox" id="toggle_hotRunner" onchange="toggleHotRunner()"><span class="toggle-switch"></span> <strong style="font-size:12px;">启用热流道 / Enable Hot Runner</strong></label><div class="hot-runner-content barrel-disabled">';
     html += renderHotRunner(sec);
+    html += '</div></div>';
   } else if (sec.rows) {
     html += '<div class="row g-2">';
     sec.rows.forEach(function (r) {
@@ -520,6 +623,17 @@ function toggleBarrel(barrelId) {
   }
 }
 
+function toggleHotRunner() {
+  hotRunnerEnabled = !hotRunnerEnabled;
+  var content = $('#section_hotRunner .hot-runner-content');
+  if (hotRunnerEnabled) {
+    content.removeClass('barrel-disabled');
+  } else {
+    content.addClass('barrel-disabled');
+    content.find('.npi-field').val('');
+  }
+}
+
 function rebuildFieldIndex() {
   fieldKeyMap = {};
   var pos = 0;
@@ -556,6 +670,10 @@ function clearForm() {
     $('#toggle_' + id).prop('checked', false);
     $('#section_' + id).addClass('barrel-disabled');
   });
+  // Reset hot runner toggle
+  hotRunnerEnabled = false;
+  $('#toggle_hotRunner').prop('checked', false);
+  $('#section_hotRunner .hot-runner-content').addClass('barrel-disabled');
 }
 
 function createTask() {
