@@ -119,8 +119,17 @@ const TEMPLATE_SECTIONS = [
       {row:101, label:'开模 P<br><small>Opening P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['五段','四段','三段','二段','一段']},
       {row:102, label:'开模 V<br><small>Opening V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['五段','四段','三段','二段','一段']},
       {row:103, label:'开模 S<br><small>Opening S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:8, subCols:['S1','S2','S3','S4','S5'], offsetClass:'me-col-1'}
+    ]},
+    { id:'clampingEject', title:'顶出<br><small>Ejection</small>', rows:[
+      {row:104, label:'顶出模式<br><small>Ejection Mode</small>'},
+      {row:105, label:'顶出次数<br><small>Ejection Count</small>', type:'number'},
+      {row:106, label:'顶出 P<br><small>Ejection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','结束']},
+      {row:107, label:'顶出 V<br><small>Ejection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','结束']},
+      {row:108, label:'顶出 S<br><small>Ejection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
+      {row:109, label:'顶针回退 P<br><small>Ejector Retract P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['结束','一段']},
+      {row:110, label:'顶针回退 V<br><small>Ejector Retract V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['结束','一段']},
+      {row:111, label:'顶针回退 S<br><small>Ejector Retract S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'me-col-1'}
     ]}
-    // TODO: 顶出 (Ejection) - to be added
   ]},
   { id: 'auxEquip', title: '配套设备信息<br><small>Auxiliary Equipment</small>', rows: [
     {row:114, label:'类别<br><small>Category</small>'},
