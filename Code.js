@@ -12790,13 +12790,14 @@ function readINJSDMRows_() {
 }
 
 // Read only the last N rows for performance (estimates ~30 rows/day)
+// Returns { rows: [], startRow: N } so callers can compute actual sheet row numbers
 function readRecentINJSDMRows_(daysBack) {
   const ws = getINJSDMSheet_();
   const lastRow = ws.getLastRow();
-  if (lastRow < 3) return [];
+  if (lastRow < 3) return { rows: [], startRow: 3 };
   var limit = Math.max(100, (daysBack || 90) * 30);
   var startRow = Math.max(3, lastRow - limit + 1);
-  return ws.getRange(startRow, 1, lastRow - startRow + 1, 15).getValues();
+  return { rows: ws.getRange(startRow, 1, lastRow - startRow + 1, 15).getValues(), startRow: startRow };
 }
 
 function rowToINJSDMItem_(row) {
@@ -12866,7 +12867,8 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
     const targetDate = reportDate || Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
     const showClosed = includeClosed === true || includeClosed === 'true';
     // Read last 180 days (~5400 rows) instead of all data
-    var allRows = readRecentINJSDMRows_(180);
+    var recent = readRecentINJSDMRows_(180);
+    var allRows = recent.rows;
     var reports = groupINJSDMReports_(allRows, showClosed);
     var todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
 
@@ -12967,15 +12969,19 @@ function saveINJSDMReport(payload, userName, userEmail) {
     }
     const data = validateINJSDMPayload_(payload);
     const ws = getINJSDMSheet_();
-    const rows = readRecentINJSDMRows_(7); // only need recent rows to find today's items
-    const existingActive = [];
+    var recent = readRecentINJSDMRows_(7);
+    var rows = recent.rows;
+    var startRow = recent.startRow;
+    var existingActiveRows = [];
+    var existingActive = [];
     let reportId = '';
     let createdAt = '';
     let previousSnapshot = null;
 
     rows.forEach(function (row, index) {
       if (formatINJSDMDate_(row[1]) === data.reportDate && (String(row[13] || '') === 'ACTIVE' || String(row[13] || '') === 'FOLLOW_UP')) {
-        existingActive.push(index + 3);
+        existingActiveRows.push(startRow + index); // actual sheet row
+        existingActive.push(index);
         reportId = reportId || String(row[0] || '');
         createdAt = createdAt || formatINJSDMDateTime_(row[11]);
       }
@@ -12993,10 +12999,19 @@ function saveINJSDMReport(payload, userName, userEmail) {
     const history = previousSnapshot ? [{ changedAt: now, before: previousSnapshot }] : [];
     const historyJSON = JSON.stringify(history);
 
-    if (existingActive.length) {
-      existingActive.forEach(function (sheetRow) {
-        ws.getRange(sheetRow, 13, 1, 3).setValues([[now, 'DELETED', historyJSON]]);
+    // Batch write: update all old rows in one operation
+    if (existingActiveRows.length) {
+      var minRow = Math.min.apply(null, existingActiveRows);
+      var maxRow = Math.max.apply(null, existingActiveRows);
+      var blockRows = maxRow - minRow + 1;
+      var block = ws.getRange(minRow, 13, blockRows, 3).getValues(); // read current
+      existingActiveRows.forEach(function (sheetRow) {
+        var idx = sheetRow - minRow;
+        block[idx][0] = now;
+        block[idx][1] = 'DELETED';
+        block[idx][2] = historyJSON;
       });
+      ws.getRange(minRow, 13, blockRows, 3).setValues(block); // single write
     }
 
     const output = [];
@@ -13083,13 +13098,16 @@ function closeINJSDMItem(itemId, userName, userEmail) {
     }
     if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
     const ws = getINJSDMSheet_();
-    const rows = readRecentINJSDMRows_(90);
+    var recent = readRecentINJSDMRows_(90);
+    var rows = recent.rows;
+    var startRow = recent.startRow;
     const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
     var found = false;
     for (var i = 0; i < rows.length; i++) {
       if (String(rows[i][4] || '') === itemId && (String(rows[i][13] || '') === 'ACTIVE' || String(rows[i][13] || '') === 'FOLLOW_UP')) {
-        ws.getRange(i + 3, 14).setValue('CLOSED');
-        ws.getRange(i + 3, 13).setValue(now);
+        var sheetRow = startRow + i;
+        ws.getRange(sheetRow, 14).setValue('CLOSED');
+        ws.getRange(sheetRow, 13).setValue(now);
         found = true;
         break;
       }
@@ -13112,13 +13130,16 @@ function reopenINJSDMItem(itemId, userName, userEmail) {
     }
     if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
     const ws = getINJSDMSheet_();
-    const rows = readRecentINJSDMRows_(90);
+    var recent = readRecentINJSDMRows_(90);
+    var rows = recent.rows;
+    var startRow = recent.startRow;
     const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
     var found = false;
     for (var i = 0; i < rows.length; i++) {
       if (String(rows[i][4] || '') === itemId && String(rows[i][13] || '') === 'CLOSED') {
-        ws.getRange(i + 3, 14).setValue('ACTIVE');
-        ws.getRange(i + 3, 13).setValue(now);
+        var sheetRow = startRow + i;
+        ws.getRange(sheetRow, 14).setValue('ACTIVE');
+        ws.getRange(sheetRow, 13).setValue(now);
         found = true;
         break;
       }
@@ -13147,7 +13168,9 @@ function batchUpdateINJSDMItems(itemIdsJSON, newStatus, userName, userEmail) {
       return JSON.stringify({ success: false, message: 'Invalid status: ' + newStatus });
     }
     const ws = getINJSDMSheet_();
-    const rows = readRecentINJSDMRows_(90);
+    var recent = readRecentINJSDMRows_(90);
+    var rows = recent.rows;
+    var startRow = recent.startRow;
     const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
     const idSet = {};
     itemIds.forEach(function (id) { idSet[id] = true; });
@@ -13156,8 +13179,9 @@ function batchUpdateINJSDMItems(itemIdsJSON, newStatus, userName, userEmail) {
       var id = String(rows[i][4] || '');
       var currentStatus = String(rows[i][13] || '');
       if (idSet[id] && (currentStatus === 'ACTIVE' || currentStatus === 'FOLLOW_UP')) { // close both ACTIVE and legacy FOLLOW_UP
-        ws.getRange(i + 3, 14).setValue(newStatus);
-        ws.getRange(i + 3, 13).setValue(now);
+        var sheetRow = startRow + i;
+        ws.getRange(sheetRow, 14).setValue(newStatus);
+        ws.getRange(sheetRow, 13).setValue(now);
         updated++;
       }
     }
