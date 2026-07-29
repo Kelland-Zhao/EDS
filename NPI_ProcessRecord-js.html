@@ -107,12 +107,14 @@ const TEMPLATE_SECTIONS = [
     ]}
   ]},
   { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', hotRunner:true, hotRunnerCount:12, hotRunnerMin:1},
-  { id: 'clamping', title: '开合模及顶出模块<br><small>Clamping & Ejection</small>', rows: [
-    {row:96, label:'合模<br><small>Clamping</small>', subRows:[
-      {row:103, label:'p'},
-      {row:106, label:'v'},
-      {row:109, label:'s'}
+  { id: 'clamping', title: '开合模及顶出模块<br><small>Clamping & Ejection</small>', subSections: [
+    { id:'clampingClose', title:'合模<br><small>Clamping</small>', rows:[
+      {row:96, label:'合模模保时间<br><small>Mold Protect Time (s)</small>', type:'number'},
+      {row:97, label:'合模 P<br><small>Clamping P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','三段','低压','高压']},
+      {row:98, label:'合模 V<br><small>Clamping V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','三段','低压','高压']},
+      {row:99, label:'合模 S<br><small>Clamping S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3','S4'], offsetClass:'ms-col-1'}
     ]}
+    // TODO: 开模 (Mold Opening) and 顶出 (Ejection) - to be added
   ]},
   { id: 'auxEquip', title: '配套设备信息<br><small>Auxiliary Equipment</small>', rows: [
     {row:114, label:'类别<br><small>Category</small>'},
