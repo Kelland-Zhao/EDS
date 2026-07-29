@@ -237,7 +237,6 @@ var EQUIPMENT_TYPES = [
     {key:'actualTemp', cn:'实际温度', en:'Actual Temp (°C)', type:'number'}
   ]},
   { id:'crusher', cn:'粉碎机', en:'Crusher', fields:[
-    {key:'inUse', cn:'是否使用', en:'In Use'},
     {key:'speed', cn:'速度', en:'Speed', type:'number'}
   ]},
   { id:'dryer', cn:'烘干机', en:'Dryer', fields:[
@@ -247,11 +246,13 @@ var EQUIPMENT_TYPES = [
   ]},
   { id:'robot3', cn:'三轴机械手', en:'3-Axis Robot', fields:[
     {key:'program', cn:'程序名称', en:'Program Name'},
-    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'}
+    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'},
+    {key:'speed', cn:'速度', en:'Speed (%)', type:'number'}
   ]},
   { id:'robot6', cn:'六轴机械手', en:'6-Axis Robot', fields:[
     {key:'program', cn:'程序名称', en:'Program Name'},
-    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'}
+    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'},
+    {key:'speed', cn:'速度', en:'Speed (%)', type:'number'}
   ]},
   { id:'conveyor', cn:'传送带', en:'Conveyor', fields:[
     {key:'speed', cn:'速度', en:'Speed', type:'number'}
