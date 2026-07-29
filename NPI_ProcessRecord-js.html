@@ -113,8 +113,14 @@ const TEMPLATE_SECTIONS = [
       {row:97, label:'合模 P<br><small>Clamping P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','三段','低压','高压']},
       {row:98, label:'合模 V<br><small>Clamping V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','三段','低压','高压']},
       {row:99, label:'合模 S<br><small>Clamping S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3','S4'], offsetClass:'ms-col-1'}
+    ]},
+    { id:'clampingOpen', title:'开模<br><small>Mold Opening</small>', rows:[
+      {row:100, label:'开模行程<br><small>Opening Stroke (s)</small>', type:'number'},
+      {row:101, label:'开模 P<br><small>Opening P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['五段','四段','三段','二段','一段']},
+      {row:102, label:'开模 V<br><small>Opening V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['五段','四段','三段','二段','一段']},
+      {row:103, label:'开模 S<br><small>Opening S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:8, subCols:['S1','S2','S3','S4','S5'], offsetClass:'me-col-1'}
     ]}
-    // TODO: 开模 (Mold Opening) and 顶出 (Ejection) - to be added
+    // TODO: 顶出 (Ejection) - to be added
   ]},
   { id: 'auxEquip', title: '配套设备信息<br><small>Auxiliary Equipment</small>', rows: [
     {row:114, label:'类别<br><small>Category</small>'},
