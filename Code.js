@@ -12789,6 +12789,16 @@ function readINJSDMRows_() {
   return ws.getRange(3, 1, lastRow - 2, 15).getValues();
 }
 
+// Read only the last N rows for performance (estimates ~30 rows/day)
+function readRecentINJSDMRows_(daysBack) {
+  const ws = getINJSDMSheet_();
+  const lastRow = ws.getLastRow();
+  if (lastRow < 3) return [];
+  var limit = Math.max(100, (daysBack || 90) * 30);
+  var startRow = Math.max(3, lastRow - limit + 1);
+  return ws.getRange(startRow, 1, lastRow - startRow + 1, 15).getValues();
+}
+
 function rowToINJSDMItem_(row) {
   let owners = [];
   try { owners = JSON.parse(String(row[10] || '[]')); } catch (e) {}
@@ -12855,11 +12865,12 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
     }
     const targetDate = reportDate || Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd');
     const showClosed = includeClosed === true || includeClosed === 'true';
-    const allRows = readINJSDMRows_();
-    const reports = groupINJSDMReports_(allRows, showClosed);
-    const todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
+    // Read last 180 days (~5400 rows) instead of all data
+    var allRows = readRecentINJSDMRows_(180);
+    var reports = groupINJSDMReports_(allRows, showClosed);
+    var todayReport = reports.filter(function (report) { return report.reportDate === targetDate; })[0] || null;
 
-    // Collect historical ACTIVE communication & todo items (cross-day carry-over)
+    // Collect historical items (single pass, reusing items from allRows)
     var historyCommItems = [];
     var historyTodoItems = [];
     var todayCommIds = {};
@@ -12868,22 +12879,27 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
       todayReport.communication.forEach(function (c) { if (c.itemId) todayCommIds[c.itemId] = true; });
       todayReport.todo.forEach(function (t) { if (t.itemId) todayTodoIds[t.itemId] = true; });
     }
+    var todayReportIds = {}; // track which itemIds appear in today's report of any category
+    if (todayReport) {
+      todayReport.major.forEach(function (m) { if (m.itemId) todayReportIds[m.itemId] = true; });
+      todayReport.outstanding.forEach(function (o) { if (o.itemId) todayReportIds[o.itemId] = true; });
+      todayReport.communication.forEach(function (c) { if (c.itemId) todayReportIds[c.itemId] = true; });
+      todayReport.todo.forEach(function (t) { if (t.itemId) todayReportIds[t.itemId] = true; });
+    }
     allRows.forEach(function (row) {
       var item = rowToINJSDMItem_(row);
+      var itemDate = formatINJSDMDate_(row[1]);
+      if (itemDate >= targetDate) return; // skip today and future
+      if (todayReportIds[item.itemId]) return; // already in today's report
       if (item.category === 'COMMUNICATION') {
         if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return;
         if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return;
-        if (formatINJSDMDate_(row[1]) >= targetDate) return;
-        if (todayCommIds[item.itemId]) return;
         var itemStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
         historyCommItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: itemStatus });
       } else if (item.category === 'TODO') {
-        // Personal todos: only show current user's items
         if (!item.owners || item.owners.indexOf(userName) === -1) return;
         if (!showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP') return;
         if (showClosed && item.status !== 'ACTIVE' && item.status !== 'FOLLOW_UP' && item.status !== 'CLOSED') return;
-        if (formatINJSDMDate_(row[1]) >= targetDate) return;
-        if (todayTodoIds[item.itemId]) return;
         var todoStatus = (item.status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
         historyTodoItems.push({ itemId: item.itemId, description: item.description, owners: item.owners, reportDate: item.reportDate, itemStatus: todoStatus });
       }
@@ -12951,7 +12967,7 @@ function saveINJSDMReport(payload, userName, userEmail) {
     }
     const data = validateINJSDMPayload_(payload);
     const ws = getINJSDMSheet_();
-    const rows = readINJSDMRows_();
+    const rows = readRecentINJSDMRows_(7); // only need recent rows to find today's items
     const existingActive = [];
     let reportId = '';
     let createdAt = '';
@@ -13067,7 +13083,7 @@ function closeINJSDMItem(itemId, userName, userEmail) {
     }
     if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
     const ws = getINJSDMSheet_();
-    const rows = readINJSDMRows_();
+    const rows = readRecentINJSDMRows_(90);
     const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
     var found = false;
     for (var i = 0; i < rows.length; i++) {
@@ -13096,7 +13112,7 @@ function reopenINJSDMItem(itemId, userName, userEmail) {
     }
     if (!itemId) return JSON.stringify({ success: false, message: 'Missing itemId' });
     const ws = getINJSDMSheet_();
-    const rows = readINJSDMRows_();
+    const rows = readRecentINJSDMRows_(90);
     const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
     var found = false;
     for (var i = 0; i < rows.length; i++) {
@@ -13131,7 +13147,7 @@ function batchUpdateINJSDMItems(itemIdsJSON, newStatus, userName, userEmail) {
       return JSON.stringify({ success: false, message: 'Invalid status: ' + newStatus });
     }
     const ws = getINJSDMSheet_();
-    const rows = readINJSDMRows_();
+    const rows = readRecentINJSDMRows_(90);
     const now = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
     const idSet = {};
     itemIds.forEach(function (id) { idSet[id] = true; });

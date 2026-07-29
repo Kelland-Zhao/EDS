@@ -781,6 +781,34 @@ Swal.fire({
 });
 ```
 
+**多步加载（推荐页面初始化标准） Multi-step Loading**
+
+页面加载有多步异步操作时，**只建一个 Swal**，通过 `Swal.getTitle()` 原地更新标题，展示加载进度。**禁止重复调用 `Swal.fire()` / `showRunning()`**，否则弹窗闪烁。
+
+```js
+// 第一步：创建 Swal
+showRunning('', '正在加载模具数据……', '', '', 30000);
+
+// 在回调中直接改标题，不关闭不重建
+google.script.run.withSuccessHandler(result => {
+  // 第二步：原地更新标题，Swal 不关不闪
+  let t = Swal.getTitle();
+  if (t) t.innerHTML = swalTitle('正在加载机台与维修数据……', 'Loading...');
+
+  // 继续后续加载...
+  google.script.run.withSuccessHandler(result2 => {
+    // 加载完成，关闭 Swal
+    Swal.close();
+    showResult('success', '数据加载完成', '', '', false, '', 2000, true);
+  }).getHistoryUninstall(...);
+}).getMoldStatusList();
+```
+
+**原则：**
+1. 第一步用 `showRunning()`（内部调用 `Swal.fire()`）创建弹窗
+2. 后续步骤直接用 `Swal.getTitle().innerHTML = swalTitle(...)` 改标题
+3. 全程不调用 `Swal.close()`，直到最后一步完成
+
 **操作成功 Success**
 
 ```js
