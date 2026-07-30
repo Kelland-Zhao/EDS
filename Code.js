@@ -14473,7 +14473,7 @@ function getSuggestedCardNumber(testTaskID) {
     var npiWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_ProcessRecords');
     var npiData = npiWs.getDataRange().getValues();
     for (var j = 1; j < npiData.length; j++) {
-      var existingCard = String(npiData[j][5] || '').trim(); // col F = card number
+      var existingCard = String(npiData[j][204] || '').trim();
       if (existingCard.indexOf(prefix) === 0) {
         var ep = existingCard.split('-'), eseq = parseInt(ep[ep.length-2] || '0', 10);
         if (eseq > maxSeq) maxSeq = eseq;
@@ -14533,7 +14533,7 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     var now = Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyy-MM-dd HH:mm:ss');
     injNew.appendRow([machineType, '', moldNo, '', productName, tbxCard, '', '', JSON.stringify(fields), '', '', '', operatorSAPID + '|' + now, '', '', '', '', '', '', '', '复核', 'NPI转正 TEST-' + testTaskID + ' | ' + productName, '']);
     npiWs.getRange(recordIdx, 3).setValue('已转正');
-    npiWs.getRange(recordIdx, 6).setValue(tbxCard);
+    npiWs.getRange(recordIdx, 205).setValue(tbxCard);
     return JSON.stringify({ success: true, processCardNumber: tbxCard });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
