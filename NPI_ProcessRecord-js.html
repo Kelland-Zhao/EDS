@@ -171,6 +171,7 @@ $(document).ready(function () {
   $('#btnCreateTask').on('click', createTask);
   $('#btnSaveDraft').on('click', saveRecord);
   $('#btnSubmit').on('click', submitRecord);
+  $('#btnPromote').on('click', promoteToTBX);
 });
 
 // Build a flat index: key = "section_row_subcol" → position in 196-element array
@@ -572,11 +573,14 @@ function selectTask(taskID) {
       if (currentRecord) {
         fillFormFields(currentRecord.fields);
         var submitted = currentRecord.status === '已提交';
-        $('#btnSaveDraft, #btnSubmit').prop('disabled', submitted);
-        $('#saveStatus').text(submitted ? '已提交 / Submitted' : '草稿 / Draft');
+        var promoted = currentRecord.status === '已转正';
+        $('#btnSaveDraft, #btnSubmit').prop('disabled', submitted || promoted);
+        $('#btnPromote').toggle(submitted && !promoted);
+        $('#saveStatus').text(promoted ? '已转正 / Promoted' : (submitted ? '已提交 / Submitted' : '草稿 / Draft'));
       } else {
         clearFormFields();
         $('#btnSaveDraft, #btnSubmit').prop('disabled', false);
+        $('#btnPromote').hide();
         $('#saveStatus').text('新记录 / New Record');
       }
       loadHistory(taskID);
@@ -758,10 +762,47 @@ function submitRecord() {
         if (res.success) {
           $('#saveStatus').text('已提交 / Submitted');
           $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
+          $('#btnPromote').show();
           loadHistory(currentTask.taskID);
         } else { Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(res.message,'') }); }
       })
       .submitNPIProcessRecord(currentRecord.recordID);
+  });
+}
+
+function promoteToTBX() {
+  if (!currentRecord || !currentRecord.recordID) {
+    Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先提交工艺参数记录','Please submit first') });
+    return;
+  }
+  Swal.fire({
+    title: swalTitle('选择机型','Select Machine Type'),
+    html: '<select id="promoteMachineType" class="form-select form-select-sm" style="width:200px;margin:0 auto;"><option value="IN">IN - 注塑 Injection</option><option value="HS">HS - 烫金 Hot Stamping</option><option value="DP">DP - 数码打印 Digital Printer</option></select>',
+    showCancelButton: true, confirmButtonText: '确认转正 / Promote', cancelButtonText: '取消 / Cancel',
+    preConfirm: function () { return $('#promoteMachineType').val(); }
+  }).then(function (result) {
+    if (!result.isConfirmed) return;
+    var mt = result.value;
+    Swal.fire({
+      title: swalTitle('确认转正','Confirm'), html: swalHtml('创建 TBX-Parameter-' + mt + '-XXXX-00 并提交 PPMS 审核','Create formal card and submit to PPMS'), icon:'warning',
+      showCancelButton: true, confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel'
+    }).then(function (r2) {
+      if (!r2.isConfirmed) return;
+      Swal.fire(swalLoading('转正中...', { title: 'Promoting...', html: '正在创建正式工艺卡' }));
+      google.script.run
+        .withSuccessHandler(function (raw) {
+          Swal.close(); var r = parseResponse(raw);
+          if (r.success) {
+            currentRecord.status = '已转正';
+            $('#saveStatus').text('已转正 / Promoted - ' + r.processCardNumber);
+            $('#btnPromote').hide(); $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
+            Swal.fire({ icon:'success', title:swalTitle('转正成功','Promoted'), html:swalHtml('正式工艺卡：<br>' + r.processCardNumber, 'Formal card: ' + r.processCardNumber), timer: 5000, showConfirmButton: true });
+            loadHistory(currentTask.taskID);
+          } else { showError(r.message || '转正失败', 'Failed'); }
+        })
+        .withFailureHandler(function (err) { Swal.close(); showError(err.message || String(err), 'Failed'); })
+        .promoteNPItoTBX(currentRecord.recordID, mt, sessionStorage.getItem('ID') || '');
+    });
   });
 }
 

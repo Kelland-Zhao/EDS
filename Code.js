@@ -12,6 +12,7 @@ const webIconUrl =
 const TASK_SS_ID = "1UBg1Ake18cFp6gj0jKRX1Y9GJ0VL1pY5aXK-UoCeAY0";
 const NPI_SS_ID = "1092k9V4BT-WhD9GPoF6sRQC2TtdZfdjeRe8pK6v1rmQ";
 const NPI_WORKCENTER_SS_ID = "12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM";
+const PPMS_SS_ID = "164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
 const TASK_TEMPLATES_SHEET = "DailyTemplates";
@@ -159,6 +160,7 @@ function doGet(e) {
   Route.path("EDS_MyTasks", loadEDSMyTasks);
   Route.path("CycleMonitor", loadCycleMonitor);
   Route.path("NPI_ProcessRecord", loadNPIProcessRecord);
+  Route.path("promoteNPItoTBX", promoteNPItoTBX);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
@@ -14392,6 +14394,53 @@ function loadNPIProcessRecordData(testTaskID) {
     return JSON.stringify({ success: true, data: null });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
+  try {
+    if (!recordID || !machineType) return JSON.stringify({ success: false, message: 'Missing params' });
+    if (['IN','HS','DP','TF','PK'].indexOf(machineType) === -1) return JSON.stringify({ success: false, message: 'Invalid machine type' });
+    var npiWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_ProcessRecords');
+    var npiData = npiWs.getDataRange().getValues();
+    var recordRow = null, recordIdx = -1;
+    for (var i = 1; i < npiData.length; i++) {
+      if (String(npiData[i][0] || '').trim() === recordID) { recordRow = npiData[i]; recordIdx = i + 1; break; }
+    }
+    if (!recordRow) return JSON.stringify({ success: false, message: 'Record not found' });
+    var testTaskID = String(recordRow[1] || '');
+    var fields = [];
+    try { fields = JSON.parse(String(recordRow[4] || '[]')); } catch (e) {}
+    var taskWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_TestTasks');
+    var taskData = taskWs.getDataRange().getValues();
+    var taskRow = null;
+    for (var j = 1; j < taskData.length; j++) {
+      if (String(taskData[j][0] || '').trim() === testTaskID) { taskRow = taskData[j]; break; }
+    }
+    if (!taskRow) return JSON.stringify({ success: false, message: 'Task not found' });
+    var productName = String(taskRow[4] || '').trim(), moldNo = String(taskRow[5] || '').trim();
+    var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
+    var injNew = ppmsSs.getSheetByName('INJ_New'), injData = injNew.getDataRange().getValues();
+    var maxSeq = 0, prefix = 'TBX-Parameter-' + machineType + '-';
+    for (var k = 1; k < injData.length; k++) {
+      var cardNo = String(injData[k][5] || '').trim();
+      if (cardNo.indexOf(prefix) === 0) {
+        var parts = cardNo.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+    var seqStr = String(maxSeq + 1); while (seqStr.length < 4) seqStr = '0' + seqStr;
+    var tbxCard = prefix + seqStr + '-00';
+    for (var m = 1; m < injData.length; m++) {
+      if (String(injData[m][20] || '').indexOf('NPI-' + testTaskID) !== -1) return JSON.stringify({ success: false, message: 'Already promoted' });
+    }
+    var now = Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyy-MM-dd HH:mm:ss');
+    injNew.appendRow([machineType, '', moldNo, '', productName, tbxCard, '', '', JSON.stringify(fields), '', '', '', operatorSAPID + '|' + now, '', '', '', '', '', '', '', '复核', 'NPI转正 TEST-' + testTaskID + ' | ' + productName, '']);
+    npiWs.getRange(recordIdx, 3).setValue('已转正');
+    npiWs.getRange(recordIdx, 6).setValue(tbxCard);
+    return JSON.stringify({ success: true, processCardNumber: tbxCard });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
   }
 }
 
