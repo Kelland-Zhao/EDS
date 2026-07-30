@@ -572,12 +572,6 @@ function selectTask(taskID) {
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
   $('#paramFormCard, #historyCard').show();
-  // Pre-fill suggested card number (after form is ready)
-  var prefetchCard = google.script.run
-    .withSuccessHandler(function (raw) {
-      window._suggestedCard = parseResponse(raw);
-    })
-    .getSuggestedCardNumber(taskID);
 
   google.script.run
     .withSuccessHandler(function (result) {
@@ -586,9 +580,6 @@ function selectTask(taskID) {
       if (currentRecord) {
         fillFormFields(currentRecord.fields);
         var cardNum = currentRecord.cardNumber || '';
-        if (!cardNum && window._suggestedCard && window._suggestedCard.cardNumber && !window._suggestedCard.isExisting) {
-          cardNum = window._suggestedCard.cardNumber;
-        }
         if (cardNum) {
           $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d6832;">' + cardNum + '</span>');
           $('[data-key="productInfo_10"]').val(cardNum);
@@ -600,13 +591,18 @@ function selectTask(taskID) {
         $('#saveStatus').text(promoted ? '已转正 / Promoted' : (submitted ? '已提交 / Submitted' : '草稿 / Draft'));
       } else {
         clearFormFields();
-        // Apply pre-fetched card number
-        if (window._suggestedCard && window._suggestedCard.cardNumber && !window._suggestedCard.isExisting) {
-          $('[data-key="productInfo_10"]').val(window._suggestedCard.cardNumber);
-        }
         $('#btnSaveDraft, #btnSubmit').prop('disabled', false);
         $('#btnPromote').hide();
         $('#saveStatus').text('新记录 / New Record');
+        // Now fetch and fill card number
+        google.script.run
+          .withSuccessHandler(function (raw2) {
+            var r2 = parseResponse(raw2);
+            if (r2.success && r2.cardNumber && !r2.isExisting) {
+              $('[data-key="productInfo_10"]').val(r2.cardNumber);
+            }
+          })
+          .getSuggestedCardNumber(taskID);
       }
       loadHistory(taskID);
     })
