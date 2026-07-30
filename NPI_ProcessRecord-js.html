@@ -538,22 +538,27 @@ function loadTaskList(callback) {
     .loadNPITestTaskList();
 }
 
-function loadWorkcenterList() {
+function loadWorkcenterList(processType) {
+  var pt = processType || $('#newProcessType').val() || 'IM';
   google.script.run
     .withSuccessHandler(function (result) {
       var r = JSON.parse(result || '{}');
       var data = r.success ? r.data : [];
-      var currentVal = $('#newMachineNo').val();
       $('#newMachineNo').empty();
       $('#newMachineNo').append('<option value="">-- 选择机台 / Select Machine --</option>');
       data.forEach(function (wc) {
         $('#newMachineNo').append('<option value="' + wc.id + '">' + wc.text + '</option>');
       });
-      if (currentVal) $('#newMachineNo').val(currentVal);
       $('#newMachineNo').trigger('change');
     })
-    .loadNPIWorkcenterList();
+    .loadNPIWorkcenterList(pt);
 }
+
+// Reload workcenters when process type changes
+$(document).on('change', '#newProcessType', function () {
+  $('#newMachineNo').val('').trigger('change');
+  loadWorkcenterList($(this).val());
+});
 
 function selectTask(taskID) {
   currentTask = allTasks.find(function (t) { return t.taskID === taskID; });
@@ -699,7 +704,7 @@ function createTask() {
     source: $('#newSource').val(), productName: $('#newProductName').val().trim(),
     moldNo: $('#newMoldNo').val().trim(), machineNo: $('#newMachineNo').val().trim(),
     material: $('#newMaterial').val().trim(), planDate: $('#newPlanDate').val(),
-    processType: $('#newProcessType').val() || 'INJ',
+    processType: $('#newProcessType').val() || 'IM',
     remark: $('#newRemark').val().trim()
   };
   // 必填验证（除备注外）
@@ -791,7 +796,7 @@ function promoteToTBX() {
   }
   Swal.fire({
     title: swalTitle('选择机型','Select Machine Type'),
-    html: '<select id="promoteMachineType" class="form-select form-select-sm" style="width:200px;margin:0 auto;"><option value="IN">IN - 注塑 Injection</option><option value="HS">HS - 烫金 Hot Stamping</option><option value="DP">DP - 数码打印 Digital Printer</option></select>',
+    html: '<select id="promoteMachineType" class="form-select form-select-sm" style="width:200px;margin:0 auto;"><option value="IM">IM - 注塑 Injection Molding</option><option value="TF">TF - 植磨毛 TF</option><option value="PK">PK - 包装 Packing</option></select>',
     showCancelButton: true, confirmButtonText: '确认转正 / Promote', cancelButtonText: '取消 / Cancel',
     preConfirm: function () { return $('#promoteMachineType').val(); }
   }).then(function (result) {

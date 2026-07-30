@@ -12,6 +12,7 @@ const webIconUrl =
 const TASK_SS_ID = "1UBg1Ake18cFp6gj0jKRX1Y9GJ0VL1pY5aXK-UoCeAY0";
 const NPI_SS_ID = "1092k9V4BT-WhD9GPoF6sRQC2TtdZfdjeRe8pK6v1rmQ";
 const NPI_WORKCENTER_SS_ID = "12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM";
+const NPI_WORKCENTER_SS_IDS = { IM: NPI_WORKCENTER_SS_ID, INJ: NPI_WORKCENTER_SS_ID, TF: '', PK: '' };
 const PPMS_SS_ID = "164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
@@ -14257,7 +14258,7 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
       '待确认 Pending', '', '', '', '',
       taskData.remark || '',
       now, now,
-      taskData.processType || 'INJ'   // S: 工序
+      taskData.processType || 'IM'   // S: 工序
     ]);
     return JSON.stringify({ success: true, taskID: taskID, message: "任务已创建 / Task created" });
   } catch (e) {
@@ -14265,9 +14266,12 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
   }
 }
 
-function loadNPIWorkcenterList() {
+function loadNPIWorkcenterList(processType) {
   try {
-    var ws = SpreadsheetApp.openById(NPI_WORKCENTER_SS_ID).getSheetByName("Workcenter");
+    var pt = (processType || 'IM').toString().trim();
+    var ssId = NPI_WORKCENTER_SS_IDS[pt] || NPI_WORKCENTER_SS_IDS['IM'] || NPI_WORKCENTER_SS_ID;
+    if (!ssId) return JSON.stringify({ success: true, data: [] }); // no workcenter configured for this process type
+    var ws = SpreadsheetApp.openById(ssId).getSheetByName("Workcenter");
     if (!ws) return JSON.stringify({ success: true, data: [] });
     var data = ws.getDataRange().getValues();
     var result = [];
@@ -14304,7 +14308,7 @@ function loadNPITestTaskList() {
         tester: String(data[i][12] || ''),
         remark: String(data[i][15] || ''),
         createdAt: String(data[i][16] || ''),
-        processType: String(data[i][18] || '') || 'INJ'
+        processType: String(data[i][18] || '') || 'IM'
       });
     }
     return JSON.stringify({ success: true, data: result });
@@ -14348,7 +14352,7 @@ function saveNPIProcessRecord(recordJSON) {
       for (var k = 0; k < 196; k++) {
         row.push(fields[k] !== undefined ? String(fields[k]) : '');
       }
-      row.push(now, now, record.operatorSAPID || '', record.processType || 'INJ');
+      row.push(now, now, record.operatorSAPID || '', record.processType || 'IM');
       ws.appendRow(row);
       record.recordID = recordID;
     }
@@ -14390,7 +14394,7 @@ function loadNPIProcessRecordData(testTaskID) {
         return JSON.stringify({ success: true, data: {
           recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
           isLatest: String(row[3] || '') === 'true', fields: fields,
-          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || ''), processType: String(row[203] || '') || 'INJ'
+          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || ''), processType: String(row[203] || '') || 'IM'
         }});
       }
     }
@@ -14406,7 +14410,7 @@ function getSuggestedCardNumber(testTaskID) {
     // Look up process type from test task
     var taskWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_TestTasks');
     var taskData = taskWs.getDataRange().getValues();
-    var machineType = 'IN';
+    var machineType = 'IM';
     for (var t = 1; t < taskData.length; t++) {
       if (String(taskData[t][0] || '').trim() === testTaskID) {
         machineType = String(taskData[t][18] || '').trim() || 'IN';
@@ -14460,8 +14464,9 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     }
     if (!recordRow) return JSON.stringify({ success: false, message: 'Record not found' });
     var testTaskID = String(recordRow[1] || '');
-    var processType = machineType || String(recordRow[203] || '').trim() || 'INJ';
-    if (['IN','HS','DP','TF','PK'].indexOf(processType) === -1) processType = 'INJ';
+    var processType = machineType || String(recordRow[203] || '').trim() || 'IM';
+    if (['IM','INJ','TF','PK'].indexOf(processType) === -1) processType = 'IM';
+    var tbxType = (processType === 'INJ') ? 'IM' : processType;
     var fields = [];
     try { fields = JSON.parse(String(recordRow[4] || '[]')); } catch (e) {}
     var taskWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_TestTasks');
@@ -14474,7 +14479,7 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     var productName = String(taskRow[4] || '').trim(), moldNo = String(taskRow[5] || '').trim();
     var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
     var injNew = ppmsSs.getSheetByName('INJ_New'), injData = injNew.getDataRange().getValues();
-    var maxSeq = 0, prefix = 'TBX-Parameter-' + processType + '-';
+    var maxSeq = 0, prefix = 'TBX-Parameter-' + tbxType + '-';
     for (var k = 1; k < injData.length; k++) {
       var cardNo = String(injData[k][5] || '').trim();
       if (cardNo.indexOf(prefix) === 0) {
