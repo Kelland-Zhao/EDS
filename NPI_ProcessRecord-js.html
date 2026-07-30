@@ -699,6 +699,7 @@ function createTask() {
     source: $('#newSource').val(), productName: $('#newProductName').val().trim(),
     moldNo: $('#newMoldNo').val().trim(), machineNo: $('#newMachineNo').val().trim(),
     material: $('#newMaterial').val().trim(), planDate: $('#newPlanDate').val(),
+    processType: $('#newProcessType').val() || 'INJ',
     remark: $('#newRemark').val().trim()
   };
   // 必填验证（除备注外）
@@ -795,7 +796,7 @@ function promoteToTBX() {
     preConfirm: function () { return $('#promoteMachineType').val(); }
   }).then(function (result) {
     if (!result.isConfirmed) return;
-    var mt = result.value;
+    var mt = currentTask.processType || result.value;
     Swal.fire({
       title: swalTitle('确认转正','Confirm'), html: swalHtml('创建 TBX-Parameter-' + mt + '-XXXX-00 并提交 PPMS 审核','Create formal card and submit to PPMS'), icon:'warning',
       showCancelButton: true, confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel'

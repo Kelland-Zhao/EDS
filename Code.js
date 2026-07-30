@@ -14256,7 +14256,8 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
       taskData.planDate || dateStr,
       '待确认 Pending', '', '', '', '',
       taskData.remark || '',
-      now, now
+      now, now,
+      taskData.processType || 'INJ'   // S: 工序
     ]);
     return JSON.stringify({ success: true, taskID: taskID, message: "任务已创建 / Task created" });
   } catch (e) {
@@ -14302,7 +14303,8 @@ function loadNPITestTaskList() {
         confirmStatus: String(data[i][10] || ''),
         tester: String(data[i][12] || ''),
         remark: String(data[i][15] || ''),
-        createdAt: String(data[i][16] || '')
+        createdAt: String(data[i][16] || ''),
+        processType: String(data[i][18] || '') || 'INJ'
       });
     }
     return JSON.stringify({ success: true, data: result });
@@ -14346,7 +14348,7 @@ function saveNPIProcessRecord(recordJSON) {
       for (var k = 0; k < 196; k++) {
         row.push(fields[k] !== undefined ? String(fields[k]) : '');
       }
-      row.push(now, now, record.operatorSAPID || '');
+      row.push(now, now, record.operatorSAPID || '', record.processType || 'INJ');
       ws.appendRow(row);
       record.recordID = recordID;
     }
@@ -14388,7 +14390,7 @@ function loadNPIProcessRecordData(testTaskID) {
         return JSON.stringify({ success: true, data: {
           recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
           isLatest: String(row[3] || '') === 'true', fields: fields,
-          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || '')
+          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || ''), processType: String(row[203] || '') || 'INJ'
         }});
       }
     }
@@ -14401,8 +14403,16 @@ function loadNPIProcessRecordData(testTaskID) {
 function getSuggestedCardNumber(testTaskID) {
   try {
     if (!testTaskID) return JSON.stringify({ success: false, message: 'Missing testTaskID' });
-    // Default to IN (injection molding); can be enhanced to look up from workcenter
+    // Look up process type from test task
+    var taskWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_TestTasks');
+    var taskData = taskWs.getDataRange().getValues();
     var machineType = 'IN';
+    for (var t = 1; t < taskData.length; t++) {
+      if (String(taskData[t][0] || '').trim() === testTaskID) {
+        machineType = String(taskData[t][18] || '').trim() || 'IN';
+        break;
+      }
+    }
     // Count existing TEST cards for this type
     var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
     var injNew = ppmsSs.getSheetByName('INJ_New');
@@ -14441,8 +14451,7 @@ function getSuggestedCardNumber(testTaskID) {
 
 function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
   try {
-    if (!recordID || !machineType) return JSON.stringify({ success: false, message: 'Missing params' });
-    if (['IN','HS','DP','TF','PK'].indexOf(machineType) === -1) return JSON.stringify({ success: false, message: 'Invalid machine type' });
+    if (!recordID) return JSON.stringify({ success: false, message: 'Missing params' });
     var npiWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_ProcessRecords');
     var npiData = npiWs.getDataRange().getValues();
     var recordRow = null, recordIdx = -1;
@@ -14451,6 +14460,8 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     }
     if (!recordRow) return JSON.stringify({ success: false, message: 'Record not found' });
     var testTaskID = String(recordRow[1] || '');
+    var processType = machineType || String(recordRow[203] || '').trim() || 'INJ';
+    if (['IN','HS','DP','TF','PK'].indexOf(processType) === -1) processType = 'INJ';
     var fields = [];
     try { fields = JSON.parse(String(recordRow[4] || '[]')); } catch (e) {}
     var taskWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_TestTasks');
@@ -14463,7 +14474,7 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     var productName = String(taskRow[4] || '').trim(), moldNo = String(taskRow[5] || '').trim();
     var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
     var injNew = ppmsSs.getSheetByName('INJ_New'), injData = injNew.getDataRange().getValues();
-    var maxSeq = 0, prefix = 'TBX-Parameter-' + machineType + '-';
+    var maxSeq = 0, prefix = 'TBX-Parameter-' + processType + '-';
     for (var k = 1; k < injData.length; k++) {
       var cardNo = String(injData[k][5] || '').trim();
       if (cardNo.indexOf(prefix) === 0) {
