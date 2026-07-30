@@ -14330,69 +14330,57 @@ function saveNPIProcessRecord(recordJSON) {
     if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
     var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var fields = record.fields || [];
+    var fieldsJSON = JSON.stringify(fields);
+
+    // Generate TEST card number on first save
+    var cardNumber = record.cardNumber || '';
+    if (!cardNumber) {
+      var pt = record.processType || 'IM';
+      if (pt === 'INJ') pt = 'IM';
+      var npiR = ws.getDataRange().getValues();
+      var maxSeq = 0, testPrefix = 'TEST-Parameter-' + pt + '-';
+      for (var n = 1; n < npiR.length; n++) {
+        var ex = String(npiR[n] ? (npiR[n][9] || '') : '').trim();
+        if (ex.indexOf(testPrefix) === 0) {
+          var parts = ex.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
+          if (seq > maxSeq) maxSeq = seq;
+        }
+      }
+      try {
+        var pss = SpreadsheetApp.openById(PPMS_SS_ID), ij2 = pss.getSheetByName('INJ_New');
+        var ijData = ij2.getDataRange().getValues();
+        for (var p = 1; p < ijData.length; p++) {
+          var pc = String(ijData[p][5] || '').trim();
+          if (pc.indexOf('TEST-Parameter-' + pt + '-') === 0) {
+            var pp = pc.split('-'), pSeq = parseInt(pp[pp.length-2] || '0', 10);
+            if (pSeq > maxSeq) maxSeq = pSeq;
+          }
+        }
+      } catch (e) {}
+      var ns = maxSeq + 1, ss = String(ns);
+      while (ss.length < 4) ss = '0' + ss;
+      cardNumber = 'TEST-Parameter-' + pt + '-' + ss + '-00';
+    }
+
     var data = ws.getDataRange().getValues();
     var rowIndex = -1;
-
     if (record.recordID) {
       for (var i = 1; i < data.length; i++) {
-        if (String(data[i][0] || '').trim() === record.recordID) {
-          rowIndex = i + 1;
-          break;
-        }
+        if (String(data[i][0] || '').trim() === record.recordID) { rowIndex = i + 1; break; }
       }
     }
 
     if (rowIndex > 0) {
-      // Update existing draft
-      var fields = record.fields || [];
-      for (var j = 0; j < fields.length && j < 196; j++) {
-        ws.getRange(rowIndex, j + 4).setValue(fields[j] !== undefined ? String(fields[j]) : '');
-      }
+      ws.getRange(rowIndex, 5).setValue(fieldsJSON);
       ws.getRange(rowIndex, 6).setValue(now);
+      ws.getRange(rowIndex, 10).setValue(cardNumber);
     } else {
-      // New record
       var seq = ('000' + (Date.now() % 10000)).slice(-4);
       var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
-      var row = [recordID, record.testTaskID || '', '草稿', true];
-      var fields = record.fields || [];
-      for (var k = 0; k < 196; k++) {
-        row.push(fields[k] !== undefined ? String(fields[k]) : '');
-      }
-      // Generate TEST card number on first save
-      var cardNumber = record.cardNumber || '';
-      if (!cardNumber) {
-        var pt = record.processType || 'IM';
-        if (pt === 'INJ') pt = 'IM';
-        // Count existing TEST cards for this type to get next seq
-        var npiData = ws.getDataRange().getValues();
-        var maxSeq = 0;
-        var testPrefix = 'TEST-Parameter-' + pt + '-';
-        for (var n = 1; n < npiData.length; n++) {
-          var existingCard = String(npiData[n] ? npiData[n][204] || '' : '').trim();
-          if (existingCard.indexOf(testPrefix) === 0) {
-            var parts = existingCard.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
-            if (seq > maxSeq) maxSeq = seq;
-          }
-        }
-        // Also check PPMS for max seq
-        var ppmsSs2 = SpreadsheetApp.openById(PPMS_SS_ID);
-        var injNew2 = ppmsSs2.getSheetByName('INJ_New');
-        var injData2 = injNew2.getDataRange().getValues();
-        for (var p = 1; p < injData2.length; p++) {
-          var ppmsCard = String(injData2[p][5] || '').trim();
-          if (ppmsCard.indexOf('TEST-Parameter-' + pt + '-') === 0) {
-            var pParts = ppmsCard.split('-'), pSeq = parseInt(pParts[pParts.length-2] || '0', 10);
-            if (pSeq > maxSeq) maxSeq = pSeq;
-          }
-        }
-        var newSeq = maxSeq + 1, seqStr = String(newSeq);
-        while (seqStr.length < 4) seqStr = '0' + seqStr;
-        cardNumber = 'TEST-Parameter-' + pt + '-' + seqStr + '-00';
-      }
-      row.push(now, now, record.operatorSAPID || '', record.processType || 'IM', cardNumber);
-      ws.appendRow(row);
-      record.cardNumber = cardNumber;
+      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, record.operatorSAPID || '', record.processType || 'IM', cardNumber]);
       record.recordID = recordID;
+      record.cardNumber = cardNumber;
     }
 
     return JSON.stringify({ success: true, recordID: record.recordID || '', message: "已保存 / Saved" });
@@ -14400,7 +14388,6 @@ function saveNPIProcessRecord(recordJSON) {
     return JSON.stringify({ success: false, message: e.message });
   }
 }
-
 function submitNPIProcessRecord(recordID) {
   try {
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
@@ -14425,14 +14412,15 @@ function loadNPIProcessRecordData(testTaskID) {
     if (!ws) return JSON.stringify({ success: false, data: null });
     var data = ws.getDataRange().getValues();
     for (var i = data.length - 1; i >= 1; i--) {
-      if (String(data[i][1] || '').trim() === testTaskID && String(data[i][3] || '').trim() === 'true') {
+      if (String(data[i][1] || '').trim() === testTaskID && String(data[i][3] || '').trim() === 'TRUE') {
         var row = data[i];
         var fields = [];
-        for (var j = 4; j < 200; j++) fields.push(row[j] !== undefined ? String(row[j] || '') : '');
+        try { fields = JSON.parse(String(row[4] || '[]')); } catch (e) {}
         return JSON.stringify({ success: true, data: {
           recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
-          isLatest: String(row[3] || '') === 'true', fields: fields,
-          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || ''), processType: String(row[203] || '') || 'IM', cardNumber: String(row[204] || '')
+          isLatest: String(row[3] || '') === 'TRUE', fields: fields,
+          createdAt: String(row[5] || ''), updatedAt: String(row[6] || ''), createdBy: String(row[7] || ''),
+          processType: String(row[8] || '') || 'IM', cardNumber: String(row[9] || '')
         }});
       }
     }
@@ -14441,7 +14429,6 @@ function loadNPIProcessRecordData(testTaskID) {
     return JSON.stringify({ success: false, message: e.message });
   }
 }
-
 function getSuggestedCardNumber(testTaskID) {
   try {
     if (!testTaskID) return JSON.stringify({ success: false, message: 'Missing testTaskID' });
@@ -14477,7 +14464,7 @@ function getSuggestedCardNumber(testTaskID) {
     var npiWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_ProcessRecords');
     var npiData = npiWs.getDataRange().getValues();
     for (var j = 1; j < npiData.length; j++) {
-      var existingCard = String(npiData[j][204] || '').trim();
+      var existingCard = String(npiData[j][9] || '').trim();
       if (existingCard.indexOf(prefix) === 0) {
         var ep = existingCard.split('-'), eseq = parseInt(ep[ep.length-2] || '0', 10);
         if (eseq > maxSeq) maxSeq = eseq;
@@ -14506,7 +14493,7 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     }
     if (!recordRow) return JSON.stringify({ success: false, message: 'Record not found' });
     var testTaskID = String(recordRow[1] || '');
-    var processType = machineType || String(recordRow[203] || '').trim() || 'IM';
+    var processType = machineType || String(recordRow[8] || '').trim() || 'IM';
     if (['IM','INJ','TF','PK'].indexOf(processType) === -1) processType = 'IM';
     var tbxType = (processType === 'INJ') ? 'IM' : processType;
     var fields = [];
@@ -14537,7 +14524,8 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     var now = Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyy-MM-dd HH:mm:ss');
     injNew.appendRow([machineType, '', moldNo, '', productName, tbxCard, '', '', JSON.stringify(fields), '', '', '', operatorSAPID + '|' + now, '', '', '', '', '', '', '', '复核', 'NPI转正 TEST-' + testTaskID + ' | ' + productName, '']);
     npiWs.getRange(recordIdx, 3).setValue('已转正');
-    npiWs.getRange(recordIdx, 205).setValue(tbxCard);
+    npiWs.getRange(recordIdx, 6).setValue(now);
+    npiWs.getRange(recordIdx, 10).setValue(tbxCard);
     return JSON.stringify({ success: true, processCardNumber: tbxCard });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
@@ -14553,7 +14541,7 @@ function loadNPIProcessRecordHistory(testTaskID) {
     for (var i = data.length - 1; i >= 1; i--) {
       if (String(data[i][1] || '').trim() === testTaskID) {
         result.push({
-          recordID: String(data[i][0] || ''), status: String(data[i][2] || ''),
+          recordID: String(data[i][0] || ''), status: String(data[i][2] || ''), cardNumber: String(data[i][9] || ''), cardNumber: String(data[i][9] || ''),
           isLatest: String(data[i][3] || '') === 'true',
           updatedAt: String(data[i][201] || ''), createdBy: String(data[i][202] || '')
         });
