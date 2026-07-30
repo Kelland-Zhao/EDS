@@ -781,6 +781,30 @@ function saveRecord() {
 
 function submitRecord() {
   if (!currentRecord || !currentRecord.recordID) { Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先保存草稿','Please save draft first') }); return; }
+  // Validate: all enabled fields must be non-empty (except remarks)
+  var emptyFields = [];
+  $('.npi-field').each(function () {
+    var el = $(this);
+    // Skip fields in disabled containers
+    if (el.closest('.barrel-disabled').length) return;
+    // Skip textarea (remarks)
+    if (el.is('textarea')) return;
+    var key = el.data('key') || '';
+    // Skip hot runner if disabled
+    if (key.indexOf('hotRunner_') === 0 && !hotRunnerEnabled) return;
+    var val = el.val().trim();
+    if (!val) {
+      var label = el.closest('.row, .col-12, .col-6').find('.form-label-sm').text().trim().replace(/<[^>]*>/g, '').substring(0, 30) || key;
+      emptyFields.push(label || key);
+    }
+  });
+  if (emptyFields.length > 0) {
+    Swal.fire({
+      icon: 'warning', title: swalTitle('请填写必填项', 'Required fields missing'),
+      html: swalHtml('以下 ' + emptyFields.length + ' 项不能为空：<br>' + emptyFields.slice(0, 10).join('<br>') + (emptyFields.length > 10 ? '<br>...等 ' + emptyFields.length + ' 项' : ''), emptyFields.length + ' fields required'),
+    });
+    return;
+  }
   Swal.fire({
     title: swalTitle('确认提交','Confirm Submit'), html: swalHtml('提交后不可修改，确认提交？','Cannot modify after submit. Confirm?'),
     icon:'warning', showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
