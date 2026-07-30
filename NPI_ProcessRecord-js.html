@@ -572,13 +572,10 @@ function selectTask(taskID) {
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
   $('#paramFormCard, #historyCard').show();
-  // Pre-fill suggested card number
-  google.script.run
+  // Pre-fill suggested card number (after form is ready)
+  var prefetchCard = google.script.run
     .withSuccessHandler(function (raw) {
-      var r = parseResponse(raw);
-      if (r.success && r.cardNumber && !r.isExisting) {
-        $('[data-key="productInfo_10"]').val(r.cardNumber);
-      }
+      window._suggestedCard = parseResponse(raw);
     })
     .getSuggestedCardNumber(taskID);
 
@@ -589,6 +586,9 @@ function selectTask(taskID) {
       if (currentRecord) {
         fillFormFields(currentRecord.fields);
         var cardNum = currentRecord.cardNumber || '';
+        if (!cardNum && window._suggestedCard && window._suggestedCard.cardNumber && !window._suggestedCard.isExisting) {
+          cardNum = window._suggestedCard.cardNumber;
+        }
         if (cardNum) {
           $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d6832;">' + cardNum + '</span>');
           $('[data-key="productInfo_10"]').val(cardNum);
@@ -600,6 +600,10 @@ function selectTask(taskID) {
         $('#saveStatus').text(promoted ? '已转正 / Promoted' : (submitted ? '已提交 / Submitted' : '草稿 / Draft'));
       } else {
         clearFormFields();
+        // Apply pre-fetched card number
+        if (window._suggestedCard && window._suggestedCard.cardNumber && !window._suggestedCard.isExisting) {
+          $('[data-key="productInfo_10"]').val(window._suggestedCard.cardNumber);
+        }
         $('#btnSaveDraft, #btnSubmit').prop('disabled', false);
         $('#btnPromote').hide();
         $('#saveStatus').text('新记录 / New Record');
