@@ -14374,11 +14374,11 @@ function saveNPIProcessRecord(recordJSON) {
     if (rowIndex > 0) {
       ws.getRange(rowIndex, 5).setValue(fieldsJSON);
       ws.getRange(rowIndex, 6).setValue(now);
-      ws.getRange(rowIndex, 10).setValue(cardNumber);
+      ws.getRange(rowIndex, 9).setValue(cardNumber);
     } else {
       var seq = ('000' + (Date.now() % 10000)).slice(-4);
       var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
-      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, record.operatorSAPID || '', record.processType || 'IM', cardNumber]);
+      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, record.operatorSAPID || '', cardNumber]);
       record.recordID = recordID;
       record.cardNumber = cardNumber;
     }
@@ -14420,7 +14420,7 @@ function loadNPIProcessRecordData(testTaskID) {
           recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
           isLatest: String(row[3] || '') === 'TRUE', fields: fields,
           createdAt: String(row[5] || ''), updatedAt: String(row[6] || ''), createdBy: String(row[7] || ''),
-          processType: String(row[8] || '') || 'IM', cardNumber: String(row[9] || '')
+          cardNumber: String(row[8] || '')
         }});
       }
     }
@@ -14464,7 +14464,7 @@ function getSuggestedCardNumber(testTaskID) {
     var npiWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_ProcessRecords');
     var npiData = npiWs.getDataRange().getValues();
     for (var j = 1; j < npiData.length; j++) {
-      var existingCard = String(npiData[j][9] || '').trim();
+      var existingCard = String(npiData[j][8] || '').trim();
       if (existingCard.indexOf(prefix) === 0) {
         var ep = existingCard.split('-'), eseq = parseInt(ep[ep.length-2] || '0', 10);
         if (eseq > maxSeq) maxSeq = eseq;
@@ -14493,7 +14493,7 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     }
     if (!recordRow) return JSON.stringify({ success: false, message: 'Record not found' });
     var testTaskID = String(recordRow[1] || '');
-    var processType = machineType || String(recordRow[8] || '').trim() || 'IM';
+    var processType = machineType || 'IM'; // derived from card number or param
     if (['IM','INJ','TF','PK'].indexOf(processType) === -1) processType = 'IM';
     var tbxType = (processType === 'INJ') ? 'IM' : processType;
     var fields = [];
@@ -14525,7 +14525,7 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     injNew.appendRow([machineType, '', moldNo, '', productName, tbxCard, '', '', JSON.stringify(fields), '', '', '', operatorSAPID + '|' + now, '', '', '', '', '', '', '', '复核', 'NPI转正 TEST-' + testTaskID + ' | ' + productName, '']);
     npiWs.getRange(recordIdx, 3).setValue('已转正');
     npiWs.getRange(recordIdx, 6).setValue(now);
-    npiWs.getRange(recordIdx, 10).setValue(tbxCard);
+    npiWs.getRange(recordIdx, 9).setValue(tbxCard);
     return JSON.stringify({ success: true, processCardNumber: tbxCard });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
@@ -14541,7 +14541,7 @@ function loadNPIProcessRecordHistory(testTaskID) {
     for (var i = data.length - 1; i >= 1; i--) {
       if (String(data[i][1] || '').trim() === testTaskID) {
         result.push({
-          recordID: String(data[i][0] || ''), status: String(data[i][2] || ''), cardNumber: String(data[i][9] || ''), cardNumber: String(data[i][9] || ''),
+          recordID: String(data[i][0] || ''), status: String(data[i][2] || ''), cardNumber: String(data[i][8] || ''), cardNumber: String(data[i][8] || ''),
           isLatest: String(data[i][3] || '') === 'true',
           updatedAt: String(data[i][201] || ''), createdBy: String(data[i][202] || '')
         });
