@@ -780,17 +780,13 @@ function saveRecord() {
 }
 
 function submitRecord() {
-  if (!currentRecord || !currentRecord.recordID) { Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先保存草稿','Please save draft first') }); return; }
-  // Validate: all enabled fields must be non-empty (except remarks)
+  if (!currentTask) { Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先选择测试任务','Please select a test task first') }); return; }
   var emptyFields = [];
   $('.npi-field').each(function () {
     var el = $(this);
-    // Skip fields in disabled containers
     if (el.closest('.barrel-disabled').length) return;
-    // Skip textarea (remarks)
     if (el.is('textarea')) return;
     var key = el.data('key') || '';
-    // Skip hot runner if disabled
     if (key.indexOf('hotRunner_') === 0 && !hotRunnerEnabled) return;
     var val = el.val().trim();
     if (!val) {
@@ -799,33 +795,26 @@ function submitRecord() {
     }
   });
   if (emptyFields.length > 0) {
-    Swal.fire({
-      icon: 'warning', title: swalTitle('请填写必填项', 'Required fields missing'),
-      html: swalHtml('以下 ' + emptyFields.length + ' 项不能为空：<br>' + emptyFields.slice(0, 10).join('<br>') + (emptyFields.length > 10 ? '<br>...等 ' + emptyFields.length + ' 项' : ''), emptyFields.length + ' fields required'),
-    });
+    Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项', 'Required fields missing'), html: swalHtml('以下 ' + emptyFields.length + ' 项不能为空：<br>' + emptyFields.slice(0, 10).join('<br>') + (emptyFields.length > 10 ? '<br>...等 ' + emptyFields.length + ' 项' : ''), emptyFields.length + ' fields required') });
     return;
   }
-  Swal.fire({
-    title: swalTitle('确认提交','Confirm Submit'), html: swalHtml('提交后不可修改，确认提交？','Cannot modify after submit. Confirm?'),
-    icon:'warning', showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel'
-  }).then(function (r) {
+  var recordData = { recordID: currentRecord ? currentRecord.recordID : null, testTaskID: currentTask.taskID, fields: collectFormFields(), operatorSAPID: sessionStorage.getItem('ID') || '', processType: currentTask.processType || 'IM' };
+  Swal.fire({ title: swalTitle('确认提交','Confirm Submit'), html: swalHtml('提交后不可修改，确认提交？','Cannot modify after submit. Confirm?'), icon:'warning', showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel' }).then(function (r) {
     if (!r.isConfirmed) return;
-    Swal.fire(swalLoading('提交中...', { title: 'Submitting...', html: '正在提交' }));
-    google.script.run
-      .withSuccessHandler(function (result) {
-        Swal.close();
-        var res = JSON.parse(result || '{}');
-        if (res.success) {
-          $('#saveStatus').text('已提交 / Submitted');
-          $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
-          $('#btnPromote').show();
-          loadHistory(currentTask.taskID);
-        } else { Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(res.message,'') }); }
-      })
-      .submitNPIProcessRecord(currentRecord.recordID);
+    Swal.fire(swalLoading('提交中...', { title: 'Submitting...', html: '正在保存并提交' }));
+    google.script.run.withSuccessHandler(function (saveResult) {
+      var sr = JSON.parse(saveResult || '{}');
+      if (!sr.success) { Swal.close(); Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(sr.message,'') }); return; }
+      var rid = sr.recordID || (currentRecord ? currentRecord.recordID : null);
+      currentRecord = { recordID: rid, status: '草稿', fields: recordData.fields, cardNumber: sr.cardNumber };
+      google.script.run.withSuccessHandler(function (subResult) {
+        Swal.close(); var sub = JSON.parse(subResult || '{}');
+        if (sub.success) { currentRecord.status = '已提交'; $('#saveStatus').text('已提交 / Submitted'); $('#btnSaveDraft, #btnSubmit').prop('disabled', true); loadHistory(currentTask.taskID); }
+        else Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(sub.message,'') });
+      }).submitNPIProcessRecord(rid);
+    }).saveNPIProcessRecord(JSON.stringify(recordData));
   });
 }
-
 function promoteToTBX() {
   if (!currentRecord || !currentRecord.recordID) {
     Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先提交工艺参数记录','Please submit first') });
