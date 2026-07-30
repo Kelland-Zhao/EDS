@@ -14358,8 +14358,40 @@ function saveNPIProcessRecord(recordJSON) {
       for (var k = 0; k < 196; k++) {
         row.push(fields[k] !== undefined ? String(fields[k]) : '');
       }
-      row.push(now, now, record.operatorSAPID || '', record.processType || 'IM');
+      // Generate TEST card number on first save
+      var cardNumber = record.cardNumber || '';
+      if (!cardNumber) {
+        var pt = record.processType || 'IM';
+        if (pt === 'INJ') pt = 'IM';
+        // Count existing TEST cards for this type to get next seq
+        var npiData = ws.getDataRange().getValues();
+        var maxSeq = 0;
+        var testPrefix = 'TEST-Parameter-' + pt + '-';
+        for (var n = 1; n < npiData.length; n++) {
+          var existingCard = String(npiData[n] ? npiData[n][204] || '' : '').trim();
+          if (existingCard.indexOf(testPrefix) === 0) {
+            var parts = existingCard.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
+            if (seq > maxSeq) maxSeq = seq;
+          }
+        }
+        // Also check PPMS for max seq
+        var ppmsSs2 = SpreadsheetApp.openById(PPMS_SS_ID);
+        var injNew2 = ppmsSs2.getSheetByName('INJ_New');
+        var injData2 = injNew2.getDataRange().getValues();
+        for (var p = 1; p < injData2.length; p++) {
+          var ppmsCard = String(injData2[p][5] || '').trim();
+          if (ppmsCard.indexOf('TEST-Parameter-' + pt + '-') === 0) {
+            var pParts = ppmsCard.split('-'), pSeq = parseInt(pParts[pParts.length-2] || '0', 10);
+            if (pSeq > maxSeq) maxSeq = pSeq;
+          }
+        }
+        var newSeq = maxSeq + 1, seqStr = String(newSeq);
+        while (seqStr.length < 4) seqStr = '0' + seqStr;
+        cardNumber = 'TEST-Parameter-' + pt + '-' + seqStr + '-00';
+      }
+      row.push(now, now, record.operatorSAPID || '', record.processType || 'IM', cardNumber);
       ws.appendRow(row);
+      record.cardNumber = cardNumber;
       record.recordID = recordID;
     }
 
@@ -14400,7 +14432,7 @@ function loadNPIProcessRecordData(testTaskID) {
         return JSON.stringify({ success: true, data: {
           recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
           isLatest: String(row[3] || '') === 'true', fields: fields,
-          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || ''), processType: String(row[203] || '') || 'IM'
+          createdAt: String(row[200] || ''), updatedAt: String(row[201] || ''), createdBy: String(row[202] || ''), processType: String(row[203] || '') || 'IM', cardNumber: String(row[204] || '')
         }});
       }
     }

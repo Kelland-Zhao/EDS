@@ -569,21 +569,9 @@ function selectTask(taskID) {
   if (currentTask.moldNo) info.push('<span class="task-info-item">模具<br><small>Mold</small>: ' + currentTask.moldNo + '</span>');
   if (currentTask.machineNo) info.push('<span class="task-info-item">机台<br><small>Machine</small>: ' + currentTask.machineNo + '</span>');
   if (currentTask.status) info.push('<span class="task-info-item">状态<br><small>Status</small>: ' + currentTask.status + '</span>');
-  info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: ⏳</span>');
+  info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
   $('#paramFormCard, #historyCard').show();
-
-  // Fetch suggested card number
-  google.script.run
-    .withSuccessHandler(function (raw) {
-      var r = parseResponse(raw);
-      if (r.success && r.cardNumber) {
-        $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d6832;">' + r.cardNumber + '</span>');
-      } else {
-        $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#999;">--</span>');
-      }
-    })
-    .getSuggestedCardNumber(taskID);
 
   google.script.run
     .withSuccessHandler(function (result) {
@@ -591,6 +579,10 @@ function selectTask(taskID) {
       currentRecord = r.success ? r.data : null;
       if (currentRecord) {
         fillFormFields(currentRecord.fields);
+        var cardNum = currentRecord.cardNumber || '';
+        if (cardNum) {
+          $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d6832;">' + cardNum + '</span>');
+        }
         var submitted = currentRecord.status === '已提交';
         var promoted = currentRecord.status === '已转正';
         $('#btnSaveDraft, #btnSubmit').prop('disabled', submitted || promoted);
@@ -795,34 +787,28 @@ function promoteToTBX() {
     Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先提交工艺参数记录','Please submit first') });
     return;
   }
+  var mt = currentTask.processType || (currentRecord.processType) || 'IM';
   Swal.fire({
-    title: swalTitle('选择机型','Select Machine Type'),
-    html: '<select id="promoteMachineType" class="form-select form-select-sm" style="width:200px;margin:0 auto;"><option value="IM">IM - 注塑 Injection Molding</option><option value="TF">TF - 植磨毛 TF</option><option value="PK">PK - 包装 Packing</option></select>',
-    showCancelButton: true, confirmButtonText: '确认转正 / Promote', cancelButtonText: '取消 / Cancel',
-    preConfirm: function () { return $('#promoteMachineType').val(); }
-  }).then(function (result) {
-    if (!result.isConfirmed) return;
-    var mt = currentTask.processType || result.value;
-    Swal.fire({
-      title: swalTitle('确认转正','Confirm'), html: swalHtml('创建 TBX-Parameter-' + mt + '-XXXX-00 并提交 PPMS 审核','Create formal card and submit to PPMS'), icon:'warning',
-      showCancelButton: true, confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel'
-    }).then(function (r2) {
-      if (!r2.isConfirmed) return;
-      Swal.fire(swalLoading('转正中...', { title: 'Promoting...', html: '正在创建正式工艺卡' }));
-      google.script.run
-        .withSuccessHandler(function (raw) {
-          Swal.close(); var r = parseResponse(raw);
-          if (r.success) {
-            currentRecord.status = '已转正';
-            $('#saveStatus').text('已转正 / Promoted - ' + r.processCardNumber);
-            $('#btnPromote').hide(); $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
-            Swal.fire({ icon:'success', title:swalTitle('转正成功','Promoted'), html:swalHtml('正式工艺卡：<br>' + r.processCardNumber, 'Formal card: ' + r.processCardNumber), timer: 5000, showConfirmButton: true });
-            loadHistory(currentTask.taskID);
-          } else { showError(r.message || '转正失败', 'Failed'); }
-        })
-        .withFailureHandler(function (err) { Swal.close(); showError(err.message || String(err), 'Failed'); })
-        .promoteNPItoTBX(currentRecord.recordID, mt, sessionStorage.getItem('ID') || '');
-    });
+    title: swalTitle('确认转正','Confirm Promote'),
+    html: swalHtml('将测试工艺卡 <b>' + (currentRecord.cardNumber || '?') + '</b> 转为正式工艺卡<br>并提交 PPMS 审核流程。', 'Promote test card to formal and submit to PPMS audit.'),
+    icon: 'warning', showCancelButton: true, confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel'
+  }).then(function (r2) {
+    if (!r2.isConfirmed) return;
+    Swal.fire(swalLoading('转正中...', { title: 'Promoting...', html: '正在创建正式工艺卡' }));
+    google.script.run
+      .withSuccessHandler(function (raw) {
+        Swal.close(); var r = parseResponse(raw);
+        if (r.success) {
+          currentRecord.status = '已转正';
+          $('#saveStatus').text('已转正 / Promoted - ' + r.processCardNumber);
+          $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d47a1;">' + r.processCardNumber + '</span>');
+          $('#btnPromote').hide(); $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
+          Swal.fire({ icon:'success', title:swalTitle('转正成功','Promoted'), html:swalHtml('正式工艺卡：<br>' + r.processCardNumber, 'Formal card: ' + r.processCardNumber), timer: 5000, showConfirmButton: true });
+          loadHistory(currentTask.taskID);
+        } else { showError(r.message || '转正失败', 'Failed'); }
+      })
+      .withFailureHandler(function (err) { Swal.close(); showError(err.message || String(err), 'Failed'); })
+      .promoteNPItoTBX(currentRecord.recordID, mt, sessionStorage.getItem('ID') || '');
   });
 }
 
