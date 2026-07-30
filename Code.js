@@ -161,6 +161,7 @@ function doGet(e) {
   Route.path("CycleMonitor", loadCycleMonitor);
   Route.path("NPI_ProcessRecord", loadNPIProcessRecord);
   Route.path("promoteNPItoTBX", promoteNPItoTBX);
+  Route.path("getSuggestedCardNumber", getSuggestedCardNumber);
 
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
@@ -14394,6 +14395,47 @@ function loadNPIProcessRecordData(testTaskID) {
     return JSON.stringify({ success: true, data: null });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+function getSuggestedCardNumber(testTaskID) {
+  try {
+    if (!testTaskID) return JSON.stringify({ success: false, message: 'Missing testTaskID' });
+    // Default to IN (injection molding); can be enhanced to look up from workcenter
+    var machineType = 'IN';
+    // Count existing TEST cards for this type
+    var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
+    var injNew = ppmsSs.getSheetByName('INJ_New');
+    var injData = injNew.getDataRange().getValues();
+    var prefix = 'TEST-Parameter-' + machineType + '-';
+    var maxSeq = 0;
+    var version = '00';
+    for (var i = 1; i < injData.length; i++) {
+      var cardNo = String(injData[i][5] || '').trim();
+      if (cardNo.indexOf(prefix) === 0) {
+        var parts = cardNo.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+    // Also check NPI records for existing test card numbers
+    var npiWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_ProcessRecords');
+    var npiData = npiWs.getDataRange().getValues();
+    for (var j = 1; j < npiData.length; j++) {
+      var existingCard = String(npiData[j][5] || '').trim(); // col F = card number
+      if (existingCard.indexOf(prefix) === 0) {
+        var ep = existingCard.split('-'), eseq = parseInt(ep[ep.length-2] || '0', 10);
+        if (eseq > maxSeq) maxSeq = eseq;
+      }
+      // Check if this task already has a card number
+      if (String(npiData[j][1] || '').trim() === testTaskID && existingCard) {
+        return JSON.stringify({ success: true, cardNumber: existingCard, isExisting: true });
+      }
+    }
+    var newSeq = maxSeq + 1, seqStr = String(newSeq);
+    while (seqStr.length < 4) seqStr = '0' + seqStr;
+    return JSON.stringify({ success: true, cardNumber: prefix + seqStr + '-' + version, isExisting: false });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
   }
 }
 
