@@ -30,7 +30,7 @@ const swalLoading = (cn, en) => {
 const TEMPLATE_SECTIONS = [
   { id: 'productInfo', title: '产品信息<br><small>Product Info</small>', rows: [
     {row:9, label:'产品名称<br><small>Product Name</small>'},
-    {row:10, label:'工艺卡编号<br><small>Process Card No.</small>'},
+    {row:10, label:'工艺卡编号<br><small>Process Card No.</small>', readonly:true},
     {row:11, label:'适用SKU<br><small>Applicable SKU</small>'},
     {row:12, label:'机型<br><small>Machine Model</small>'},
     {row:13, label:'成型周期标准<br><small>Cycle Time Std</small>', type:'number'},
@@ -516,7 +516,7 @@ function renderFieldRow(prefix, r) {
     var inputType = r.type || 'text';
     html += '<div class="col-6 col-md-4 col-lg-3">';
     html += '<label class="form-label-sm">' + r.label + '</label>';
-    html += '<input type="' + inputType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '"' + (inputType === 'number' ? ' step="any" min="0"' : '') + '>';
+    html += '<input type="' + inputType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '"' + (inputType === 'number' ? ' step="any" min="0"' : '') + (r.readonly ? ' readonly' : '') + '>';
     html += '</div>';
   }
   return html;
@@ -582,6 +582,7 @@ function selectTask(taskID) {
         var cardNum = currentRecord.cardNumber || '';
         if (cardNum) {
           $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d6832;">' + cardNum + '</span>');
+          $('[data-key="productInfo_10"]').val(cardNum);
         }
         var submitted = currentRecord.status === '已提交';
         var promoted = currentRecord.status === '已转正';
