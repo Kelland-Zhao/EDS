@@ -587,6 +587,7 @@ function selectTask(taskID) {
       currentRecord = r.success ? r.data : null;
       if (currentRecord) {
         fillFormFields(currentRecord.fields);
+        console.log('Loaded record:', currentRecord.recordID, 'fields count:', currentRecord.fields.length, 'first 3:', currentRecord.fields.slice(0,3));
         var cardNum = currentRecord.cardNumber || '';
         if (cardNum) {
           $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d6832;">' + cardNum + '</span>');
@@ -599,6 +600,7 @@ function selectTask(taskID) {
         $('#saveStatus').text(promoted ? '已转正 / Promoted' : (submitted ? '已提交 / Submitted' : '草稿 / Draft'));
       } else {
         clearFormFields();
+        console.log('No record found for task');
         $('#btnSaveDraft, #btnSubmit').prop('disabled', false);
         $('#btnPromote').hide();
         $('#saveStatus').text('新记录 / New Record');
