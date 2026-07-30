@@ -544,19 +544,20 @@ function loadWorkcenterList(processType) {
     .withSuccessHandler(function (result) {
       var r = JSON.parse(result || '{}');
       var data = r.success ? r.data : [];
-      $('#newMachineNo').empty();
-      $('#newMachineNo').append('<option value="">-- 选择机台 / Select Machine --</option>');
+      var sel = $('#newMachineNo');
+      sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
       data.forEach(function (wc) {
-        $('#newMachineNo').append('<option value="' + wc.id + '">' + wc.text + '</option>');
+        sel.append('<option value="' + wc.id + '">' + wc.text + '</option>');
       });
-      $('#newMachineNo').trigger('change');
+      sel.val(null).trigger('change');
     })
     .loadNPIWorkcenterList(pt);
 }
 
 // Reload workcenters when process type changes
 $(document).on('change', '#newProcessType', function () {
-  $('#newMachineNo').val('').trigger('change');
+  var sel = $('#newMachineNo');
+  sel.val(null).empty().append('<option value="">-- 选择机台 / Select Machine --</option>').trigger('change');
   loadWorkcenterList($(this).val());
 });
 

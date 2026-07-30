@@ -14269,8 +14269,14 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
 function loadNPIWorkcenterList(processType) {
   try {
     var pt = (processType || 'IM').toString().trim();
-    var ssId = NPI_WORKCENTER_SS_IDS[pt] || NPI_WORKCENTER_SS_IDS['IM'] || NPI_WORKCENTER_SS_ID;
-    if (!ssId) return JSON.stringify({ success: true, data: [] }); // no workcenter configured for this process type
+    // Check exact key first, then try INJ→IM fallback
+    var ssId = null;
+    if (NPI_WORKCENTER_SS_IDS.hasOwnProperty(pt)) {
+      ssId = NPI_WORKCENTER_SS_IDS[pt];
+    } else if (pt === 'INJ') {
+      ssId = NPI_WORKCENTER_SS_IDS['IM'];
+    }
+    if (!ssId) return JSON.stringify({ success: true, data: [] }); // not configured yet
     var ws = SpreadsheetApp.openById(ssId).getSheetByName("Workcenter");
     if (!ws) return JSON.stringify({ success: true, data: [] });
     var data = ws.getDataRange().getValues();
