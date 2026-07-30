@@ -14451,23 +14451,27 @@ function getSuggestedCardNumber(testTaskID) {
     var machineType = 'IM';
     for (var t = 1; t < taskData.length; t++) {
       if (String(taskData[t][0] || '').trim() === testTaskID) {
-        machineType = String(taskData[t][18] || '').trim() || 'IN';
+        machineType = String(taskData[t][18] || '').trim() || 'IM';
         break;
       }
     }
-    // Count existing TEST cards for this type
-    var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
-    var injNew = ppmsSs.getSheetByName('INJ_New');
-    var injData = injNew.getDataRange().getValues();
+    // Count existing TEST cards for this type (PPMS + NPI local)
     var prefix = 'TEST-Parameter-' + machineType + '-';
     var maxSeq = 0;
     var version = '00';
-    for (var i = 1; i < injData.length; i++) {
-      var cardNo = String(injData[i][5] || '').trim();
-      if (cardNo.indexOf(prefix) === 0) {
-        var parts = cardNo.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
-        if (seq > maxSeq) maxSeq = seq;
+    try {
+      var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
+      var injNew = ppmsSs.getSheetByName('INJ_New');
+      var injData = injNew.getDataRange().getValues();
+      for (var i = 1; i < injData.length; i++) {
+        var cardNo = String(injData[i][5] || '').trim();
+        if (cardNo.indexOf(prefix) === 0) {
+          var parts = cardNo.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
+          if (seq > maxSeq) maxSeq = seq;
+        }
       }
+    } catch (e) {
+      // PPMS not accessible, just use NPI local data
     }
     // Also check NPI records for existing test card numbers
     var npiWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_ProcessRecords');

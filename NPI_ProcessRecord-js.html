@@ -600,7 +600,12 @@ function selectTask(taskID) {
             var r2 = parseResponse(raw2);
             if (r2.success && r2.cardNumber && !r2.isExisting) {
               $('[data-key="productInfo_10"]').val(r2.cardNumber);
+            } else if (!r2.success) {
+              console.log('getSuggestedCardNumber failed: ' + (r2.message || ''));
             }
+          })
+          .withFailureHandler(function (err) {
+            console.log('getSuggestedCardNumber error: ' + (err.message || String(err)));
           })
           .getSuggestedCardNumber(taskID);
       }
