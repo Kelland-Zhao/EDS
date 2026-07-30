@@ -572,6 +572,15 @@ function selectTask(taskID) {
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
   $('#paramFormCard, #historyCard').show();
+  // Pre-fill suggested card number
+  google.script.run
+    .withSuccessHandler(function (raw) {
+      var r = parseResponse(raw);
+      if (r.success && r.cardNumber && !r.isExisting) {
+        $('[data-key="productInfo_10"]').val(r.cardNumber);
+      }
+    })
+    .getSuggestedCardNumber(taskID);
 
   google.script.run
     .withSuccessHandler(function (result) {
