@@ -14412,7 +14412,7 @@ function loadNPIProcessRecordData(testTaskID) {
     if (!ws) return JSON.stringify({ success: false, data: null });
     var data = ws.getDataRange().getValues();
     for (var i = data.length - 1; i >= 1; i--) {
-      if (String(data[i][1] || '').trim() === testTaskID && String(data[i][3] || '').trim() === 'TRUE') {
+      if (String(data[i][1] || '').trim() === testTaskID && String(data[i][3] || '').trim().toUpperCase() === 'TRUE') {
         var row = data[i];
         var fields = [];
         try { fields = JSON.parse(String(row[4] || '[]')); } catch (e) {}
