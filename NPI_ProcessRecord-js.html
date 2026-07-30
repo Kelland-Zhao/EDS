@@ -574,10 +574,8 @@ function selectTask(taskID) {
   $('#taskInfo').html(info.join(' '));
   $('#paramFormCard, #historyCard').show();
 
-  var pendingLoads = 3;
-  function loadDone() {
-    if (--pendingLoads <= 0) Swal.close();
-  }
+  var pendingLoads = 2; // loadRecord + loadHistory (getSuggestedCardNumber adds 1 if needed)
+  function loadDone() { if (--pendingLoads <= 0) Swal.close(); }
   Swal.fire(swalLoading('加载工艺参数...', { title: 'Loading Parameters...', html: '正在获取工艺数据' }));
 
   google.script.run
@@ -587,7 +585,6 @@ function selectTask(taskID) {
       currentRecord = r.success ? r.data : null;
       if (currentRecord) {
         fillFormFields(currentRecord.fields);
-        console.log('Loaded record:', currentRecord.recordID, 'fields count:', currentRecord.fields.length, 'first 3:', currentRecord.fields.slice(0,3));
         var cardNum = currentRecord.cardNumber || '';
         if (cardNum) {
           $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d6832;">' + cardNum + '</span>');
@@ -605,6 +602,7 @@ function selectTask(taskID) {
         $('#btnPromote').hide();
         $('#saveStatus').text('新记录 / New Record');
         // Now fetch and fill card number
+        pendingLoads++;
         google.script.run
           .withSuccessHandler(function (raw2) {
             var r2 = parseResponse(raw2);
