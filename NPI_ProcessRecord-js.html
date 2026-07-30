@@ -574,8 +574,15 @@ function selectTask(taskID) {
   $('#taskInfo').html(info.join(' '));
   $('#paramFormCard, #historyCard').show();
 
+  var pendingLoads = 3;
+  function loadDone() {
+    if (--pendingLoads <= 0) Swal.close();
+  }
+  Swal.fire(swalLoading('加载工艺参数...', { title: 'Loading Parameters...', html: '正在获取工艺数据' }));
+
   google.script.run
     .withSuccessHandler(function (result) {
+      loadDone();
       var r = JSON.parse(result || '{}');
       currentRecord = r.success ? r.data : null;
       if (currentRecord) {
@@ -601,16 +608,13 @@ function selectTask(taskID) {
             var r2 = parseResponse(raw2);
             if (r2.success && r2.cardNumber && !r2.isExisting) {
               $('[data-key="productInfo_10"]').val(r2.cardNumber);
-            } else if (!r2.success) {
-              console.log('getSuggestedCardNumber failed: ' + (r2.message || ''));
             }
+            loadDone();
           })
-          .withFailureHandler(function (err) {
-            console.log('getSuggestedCardNumber error: ' + (err.message || String(err)));
-          })
+          .withFailureHandler(function () { loadDone(); })
           .getSuggestedCardNumber(taskID);
       }
-      loadHistory(taskID);
+      loadHistory(taskID, loadDone);
     })
     .loadNPIProcessRecordData(taskID);
 }
@@ -828,9 +832,10 @@ function promoteToTBX() {
   });
 }
 
-function loadHistory(testTaskID) {
+function loadHistory(testTaskID, doneCallback) {
   google.script.run
     .withSuccessHandler(function (result) {
+      if (doneCallback) doneCallback();
       var r = JSON.parse(result || '{}');
       var versions = r.success ? r.data : [];
       var html = '';
