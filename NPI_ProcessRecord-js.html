@@ -465,10 +465,9 @@ function renderSectionBody(sec) {
       html += '<div class="mb-3 ' + bc + (isBarrel ? ' barrel-disabled' : '') + '" id="section_' + sub.id + '">';
       if (isBarrel) {
         var subCollapseId = 'collapse_' + sec.id + '_' + sub.id;
-        var isFirstBarrel = sub.id === 'barrelA';
         html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + sub.id + '" onchange="toggleBarrel(\'' + sub.id + '\')"><span class="toggle-switch"></span></label>';
-        html += '<button class="accordion-button barrel-sub-header' + (isFirstBarrel ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + subCollapseId + '" aria-expanded="' + (isFirstBarrel ? 'true' : 'false') + '">' + sub.title + '</button>';
-        html += '<div id="' + subCollapseId + '" class="accordion-collapse collapse' + (isFirstBarrel ? ' show' : '') + '">';
+        html += '<button class="accordion-button barrel-sub-header" type="button" data-bs-toggle="collapse" data-bs-target="#' + subCollapseId + '" aria-expanded="true">' + sub.title + '</button>';
+        html += '<div id="' + subCollapseId + '" class="accordion-collapse collapse show">';
         html += '<div class="row g-2 mt-1">';
         (sub.rows || []).forEach(function (r) {
           html += renderFieldRow(sec.id + '_' + sub.id, r);
