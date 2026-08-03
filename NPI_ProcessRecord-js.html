@@ -466,8 +466,8 @@ function renderSectionBody(sec) {
       if (isBarrel) {
         var subCollapseId = 'collapse_' + sec.id + '_' + sub.id;
         html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + sub.id + '" onchange="toggleBarrel(\'' + sub.id + '\')"><span class="toggle-switch"></span></label>';
-        html += '<button class="accordion-button barrel-sub-header" type="button" data-bs-toggle="collapse" data-bs-target="#' + subCollapseId + '" aria-expanded="true">' + sub.title + '</button>';
-        html += '<div id="' + subCollapseId + '" class="accordion-collapse collapse show">';
+        html += '<button class="accordion-button barrel-sub-header collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#' + subCollapseId + '" aria-expanded="false">' + sub.title + '</button>';
+        html += '<div id="' + subCollapseId + '" class="accordion-collapse collapse">';
         html += '<div class="row g-2 mt-1">';
         (sub.rows || []).forEach(function (r) {
           html += renderFieldRow(sec.id + '_' + sub.id, r);
@@ -634,6 +634,32 @@ function fillFormFields(fields) {
     var pos = fieldKeyMap[key];
     $(this).val(pos !== undefined && fields && fields[pos] ? fields[pos] : '');
   });
+  // Auto-enable and auto-expand barrels with saved data
+  ['barrelA','barrelB','barrelC','barrelD'].forEach(function (barrelId) {
+    var hasData = false;
+    $('#section_' + barrelId + ' .npi-field').each(function () {
+      if ($(this).val().trim()) hasData = true;
+    });
+    if (hasData) {
+      barrelEnabled[barrelId] = true;
+      $('#section_' + barrelId).removeClass('barrel-disabled');
+      $('#toggle_' + barrelId).prop('checked', true);
+      // Expand the collapse section
+      $('#collapse_barrel_' + barrelId).collapse('show');
+    }
+  });
+  // Auto-enable hot runner if has data
+  if (fields) {
+    var hrHasData = false;
+    $('#section_hotRunner .npi-field').each(function () {
+      if ($(this).val().trim()) hrHasData = true;
+    });
+    if (hrHasData) {
+      hotRunnerEnabled = true;
+      $('#section_hotRunner .hot-runner-content').removeClass('barrel-disabled');
+      $('#toggle_hotRunner').prop('checked', true);
+    }
+  }
 }
 
 function addSegment(prefix, row, minSeg, maxSeg, colType, segPrefix) {
@@ -662,9 +688,11 @@ function toggleBarrel(barrelId) {
   var section = $('#section_' + barrelId);
   if (barrelEnabled[barrelId]) {
     section.removeClass('barrel-disabled');
+    $('#collapse_barrel_' + barrelId).collapse('show');
   } else {
     section.addClass('barrel-disabled');
     section.find('.npi-field').val('');
+    $('#collapse_barrel_' + barrelId).collapse('hide');
   }
 }
 
