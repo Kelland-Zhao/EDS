@@ -14371,6 +14371,12 @@ function saveNPIProcessRecord(recordJSON) {
       }
     }
 
+    // 操作人姓名|工号
+    var sapToNamePR = getSapToNameMap_();
+    var opSAPID = record.operatorSAPID || '';
+    var opNamePR = sapToNamePR[opSAPID] || '';
+    var operatorIdPR = opNamePR ? opNamePR + '|' + opSAPID : opSAPID;
+
     if (rowIndex > 0) {
       ws.getRange(rowIndex, 5).setValue(fieldsJSON);
       ws.getRange(rowIndex, 6).setValue(now);
@@ -14378,7 +14384,7 @@ function saveNPIProcessRecord(recordJSON) {
     } else {
       var seq = ('000' + (Date.now() % 10000)).slice(-4);
       var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
-      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, record.operatorSAPID || '', cardNumber]);
+      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, operatorIdPR, cardNumber]);
       record.recordID = recordID;
       record.cardNumber = cardNumber;
     }
