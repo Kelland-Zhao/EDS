@@ -14378,9 +14378,12 @@ function saveNPIProcessRecord(recordJSON) {
     var operatorIdPR = opNamePR ? opNamePR + '|' + opSAPID : opSAPID;
 
     if (rowIndex > 0) {
+      // Keep existing card number if not explicitly provided
+      var existingCardNumber = String(data[rowIndex - 1][8] || '').trim();
+      var finalCardNumber = record.cardNumber || existingCardNumber || '';
       ws.getRange(rowIndex, 5).setValue(fieldsJSON);
       ws.getRange(rowIndex, 6).setValue(now);
-      ws.getRange(rowIndex, 9).setValue(cardNumber);
+      if (finalCardNumber) ws.getRange(rowIndex, 9).setValue(finalCardNumber);
     } else {
       var seq = ('000' + (Date.now() % 10000)).slice(-4);
       var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
