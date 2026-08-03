@@ -173,6 +173,7 @@ $(document).ready(function () {
   $('#btnSaveDraft').on('click', saveRecord);
   $('#btnSubmit').on('click', submitRecord);
   $('#btnPromote').on('click', promoteToTBX);
+  $('#btnFillTest').on('click', fillTestData);
 });
 
 // Build a flat index: key = "section_row_subcol" → position in 196-element array
@@ -572,7 +573,7 @@ function selectTask(taskID) {
   if (currentTask.status) info.push('<span class="task-info-item">状态<br><small>Status</small>: ' + currentTask.status + '</span>');
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
-  $('#paramFormCard, #historyCard').show();
+  $('#paramFormCard, #historyCard, #btnFillTest').show();
 
   var pendingLoads = 2; // loadRecord + loadHistory (getSuggestedCardNumber adds 1 if needed)
   function loadDone() { if (--pendingLoads <= 0) Swal.close(); }
@@ -699,7 +700,7 @@ function collectFormFields() {
 
 function clearForm() {
   currentTask = null; currentRecord = null;
-  $('#taskInfo').html(''); $('#paramFormCard, #historyCard').hide(); clearFormFields();
+  $('#taskInfo').html(''); $('#paramFormCard, #historyCard, #btnFillTest').hide(); clearFormFields();
   // Reset barrel toggles
   ['barrelA','barrelB','barrelC','barrelD'].forEach(function (id) {
     barrelEnabled[id] = false;
@@ -755,6 +756,40 @@ function createTask() {
       })
       .createNPITestTask(JSON.stringify(taskData), sessionStorage.getItem('ID') || '');
   });
+}
+
+function fillTestData() {
+  if (!currentTask) { Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先选择测试任务','Please select a test task first') }); return; }
+  $('.npi-field').each(function () {
+    var $el = $(this);
+    if ($el.is('textarea')) return;
+    // Skip disabled barrel sections
+    var barrelId = $el.closest('[id]').attr('id') || '';
+    if (barrelId && barrelId.indexOf('barrel') === 0 && barrelId !== 'barrelA' && !barrelEnabled[barrelId]) return;
+    // Skip hot runner if disabled
+    var key = $el.data('key') || '';
+    if (key.indexOf('hotRunner_') === 0 && !hotRunnerEnabled) return;
+    // Skip readonly fields
+    if ($el.prop('readonly')) return;
+    // Infer value from label text
+    var label = ($el.closest('.row, .col-12, .col-6').find('.form-label-sm').text() || '').trim();
+    var val = '';
+    if (label.indexOf('温度') >= 0 || label.indexOf('Temp') >= 0) val = '200';
+    else if (label.indexOf('P') >= 0 && label.indexOf('压力') < 0) val = '80';
+    else if (label.indexOf('V') >= 0 || label.indexOf('%') >= 0) val = '50';
+    else if (label.indexOf('S') >= 0 && label.indexOf('mm') >= 0) val = '30';
+    else if (label.indexOf('T') >= 0 && label.indexOf('s') >= 0) val = '5';
+    else if (label.indexOf('时间') >= 0 || label.indexOf('Time') >= 0) val = '5';
+    else if (label.indexOf('位置') >= 0 || label.indexOf('Pos') >= 0) val = '15';
+    else if (label.indexOf('行程') >= 0 || label.indexOf('Stroke') >= 0) val = '20';
+    else if (label.indexOf('压力') >= 0 || label.indexOf('Pressure') >= 0) val = '80';
+    else if (label.indexOf('周期') >= 0 || label.indexOf('Cycle') >= 0) val = '30';
+    else if (label.indexOf('量') >= 0 || label.indexOf('Charge') >= 0) val = '60';
+    else if (label.indexOf('背压') >= 0 || label.indexOf('Back') >= 0) val = '5';
+    else val = '100';
+    $el.val(val);
+  });
+  Swal.fire({ icon:'success', title:swalTitle('已填充','Filled'), html:swalHtml('测试数据已填入','Test data filled'), timer:1200, showConfirmButton:false });
 }
 
 function saveRecord() {
