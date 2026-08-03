@@ -14341,7 +14341,7 @@ function saveNPIProcessRecord(recordJSON) {
       var npiR = ws.getDataRange().getValues();
       var maxSeq = 0, testPrefix = 'TEST-Parameter-' + pt + '-';
       for (var n = 1; n < npiR.length; n++) {
-        var ex = String(npiR[n] ? (npiR[n][9] || '') : '').trim();
+        var ex = String(npiR[n] ? (npiR[n][8] || '') : '').trim();
         if (ex.indexOf(testPrefix) === 0) {
           var parts = ex.split('-'), seq = parseInt(parts[parts.length-2] || '0', 10);
           if (seq > maxSeq) maxSeq = seq;
