@@ -573,9 +573,9 @@ function selectTask(taskID) {
   if (currentTask.status) info.push('<span class="task-info-item">状态<br><small>Status</small>: ' + currentTask.status + '</span>');
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
-  $('#paramFormCard, #historyCard, #btnFillTest').show();
+  $('#paramFormCard, #btnFillTest').show();
 
-  var pendingLoads = 2; // loadRecord + loadHistory (getSuggestedCardNumber adds 1 if needed)
+  var pendingLoads = 1; // loadRecord (+1 if getSuggestedCardNumber needed)
   function loadDone() { if (--pendingLoads <= 0) Swal.close(); }
   Swal.fire(swalLoading('加载工艺参数...', { title: 'Loading Parameters...', html: '正在获取工艺数据' }));
 
@@ -615,7 +615,6 @@ function selectTask(taskID) {
           .withFailureHandler(function () { loadDone(); })
           .getSuggestedCardNumber(taskID);
       }
-      loadHistory(taskID, loadDone);
     })
     .loadNPIProcessRecordData(taskID);
 }
@@ -700,7 +699,7 @@ function collectFormFields() {
 
 function clearForm() {
   currentTask = null; currentRecord = null;
-  $('#taskInfo').html(''); $('#paramFormCard, #historyCard, #btnFillTest').hide(); clearFormFields();
+  $('#taskInfo').html(''); $('#paramFormCard, #btnFillTest').hide(); clearFormFields();
   // Reset barrel toggles
   ['barrelA','barrelB','barrelC','barrelD'].forEach(function (id) {
     barrelEnabled[id] = false;
@@ -808,7 +807,6 @@ function saveRecord() {
       if (r.success) {
         if (r.recordID) currentRecord = { recordID: r.recordID, status: '草稿', fields: recordData.fields };
         $('#saveStatus').text('已保存 / Saved @ ' + new Date().toLocaleTimeString());
-        loadHistory(currentTask.taskID);
       } else { Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(r.message,'') }); }
     })
     .saveNPIProcessRecord(JSON.stringify(recordData));
@@ -844,7 +842,7 @@ function submitRecord() {
       currentRecord = { recordID: rid, status: '草稿', fields: recordData.fields, cardNumber: sr.cardNumber };
       google.script.run.withSuccessHandler(function (subResult) {
         Swal.close(); var sub = JSON.parse(subResult || '{}');
-        if (sub.success) { currentRecord.status = '已提交'; $('#saveStatus').text('已提交 / Submitted'); $('#btnSaveDraft, #btnSubmit').prop('disabled', true); loadHistory(currentTask.taskID); }
+        if (sub.success) { currentRecord.status = '已提交'; $('#saveStatus').text('已提交 / Submitted'); $('#btnSaveDraft, #btnSubmit').prop('disabled', true); }
         else Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(sub.message,'') });
       }).submitNPIProcessRecord(rid);
     }).saveNPIProcessRecord(JSON.stringify(recordData));
@@ -872,7 +870,6 @@ function promoteToTBX() {
           $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d47a1;">' + r.processCardNumber + '</span>');
           $('#btnPromote').hide(); $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
           Swal.fire({ icon:'success', title:swalTitle('转正成功','Promoted'), html:swalHtml('正式工艺卡：<br>' + r.processCardNumber, 'Formal card: ' + r.processCardNumber), timer: 5000, showConfirmButton: true });
-          loadHistory(currentTask.taskID);
         } else { showError(r.message || '转正失败', 'Failed'); }
       })
       .withFailureHandler(function (err) { Swal.close(); showError(err.message || String(err), 'Failed'); })
@@ -880,27 +877,4 @@ function promoteToTBX() {
   });
 }
 
-function loadHistory(testTaskID, doneCallback) {
-  google.script.run
-    .withSuccessHandler(function (result) {
-      if (doneCallback) doneCallback();
-      var r = JSON.parse(result || '{}');
-      var versions = r.success ? r.data : [];
-      var html = '';
-      versions.forEach(function (v) {
-        var isActive = currentRecord && currentRecord.recordID === v.recordID;
-        var statusBadge = v.status === '已提交'
-          ? '<span style="color:#198754;font-weight:700;">已提交 / Submitted</span>'
-          : '<span style="color:#fd7e14;">草稿 / Draft</span>';
-        var latestBadge = v.isLatest ? ' <span class="badge bg-primary" style="font-size:9px;">最新 Latest</span>' : '';
-        html += '<div class="version-list-item' + (isActive ? ' active' : '') + '">';
-        html += '<span>' + v.recordID + latestBadge + '</span>';
-        html += '<span>' + statusBadge + '</span>';
-        html += '<span style="color:#adb5bd;font-size:11px;">' + (v.updatedAt || '') + '</span>';
-        html += '</div>';
-      });
-      $('#historyList').html(html || '<div style="color:#adb5bd;font-size:12px;padding:12px;">暂无记录 / No records</div>');
-    })
-    .loadNPIProcessRecordHistory(testTaskID);
-}
 </script>
