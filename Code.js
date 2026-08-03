@@ -14404,9 +14404,21 @@ function submitNPIProcessRecord(recordID) {
     var data = ws.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0] || '').trim() === recordID) {
+        // Increment version number on card
+        var currentCard = String(data[i][8] || '').trim();
+        if (currentCard) {
+          var cardParts = currentCard.split('-');
+          var oldVer = parseInt(cardParts[cardParts.length-1] || '0', 10);
+          var newVer = oldVer + 1;
+          var verStr = String(newVer);
+          while (verStr.length < 2) verStr = '0' + verStr;
+          cardParts[cardParts.length-1] = verStr;
+          var newCard = cardParts.join('-');
+          ws.getRange(i + 1, 9).setValue(newCard);
+        }
         ws.getRange(i + 1, 3).setValue('已提交');
         ws.getRange(i + 1, 6).setValue(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"));
-        return JSON.stringify({ success: true, message: "已提交 / Submitted" });
+        return JSON.stringify({ success: true, message: "已提交 / Submitted", cardNumber: newCard || currentCard });
       }
     }
     return JSON.stringify({ success: false, message: "记录未找到 / Record not found" });

@@ -879,7 +879,15 @@ function submitRecord() {
       currentRecord = { recordID: rid, status: '草稿', fields: recordData.fields, cardNumber: sr.cardNumber };
       google.script.run.withSuccessHandler(function (subResult) {
         Swal.close(); var sub = JSON.parse(subResult || '{}');
-        if (sub.success) { currentRecord.status = '已提交'; $('#saveStatus').text('已提交 / Submitted'); $('#btnSaveDraft, #btnSubmit').prop('disabled', true); }
+        if (sub.success) {
+          currentRecord.status = '已提交';
+          $('#saveStatus').text('已提交 / Submitted');
+          $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
+          if (sub.cardNumber) {
+            currentRecord.cardNumber = sub.cardNumber;
+            $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d47a1;">' + sub.cardNumber + '</span>');
+          }
+        }
         else Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(sub.message,'') });
       }).submitNPIProcessRecord(rid);
     }).saveNPIProcessRecord(JSON.stringify(recordData));
