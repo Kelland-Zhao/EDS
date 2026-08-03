@@ -886,6 +886,7 @@ function submitRecord() {
           if (sub.cardNumber) {
             currentRecord.cardNumber = sub.cardNumber;
             $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d47a1;">' + sub.cardNumber + '</span>');
+            $('[data-key="productInfo_10"]').val(sub.cardNumber);
           }
         }
         else Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(sub.message,'') });
