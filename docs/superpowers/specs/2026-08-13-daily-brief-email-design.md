@@ -72,7 +72,7 @@
    - ∪ B 类任务涉及的 owner/collaborator 的 SAPID 对应邮箱
    - 去重、去空
 5. 渲染 HTML（buildBriefEmailHtml_）→ MailApp.sendEmail({to, subject, htmlBody})
-6. writeTaskLog_ 记录发送结果：Action='dailyBrief'，含 A/B 清单人数、收件人数、成功/失败
+6. writeTaskLog_ 记录发送结果：Action='dailyBrief'，TargetType='DailyBrief'，TargetID=today（日期），含 A/B 清单人数、收件人数、成功/失败
 ```
 
 ### 4.3 邮件内容
