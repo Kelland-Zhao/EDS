@@ -11707,6 +11707,140 @@ function getBriefRecipients_(involvedSapIDs) {
   return emails;
 }
 
+/** HTML 转义（邮件内容防注入） */
+function escHtml_(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * 早会闭环日报 HTML（遵循 UI规范.md：品牌红、双语中上英下、斑马纹、内联样式、无外部资源）
+ */
+function buildBriefEmailHtml_(today, staffData, overdueData, supMaps) {
+  const staff = (staffData && staffData.staff) || [];
+  const tasks = (overdueData && overdueData.tasks) || [];
+  const src = (staffData && staffData.source) || '';
+  const fallbackKeys = ['未配置直线上级', '考勤表不存在或读取失败'];
+
+  const staffGroups = {};
+  staff.forEach(function (s) {
+    const sap = String(s.sapID || '').trim();
+    const name = String(s.name || '').trim();
+    let gk;
+    if (!supMaps.sheetFound) gk = '考勤表不存在或读取失败';
+    else {
+      const sup = (sap && supMaps.sapToSupervisor[sap]) || (name && supMaps.nameToSupervisor[name]) || '';
+      gk = sup || '未配置直线上级';
+    }
+    if (!staffGroups[gk]) staffGroups[gk] = [];
+    staffGroups[gk].push(s);
+  });
+
+  const taskGroups = {};
+  tasks.forEach(function (t) {
+    const mainSap = (t.ownerSapIDs && t.ownerSapIDs[0]) || '';
+    const mainName = (t.ownerNames && t.ownerNames[0]) || (t.collaboratorNames && t.collaboratorNames[0]) || '';
+    let gk;
+    if (!supMaps.sheetFound) gk = '考勤表不存在或读取失败';
+    else {
+      const sup = (mainSap && supMaps.sapToSupervisor[mainSap]) || (mainName && supMaps.nameToSupervisor[mainName]) || '';
+      gk = sup || '未配置直线上级';
+    }
+    if (!taskGroups[gk]) taskGroups[gk] = [];
+    taskGroups[gk].push(t);
+  });
+
+  function sortedKeys(groups) {
+    return Object.keys(groups).sort(function (a, b) {
+      const fa = fallbackKeys.indexOf(a) !== -1;
+      const fb = fallbackKeys.indexOf(b) !== -1;
+      if (fa !== fb) return fa ? 1 : -1;
+      return a.localeCompare(b);
+    });
+  }
+  const zebra = function (idx) { return idx % 2 === 0 ? '#ffffff' : '#f5f5f5'; };
+  const secTitle = function (cn, en) {
+    return '<div style="font-size:13px;font-weight:700;color:#6c757d;letter-spacing:1px;margin:18px 0 10px;border-left:3px solid #E60012;padding-left:10px;">'
+      + escHtml_(cn) + ' <span style="font-weight:400;">/ ' + escHtml_(en) + '</span></div>';
+  };
+  const groupTitle = function (name) {
+    const suffix = fallbackKeys.indexOf(name) !== -1 ? '' : '（主管）';
+    return '<div style="font-size:13px;font-weight:700;color:#333;margin:12px 0 6px;border-left:3px solid #E60012;padding-left:10px;">'
+      + escHtml_(name) + suffix + '</div>';
+  };
+  const th = function (cn, en) {
+    return '<th style="background:#E60012;color:#fff;text-align:center;font-size:12px;padding:5px 6px;">'
+      + escHtml_(cn) + '<br><span style="font-weight:400;font-size:11px;">' + escHtml_(en) + '</span></th>';
+  };
+  const td = function (text, align, idx, extra) {
+    return '<td style="text-align:' + (align || 'center') + ';padding:5px 6px;background:' + zebra(idx) + ';' + (extra || '') + '">' + text + '</td>';
+  };
+
+  let html = '';
+  html += '<table style="width:100%;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#333;" cellpadding="0" cellspacing="0"><tr><td style="padding:16px;">';
+  // banner
+  html += '<table style="width:100%;border-collapse:collapse;" cellpadding="0" cellspacing="0">';
+  html += '<tr><td style="background:#E60012;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;">'
+    + '<div style="font-size:18px;font-weight:700;">人员工作安排 &amp; 任务完成情况</div>'
+    + '<div style="font-size:12px;opacity:0.85;margin-top:4px;">Daily Work Arrangement &amp; Task Completion</div>'
+    + '<div style="font-size:12px;opacity:0.85;margin-top:4px;">' + escHtml_(today) + '</div></td></tr>';
+  // 内容卡片
+  html += '<tr><td style="background:#ffffff;border:1px solid #e9ecef;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px;">';
+
+  // 段一
+  html += secTitle('今日在岗未安排人员', 'UNASSIGNED STAFF TODAY');
+  if (src === 'none') {
+    html += '<div style="font-size:13px;color:#6c757d;">今日无出勤数据 / No attendance data today</div>';
+  } else if (staff.length === 0) {
+    html += '<div style="font-size:13px;color:#198754;">&#10003; 今日全员已安排 / All staff assigned</div>';
+  } else {
+    sortedKeys(staffGroups).forEach(function (gk) {
+      html += groupTitle(gk);
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px;" cellpadding="0" cellspacing="0">';
+      html += '<tr>' + th('姓名', 'Name') + th('工号', 'ID') + th('车间', 'Workshop') + th('工序', 'Process') + th('班次', 'Shift') + '</tr>';
+      staffGroups[gk].sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }).forEach(function (s, idx) {
+        html += '<tr>'
+          + td(escHtml_(s.name || ''), 'center', idx)
+          + td(escHtml_(s.sapID || ''), 'center', idx)
+          + td(escHtml_(s.workshop || ''), 'center', idx)
+          + td(escHtml_(s.process || ''), 'center', idx)
+          + td(escHtml_(s.shift || ''), 'center', idx) + '</tr>';
+      });
+      html += '</table>';
+    });
+  }
+
+  // 段二
+  html += secTitle('超期未关闭任务', 'OVERDUE TASKS');
+  if (tasks.length === 0) {
+    html += '<div style="font-size:13px;color:#198754;">&#10003; 无超期任务 / No overdue tasks</div>';
+  } else {
+    sortedKeys(taskGroups).forEach(function (gk) {
+      html += groupTitle(gk);
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px;" cellpadding="0" cellspacing="0">';
+      html += '<tr>' + th('任务编号', 'Task ID') + th('标题', 'Title') + th('负责人', 'Owner') + th('截止日期', 'Due Date') + th('超期天数', 'Overdue Days') + '</tr>';
+      taskGroups[gk].forEach(function (t, idx) {
+        html += '<tr>'
+          + td(escHtml_(t.taskID), 'center', idx)
+          + td(escHtml_(t.title), 'left', idx, 'max-width:220px;word-wrap:break-word;overflow-wrap:break-word;')
+          + td(escHtml_((t.ownerNames || []).join(', ')), 'center', idx)
+          + td(escHtml_(t.dueDate), 'center', idx)
+          + td('<strong style="color:#E60012;">' + t.overdueDays + '</strong>', 'center', idx) + '</tr>';
+      });
+      html += '</table>';
+    });
+  }
+
+  // CTA + 脚注
+  html += '<div style="text-align:center;margin:20px 0 8px;">'
+    + '<a href="' + getReleaseWebPage() + '" style="display:inline-block;background:#E60012;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-size:14px;">进入 EDS 系统 / Open EDS</a>'
+    + '</div>';
+  html += '<div style="text-align:center;font-size:11px;color:#adb5bd;margin-top:12px;">此邮件由 EDS 系统自动发送 / Auto-generated by EDS</div>';
+
+  html += '</td></tr></table>';
+  html += '</td></tr></table>';
+  return html;
+}
+
 // ============================================================
 //  任务安排模块 - 辅助函数 / Task Arrangement - Helpers
 // ============================================================
