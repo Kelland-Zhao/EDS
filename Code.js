@@ -11794,9 +11794,8 @@ function buildBriefEmailHtml_(today, staffData, overdueData, supMaps) {
       + escHtml_(cn) + ' <span style="font-weight:400;">/ ' + escHtml_(en) + '</span></div>';
   };
   const groupTitle = function (name) {
-    const suffix = fallbackKeys.indexOf(name) !== -1 ? '' : '（主管）';
     return '<div style="font-size:13px;font-weight:700;color:#333;margin:12px 0 6px;border-left:3px solid #E60012;padding-left:10px;">'
-      + escHtml_(name) + suffix + '</div>';
+      + escHtml_(name) + '</div>';
   };
   const th = function (cn, en) {
     return '<th style="background:#E60012;color:#fff;text-align:center;font-size:12px;padding:5px 6px;">'
