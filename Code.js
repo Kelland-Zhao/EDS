@@ -11841,6 +11841,40 @@ function buildBriefEmailHtml_(today, staffData, overdueData, supMaps) {
   return html;
 }
 
+/**
+ * 早会闭环日报：每天 07:45 由日触发器调用（GAS 编辑器可手动 Run 测试）
+ * 汇总 A 类（在岗未安排）+ B 类（超期未关闭），按 Supervisor 分组渲染邮件发送给主管/管理员+责任人
+ */
+function sendDailyBrief() {
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  try {
+    const staffData = collectUnassignedStaff_(today);
+    const overdueData = collectOverdueTasks_(today);
+    const supMaps = getSupervisorFromAttendance_();
+    const recipients = getBriefRecipients_(overdueData.involvedSapIDs);
+    if (recipients.length === 0) {
+      writeTaskLog_('dailyBrief', 'DailyBrief', today, '', '收件人为空，跳过发送', '', '');
+      return JSON.stringify({ success: true, skipped: true, message: '收件人为空，已跳过 / No recipients' });
+    }
+    const html = buildBriefEmailHtml_(today, staffData, overdueData, supMaps);
+    MailApp.sendEmail({
+      to: recipients.join(','),
+      subject: '【EDS人员工作安排 & 任务完成情况】' + today,
+      htmlBody: html
+    });
+    const brief = 'A=' + (staffData.staff ? staffData.staff.length : 0)
+      + ';B=' + (overdueData.tasks ? overdueData.tasks.length : 0)
+      + ';recipients=' + recipients.length
+      + ';source=' + (staffData.source || '');
+    writeTaskLog_('dailyBrief', 'DailyBrief', today, '', brief, '', '');
+    return JSON.stringify({ success: true, brief: brief });
+  } catch (e) {
+    console.error('sendDailyBrief error: ' + e);
+    try { writeTaskLog_('dailyBrief', 'DailyBrief', today, '', '发送失败: ' + e.message, '', ''); } catch (e2) { /* 忽略日志失败 */ }
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
 // ============================================================
 //  任务安排模块 - 辅助函数 / Task Arrangement - Helpers
 // ============================================================
