@@ -11621,6 +11621,26 @@ function collectUnassignedStaff_(today) {
       const st = String(s.attendanceStatus || '').trim();
       return !st || st === '在岗';
     });
+    // 试用范围：仅保留 INJ（注塑）工序人员；userID 表读取失败则整体报错
+    let processMap = {};
+    try {
+      const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+      if (!ws) {
+        return { success: false, staff: [], source: 'error', message: 'userID 表读取失败，无法进行工序筛选' };
+      }
+      const values = ws.getDataRange().getValues();
+      for (let i = 2; i < values.length; i++) {
+        const sapID = String(values[i][0] || '').trim();
+        const process = String(values[i][14] || '').trim().toUpperCase();
+        if (sapID) processMap[sapID] = process;
+      }
+    } catch (e) {
+      return { success: false, staff: [], source: 'error', message: 'userID 表读取失败，无法进行工序筛选' };
+    }
+    staff = staff.filter(function (s) {
+      const sap = String(s.sapID || '').trim();
+      return sap && processMap[sap] === 'INJ';
+    });
     const tasksResult = JSON.parse(loadAllTasksForList(true));
     const allTasks = tasksResult.success ? tasksResult.merged : [];
     const assigned = {};
@@ -11659,6 +11679,9 @@ function collectOverdueTasks_(today) {
     const involved = {};
     const tasks = [];
     allTasks.forEach(function (t) {
+      // 试用范围：仅保留 INJ（注塑）工序任务（IM 为遗留编码，等价处理）
+      const pc = String(t.process || '').trim().toUpperCase();
+      if (pc !== 'INJ' && pc !== 'IM') return;
       const status = String(t.status || '');
       if (status === '已完成' || status === '已取消') return;
       const due = String(t.dueDate || '');
