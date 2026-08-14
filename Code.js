@@ -11585,6 +11585,128 @@ function getSupervisorFromAttendance_() {
   return result;
 }
 
+/** yyyy-MM-dd 差值天数（from → to） */
+function daysBetween_(fromYMD, toYMD) {
+  const p1 = String(fromYMD).split('-');
+  const p2 = String(toYMD).split('-');
+  return Math.round((new Date(p2[0], p2[1] - 1, p2[2]) - new Date(p1[0], p1[1] - 1, p1[2])) / 86400000);
+}
+
+/**
+ * A 类汇总：今日在岗但未安排任何任务的人员
+ * 出勤数据源：AttendanceSync 优先，IM 排班降级，两者皆空则 source='none'
+ * 只保留 attendanceStatus 为空或在岗的人员
+ * 已安排口径（与工作台 todayTasks 一致）：手动+PM 合并任务中 status≠已取消、
+ * 日期区间与 today 重叠（planStartDate≤today≤dueDate）、该人是 owner 或 collaborator（sapID 与姓名都算命中）
+ */
+function collectUnassignedStaff_(today) {
+  try {
+    let staff = [];
+    let source = 'none';
+    let attResult = JSON.parse(loadAttendanceSync(today));
+    if (attResult.success && attResult.data.length > 0) {
+      staff = attResult.data;
+      source = 'AttendanceSync';
+    } else {
+      let imResult = JSON.parse(loadIMStaffByDate(today));
+      staff = imResult.success ? imResult.data : [];
+      if (staff.length > 0) source = 'IM';
+    }
+    staff = staff.filter(function (s) {
+      const st = String(s.attendanceStatus || '').trim();
+      return !st || st === '在岗';
+    });
+    const tasksResult = JSON.parse(loadAllTasksForList(true));
+    const allTasks = tasksResult.success ? tasksResult.merged : [];
+    const assigned = {};
+    allTasks.forEach(function (t) {
+      if (t.status === '已取消') return;
+      const start = String(t.planStartDate || '');
+      const due = String(t.dueDate || '');
+      if (!start || !due) return;
+      if (start > today || due < today) return;
+      (t.owners || []).forEach(function (sap) { if (sap) assigned[String(sap)] = true; });
+      (t.collaborators || []).forEach(function (sap) { if (sap) assigned[String(sap)] = true; });
+      (t.ownerNames || []).forEach(function (n) { if (n) assigned[String(n)] = true; });
+      (t.collaboratorNames || []).forEach(function (n) { if (n) assigned[String(n)] = true; });
+    });
+    const unassigned = staff.filter(function (s) {
+      const sap = String(s.sapID || '').trim();
+      const name = String(s.name || '').trim();
+      return !(sap && assigned[sap]) && !(name && assigned[name]);
+    });
+    return { success: true, staff: unassigned, source: source, message: '' };
+  } catch (e) {
+    return { success: false, staff: [], source: 'none', message: e.message };
+  }
+}
+
+/**
+ * B 类汇总：截止日期已过且未关闭（status ∉ {已完成, 已取消}）的任务，按超期天数降序
+ */
+function collectOverdueTasks_(today) {
+  try {
+    const tasksResult = JSON.parse(loadAllTasksForList(true));
+    const allTasks = tasksResult.success ? tasksResult.merged : [];
+    const involved = {};
+    const tasks = [];
+    allTasks.forEach(function (t) {
+      const status = String(t.status || '');
+      if (status === '已完成' || status === '已取消') return;
+      const due = String(t.dueDate || '');
+      if (!due || due >= today) return;
+      (t.owners || []).forEach(function (sap) { if (sap) involved[String(sap)] = true; });
+      (t.collaborators || []).forEach(function (sap) { if (sap) involved[String(sap)] = true; });
+      tasks.push({
+        taskID: String(t.taskID || ''),
+        title: String(t.title || ''),
+        ownerSapIDs: (t.owners || []).map(String),
+        ownerNames: (t.ownerNames || []).map(String),
+        collaboratorNames: (t.collaboratorNames || []).map(String),
+        dueDate: due,
+        overdueDays: daysBetween_(due, today),
+        status: status
+      });
+    });
+    tasks.sort(function (a, b) { return b.overdueDays - a.overdueDays; });
+    return { success: true, tasks: tasks, involvedSapIDs: Object.keys(involved), message: '' };
+  } catch (e) {
+    return { success: false, tasks: [], involvedSapIDs: [], message: e.message };
+  }
+}
+
+/**
+ * 收件人：userID 表 BK 列(62) 任务安排权限 ∈ {admin, supervisor} 的邮箱
+ * ∪ B 类任务涉及 owner/collaborator 的 SAPID 对应邮箱（A 列匹配 → J 列邮箱）
+ */
+function getBriefRecipients_(involvedSapIDs) {
+  const emails = [];
+  try {
+    const ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return emails;
+    const values = ws.getDataRange().getValues();
+    const sapToEmail = {};
+    for (let i = 2; i < values.length; i++) {
+      const sapID = String(values[i][0] || '').trim();
+      const email = String(values[i][9] || '').trim();
+      if (sapID && email) sapToEmail[sapID] = email;
+    }
+    for (let i = 2; i < values.length; i++) {
+      const perm = String(values[i][TASK_PERMISSION_COL] || '').trim().toLowerCase();
+      if (perm === 'admin' || perm === 'supervisor') {
+        const email = String(values[i][9] || '').trim();
+        if (email && emails.indexOf(email) === -1) emails.push(email);
+      }
+    }
+    (involvedSapIDs || []).forEach(function (sap) {
+      if (sapToEmail[sap] && emails.indexOf(sapToEmail[sap]) === -1) emails.push(sapToEmail[sap]);
+    });
+  } catch (e) {
+    console.error('getBriefRecipients_ error: ' + e);
+  }
+  return emails;
+}
+
 // ============================================================
 //  任务安排模块 - 辅助函数 / Task Arrangement - Helpers
 // ============================================================
