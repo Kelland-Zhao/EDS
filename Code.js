@@ -11549,6 +11549,42 @@ function getAttendanceMonthSheet_(year, month) {
   }
 }
 
+/**
+ * 从考勤表当月 sheet 构建直线上级映射（「考勤员」列 = 主管/组长姓名）
+ * 表头结构：前3行多层表头，第4行语义表头，数据自第5行起
+ * 关键列：工号(A,0) 5位、姓名(C,2)；考勤员列按表头名定位（列位置逐月可能漂移）
+ */
+function getSupervisorFromAttendance_() {
+  const result = { sheetFound: false, clerkFound: false, sapToSupervisor: {}, nameToSupervisor: {} };
+  try {
+    const now = new Date();
+    const y = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy');
+    const mm = parseInt(Utilities.formatDate(now, Session.getScriptTimeZone(), 'MM'), 10);
+    const ws = getAttendanceMonthSheet_(y, mm);
+    if (!ws) return result;
+    result.sheetFound = true;
+    const data = ws.getDataRange().getValues();
+    if (data.length < 5) return result;
+    const header = data[3]; // 第4行语义表头
+    let clerkIdx = -1;
+    for (let c = 0; c < header.length; c++) {
+      if (String(header[c] || '').trim() === '考勤员') { clerkIdx = c; break; }
+    }
+    if (clerkIdx === -1) return result;
+    result.clerkFound = true;
+    for (let i = 4; i < data.length; i++) {
+      const sapID = String(data[i][0] || '').trim();
+      const name = String(data[i][2] || '').trim();
+      const clerk = String(data[i][clerkIdx] || '').trim();
+      if (sapID && clerk) result.sapToSupervisor[sapID] = clerk;
+      if (name && clerk) result.nameToSupervisor[name] = clerk;
+    }
+  } catch (e) {
+    console.error('getSupervisorFromAttendance_ error: ' + e);
+  }
+  return result;
+}
+
 // ============================================================
 //  任务安排模块 - 辅助函数 / Task Arrangement - Helpers
 // ============================================================
