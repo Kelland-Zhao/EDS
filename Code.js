@@ -12991,6 +12991,15 @@ function createTask(taskJSON, membersJSON, operatorSAPID, operatorName) {
   try {
     const task = typeof taskJSON === 'string' ? JSON.parse(taskJSON) : taskJSON;
     const members = typeof membersJSON === 'string' ? JSON.parse(membersJSON) : (membersJSON || []);
+    // 日期校验：两个日期必填，且截止日期 ≥ 计划开始日期
+    const planStartDate = String(task.planStartDate || '').trim();
+    const dueDate = String(task.dueDate || '').trim();
+    if (!planStartDate || !dueDate) {
+      return JSON.stringify({ success: false, message: '计划开始日期和截止日期为必填 / Plan start date and due date are required' });
+    }
+    if (dueDate < planStartDate) {
+      return JSON.stringify({ success: false, message: '截止日期不能早于计划开始日期 / Due date cannot be earlier than plan start date' });
+    }
     const ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName(TASK_TASKS_SHEET);
     if (!ws) return JSON.stringify({ success: false, message: 'Tasks sheet not found' });
     const taskID = generateTaskID_();
@@ -13054,6 +13063,15 @@ function updateTask(taskJSON, membersJSON, operatorSAPID, operatorName) {
       }
     }
     if (rowIndex === -1) return JSON.stringify({ success: false, message: '任务未找到 / Task not found' });
+    // 日期校验：两个日期必填，且截止日期 ≥ 计划开始日期
+    const planStartDate = String(task.planStartDate || '').trim();
+    const dueDate = String(task.dueDate || '').trim();
+    if (!planStartDate || !dueDate) {
+      return JSON.stringify({ success: false, message: '计划开始日期和截止日期为必填 / Plan start date and due date are required' });
+    }
+    if (dueDate < planStartDate) {
+      return JSON.stringify({ success: false, message: '截止日期不能早于计划开始日期 / Due date cannot be earlier than plan start date' });
+    }
     const beforeJSON = JSON.stringify({
       title: String(data[rowIndex - 1][1] || ''),
       description: String(data[rowIndex - 1][2] || ''),

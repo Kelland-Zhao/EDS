@@ -545,6 +545,24 @@ function saveTaskFromModal() {
     }
   }
 
+  // 日期校验：两个日期必填，且截止日期 ≥ 计划开始日期（新建与编辑统一）
+  if (!planStartDate || !dueDate) {
+    Swal.fire({
+      icon: 'warning',
+      title: swalTitle('请填写日期', 'Dates required'),
+      html: swalHtml('计划开始日期和截止日期均为必填', 'Plan start date and due date are required')
+    });
+    return;
+  }
+  if (dueDate < planStartDate) {
+    Swal.fire({
+      icon: 'warning',
+      title: swalTitle('日期不合法', 'Invalid dates'),
+      html: swalHtml('截止日期不能早于计划开始日期', 'Due date cannot be earlier than plan start date')
+    });
+    return;
+  }
+
   var taskData = {
     taskID: tid,
     title: title,
