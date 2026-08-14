@@ -20,6 +20,7 @@ const TASK_TEMPLATES_SHEET = "DailyTemplates";
 const TASK_LOGS_SHEET = "TaskLogs";
 const TASK_CONFIG_SHEET = "TaskConfig";
 const TASK_PERMISSION_COL = 62; // Column BK (0-indexed)
+const ATTENDANCE_SS_ID = "1dMON_DEcAUH9xRsfOkEF37fIN7DuyVHfNwOoUyd-V-0"; // 考勤表（E&E 电子考勤记录）
 const IM_SCHEDULING_SS_ID = "1dyS5C7r4pqYIeRT0p1zYzngt0EDCYR4hsswurAsEBYg"; // 注塑排班主数据
 const IM_SCHEDULING_SHEET = "MasterData";
 
@@ -11521,6 +11522,30 @@ function writeTaskLog_(action, targetType, targetID, beforeJSON, afterJSON, oper
     ws.appendRow([logID, action, targetType, targetID, beforeJSON || '', afterJSON || '', operatorSAPID, operatorName, now]);
   } catch (e) {
     console.error('writeTaskLog_ error: ' + e);
+  }
+}
+
+// ============================================================
+//  任务安排模块 - 早会闭环日报 / Daily Brief Email
+// ============================================================
+
+/**
+ * 考勤表月度 sheet 解析：sheet 名形如 "2026.08" / "2026.8" / "2026.08月"（命名不统一）
+ * 遍历全部 sheet，正则 ^(20\d{2})\.(\d{1,2})月?$ 匹配，取 年+月 == 参数 的 sheet
+ */
+function getAttendanceMonthSheet_(year, month) {
+  try {
+    const ss = SpreadsheetApp.openById(ATTENDANCE_SS_ID);
+    const sheets = ss.getSheets();
+    const y = String(year);
+    for (let i = 0; i < sheets.length; i++) {
+      const m = sheets[i].getName().match(/^(20\d{2})\.(\d{1,2})月?$/);
+      if (m && m[1] === y && parseInt(m[2], 10) === month) return sheets[i];
+    }
+    return null;
+  } catch (e) {
+    console.error('getAttendanceMonthSheet_ error: ' + e);
+    return null;
   }
 }
 
