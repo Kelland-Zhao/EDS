@@ -11621,6 +11621,12 @@ function collectUnassignedStaff_(today) {
       const st = String(s.attendanceStatus || '').trim();
       return !st || st === '在岗';
     });
+    // 跟班豁免（与甘特图口径一致）：team A/B/C = 倒班人员，出勤默认跟班，视为已安排；
+    // IM 排班降级源无 team 字段（视为非 ABC，照常检查任务）
+    staff = staff.filter(function (s) {
+      const team = String(s.team || '').trim().toUpperCase();
+      return team !== 'A' && team !== 'B' && team !== 'C';
+    });
     // 试用范围：仅保留 INJ（注塑）工序人员；userID 表读取失败则整体报错
     let processMap = {};
     try {
