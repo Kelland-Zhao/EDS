@@ -233,12 +233,14 @@ function bindEvents() {
       showLoading();
       google.script.run
         .withSuccessHandler(function (res) {
-          Swal.close();
           var r2 = JSON.parse(res || '{}');
           if (r2.success) {
-            Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
             $('#taskDetailModal').modal('hide');
-            reloadData(function () { applyFiltersAndRender(); });
+            reloadData(function () {
+              applyFiltersAndRender();
+              Swal.close();
+              Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
+            });
           } else {
             Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
           }
@@ -263,12 +265,14 @@ function bindEvents() {
       showLoading();
       google.script.run
         .withSuccessHandler(function (res) {
-          Swal.close();
           var r2 = JSON.parse(res || '{}');
           if (r2.success) {
-            Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
             $('#taskDetailModal').modal('hide');
-            reloadData(function () { applyFiltersAndRender(); });
+            reloadData(function () {
+              applyFiltersAndRender();
+              Swal.close();
+              Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r2.message, ''), timer: 1500 });
+            });
           } else {
             Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
           }
@@ -351,7 +355,7 @@ function showLoading() {
   });
 }
 
-// 刷新数据 — 使用合并接口，传 forceRefresh=true 跳过缓存
+// 刷新数据 — 快速合并接口：手动任务强刷、PM 走缓存（保存后即时刷新，避免大表重扫延迟）
 function reloadData(callback) {
   google.script.run
     .withSuccessHandler(function (result) {
@@ -362,7 +366,7 @@ function reloadData(callback) {
       if (callback) callback();
     })
     .withFailureHandler(function () { if (callback) callback(); })
-    .loadAllTasksForList(true);
+    .loadAllTasksForListFast();
 }
 
 // 筛选 + 渲染
@@ -579,12 +583,14 @@ function saveTaskFromModal() {
 
     google.script.run
       .withSuccessHandler(function (res) {
-        Swal.close();
         var r = JSON.parse(res || '{}');
         if (r.success) {
-          Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
           $('#taskDetailModal').modal('hide');
-          reloadData(function () { applyFiltersAndRender(); });
+          reloadData(function () {
+            applyFiltersAndRender();
+            Swal.close();
+            Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+          });
         } else {
           Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
         }
@@ -600,12 +606,14 @@ function saveTaskFromModal() {
 function updateStatusIfNeeded(taskID, newStatus) {
   google.script.run
     .withSuccessHandler(function (res) {
-      Swal.close();
       var r = JSON.parse(res || '{}');
       if (r.success) {
-        Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
         $('#taskDetailModal').modal('hide');
-        reloadData(function () { applyFiltersAndRender(); });
+        reloadData(function () {
+          applyFiltersAndRender();
+          Swal.close();
+          Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+        });
       } else {
         Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
       }
@@ -617,11 +625,13 @@ function doUpdateStatus(taskID, newStatus) {
   showLoading();
   google.script.run
     .withSuccessHandler(function (res) {
-      Swal.close();
       var r = JSON.parse(res || '{}');
       if (r.success) {
-        Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
-        reloadData(function () { applyFiltersAndRender(); });
+        reloadData(function () {
+          applyFiltersAndRender();
+          Swal.close();
+          Swal.fire({ icon: 'success', title: swalTitle('成功', 'Success'), html: swalHtml(r.message, ''), timer: 1500 });
+        });
       } else {
         Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message, '') });
       }

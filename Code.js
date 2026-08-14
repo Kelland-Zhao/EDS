@@ -12396,6 +12396,25 @@ function loadAllTasksForList(forceRefresh) {
   }
 }
 
+/**
+ * 任务列表快速刷新：手动任务强制刷新（小表），PM 任务走天级缓存（大表，本界面不可编辑）
+ * 用于前端保存/状态变更后的即时刷新，避免每次全量强刷 PM 大表导致 10s+ 延迟
+ */
+function loadAllTasksForListFast() {
+  try {
+    var manualResult = JSON.parse(loadTasks(JSON.stringify({ _forceRefresh: true })));
+    var pmResult = JSON.parse(loadAllPMTasks(JSON.stringify({})));
+    var manualData = manualResult.success ? manualResult.data : [];
+    var pmData = pmResult.success ? pmResult.data : [];
+    var seen = {};
+    pmData.forEach(function (t) { seen[t.taskID] = true; });
+    var merged = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    return JSON.stringify({ success: true, manual: manualData, pm: pmData, merged: merged });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
 function loadIMStaffByDate(dateStr) {
   try {
     // Convert yyyy-MM-dd to yyyy.MM.dd
