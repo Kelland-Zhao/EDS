@@ -729,8 +729,10 @@ Expected: 10 个 `function XXX` 命中（正式函数），3 个 `testXXX_` 零�
 1. Run `sendDailyBrief` → 收件箱收到 `【EDS人员工作安排 & 任务完成情况】2026-08-14`，TaskLogs 表新增 `dailyBrief` 记录（含 A/B 人数与收件人数）
 2. 邮件内容核对：段一段二按 Supervisor 分组、双语表头、红色 banner、超期天数红字、CTA 链接可点（落到登录页）
 3. 场景验证（对照 spec 4.6）：在岗无任务人员出现在段一；建任务后消失；「机动/待命」任务豁免；dueDate 昨天的未完成任务出现在段二；状态改已完成消失；空清单收到"全员已安排"确认邮件
-4. Run `ensureDailyBriefTrigger_` 两次 → GAS 触发器页仅 1 个 `sendDailyBrief` 触发器（07:45）
-5. 验证通过后用 deploy-gas 技能发布到生产（需用户确认）
+4. 场景核对时，确认邮件中「未配置直线上级」分组人数少、符合预期（若该组占多数，说明考勤员列匹配失败，如考勤表纵向合并单元格导致读列偏移，需检查 `getSupervisorFromAttendance_`）
+5. Run `ensureDailyBriefTrigger_` 两次 → GAS 触发器页仅 1 个 `sendDailyBrief` 触发器（07:45）
+6. 推送后打开任一 EDS 页面（经部署的 Web App 访问，doGet 即执行触发器自愈挂载）→ 再到 GAS 触发器页确认仍仅有 1 个 `sendDailyBrief` 触发器（07:45）——端到端验证 doGet 挂载路径
+7. 验证通过后用 deploy-gas 技能发布到生产（需用户确认）
 
 - [ ] **Step 4: 最终提交（如有验证后的修正）**
 

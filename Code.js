@@ -11596,7 +11596,7 @@ function daysBetween_(fromYMD, toYMD) {
 
 /**
  * A 类汇总：今日在岗但未安排任何任务的人员
- * 出勤数据源：AttendanceSync 优先，IM 排班降级，两者皆空则 source='none'
+ * 出勤数据源：AttendanceSync 优先，IM 排班降级，两者皆空则 source='none'，读取失败则 source='error'
  * 只保留 attendanceStatus 为空或在岗的人员
  * 已安排口径（与工作台 todayTasks 一致）：手动+PM 合并任务中 status≠已取消、
  * 日期区间与 today 重叠（planStartDate≤today≤dueDate）、该人是 owner 或 collaborator（sapID 与姓名都算命中）
@@ -11611,7 +11611,10 @@ function collectUnassignedStaff_(today) {
       source = 'AttendanceSync';
     } else {
       let imResult = JSON.parse(loadIMStaffByDate(today));
-      staff = imResult.success ? imResult.data : [];
+      if (!imResult.success) {
+        return { success: false, staff: [], source: 'error', message: imResult.message || 'IM 出勤数据读取失败' };
+      }
+      staff = imResult.data;
       if (staff.length > 0) source = 'IM';
     }
     staff = staff.filter(function (s) {
@@ -11639,7 +11642,7 @@ function collectUnassignedStaff_(today) {
     });
     return { success: true, staff: unassigned, source: source, message: '' };
   } catch (e) {
-    return { success: false, staff: [], source: 'none', message: e.message };
+    return { success: false, staff: [], source: 'error', message: e.message };
   }
 }
 
@@ -11649,7 +11652,10 @@ function collectUnassignedStaff_(today) {
 function collectOverdueTasks_(today) {
   try {
     const tasksResult = JSON.parse(loadAllTasksForList(true));
-    const allTasks = tasksResult.success ? tasksResult.merged : [];
+    if (!tasksResult.success) {
+      return { success: false, tasks: [], involvedSapIDs: [], message: tasksResult.message || '任务清单读取失败' };
+    }
+    const allTasks = tasksResult.merged;
     const involved = {};
     const tasks = [];
     allTasks.forEach(function (t) {
@@ -11788,9 +11794,16 @@ function buildBriefEmailHtml_(today, staffData, overdueData, supMaps) {
   // 内容卡片
   html += '<tr><td style="background:#ffffff;border:1px solid #e9ecef;border-top:none;border-radius:0 0 8px 8px;padding:16px 18px;">';
 
+  // 采集失败警示（置于内容卡片顶部、段一之前）
+  if (staffData.success === false || overdueData.success === false) {
+    html += '<div style="font-size:13px;color:#E60012;font-weight:700;margin:0 0 8px;">⚠ 数据读取失败，清单可能不完整，请联系管理员 / Data load failed — lists may be incomplete. Contact admin.</div>';
+  }
+
   // 段一
   html += secTitle('今日在岗未安排人员', 'UNASSIGNED STAFF TODAY');
-  if (src === 'none') {
+  if (src === 'error') {
+    html += '<div style="font-size:13px;color:#E60012;font-weight:700;">出勤数据读取失败 / Attendance data load failed</div>';
+  } else if (src === 'none') {
     html += '<div style="font-size:13px;color:#6c757d;">今日无出勤数据 / No attendance data today</div>';
   } else if (staff.length === 0) {
     html += '<div style="font-size:13px;color:#198754;">&#10003; 今日全员已安排 / All staff assigned</div>';
@@ -11864,10 +11877,11 @@ function sendDailyBrief() {
       subject: '【EDS人员工作安排 & 任务完成情况】' + today,
       htmlBody: html
     });
-    const brief = 'A=' + (staffData.staff ? staffData.staff.length : 0)
+    let brief = 'A=' + (staffData.staff ? staffData.staff.length : 0)
       + ';B=' + (overdueData.tasks ? overdueData.tasks.length : 0)
       + ';recipients=' + recipients.length
       + ';source=' + (staffData.source || '');
+    if (staffData.success === false || overdueData.success === false) brief += ';collectorError=1';
     writeTaskLog_('dailyBrief', 'DailyBrief', today, '', brief, '', '');
     return JSON.stringify({ success: true, brief: brief });
   } catch (e) {
