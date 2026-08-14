@@ -165,6 +165,8 @@ function doGet(e) {
   Route.path("promoteNPItoTBX", promoteNPItoTBX);
   Route.path("getSuggestedCardNumber", getSuggestedCardNumber);
 
+  ensureDailyBriefTrigger_();
+
   if (Route[e.parameters.v]) {
     return Route[e.parameters.v](
       e.parameters.webPage,
@@ -11872,6 +11874,22 @@ function sendDailyBrief() {
     console.error('sendDailyBrief error: ' + e);
     try { writeTaskLog_('dailyBrief', 'DailyBrief', today, '', '发送失败: ' + e.message, '', ''); } catch (e2) { /* 忽略日志失败 */ }
     return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+/**
+ * 幂等安装早会日报日触发器（每天 07:45，脚本时区 Asia/Hong_Kong）
+ * doGet 时调用——任何人打开任意页面都会做幂等检查，触发器具备自修复能力
+ */
+function ensureDailyBriefTrigger_() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    for (let i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === 'sendDailyBrief') return;
+    }
+    ScriptApp.newTrigger('sendDailyBrief').timeBased().everyDays(1).atHour(7).atMinute(45).create();
+  } catch (e) {
+    console.error('ensureDailyBriefTrigger_ error: ' + e);
   }
 }
 
