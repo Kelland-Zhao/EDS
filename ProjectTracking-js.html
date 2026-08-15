@@ -17,6 +17,7 @@
   var dtInstance = null;
   var userListCache = null;
   var currentTypeFilter = 'all';
+  var currentLevelFilter = 'all';
   var currentProcessFilter = 'all';
   var currentLeaderFilter = '';
   var hideCompleted = true;
@@ -79,6 +80,12 @@
       currentTypeFilter = $(this).data('type');
       $('#typeFilter button').removeClass('btn-danger').addClass('btn-outline-danger');
       $(this).removeClass('btn-outline-danger').addClass('btn-danger');
+      renderTable();
+    });
+
+    // 级别筛选（仅对 CI/Kaizen 生效）
+    $('#levelFilter').on('change', function() {
+      currentLevelFilter = this.value;
       renderTable();
     });
 
@@ -159,6 +166,7 @@
     // 类型切换时重建里程碑行
     $('#modalType').on('change', function() {
       var newType = $(this).val();
+      $('#modalLevelWrap').toggleClass('d-none', !isCIType(newType));
       var wasCI = currentUpdateIsCI;
       currentUpdateIsCI = (newType === 'CI');
       if (wasCI === currentUpdateIsCI) return;
@@ -571,11 +579,28 @@
     return '<span class="status-badge" style="background:' + bg + ';">' + txt + '</span>';
   }
 
+  // ABC 级别：仅 CI/Kaizen 项目有级别；'' 表示未分级（UN）
+  function levelKey(p) {
+    if (!isCIType(projType(p))) return '';
+    var l = String(p.level || '').trim().toUpperCase();
+    return (l === 'A' || l === 'B' || l === 'C') ? l : 'UN';
+  }
+
+  function levelBadge(p) {
+    if (!isCIType(projType(p))) return '';
+    var l = levelKey(p);
+    var bg = l === 'A' ? '#dc3545' : (l === 'B' ? '#fd7e14' : (l === 'C' ? '#198754' : '#adb5bd'));
+    var txt = l === 'UN' ? '未分级' : l + '类';
+    var tip = l === 'A' ? 'A类：重大改进' : (l === 'B' ? 'B类：一般改进' : (l === 'C' ? 'C类：小改进' : '未分级'));
+    return '<span class="status-badge" style="background:' + bg + ';margin-left:3px;" title="' + tip + '">' + txt + '</span>';
+  }
+
   function renderTable() {
     var projects = (globalData && globalData.projects) ? globalData.projects.filter(function(p) {
       if (hideCompleted && p.status === 'Done') return false;
       if (showOnlyMine && (!p.leader || p.leader.replace(/\(.*\)/, '').trim() !== globalName)) return false;
       if (currentTypeFilter !== 'all' && projType(p) !== currentTypeFilter) return false;
+      if (currentLevelFilter !== 'all' && (!isCIType(projType(p)) || levelKey(p) !== currentLevelFilter)) return false;
       if (currentProcessFilter !== 'all' && (p.process || 'INJ') !== currentProcessFilter) return false;
       if (currentLeaderFilter && (!p.leader || p.leader !== currentLeaderFilter)) return false;
       return true;
@@ -586,6 +611,14 @@
       dtInstance = null;
     }
     $('#projectTable tbody').empty();
+
+    // 默认排序：CI/Kaizen 按级别 A→B→C→未分级 排前（同级别按名称），标准项目在后
+    projects.sort(function(a, b) {
+      var ka = isCIType(projType(a)) ? '0-' + levelKey(a) : '1';
+      var kb = isCIType(projType(b)) ? '0-' + levelKey(b) : '1';
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      return (a.projectName || '').localeCompare(b.projectName || '');
+    });
 
     var rows = projects.map(function(proj) {
       var stColor = getStatusColor(proj.status);
@@ -599,7 +632,7 @@
       return [
         '',
         proj.projectName + (proj.projectId ? '<br><small style="color:#999;font-size:10px;">' + proj.projectId + '</small>' : ''),
-        typeBadge(proj),
+        typeBadge(proj) + levelBadge(proj),
         (proj.leader || '').replace(/\(.*\)/, '').trim(),
         statusBadge,
         progBar,
@@ -625,7 +658,7 @@
         info: '共 _TOTAL_ 个项目', infoEmpty: '暂无数据',
         zeroRecords: '无匹配结果', paginate: { first: '首页', last: '末页', next: '下一页', previous: '上一页' }
       },
-      pageLength: 25, order: [[1, 'asc']],
+      pageLength: 25, order: [], // 保持数据传入顺序（级别优先排序已在 renderTable 内完成）
       createdRow: function(row, data, dataIndex) {
         $(row).attr('data-project', projects[dataIndex] ? projects[dataIndex].projectName : '');
       },
@@ -1241,6 +1274,10 @@
       .append('<option value="Kaizen">Kaizen / Kaizen</option>')
       .val(pType).prop('disabled', false);
     $('#typeHelp').text('切换类型将重建节点列表 / Switching type rebuilds milestone list');
+    // 级别（仅 CI/Kaizen 显示；'UN' = 未分级 → 保存时写空）
+    var lvlVal = String(proj.level || '').trim().toUpperCase();
+    $('#modalLevel').val((lvlVal === 'A' || lvlVal === 'B' || lvlVal === 'C') ? lvlVal : 'UN');
+    $('#modalLevelWrap').toggleClass('d-none', !isCIType(pType));
     // 解析项目 Leader（"姓名 (邮箱)"），供 CI 行 owner 缺省回退
     (function() {
       var L = (proj.leader || '').trim();
@@ -1351,6 +1388,15 @@
     var newType = $('#modalType').val();
     if (proj && newType && newType !== (proj.type || '新品/新自动化')) updates.type = newType;
     if (isStatusChanged) updates.status = newStatus;
+
+    // Level change（'UN' = 未分级 → 空）
+    if (proj) {
+      var newLevelSel = $('#modalLevel').val() || 'UN';
+      var newLevelVal = newLevelSel === 'UN' ? '' : newLevelSel;
+      var curLvl = String(proj.level || '').trim().toUpperCase();
+      var curLvlSel = (curLvl === 'A' || curLvl === 'B' || curLvl === 'C') ? curLvl : 'UN';
+      if (newLevelSel !== curLvlSel) updates.level = newLevelVal;
+    }
 
     function executeSave(pn, upd) {
       Swal.fire({
@@ -1576,11 +1622,13 @@
       $('#addStandardSection').addClass('d-none');
       $('#addTemplateWrap').addClass('d-none');
       $('#addCISection').removeClass('d-none');
+      $('#addLevelWrap').removeClass('d-none');
       if ($('#addFollowups').children().length === 0) addFollowupRow('', '', '', '', formatDateYMD(today), '');
     } else {
       $('#addCISection').addClass('d-none');
       $('#addTemplateWrap').removeClass('d-none');
       $('#addStandardSection').removeClass('d-none');
+      $('#addLevelWrap').addClass('d-none');
       if ($('#addMilestones').children().length === 0) addMilestoneRow('', '', formatDateYMD(today));
     }
   }
@@ -1589,6 +1637,7 @@
     $('#addProjectName').val('');
     $('#addStatus').val('Not start');
     $('#addType').val('CI');
+    $('#addLevel').val('C');
     $('#addTemplate').val('standard');
     $('#addProcess').val(normalizeProcess(globalProcess) || 'INJ');
     $('#addMilestones').empty();
@@ -1646,7 +1695,8 @@
       projectName: projectName, leader: $('#addLeader').val() || '',
       technician: $('#addTechnician').val() || '',
       status: $('#addStatus').val() || 'Not start', type: type, milestones: milestones,
-      process: $('#addProcess').val() || normalizeProcess(globalProcess) || 'INJ'
+      process: $('#addProcess').val() || normalizeProcess(globalProcess) || 'INJ',
+      level: isCIType(type) ? ($('#addLevel').val() || 'C') : ''
     };
     var editorName = globalName || '';
     Swal.fire({ title: swalTitle('正在提交...', 'Submitting...'), html: swalHtml('正在添加新项目，请稍候。', 'Adding new project, please wait.'), allowOutsideClick: false, showConfirmButton: false, didOpen: function() { Swal.showLoading(); } });

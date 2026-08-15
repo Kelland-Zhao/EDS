@@ -10746,6 +10746,7 @@ const PROJECT_ID_COL = 6;              // Col G — 项目编号
 const PROJECT_CREATED_COL = 7;         // Col H — 创建时间
 const PROJECT_COMPLETED_COL = 8;       // Col I — 完成时间
 const PROJECT_PROCESS_COL = 9;         // Col J — 工序（INJ/TF/PK）
+const PROJECT_LEVEL_COL = 10;          // Col K — 级别：A/B/C（仅 CI/Kaizen 项目，标准项目留空）
 
 /**
  * Format a sheet cell value as YYYY-MM-DD string
@@ -10766,6 +10767,16 @@ function formatSheetDate_(val) {
     return year + '-' + ('0' + parseInt(m[1])).slice(-2) + '-' + ('0' + parseInt(m[2])).slice(-2);
   }
   return s;
+}
+
+/**
+ * 规范化项目级别：仅接受 A/B/C（大小写归一），其他值返回空串
+ * @param {*} val - 前端传入的级别值
+ * @returns {string} 'A' | 'B' | 'C' | ''
+ */
+function normalizeProjectLevel_(val) {
+  var s = String(val || '').trim().toUpperCase();
+  return (s === 'A' || s === 'B' || s === 'C') ? s : '';
 }
 
 /**
@@ -10807,6 +10818,7 @@ function getProjectTrackingData() {
         technician: String(row[2] || ''),
         status: String(row[PROJECT_STATUS_COL] || ''),
         type: String(row[PROJECT_TYPE_COL] || '').trim() || '新品/新自动化',
+        level: String(row[PROJECT_LEVEL_COL] || '').trim(),
         process: String(row[PROJECT_PROCESS_COL] || '').trim() || 'INJ',
         milestones: parseMilestonesJSON_(row[PROJECT_MILESTONES_JSON_COL]),
         createdAt: String(row[PROJECT_CREATED_COL] || ''),
@@ -11005,6 +11017,22 @@ function updateProjectTracking(projectName, updatesStr, editorName) {
         }
       }
       ws.getRange(rowIndex, PROJECT_TYPE_COL + 1).setValue(updates.type);
+    }
+
+    // Update level (ABC 级别，仅 CI/Kaizen 项目有意义)
+    if (updates.level !== undefined) {
+      const newLevel = normalizeProjectLevel_(updates.level);
+      const currentLevel = String(currentRow[PROJECT_LEVEL_COL] || '').trim();
+      if (newLevel !== currentLevel) {
+        changes.level = { old: currentLevel || '未分级', new: newLevel || '未分级' };
+        const historyWs = ss.getSheetByName(PROJECT_TRACKING_HISTORY_SHEET_NAME);
+        if (historyWs) {
+          const tz = Session.getScriptTimeZone() || 'Asia/Shanghai';
+          const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+          historyWs.appendRow([projectName, '级别变更', changes.level.old, changes.level.new, editorName, now, '项目级别变更']);
+        }
+      }
+      ws.getRange(rowIndex, PROJECT_LEVEL_COL + 1).setValue(newLevel);
     }
 
     if (Object.keys(changes).length > 0) {
@@ -13946,7 +13974,7 @@ function addProject(dataStr, editorName) {
     }
     const projectId = todayPrefix + String(maxSeq + 1).padStart(3, '0');
 
-    // Build row: A-G → 项目名称/Leader/技术员/状态/里程碑JSON/类型/编号/创建时间/完成时间
+    // Build row: A-K → 项目名称/Leader/技术员/状态/里程碑JSON/类型/编号/创建时间/完成时间/工序/级别
     const row = [
       data.projectName || '',
       data.leader || '',
@@ -13957,7 +13985,8 @@ function addProject(dataStr, editorName) {
       projectId,
       nowDate,
       '',
-      data.process || 'INJ'
+      data.process || 'INJ',
+      (projType === 'CI' || projType === 'Kaizen') ? normalizeProjectLevel_(data.level) : ''
     ];
 
     ws.appendRow(row);

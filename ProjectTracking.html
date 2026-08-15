@@ -188,6 +188,15 @@
           <button type="button" class="btn btn-outline-danger" data-process="TF">植磨毛<br><small>TF</small></button>
           <button type="button" class="btn btn-outline-danger" data-process="PK">包装<br><small>PK</small></button>
         </div>
+        <span class="ms-2" title="按级别筛选（仅 CI/Kaizen）/ Filter by level (CI/Kaizen only)">
+          <select id="levelFilter" style="width:110px;font-size:12px;">
+            <option value="all">级别: 全部</option>
+            <option value="A">级别: A类</option>
+            <option value="B">级别: B类</option>
+            <option value="C">级别: C类</option>
+            <option value="UN">级别: 未分级</option>
+          </select>
+        </span>
         <span class="leader-filter-wrap ms-2" title="按 Leader 筛选 / Filter by Leader">
           <i class="bi bi-person-badge leader-filter-icon"></i>
           <select id="leaderFilter" style="width:140px;font-size:12px;"></select>
@@ -272,7 +281,7 @@
             </div>
           </div>
           <div class="row">
-            <div class="col-6">
+            <div class="col-4">
               <label class="form-label fw-bold" style="font-size:12px;">状态<br><small>Status</small></label>
               <select class="form-select" id="modalStatus" disabled>
                 <option value="Ongoing">进行中 / Ongoing</option>
@@ -282,7 +291,7 @@
               </select>
               <div class="form-text" id="statusHelp" style="font-size:10px;">仅 Lyon Zhang 可修改状态</div>
             </div>
-            <div class="col-6">
+            <div class="col-4">
               <label class="form-label fw-bold" style="font-size:12px;">项目类型<br><small>Project Type</small></label>
               <select class="form-select" id="modalType" style="font-size:12px;" disabled>
                 <option value="新品/新自动化">新品/新自动化 / New Product & Automation</option>
@@ -290,6 +299,16 @@
                 <option value="Kaizen">Kaizen / Kaizen</option>
               </select>
               <div class="form-text" id="typeHelp" style="font-size:10px;"></div>
+            </div>
+            <div class="col-4" id="modalLevelWrap">
+              <label class="form-label fw-bold" style="font-size:12px;">级别<br><small>Level</small></label>
+              <select class="form-select" id="modalLevel" style="font-size:12px;">
+                <option value="A">A类 / Class A（重大改进）</option>
+                <option value="B">B类 / Class B（一般改进）</option>
+                <option value="C">C类 / Class C（小改进）</option>
+                <option value="UN">未分级 / Unclassified</option>
+              </select>
+              <div class="form-text" id="levelHelp" style="font-size:10px;">仅 CI / Kaizen 项目</div>
             </div>
           </div>
         </div>
@@ -336,7 +355,7 @@
             </div>
           </div>
           <div class="row mb-2">
-            <div class="col-4">
+            <div class="col-3">
               <label class="form-label fw-bold" style="font-size:12px;">状态<br><small>Status</small></label>
               <select class="form-select" id="addStatus">
                 <option value="Ongoing">进行中 / Ongoing</option>
@@ -345,7 +364,7 @@
                 <option value="Not start" selected>未开始 / Not Start</option>
               </select>
             </div>
-            <div class="col-4">
+            <div class="col-3">
               <label class="form-label fw-bold" style="font-size:12px;">项目类型<br><small>Project Type</small></label>
               <select class="form-select" id="addType" style="font-size:12px;">
                 <option value="新品/新自动化">新品/新自动化 / New Product & Automation</option>
@@ -353,7 +372,16 @@
                 <option value="Kaizen">Kaizen / Kaizen</option>
               </select>
             </div>
-            <div class="col-4" id="addTemplateWrap">
+            <div class="col-3" id="addLevelWrap">
+              <label class="form-label fw-bold" style="font-size:12px;">级别<br><small>Level</small></label>
+              <select class="form-select" id="addLevel" style="font-size:12px;">
+                <option value="A">A类 / Class A（重大改进）</option>
+                <option value="B">B类 / Class B（一般改进）</option>
+                <option value="C" selected>C类 / Class C（小改进）</option>
+              </select>
+              <div class="form-text" style="font-size:10px;">仅 CI / Kaizen 项目</div>
+            </div>
+            <div class="col-3" id="addTemplateWrap">
               <label class="form-label fw-bold" style="font-size:12px;">里程碑模板<br><small>Milestone Template</small></label>
               <select class="form-select" id="addTemplate" style="font-size:12px;">
                 <option value="standard">新品/新自动化设备安装（7节点）/ New Prod & Automation 7-node</option>
