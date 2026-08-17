@@ -128,10 +128,14 @@ function buildFilters() {
     if (w) weeks[w.key] = w;
   });
   var wSel = $('#weekFilter');
+  var prev = wSel.val();
   wSel.empty().append('<option value="">全部周 / All Weeks</option>');
   Object.keys(weeks).sort().reverse().forEach(function (k) { wSel.append('<option value="' + k + '">' + weeks[k].label + '</option>'); });
-  var todayWeek = computeWeekInfo_(new Date().toISOString().split('T')[0]);
-  if (todayWeek && weeks[todayWeek.key]) wSel.val(todayWeek.key);
+  var now = new Date();
+  var todayLocal = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2) + '-' + ('0' + now.getDate()).slice(-2);
+  var todayWeek = computeWeekInfo_(todayLocal);
+  if (prev && weeks[prev]) wSel.val(prev);
+  else if (todayWeek && weeks[todayWeek.key]) wSel.val(todayWeek.key);
 }
 
 function renderTable() {
@@ -155,7 +159,7 @@ function renderTable() {
     if (reqF && t.reqPerson !== reqF) return false;
     return true;
   });
-  var conflicts = findMachineConflicts_(tasks);
+  var conflicts = findMachineConflicts_(allTasks);
   var byWeek = {};
   tasks.forEach(function (t) {
     var w = t.planDate ? computeWeekInfo_(t.planDate) : null;

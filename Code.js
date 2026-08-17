@@ -15514,7 +15514,7 @@ function importTestPlanRows(rowsJSON, operatorSAPID) {
       existingKeys[key] = true;
       todayCount++;
       var seq = ('000' + todayCount).slice(-4);
-      var status = r.status || '待确认 Pending'; // 客户端候选已携带映射后的状态
+      var status = NPI_STATUS_FLOW.hasOwnProperty(r.status) ? r.status : '待确认 Pending'; // 白名单校验；未知/空值归待确认
       ws.appendRow([
         todayPrefix + '-' + seq,             // 0 任务ID
         '周计划 Weekly',                      // 1 来源
