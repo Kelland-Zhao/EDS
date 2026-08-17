@@ -1710,7 +1710,7 @@
           let selectData = [];
           PM_Workorder_Database.forEach(function (item) {
             let order = item["订单"] || "";
-            let description = item["描述"] || ""; // 使用J列的"描述"字段作为工单描述（仅作为提示）
+            let description = item["描述"] || ""; // 使用F列的"描述"字段作为工单描述（同名"描述"列后端取首个，即F列）
             
             if (order) {
               selectData.push({
@@ -2222,6 +2222,41 @@
     });
   });
 
+  // 校验必须填写数值的任务（任务编号含* 或 PDM）：返回已勾选完成但数值为空的行
+  function findMissingMandatoryValueRows(taskRows) {
+    let missing = [];
+    taskRows.forEach((r, idx) => {
+      let taskNo = (r.taskNo || '').toString();
+      let isMandatory = taskNo.toUpperCase().includes('PDM') || taskNo.includes('*');
+      if (!isMandatory) return;
+      // 仅勾选完成的任务强制填写数值；未勾选的走"原因+措施"流程
+      if (!r.checked) return;
+      if (r.valueAndNote && r.valueAndNote.trim() !== '') return;
+      missing.push({
+        rowIndex: idx + 1,
+        taskNo: taskNo,
+        taskDescription: r.taskDescription || '未知任务'
+      });
+    });
+    return missing;
+  }
+
+  // 从任务表收集每行的任务编号/描述/勾选状态/数值输入，交给纯函数校验
+  function getMissingMandatoryValueRows() {
+    let rows = [];
+    table_tasklist.rows().every(function () {
+      let row = this.node();
+      let rowData = this.data();
+      rows.push({
+        taskNo: rowData['Task No'],
+        taskDescription: rowData['Task Description'],
+        checked: $(row).find('.form-check-input').prop('checked'),
+        valueAndNote: $(row).find('input[type="text"]').val()
+      });
+    });
+    return findMissingMandatoryValueRows(rows);
+  }
+
   $("#PmEnd").on("click", function () {
     if (!table_tasklist) {
       Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('表格未初始化，请先加载任务数据。','Table not initialized. Please load task data first.') });
@@ -2231,6 +2266,29 @@
     let totalRows = table_tasklist.rows().count();
     if (totalRows === 0) {
       Swal.fire({ icon:'warning', title:swalTitle('警告','Warning'), html:swalHtml('表格中没有数据，请先加载任务。','No data in table. Please load tasks first.') });
+      return;
+    }
+
+    // 校验必须填写数值的任务（任务编号含*或PDM）：缺失则硬性拦截
+    let missingValueRows = getMissingMandatoryValueRows();
+    if (missingValueRows.length > 0) {
+      let missingDetails = missingValueRows.map(item =>
+        `第${item.rowIndex}行：${item.taskNo} ${item.taskDescription}`
+      ).join('\n');
+
+      Swal.fire({
+        title: swalTitle('存在未填写数值的任务','Tasks Missing Required Values'),
+        html: `
+          <div style="text-align: left;">
+            <p>以下任务必须填写"数值&备注"后才能提交：<br><span style="font-size:0.85em;color:#888;">The following tasks require a value in "Value & Notes" before submission:</span></p>
+            <div style="max-height: 200px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 12px;">
+              <pre style="margin: 0; white-space: pre-wrap;">${missingDetails}</pre>
+            </div>
+          </div>
+        `,
+        icon: 'error',
+        confirmButtonText: '确定 / OK'
+      });
       return;
     }
 

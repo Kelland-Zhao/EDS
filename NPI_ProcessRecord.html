@@ -167,7 +167,14 @@
           <div class="row g-2">
             <div class="col-6">
               <label class="form-label-sm">产品名称<br><small>Product Name</small></label>
-              <input type="text" class="form-control form-control-sm" id="newProductName">
+              <select class="form-select form-select-sm" id="newProductName" style="width:100%;">
+                <option value="">-- 选择或输入产品名称 / Select or type --</option>
+              </select>
+            </div>
+            <div class="col-6" id="skuGroup" style="display:none;">
+              <label class="form-label-sm">适用SKU<br><small>SKU</small></label>
+              <select class="form-select form-select-sm" id="newSku" style="width:100%;"></select>
+              <input type="text" class="form-control form-control-sm" id="newSkuCustom" style="display:none;margin-top:6px;" placeholder="编辑新SKU / Edit SKU">
             </div>
             <div class="col-6">
               <label class="form-label-sm">模具编号<br><small>Mold No.</small></label>

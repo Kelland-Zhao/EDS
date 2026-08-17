@@ -13,6 +13,10 @@ const TASK_SS_ID = "1UBg1Ake18cFp6gj0jKRX1Y9GJ0VL1pY5aXK-UoCeAY0";
 const NPI_SS_ID = "1092k9V4BT-WhD9GPoF6sRQC2TtdZfdjeRe8pK6v1rmQ";
 const NPI_WORKCENTER_SS_ID = "12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM";
 const NPI_WORKCENTER_SS_IDS = { IM: NPI_WORKCENTER_SS_ID, INJ: NPI_WORKCENTER_SS_ID, TF: '', PK: '' };
+const BOM_SS_ID = "1Ikmgrv9jdTjBsa9-bNsMfyuZ5OY3ObBjA1mmPQjcROY"; // TB BOM主数据表
+const BOM_SHEET_NAME = "TF BOM masterdata Header";
+const BOM_BUNDLE_COL = 44; // AR列 Bundle
+const BOM_SKU_COL = 5;     // E列 相关SKU
 const PPMS_SS_ID = "164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
@@ -164,6 +168,8 @@ function doGet(e) {
   Route.path("NPI_ProcessRecord", loadNPIProcessRecord);
   Route.path("promoteNPItoTBX", promoteNPItoTBX);
   Route.path("getSuggestedCardNumber", getSuggestedCardNumber);
+  Route.path("loadBOMBundleList", loadBOMBundleList);
+  Route.path("getBundleYabingSKUs", getBundleYabingSKUs);
 
   ensureDailyBriefTrigger_();
 
@@ -9754,6 +9760,28 @@ function get_Equipment_No_in_EAM() {
   }
 }
 
+// 将表头数组+数据行数组转换为对象；表头重复时保留第一个出现的列
+// （Database表"描述"在F/G/I三列同名，取F列，避免后列覆盖前列）
+function buildRowObject(head, row) {
+  let obj = {};
+  for (let i = 0; i < head.length; i++) {
+    let key = head[i];
+    if (!key || obj.hasOwnProperty(key)) continue;
+    // 处理日期类型
+    if (row[i] instanceof Date) {
+      let timezoneOffset = row[i].getTimezoneOffset() * 60000;
+      let beijingOffset = 8 * 60 * 60000;
+      let adjustedDate = new Date(
+        row[i].getTime() + beijingOffset - timezoneOffset
+      );
+      obj[key] = adjustedDate.toISOString().split("T")[0];
+    } else {
+      obj[key] = row[i] || "";
+    }
+  }
+  return obj;
+}
+
 function get_PM_Workorder() {
   try {
     let ID = "1YzMGIQ2RcBlGIadWh5yfxlCmOpCuOBHpgKfEVz8_W98";
@@ -9786,21 +9814,7 @@ function get_PM_Workorder() {
     // 构建结果数组，将每行数据转换为对象
     let result = [];
     data.forEach(function (row) {
-      let obj = {};
-      for (let i = 0; i < head.length; i++) {
-        // 处理日期类型
-        if (row[i] instanceof Date) {
-          let timezoneOffset = row[i].getTimezoneOffset() * 60000;
-          let beijingOffset = 8 * 60 * 60000;
-          let adjustedDate = new Date(
-            row[i].getTime() + beijingOffset - timezoneOffset
-          );
-          obj[head[i]] = adjustedDate.toISOString().split("T")[0];
-        } else {
-          obj[head[i]] = row[i] || "";
-        }
-      }
-      result.push(obj);
+      result.push(buildRowObject(head, row));
     });
 
     console.log("成功获取PM工单数据，共 " + result.length + " 条记录");
@@ -14672,6 +14686,10 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
     var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
     var data = ws.getDataRange().getValues();
+    // 第20列表头：适用SKU/SKU（新增列，向后兼容）
+    if (data.length && !String(data[0][19] || '').trim()) {
+      ws.getRange(1, 20).setValue('适用SKU\nSKU');
+    }
     var todayCount = 0;
     for (var i = 1; i < data.length; i++) {
       var tid = String(data[i][0] || '');
@@ -14703,7 +14721,8 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
       '待确认 Pending', '', '', '', '',
       taskData.remark || '',
       now, now,
-      taskData.processType || 'IM'   // S: 工序
+      taskData.processType || 'IM',  // S: 工序
+      taskData.sku || ''             // T: 适用SKU
     ]);
     return JSON.stringify({ success: true, taskID: taskID, message: "任务已创建 / Task created" });
   } catch (e) {
@@ -14759,7 +14778,8 @@ function loadNPITestTaskList() {
         tester: String(data[i][12] || ''),
         remark: String(data[i][15] || ''),
         createdAt: String(data[i][16] || ''),
-        processType: String(data[i][18] || '') || 'IM'
+        processType: String(data[i][18] || '') || 'IM',
+        sku: String(data[i][19] || '')
       });
     }
     return JSON.stringify({ success: true, data: result });
@@ -15014,6 +15034,81 @@ function loadNPIProcessRecordHistory(testTaskID) {
       }
     }
     return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 从「相关SKU」文本中解析牙柄族 SKU（标签含「牙柄」的行：牙柄/烫印牙柄/打印牙柄/牙柄{}变体）
+function extractYabingSKUs_(skuText) {
+  var out = [];
+  if (!skuText) return out;
+  var lines = String(skuText).split('\n');
+  lines.forEach(function (line) {
+    var segs = line.trim().split('|').map(function (s) { return s.trim(); });
+    if (segs.length < 2 || !segs[0] || segs[0].indexOf('牙柄') < 0) return;
+    for (var i = 1; i < segs.length; i++) {
+      if (segs[i] && out.indexOf(segs[i]) < 0) out.push(segs[i]);
+    }
+  });
+  return out;
+}
+
+// 合并多行 BOM 的牙柄 SKU（去重保序）
+function unionYabingSKUs_(skuTexts) {
+  var out = [];
+  (skuTexts || []).forEach(function (t) {
+    extractYabingSKUs_(t).forEach(function (s) {
+      if (out.indexOf(s) < 0) out.push(s);
+    });
+  });
+  return out;
+}
+
+// 产品名称选项：BOM主数据表 AR列（Bundle）去重列表
+function loadBOMBundleList() {
+  try {
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get('npi_bom_bundle_list');
+    if (cached) return cached;
+    var ws = SpreadsheetApp.openById(BOM_SS_ID).getSheetByName(BOM_SHEET_NAME);
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var lastRow = ws.getLastRow();
+    if (lastRow < 2) return JSON.stringify({ success: true, data: [] });
+    var vals = ws.getRange(2, BOM_BUNDLE_COL, lastRow - 1, 1).getValues();
+    var seen = {}, out = [];
+    vals.forEach(function (r) {
+      var b = String(r[0] || '').trim();
+      if (b && !seen[b]) { seen[b] = true; out.push(b); }
+    });
+    var result = JSON.stringify({ success: true, data: out });
+    cache.put('npi_bom_bundle_list', result, 21600);
+    return result;
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 指定 Bundle 的牙柄 SKU 列表（跨多行 BOM 去重合并）
+function getBundleYabingSKUs(bundle) {
+  try {
+    if (!bundle) return JSON.stringify({ success: true, data: [] });
+    var cacheKey = 'npi_bom_skus_' + bundle;
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get(cacheKey);
+    if (cached) return cached;
+    var ws = SpreadsheetApp.openById(BOM_SS_ID).getSheetByName(BOM_SHEET_NAME);
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var lastRow = ws.getLastRow();
+    var bundles = lastRow >= 2 ? ws.getRange(2, BOM_BUNDLE_COL, lastRow - 1, 1).getValues() : [];
+    var skuCol = lastRow >= 2 ? ws.getRange(2, BOM_SKU_COL, lastRow - 1, 1).getValues() : [];
+    var texts = [];
+    for (var i = 0; i < bundles.length; i++) {
+      if (String(bundles[i][0] || '').trim() === bundle) texts.push(String(skuCol[i][0] || ''));
+    }
+    var result = JSON.stringify({ success: true, data: unionYabingSKUs_(texts) });
+    cache.put(cacheKey, result, 21600);
+    return result;
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
