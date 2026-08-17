@@ -159,7 +159,7 @@ $(document).ready(function () {
 
   buildFieldIndex();
   renderAccordion();
-  loadTaskList();
+  loadTaskList(applyUrlParams_);
   loadWorkcenterList();
   loadBOMBundleList();
   loadMaterialOptions();
@@ -978,6 +978,30 @@ function rebuildFieldIndex() {
 }
 
 function clearFormFields() { $('.npi-field').val(''); }
+
+// URL参数解析：taskID / new
+function parsePageParams_(qs) {
+  var out = {};
+  (qs || '').replace(/^\?/, '').split('&').forEach(function (kv) {
+    if (!kv) return;
+    var p = kv.split('=');
+    if (p[0]) out[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  return out;
+}
+
+// 页面初始化时应用URL参数：taskID自动选中 / new=1自动打开新建弹窗
+function applyUrlParams_() {
+  var params = parsePageParams_(window.location.search);
+  if (params.taskID) {
+    if ($('#taskSelect option[value="' + params.taskID + '"]').length) {
+      $('#taskSelect').val(params.taskID);
+      selectTask(params.taskID);
+    }
+  } else if (params.new === '1') {
+    $('#btnNewTask').trigger('click');
+  }
+}
 
 // 选中任务后预填产品信息：产品名称/模具编号/适用SKU/机型（仅填空字段，不覆盖已保存值）
 function applyTaskPrefill() {
