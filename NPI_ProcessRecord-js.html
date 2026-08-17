@@ -176,12 +176,15 @@ $(document).ready(function () {
     dropdownParent: $('#newTaskModal'),
     tags: true
   });
-  // 适用SKU Select2（选项随产品联动）
+  // 适用SKU Select2（多选，选项随产品联动）
   $('#newSku').select2({
     placeholder: '选择SKU / Select SKU',
     allowClear: true,
     width: '100%',
-    dropdownParent: $('#newTaskModal')
+    multiple: true,
+    closeOnSelect: false,
+    dropdownParent: $('#newTaskModal'),
+    templateSelection: function (data) { return skuSelectionText(data.id, data.text); }
   });
 
   $('#taskSelect').on('change', function () { var tid = $(this).val(); if (tid) selectTask(tid); else clearForm(); });
@@ -192,7 +195,22 @@ $(document).ready(function () {
   });
   $('#newProductName').on('change', function () { onProductSelected($(this).val()); });
   $('#newSku').on('change', function () {
-    if ($(this).val() === '__new__') showSkuCustom(modalSkus[0] || '');
+    var vals = $(this).val() || [];
+    var hasNew = vals.indexOf('__new__') >= 0;
+    var real = vals.filter(function (v) { return v !== '__new__'; });
+    if (hasNew) {
+      // 「＋新增」：展开可编辑输入框（默认 New），已选SKU保留，列表可继续选
+      var custom = $('#newSkuCustom');
+      if (!custom.val().trim()) custom.val('New');
+      custom.show().prop('readonly', false);
+      selectedSkuCodes = real;
+      skuChangeGuard = true;
+      $(this).val(real).trigger('change');
+      return;
+    }
+    if (skuChangeGuard) { skuChangeGuard = false; return; }
+    $('#newSkuCustom').hide();
+    selectedSkuCodes = real;
   });
   $('#btnCreateTask').on('click', createTask);
   $('#btnSaveDraft').on('click', saveRecord);
@@ -597,7 +615,19 @@ $(document).on('change', '#newProcessType', function () {
   loadWorkcenterList($(this).val());
 });
 
-var modalSkus = []; // 当前产品可选的牙柄SKU列表
+var modalSkus = [];         // 当前产品可选的牙柄SKU [{sku, color, bomFound}]
+var selectedSkuCodes = [];  // 当前已选中的SKU编码（不含颜色，多选）
+var skuChangeGuard = false; // 移除__new__令牌时抑制change回调
+
+function skuDisplayText(o) {
+  return o.sku + (o.color ? ' ' + o.color : (o.bomFound ? '' : ' 无对应BOM'));
+}
+
+// Select2 选中后的输入框文案：普通SKU只显示纯C#；特殊选项显示其原文
+function skuSelectionText(id, text) {
+  if (id === '__new__') return text;
+  return id || text;
+}
 
 // 产品名称选项：BOM主数据表 AR列（Bundle）去重列表；失败时可手输
 function loadBOMBundleList() {
@@ -625,8 +655,10 @@ function onProductSelected(bundle) {
   // 全新产品为自由输入，不在BOM选项里 → 保持手填流程
   var exists = $('#newProductName option').toArray().some(function (o) { return o.value === bundle; });
   if (!exists) { hideSkuControls(); return; }
+  showSkuLoading();
   google.script.run
     .withSuccessHandler(function (result) {
+      hideSkuLoading();
       var r = JSON.parse(result || '{}');
       if (!r.success) { showSkuCustom(''); return; }
       modalSkus = r.data || [];
@@ -634,13 +666,25 @@ function onProductSelected(bundle) {
       if (modalSkus.length === 1) { showSkuFixed(modalSkus[0]); return; }
       showSkuSelect(modalSkus);
     })
-    .withFailureHandler(function () { showSkuCustom(''); })
+    .withFailureHandler(function () { hideSkuLoading(); showSkuCustom(''); })
     .getBundleYabingSKUs(bundle);
 }
 
+function showSkuLoading() {
+  $('#skuGroup').show();
+  setSkuSelectVisible(false);
+  $('#newSkuCustom').hide();
+  $('#skuLoading').removeClass('d-none');
+}
+
+function hideSkuLoading() { $('#skuLoading').addClass('d-none'); }
+
 function hideSkuControls() {
   modalSkus = [];
+  selectedSkuCodes = [];
+  skuChangeGuard = false;
   $('#skuGroup').hide();
+  hideSkuLoading();
   $('#newSku').empty().val(null).trigger('change');
   $('#newSkuCustom').hide().val('').prop('readonly', false);
 }
@@ -651,33 +695,42 @@ function setSkuSelectVisible(visible) {
   $('#newSku').next('.select2').toggle(visible);
 }
 
-function showSkuFixed(sku) {
+function showSkuFixed(o) {
   $('#skuGroup').show();
+  hideSkuLoading();
+  selectedSkuCodes = [o.sku];
   setSkuSelectVisible(false);
-  $('#newSkuCustom').show().val(sku).prop('readonly', true);
+  $('#newSkuCustom').show().val(o.sku).prop('readonly', true);
 }
 
 function showSkuSelect(skus) {
   $('#skuGroup').show();
+  hideSkuLoading();
+  selectedSkuCodes = [];
   $('#newSkuCustom').hide();
   setSkuSelectVisible(true);
   var sel = $('#newSku');
-  sel.empty().append('<option value="">-- 选择SKU / Select SKU --</option>');
-  skus.forEach(function (s) { sel.append('<option value="' + s + '">' + s + '</option>'); });
+  sel.empty();
+  skus.forEach(function (o) { sel.append('<option value="' + o.sku + '">' + skuDisplayText(o) + '</option>'); });
   sel.append('<option value="__new__">＋在现有SKU基础上新增 / New SKU from existing</option>');
   sel.val(null).trigger('change');
 }
 
 function showSkuCustom(prefill) {
   $('#skuGroup').show();
+  hideSkuLoading();
+  selectedSkuCodes = [];
   setSkuSelectVisible(false);
   $('#newSkuCustom').show().val(prefill || '').prop('readonly', false);
 }
 
+// 多选结果：已选SKU + （如有）新增输入框内容，分号连接
 function getSelectedSku() {
   if (!$('#skuGroup').is(':visible')) return '';
-  if ($('#newSkuCustom').is(':visible')) return $('#newSkuCustom').val().trim();
-  return $('#newSku').val() || '';
+  var parts = selectedSkuCodes.slice();
+  var custom = $('#newSkuCustom');
+  if (custom.is(':visible') && !custom.prop('readonly') && custom.val().trim()) parts.push(custom.val().trim());
+  return parts.join('; ');
 }
 
 function selectTask(taskID) {

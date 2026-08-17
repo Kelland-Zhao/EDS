@@ -17,6 +17,7 @@ const BOM_SS_ID = "1Ikmgrv9jdTjBsa9-bNsMfyuZ5OY3ObBjA1mmPQjcROY"; // TB BOM主�
 const BOM_SHEET_NAME = "TF BOM masterdata Header";
 const BOM_BUNDLE_COL = 44; // AR列 Bundle
 const BOM_SKU_COL = 5;     // E列 相关SKU
+const BOM_FOLDER_ID = "1JFw67bGsVeOUFfh5pksaBJ6Zvxz0VyBs"; // 共享盘 01 GS TB BOM（BOM#同名表格文件夹）
 const PPMS_SS_ID = "164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
@@ -15039,14 +15040,15 @@ function loadNPIProcessRecordHistory(testTaskID) {
   }
 }
 
-// 从「相关SKU」文本中解析牙柄族 SKU（标签含「牙柄」的行：牙柄/烫印牙柄/打印牙柄/牙柄{}变体）
+// 从「相关SKU」文本中解析牙柄 SKU：仅取以「牙柄」开头的行
+// （烫印牙柄/打印牙柄是注塑后另加工序，不在本模块范围）
 function extractYabingSKUs_(skuText) {
   var out = [];
   if (!skuText) return out;
   var lines = String(skuText).split('\n');
   lines.forEach(function (line) {
     var segs = line.trim().split('|').map(function (s) { return s.trim(); });
-    if (segs.length < 2 || !segs[0] || segs[0].indexOf('牙柄') < 0) return;
+    if (segs.length < 2 || !segs[0] || segs[0].indexOf('牙柄') !== 0) return;
     for (var i = 1; i < segs.length; i++) {
       if (segs[i] && out.indexOf(segs[i]) < 0) out.push(segs[i]);
     }
@@ -15061,6 +15063,35 @@ function unionYabingSKUs_(skuTexts) {
     extractYabingSKUs_(t).forEach(function (s) {
       if (out.indexOf(s) < 0) out.push(s);
     });
+  });
+  return out;
+}
+
+// 解析BOM表格的SKU关系表：SKU → 所在行的「备注」颜色组合
+// 结构：SKU关系表标题行 → 表头行(备注/散刷/牙柄...) → 数据行 → 空行结束
+function parseBomSkuColors_(rows) {
+  var out = {};
+  var started = false, headerSeen = false, dataSeen = false;
+  (rows || []).forEach(function (row) {
+    var cells = (row || []).map(function (c) { return String(c || '').trim(); });
+    if (!started) {
+      if (cells[0] === 'SKU关系表') started = true;
+      return;
+    }
+    if (!cells.join('')) { if (dataSeen) started = false; return; } // 空行结束关系表
+    if (!headerSeen) { headerSeen = true; return; } // 表头行跳过
+    var hasSku = false;
+    for (var i = 2; i < cells.length; i++) {
+      if (/^C\d+[A-Z]*$/.test(cells[i])) { hasSku = true; break; }
+    }
+    if (!hasSku) return; // INJ段等非关系表行（多行文本单元格不匹配）
+    dataSeen = true;
+    var color = cells[1] || '';
+    for (var j = 2; j < cells.length; j++) {
+      if (!/^C\d+[A-Z]*$/.test(cells[j])) continue;
+      if (!out[cells[j]]) out[cells[j]] = color;
+      else if (color && out[cells[j]].indexOf(color) < 0) out[cells[j]] += '/' + color;
+    }
   });
   return out;
 }
@@ -15089,24 +15120,74 @@ function loadBOMBundleList() {
   }
 }
 
-// 指定 Bundle 的牙柄 SKU 列表（跨多行 BOM 去重合并）
+// BOM# → 共享盘文件夹中同名表格的 fileId 索引（缓存6h）
+function getBomFileIndex_() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('npi_bom_file_index');
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
+  var index = {};
+  try {
+    var folder = DriveApp.getFolderById(BOM_FOLDER_ID);
+    var it = folder.getFiles();
+    while (it.hasNext()) {
+      var f = it.next();
+      if (f.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
+      var name = f.getName().trim();
+      if (name && !index[name]) index[name] = f.getId();
+    }
+    if (Object.keys(index).length) cache.put('npi_bom_file_index', JSON.stringify(index), 21600);
+  } catch (e) {}
+  return index;
+}
+
+// 指定 Bundle 的牙柄 SKU 列表 + 颜色
+// SKU 来自相关SKU解析（以牙柄开头），颜色来自各 BOM# 同名表格的 SKU关系表（行备注颜色组合）
+// 返回 [{sku, color, bomFound}]；无同名表格时 bomFound=false（前端显示「无对应BOM」）
 function getBundleYabingSKUs(bundle) {
   try {
     if (!bundle) return JSON.stringify({ success: true, data: [] });
-    var cacheKey = 'npi_bom_skus_' + bundle;
+    var cacheKey = 'npi_bom_skus2_' + bundle;
     var cache = CacheService.getScriptCache();
     var cached = cache.get(cacheKey);
     if (cached) return cached;
     var ws = SpreadsheetApp.openById(BOM_SS_ID).getSheetByName(BOM_SHEET_NAME);
     if (!ws) return JSON.stringify({ success: true, data: [] });
     var lastRow = ws.getLastRow();
-    var bundles = lastRow >= 2 ? ws.getRange(2, BOM_BUNDLE_COL, lastRow - 1, 1).getValues() : [];
+    var bomCol = lastRow >= 2 ? ws.getRange(2, 1, lastRow - 1, 1).getValues() : [];
     var skuCol = lastRow >= 2 ? ws.getRange(2, BOM_SKU_COL, lastRow - 1, 1).getValues() : [];
-    var texts = [];
-    for (var i = 0; i < bundles.length; i++) {
-      if (String(bundles[i][0] || '').trim() === bundle) texts.push(String(skuCol[i][0] || ''));
+    var bundleCol = lastRow >= 2 ? ws.getRange(2, BOM_BUNDLE_COL, lastRow - 1, 1).getValues() : [];
+    var texts = [], boms = [];
+    for (var i = 0; i < bundleCol.length; i++) {
+      if (String(bundleCol[i][0] || '').trim() === bundle) {
+        texts.push(String(skuCol[i][0] || ''));
+        boms.push(String(bomCol[i][0] || '').trim());
+      }
     }
-    var result = JSON.stringify({ success: true, data: unionYabingSKUs_(texts) });
+    var skus = unionYabingSKUs_(texts);
+    // 颜色：BOM# → 文件夹同名表格 INJ段
+    var fileIndex = getBomFileIndex_();
+    var colorMap = {}, bomFoundMap = {};
+    boms.forEach(function (bom) {
+      if (!bom || !fileIndex[bom]) return;
+      try {
+        var bss = SpreadsheetApp.openById(fileIndex[bom]).getSheetByName('BOM');
+        if (!bss) return;
+        var last = Math.min(bss.getLastRow(), 50);
+        var bdata = bss.getRange(1, 1, last, 13).getValues();
+        var colors = parseBomSkuColors_(bdata);
+        Object.keys(colors).forEach(function (sku) {
+          bomFoundMap[sku] = true;
+          if (!colorMap[sku]) colorMap[sku] = colors[sku];
+          else if (colorMap[sku].indexOf(colors[sku]) < 0) colorMap[sku] += '/' + colors[sku];
+        });
+      } catch (e) {}
+    });
+    var data = skus.map(function (sku) {
+      return { sku: sku, color: colorMap[sku] || '', bomFound: !!bomFoundMap[sku] };
+    });
+    var result = JSON.stringify({ success: true, data: data });
     cache.put(cacheKey, result, 21600);
     return result;
   } catch (e) {
