@@ -16,11 +16,11 @@ var importCandidates = [];
 
 var NPI_ACTIVE_STATUSES = ['待确认 Pending', '已排期 Scheduled', '执行中 In Progress'];
 var STATUS_BADGE_CLASS = {
-  '待确认 Pending': 'bg-secondary',
-  '已排期 Scheduled': 'bg-primary',
-  '执行中 In Progress': 'bg-warning text-dark',
-  '已完成 Completed': 'bg-success',
-  '已取消 Cancelled': 'bg-dark'
+  '待确认 Pending': 'status-ongoing',
+  '已排期 Scheduled': 'status-ongoing',
+  '执行中 In Progress': 'status-ongoing',
+  '已完成 Completed': 'status-completed',
+  '已取消 Cancelled': 'status-cancelled'
 };
 
 // 周五起始周（与草稿表一致：WK01=当年第一个周五）
@@ -103,6 +103,9 @@ function loadTasks() {
       buildFilters();
       renderTable();
     })
+    .withFailureHandler(function (err) {
+      Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('任务列表加载失败', 'Failed to load task list') });
+    })
     .loadNPITestTaskList();
 }
 
@@ -114,9 +117,9 @@ function buildFilters() {
   });
   var mSel = $('#machineFilter'), rSel = $('#reqFilter');
   mSel.empty().append('<option value="">全部机台 / All</option>');
-  Object.keys(machines).sort().forEach(function (m) { mSel.append('<option value="' + m + '">' + m + '</option>'); });
+  Object.keys(machines).sort().forEach(function (m) { mSel.append('<option value="' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>'); });
   rSel.empty().append('<option value="">全部负责人 / All</option>');
-  Object.keys(requestors).sort().forEach(function (r) { rSel.append('<option value="' + r + '">' + r + '</option>'); });
+  Object.keys(requestors).sort().forEach(function (r) { rSel.append('<option value="' + escapeHtml(r) + '">' + escapeHtml(r) + '</option>'); });
   // 周选项（含全部）
   var weeks = {};
   allTasks.forEach(function (t) {
@@ -138,7 +141,10 @@ function renderTable() {
   var sourceF = $('#sourceFilter').val();
   var reqF = $('#reqFilter').val();
   var tasks = allTasks.filter(function (t) {
-    if (weekKey && (!t.planDate || computeWeekInfo_(t.planDate).key !== weekKey)) return false;
+    if (weekKey) {
+      var wk = t.planDate ? computeWeekInfo_(t.planDate) : null;
+      if (!wk || wk.key !== weekKey) return false;
+    }
     if (statusF && t.status !== statusF) return false;
     if (machineF && t.machineNo !== machineF) return false;
     if (sourceF) {
@@ -189,7 +195,7 @@ function renderTable() {
         '<td>' + escapeHtml(t.sku) + '</td><td>' + escapeHtml(t.material) + '</td>' +
         '<td><span class="badge ' + badge + '">' + escapeHtml(t.status) + '</span></td>' +
         '<td>' + escapeHtml(t.planDate) + '</td><td>' + escapeHtml(t.reqPerson) + '</td>' +
-        '<td onclick="event.stopPropagation();">' + actions + '</td></tr>';
+        '<td class="text-center align-middle" onclick="event.stopPropagation();">' + actions + '</td></tr>';
     });
     html += '</tbody></table></div>';
   });
@@ -198,25 +204,46 @@ function renderTable() {
 }
 
 function statusBtn(taskID, newStatus, cn, en, extra) {
-  return '<button class="btn btn-sm btn-' + (extra || 'outline-secondary') + ' me-1" style="font-size:10px;" ' +
-    'onclick="doStatusChange(\'' + encodeURIComponent(taskID) + '\', \'' + encodeURIComponent(newStatus) + '\')">' + cn + '<br><small>' + en + '</small></button>';
+  // newStatus 为固定五态常量（不含引号/反斜杠），直接拼接；encode 后 inline handler 不会百分号解码会导致后端匹配失败
+  return '<button class="btn btn-sm btn-' + (extra || 'outline-secondary') + ' me-1" style="font-size:10px;white-space:nowrap;" ' +
+    'onclick="doStatusChange(\'' + encodeURIComponent(taskID) + '\', \'' + newStatus + '\')">' + cn + '<br><small>' + en + '</small></button>';
 }
 
 function doStatusChange(taskID, newStatus) {
-  google.script.run
-    .withSuccessHandler(function (raw) {
-      var r = parseResponse(raw);
-      if (r.success) {
-        loadTasks();
-      } else {
-        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '更新失败', 'Failed') });
-      }
-    })
-    .updateNPITaskStatus(taskID, newStatus);
+  var applyStatus = function () {
+    google.script.run
+      .withSuccessHandler(function (raw) {
+        var r = parseResponse(raw);
+        if (r.success) {
+          loadTasks();
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '更新失败', 'Failed') });
+        }
+      })
+      .withFailureHandler(function (err) {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(err.message || String(err), 'Failed') });
+      })
+      .updateNPITaskStatus(taskID, newStatus);
+  };
+  if (newStatus === '已取消 Cancelled') {
+    // 终态操作，二次确认（UI规范 §9）
+    Swal.fire({
+      title: swalTitle('确认取消', 'Confirm Cancel'),
+      html: swalHtml('确定要取消该任务吗？取消后为终态。', 'Cancel this task? This is a final state.'),
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '确认 / Confirm',
+      cancelButtonText: '取消 / Cancel'
+    }).then(function (r2) {
+      if (r2.isConfirmed) applyStatus();
+    });
+  } else {
+    applyStatus();
+  }
 }
 
 function openImportModal() {
-  Swal.fire({ title: swalTitle('加载候选行...', 'Loading candidates...'), allowOutsideClick: false, showConfirmButton: false });
+  Swal.fire({ title: swalTitle('加载候选行...', 'Loading candidates...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => { Swal.showLoading(); } });
   google.script.run
     .withSuccessHandler(function (raw) {
       Swal.close();
@@ -256,14 +283,14 @@ function doImport() {
   Swal.fire({ title: swalTitle('确认导入', 'Confirm Import'), html: swalHtml('将导入 ' + selected.length + ' 条测试计划', 'Will import ' + selected.length + ' rows'), icon: 'warning', showCancelButton: true, confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel' })
     .then(function (r2) {
       if (!r2.isConfirmed) return;
-      Swal.fire({ title: swalTitle('导入中...', 'Importing...'), allowOutsideClick: false, showConfirmButton: false });
+      Swal.fire({ title: swalTitle('导入中...', 'Importing...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => { Swal.showLoading(); } });
       google.script.run
         .withSuccessHandler(function (raw) {
           Swal.close();
           var r = parseResponse(raw);
           if (r.success) {
             $('#importModal').modal('hide');
-            Swal.fire({ icon: 'success', title: swalTitle('导入完成', 'Imported'), html: swalHtml('成功 ' + r.imported + ' 条，跳过已导入 ' + r.skipped + ' 条', 'Imported ' + r.imported + ', skipped ' + r.skipped), timer: 3000, showConfirmButton: false });
+            Swal.fire({ icon: 'success', title: swalTitle('导入完成', 'Imported'), html: swalHtml('成功 ' + r.imported + ' 条，跳过已导入 ' + r.skipped + ' 条', 'Imported ' + r.imported + ', skipped ' + r.skipped), timer: 1500, showConfirmButton: false });
             loadTasks();
           } else {
             Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '导入失败', 'Failed') });
