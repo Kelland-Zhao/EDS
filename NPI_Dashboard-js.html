@@ -1,0 +1,279 @@
+<script>
+// ============================================================
+//  测试计划 JS / Test Scheduling JS
+// ============================================================
+var siWebPage = '<?!= webPage ?>';
+var intoWebID = '<?!= intoWebID ?>';
+var intoWebName = '<?!= intoWebName ?>';
+var intoWebType = '<?!= intoWebType ?>';
+
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+function parseResponse(raw) { return typeof raw === 'string' ? JSON.parse(raw) : raw; }
+
+var allTasks = [];
+var importCandidates = [];
+
+var NPI_ACTIVE_STATUSES = ['待确认 Pending', '已排期 Scheduled', '执行中 In Progress'];
+var STATUS_BADGE_CLASS = {
+  '待确认 Pending': 'bg-secondary',
+  '已排期 Scheduled': 'bg-primary',
+  '执行中 In Progress': 'bg-warning text-dark',
+  '已完成 Completed': 'bg-success',
+  '已取消 Cancelled': 'bg-dark'
+};
+
+// 周五起始周（与草稿表一致：WK01=当年第一个周五）
+function computeWeekInfo_(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return null;
+  var d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  var diff = (d.getDay() + 2) % 7; // 距上周五的天数
+  var friday = new Date(d.getTime() - diff * 86400000);
+  function firstFridayOf(year) {
+    var s = new Date(year, 0, 1);
+    return new Date(s.getTime() + ((5 - s.getDay() + 7) % 7) * 86400000);
+  }
+  var firstFriday = firstFridayOf(friday.getFullYear());
+  var weekNum = Math.floor((friday - firstFriday) / (7 * 86400000)) + 1;
+  if (weekNum < 1) {
+    firstFriday = firstFridayOf(friday.getFullYear() - 1);
+    weekNum = Math.floor((friday - firstFriday) / (7 * 86400000)) + 1;
+  }
+  var end = new Date(friday.getTime() + 6 * 86400000);
+  function fmt(x) { return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); }
+  return { key: 'WK' + ('0' + weekNum).slice(-2), start: fmt(friday), end: fmt(end), label: 'WK' + ('0' + weekNum).slice(-2) + ' ' + fmt(friday) + '~' + fmt(end) };
+}
+
+// 机台冲突：同机台+同天 ≥2 条活跃任务 → {taskID: [冲突taskID...]}
+function findMachineConflicts_(tasks) {
+  var byKey = {};
+  (tasks || []).forEach(function (t) {
+    if (!t.machineNo || !t.planDate) return;
+    if (NPI_ACTIVE_STATUSES.indexOf(t.status) < 0) return;
+    var k = t.machineNo + '||' + t.planDate;
+    (byKey[k] = byKey[k] || []).push(t.taskID);
+  });
+  var out = {};
+  Object.keys(byKey).forEach(function (k) {
+    var ids = byKey[k];
+    if (ids.length >= 2) {
+      ids.forEach(function (id) { out[id] = ids.filter(function (x) { return x !== id; }); });
+    }
+  });
+  return out;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+$(document).ready(function () {
+  var perm = sessionStorage.getItem('EDSTaskPermission') || '';
+  var permLabels = { 'admin': '管理员 / Admin', 'supervisor': '主管 / Supervisor', 'employee': '员工 / Employee' };
+  $('#userLevelBadge').removeClass('bg-secondary bg-danger bg-warning')
+    .addClass(perm === 'admin' ? 'bg-danger' : (perm === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary'))
+    .text(permLabels[perm] || ('员工 / Employee'));
+
+  loadTasks();
+
+  $('#weekFilter, #statusFilter, #machineFilter, #sourceFilter, #reqFilter').on('change', renderTable);
+  $('#btnNewTask').on('click', function () { openProcessPage('new=1'); });
+  $('#btnImport').on('click', openImportModal);
+  $('#importCheckAll').on('change', function () {
+    $('#importTable tbody input[type=checkbox]').prop('checked', $(this).prop('checked'));
+  });
+  $('#btnDoImport').on('click', doImport);
+});
+
+function openProcessPage(extraParam) {
+  var url = siWebPage + '?v=NPI_ProcessRecord'
+    + (extraParam ? '&' + extraParam : '')
+    + '&ID=' + encodeURIComponent(sessionStorage.getItem('ID') || intoWebID || '')
+    + '&Name=' + encodeURIComponent(sessionStorage.getItem('Name') || intoWebName || '')
+    + '&Process=' + encodeURIComponent(sessionStorage.getItem('Process') || intoWebType || '');
+  window.open(url, '_blank');
+}
+
+function loadTasks() {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = parseResponse(result);
+      allTasks = r.success ? r.data : [];
+      buildFilters();
+      renderTable();
+    })
+    .loadNPITestTaskList();
+}
+
+function buildFilters() {
+  var machines = {}, requestors = {};
+  allTasks.forEach(function (t) {
+    if (t.machineNo) machines[t.machineNo] = true;
+    if (t.reqPerson) requestors[t.reqPerson] = true;
+  });
+  var mSel = $('#machineFilter'), rSel = $('#reqFilter');
+  mSel.empty().append('<option value="">全部机台 / All</option>');
+  Object.keys(machines).sort().forEach(function (m) { mSel.append('<option value="' + m + '">' + m + '</option>'); });
+  rSel.empty().append('<option value="">全部负责人 / All</option>');
+  Object.keys(requestors).sort().forEach(function (r) { rSel.append('<option value="' + r + '">' + r + '</option>'); });
+  // 周选项（含全部）
+  var weeks = {};
+  allTasks.forEach(function (t) {
+    if (!t.planDate) return;
+    var w = computeWeekInfo_(t.planDate);
+    if (w) weeks[w.key] = w;
+  });
+  var wSel = $('#weekFilter');
+  wSel.empty().append('<option value="">全部周 / All Weeks</option>');
+  Object.keys(weeks).sort().reverse().forEach(function (k) { wSel.append('<option value="' + k + '">' + weeks[k].label + '</option>'); });
+  var todayWeek = computeWeekInfo_(new Date().toISOString().split('T')[0]);
+  if (todayWeek && weeks[todayWeek.key]) wSel.val(todayWeek.key);
+}
+
+function renderTable() {
+  var weekKey = $('#weekFilter').val();
+  var statusF = $('#statusFilter').val();
+  var machineF = $('#machineFilter').val();
+  var sourceF = $('#sourceFilter').val();
+  var reqF = $('#reqFilter').val();
+  var tasks = allTasks.filter(function (t) {
+    if (weekKey && (!t.planDate || computeWeekInfo_(t.planDate).key !== weekKey)) return false;
+    if (statusF && t.status !== statusF) return false;
+    if (machineF && t.machineNo !== machineF) return false;
+    if (sourceF) {
+      var src = (t.source || '').toLowerCase();
+      if (sourceF === 'urgent' && src.indexOf('urgent') < 0) return false;
+      if (sourceF === 'weekly' && src.indexOf('urgent') >= 0) return false;
+    }
+    if (reqF && t.reqPerson !== reqF) return false;
+    return true;
+  });
+  var conflicts = findMachineConflicts_(tasks);
+  var byWeek = {};
+  tasks.forEach(function (t) {
+    var w = t.planDate ? computeWeekInfo_(t.planDate) : null;
+    var k = w ? w.key : '未知周';
+    (byWeek[k] = byWeek[k] || []).push(t);
+  });
+  var html = '';
+  Object.keys(byWeek).sort().reverse().forEach(function (k) {
+    var list = byWeek[k];
+    var label = list[0] && list[0].planDate ? computeWeekInfo_(list[0].planDate).label : k;
+    html += '<div class="week-group mb-3"><div class="week-group-title">' + escapeHtml(label) + '（' + list.length + '）</div>';
+    html += '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead><tr>' +
+      '<th>任务号<br><small>Task ID</small></th><th>产品<br><small>Product</small></th><th>模具<br><small>Mold</small></th>' +
+      '<th>机台(机型)<br><small>Machine(Model)</small></th><th>SKU<br><small>SKU</small></th><th>物料<br><small>Material</small></th>' +
+      '<th>状态<br><small>Status</small></th><th>计划日期<br><small>Plan Date</small></th><th>负责人<br><small>Requestor</small></th>' +
+      '<th>操作<br><small>Action</small></th></tr></thead><tbody>';
+    list.sort(function (a, b) {
+      var au = (a.source || '').indexOf('urgent') >= 0 ? 1 : 0;
+      var bu = (b.source || '').indexOf('urgent') >= 0 ? 1 : 0;
+      if (au !== bu) return bu - au; // 紧急置顶
+      return String(a.planDate || '').localeCompare(String(b.planDate || ''));
+    }).forEach(function (t) {
+      var urgent = (t.source || '').indexOf('urgent') >= 0;
+      var badge = STATUS_BADGE_CLASS[t.status] || 'bg-secondary';
+      var conflict = conflicts[t.taskID];
+      var machineCell = escapeHtml(t.machineNo) + (t.machineModel ? ' (' + escapeHtml(t.machineModel) + ')' : '');
+      if (conflict) {
+        machineCell += ' <span class="badge bg-warning text-dark" title="冲突: ' + escapeHtml(conflict.join(', ')) + '">冲突<br><small>Conflict</small></span>';
+      }
+      var actions = '';
+      if (t.status === '待确认 Pending') actions += statusBtn(t.taskID, '已排期 Scheduled', '置已排期', 'Schedule') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
+      if (t.status === '已排期 Scheduled') actions += statusBtn(t.taskID, '执行中 In Progress', '开始执行', 'Start') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
+      if (t.status === '执行中 In Progress') actions += statusBtn(t.taskID, '已完成 Completed', '完成', 'Complete') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
+      html += '<tr class="' + (urgent ? 'table-danger' : '') + '" style="cursor:pointer;" onclick="openProcessPage(\'taskID=' + encodeURIComponent(t.taskID) + '\')">' +
+        '<td>' + escapeHtml(t.taskID) + (urgent ? ' <span class="badge bg-danger">紧急<br><small>Urgent</small></span>' : '') + '</td>' +
+        '<td>' + escapeHtml(t.productName) + '</td><td>' + escapeHtml(t.moldNo) + '</td><td>' + machineCell + '</td>' +
+        '<td>' + escapeHtml(t.sku) + '</td><td>' + escapeHtml(t.material) + '</td>' +
+        '<td><span class="badge ' + badge + '">' + escapeHtml(t.status) + '</span></td>' +
+        '<td>' + escapeHtml(t.planDate) + '</td><td>' + escapeHtml(t.reqPerson) + '</td>' +
+        '<td onclick="event.stopPropagation();">' + actions + '</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  });
+  if (!Object.keys(byWeek).length) html = '<div class="text-muted py-3 text-center">暂无任务 / No tasks</div>';
+  $('#taskTableWrap').html(html);
+}
+
+function statusBtn(taskID, newStatus, cn, en, extra) {
+  return '<button class="btn btn-sm btn-' + (extra || 'outline-secondary') + ' me-1" style="font-size:10px;" ' +
+    'onclick="doStatusChange(\'' + encodeURIComponent(taskID) + '\', \'' + encodeURIComponent(newStatus) + '\')">' + cn + '<br><small>' + en + '</small></button>';
+}
+
+function doStatusChange(taskID, newStatus) {
+  google.script.run
+    .withSuccessHandler(function (raw) {
+      var r = parseResponse(raw);
+      if (r.success) {
+        loadTasks();
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '更新失败', 'Failed') });
+      }
+    })
+    .updateNPITaskStatus(taskID, newStatus);
+}
+
+function openImportModal() {
+  Swal.fire({ title: swalTitle('加载候选行...', 'Loading candidates...'), allowOutsideClick: false, showConfirmButton: false });
+  google.script.run
+    .withSuccessHandler(function (raw) {
+      Swal.close();
+      var r = parseResponse(raw);
+      if (!r.success) {
+        Swal.fire({ icon: 'error', title: swalTitle('导入不可用', 'Import unavailable'), html: swalHtml(r.message || '', '') });
+        return;
+      }
+      importCandidates = r.data || [];
+      var html = '';
+      importCandidates.forEach(function (c, idx) {
+        html += '<tr class="' + (c.imported ? 'text-muted' : '') + '">' +
+          '<td><input type="checkbox" data-idx="' + idx + '" ' + (c.imported ? 'disabled' : 'checked') + '></td>' +
+          '<td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.productName) + '</td><td>' + escapeHtml(c.moldNo) + '</td>' +
+          '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
+      });
+      $('#importTable tbody').html(html);
+      $('#importCheckAll').prop('checked', true);
+      var unimported = importCandidates.filter(function (c) { return !c.imported; }).length;
+      $('#importHint').text('共 ' + importCandidates.length + ' 行，未导入 ' + unimported + ' 行（已导入行置灰跳过）');
+      $('#importModal').modal('show');
+    })
+    .withFailureHandler(function () {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('导入不可用', 'Import unavailable'), html: swalHtml('草稿表读取失败', 'Failed to read test plan sheet') });
+    })
+    .loadTestPlanImportCandidates();
+}
+
+function doImport() {
+  var selected = [];
+  $('#importTable tbody input[type=checkbox]:checked').each(function () {
+    var idx = parseInt($(this).data('idx'), 10);
+    if (!isNaN(idx) && importCandidates[idx]) selected.push(importCandidates[idx]);
+  });
+  if (!selected.length) { Swal.fire({ icon: 'warning', title: swalTitle('未选择', 'Nothing selected'), html: swalHtml('请勾选要导入的行', 'Please select rows to import') }); return; }
+  Swal.fire({ title: swalTitle('确认导入', 'Confirm Import'), html: swalHtml('将导入 ' + selected.length + ' 条测试计划', 'Will import ' + selected.length + ' rows'), icon: 'warning', showCancelButton: true, confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel' })
+    .then(function (r2) {
+      if (!r2.isConfirmed) return;
+      Swal.fire({ title: swalTitle('导入中...', 'Importing...'), allowOutsideClick: false, showConfirmButton: false });
+      google.script.run
+        .withSuccessHandler(function (raw) {
+          Swal.close();
+          var r = parseResponse(raw);
+          if (r.success) {
+            $('#importModal').modal('hide');
+            Swal.fire({ icon: 'success', title: swalTitle('导入完成', 'Imported'), html: swalHtml('成功 ' + r.imported + ' 条，跳过已导入 ' + r.skipped + ' 条', 'Imported ' + r.imported + ', skipped ' + r.skipped), timer: 3000, showConfirmButton: false });
+            loadTasks();
+          } else {
+            Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '导入失败', 'Failed') });
+          }
+        })
+        .withFailureHandler(function (err) {
+          Swal.close();
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(err.message || String(err), 'Failed') });
+        })
+        .importTestPlanRows(JSON.stringify(selected), sessionStorage.getItem('ID') || '');
+    });
+}
+</script>

@@ -453,5 +453,14 @@
         window.open(url);
         $('#npiModal').modal('hide');
     });
+    $('#NPI_Dashboard_Btn').on('click', () => {
+        let url = siWebPage + '?v=NPI_Dashboard'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#npiModal').modal('hide');
+    });
   });
 </script>

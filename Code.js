@@ -169,6 +169,7 @@ function doGet(e) {
   Route.path("EDS_MyTasks", loadEDSMyTasks);
   Route.path("CycleMonitor", loadCycleMonitor);
   Route.path("NPI_ProcessRecord", loadNPIProcessRecord);
+  Route.path("NPI_Dashboard", loadNPIDashboard);
   Route.path("promoteNPItoTBX", promoteNPItoTBX);
   Route.path("getSuggestedCardNumber", getSuggestedCardNumber);
   Route.path("loadBOMBundleList", loadBOMBundleList);
@@ -1415,6 +1416,18 @@ function loadNPIProcessRecord(webPage, id, name, process) {
     intoWebType: process || ""
   })
     .setTitle("新品测试工艺参数 | NPI Process Record")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadNPIDashboard(webPage, id, name, process) {
+  var pageUrl = webPage || getReleaseWebPage();
+  return render("NPI_Dashboard", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("测试计划 | Test Scheduling")
     .setFaviconUrl(webIconUrl);
 }
 
