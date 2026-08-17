@@ -18,6 +18,8 @@ const BOM_SHEET_NAME = "TF BOM masterdata Header";
 const BOM_BUNDLE_COL = 44; // AR列 Bundle
 const BOM_SKU_COL = 5;     // E列 相关SKU
 const BOM_FOLDER_ID = "1JFw67bGsVeOUFfh5pksaBJ6Zvxz0VyBs"; // 共享盘 01 GS TB BOM（BOM#同名表格文件夹）
+const TEST_PLAN_SS_ID = "17ys3UDFWjhfaPnk0TErqqeU0FnMP7nsRoRsTmlmm2fg"; // 2026 Test Plan 草稿表
+const TEST_PLAN_IM_SHEET = "注塑测试";
 const PPMS_SS_ID = "164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ";
 const TASK_TASKS_SHEET = "Tasks";
 const TASK_MEMBERS_SHEET = "TaskMembers";
@@ -177,6 +179,8 @@ function doGet(e) {
   Route.path("updateNPITestTask", updateNPITestTask);
   Route.path("deleteNPITestTask", deleteNPITestTask);
   Route.path("updateNPITaskStatus", updateNPITaskStatus);
+  Route.path("loadTestPlanImportCandidates", loadTestPlanImportCandidates);
+  Route.path("importTestPlanRows", importTestPlanRows);
 
   ensureDailyBriefTrigger_();
 
@@ -15396,6 +15400,130 @@ function getBundleYabingSKUs(bundle) {
     var result = JSON.stringify({ success: true, data: data });
     cache.put(cacheKey, result, 21600);
     return result;
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 草稿表状态 → NPI 状态（未知状态归待确认）
+function mapTestPlanStatus_(draftStatus) {
+  var map = {
+    '已完成': '已完成 Completed',
+    '正在进行': '执行中 In Progress',
+    '延期': '已排期 Scheduled',
+    '未完成': '已排期 Scheduled',
+    '满产': '待确认 Pending',
+    '模具不在线': '待确认 Pending',
+    '取消': '已取消 Cancelled'
+  };
+  return map[draftStatus] || '待确认 Pending';
+}
+
+// 导入去重键：产品+模具+机台+日期 四元组
+function taskImportKey_(productName, moldNo, machineNo, dateStr) {
+  return [String(productName || '').trim(), String(moldNo || '').trim(), String(machineNo || '').trim(), String(dateStr || '').trim()].join('||');
+}
+
+// 导入候选：读草稿表「注塑测试」全部行，标记已导入（四元组去重）
+function loadTestPlanImportCandidates() {
+  try {
+    var ws = SpreadsheetApp.openById(TEST_PLAN_SS_ID).getSheetByName(TEST_PLAN_IM_SHEET);
+    if (!ws) return JSON.stringify({ success: false, message: '测试计划表不可访问 / Test plan sheet not accessible' });
+    var data = ws.getDataRange().getValues();
+    var tData = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks").getDataRange().getValues();
+    var existingKeys = {};
+    for (var i = 1; i < tData.length; i++) {
+      if (!String(tData[i][0] || '').trim()) continue;
+      var d = tData[i][9] instanceof Date ? Utilities.formatDate(tData[i][9], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(tData[i][9] || '').trim();
+      existingKeys[taskImportKey_(tData[i][3], tData[i][4], tData[i][5], d)] = true;
+    }
+    var candidates = [];
+    for (var j = 1; j < data.length; j++) {
+      var product = String(data[j][5] || '').trim();
+      if (!product) continue;
+      var dateStr = data[j][1] instanceof Date ? Utilities.formatDate(data[j][1], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(data[j][1] || '').trim();
+      var mold = String(data[j][7] || '').trim();
+      var machine = String(data[j][11] || '').trim();
+      candidates.push({
+        rowIndex: j + 1,
+        date: dateStr,
+        productName: product,
+        moldNo: mold,
+        machineNo: machine,
+        remark: String(data[j][6] || '').trim(),
+        status: mapTestPlanStatus_(String(data[j][15] || '').trim()),
+        imported: !!existingKeys[taskImportKey_(product, mold, machine, dateStr)]
+      });
+    }
+    return JSON.stringify({ success: true, data: candidates });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 批量导入选中的草稿表行（客户端传候选对象数组；服务端再次四元组去重；机型由Workcenter带出）
+function importTestPlanRows(rowsJSON, operatorSAPID) {
+  try {
+    var rows = typeof rowsJSON === 'string' ? JSON.parse(rowsJSON) : rowsJSON;
+    if (!rows || !rows.length) return JSON.stringify({ success: true, imported: 0, skipped: 0, message: '无可导入行 / Nothing to import' });
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
+    if (!ws) return JSON.stringify({ success: false, message: 'Sheet not found' });
+    var data = ws.getDataRange().getValues();
+    var existingKeys = {};
+    for (var i = 1; i < data.length; i++) {
+      if (!String(data[i][0] || '').trim()) continue;
+      var d = data[i][9] instanceof Date ? Utilities.formatDate(data[i][9], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(data[i][9] || '').trim();
+      existingKeys[taskImportKey_(data[i][3], data[i][4], data[i][5], d)] = true;
+    }
+    var wcModel = {};
+    try {
+      var wcData = SpreadsheetApp.openById(NPI_WORKCENTER_SS_ID).getSheetByName('Workcenter').getDataRange().getValues();
+      for (var w = 1; w < wcData.length; w++) {
+        var model = String(wcData[w][3] || '').trim();
+        if (!isValidWorkcenterModel_(model)) continue;
+        wcModel[String(wcData[w][0] || '').trim()] = model;
+      }
+    } catch (e) {}
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var todayPrefix = 'NPI-' + dateStr.replace(/-/g, '');
+    var todayCount = 0;
+    for (var c = 1; c < data.length; c++) {
+      if (String(data[c][0] || '').indexOf(todayPrefix) === 0) todayCount++;
+    }
+    var sapToName = getSapToNameMap_();
+    var opName = sapToName[operatorSAPID] || '';
+    var operatorId = opName ? opName + '|' + operatorSAPID : operatorSAPID;
+    var imported = 0, skipped = 0;
+    rows.forEach(function (r) {
+      var key = taskImportKey_(r.productName, r.moldNo, r.machineNo, r.date);
+      if (existingKeys[key]) { skipped++; return; }
+      existingKeys[key] = true;
+      todayCount++;
+      var seq = ('000' + todayCount).slice(-4);
+      var status = r.status || '待确认 Pending'; // 客户端候选已携带映射后的状态
+      ws.appendRow([
+        todayPrefix + '-' + seq,             // 0 任务ID
+        '周计划 Weekly',                      // 1 来源
+        status,                              // 2 状态
+        String(r.productName || ''),         // 3 产品名称
+        String(r.moldNo || ''),              // 4 模具编号
+        String(r.machineNo || ''),           // 5 机台编号
+        '',                                  // 6 物料（留空）
+        '',                                  // 7 发起部门（Phase 2B 联动）
+        operatorId,                          // 8 发起人（导入人）
+        String(r.date || dateStr),           // 9 计划日期
+        status === '待确认 Pending' ? '待确认 Pending' : '已确认 Confirmed', // 10 计划部确认
+        '', '', '', '',                      // 11-14
+        String(r.remark || ''),              // 15 备注
+        now, now,                            // 16-17
+        'IM',                                // 18 工序
+        '',                                  // 19 SKU（留空）
+        wcModel[String(r.machineNo || '').trim()] || '' // 20 机型
+      ]);
+      imported++;
+    });
+    return JSON.stringify({ success: true, imported: imported, skipped: skipped, message: '导入完成 / Import done' });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
