@@ -176,6 +176,7 @@ function doGet(e) {
   Route.path("createNPIProcessRecordVersion", createNPIProcessRecordVersion);
   Route.path("updateNPITestTask", updateNPITestTask);
   Route.path("deleteNPITestTask", deleteNPITestTask);
+  Route.path("updateNPITaskStatus", updateNPITaskStatus);
 
   ensureDailyBriefTrigger_();
 
@@ -15052,6 +15053,48 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     return JSON.stringify({ success: true, processCardNumber: tbxCard });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
+  }
+}
+
+// 任务状态机：合法迁移表（存储值为双语字符串）
+var NPI_STATUS_FLOW = {
+  '待确认 Pending': ['已排期 Scheduled', '已取消 Cancelled'],
+  '已排期 Scheduled': ['执行中 In Progress', '已取消 Cancelled'],
+  '执行中 In Progress': ['已完成 Completed', '已取消 Cancelled'],
+  '已完成 Completed': [],
+  '已取消 Cancelled': []
+};
+
+// 校验状态迁移是否合法
+function isValidNPIStatusTransition_(fromStatus, toStatus) {
+  var allowed = NPI_STATUS_FLOW[fromStatus];
+  return !!allowed && allowed.indexOf(toStatus) >= 0;
+}
+
+// 任务状态流转：状态机校验 + 写状态列（第3列）+ 更新 updatedAt（第18列）
+function updateNPITaskStatus(taskID, newStatus) {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
+    if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
+    var data = ws.getDataRange().getValues();
+    var rowIdx = -1, fromStatus = '';
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === taskID) {
+        rowIdx = i + 1;
+        fromStatus = String(data[i][2] || '').trim();
+        break;
+      }
+    }
+    if (rowIdx < 0) return JSON.stringify({ success: false, message: "任务未找到 / Task not found" });
+    if (!isValidNPIStatusTransition_(fromStatus, newStatus)) {
+      return JSON.stringify({ success: false, message: "状态流转不合法 / Invalid status transition" });
+    }
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    ws.getRange(rowIdx, 3).setValue(newStatus);
+    ws.getRange(rowIdx, 18).setValue(now);
+    return JSON.stringify({ success: true, message: "状态已更新 / Status updated" });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
   }
 }
 
