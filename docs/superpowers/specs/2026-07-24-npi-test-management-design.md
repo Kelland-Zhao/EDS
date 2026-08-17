@@ -52,6 +52,11 @@ Sheet 列头行示例：
 | remark | 备注<br>Remark | string | |
 | createdAt | 创建时间<br>Created At | datetime | |
 | updatedAt | 更新时间<br>Updated At | datetime | |
+| processType | 工序<br>Process Type | enum | `IM 注塑` / `TF 植磨毛` / `PK 包装`（扩展列） |
+| sku | 适用SKU<br>SKU | string | 分号分隔多值，来自 BOM 主数据（扩展列） |
+| machineModel | 机型<br>Machine Model | string | 选机台时从 Workcenter D列自动带出（扩展列） |
+
+> reqDept（发起部门）、confirmStatus（计划部确认）、tester、actualStart/actualEnd 归 Phase 2 测试排期联动。
 
 ### ProcessRecord — 工艺参数记录 / Process Record
 
@@ -61,7 +66,8 @@ Sheet 列头行示例：
 |------|------|------|------|
 | recordID | 记录编号<br>Record ID | string | `NPI-PR-YYYYMMDD-XXXX` |
 | testTaskID | 任务编号<br>Task ID | string | **FK → TestTask** |
-| status | 状态<br>Status | enum | `草稿 Draft` / `已提交 Submitted` |
+| status | 状态<br>Status | enum | `草稿 Draft` / `已提交 Submitted` / `已转正 Promoted` |
+| cardNumber | 工艺卡编号<br>Card No. | string | `TEST-Parameter-{工序}-NNNN-NN`，提交时版本号递增（扩展列） |
 | isLatest | 最新版本<br>Is Latest | bool | 是否为最新版本（支持修订） |
 | …196 fields | 来自工艺卡模板，列头均双语 | — | 注塑/注胶产品工艺卡通用模板全部字段 |
 | createdAt | 创建时间<br>Created At | datetime | |
@@ -149,11 +155,45 @@ function loadNPIProcessRecordHistory(testTaskID) // 版本历史
 
 ---
 
+## Phase 1 实现现状与扩展（2026-08-17 更新）
+
+Phase 1 已完整上线，以下为原设计之外的扩展与实现细节：
+
+### 已实现扩展
+- **BOM 主数据联动**（数据源：TB BOM 主数据表）
+  - 产品名称：Select2 模糊搜索 + 自由输入，选项 = TF BOM Header AR列（Bundle）去重（333 个）
+  - 适用SKU：选中产品后从 E列相关SKU 解析以「牙柄」开头的行（烫印/打印牙柄为注塑后另加工序，排除）
+  - SKU 颜色：BOM# → 共享盘文件夹「01 GS TB BOM」同名表格的 SKU关系表 行备注颜色组合；无表格显示「无对应BOM」
+  - 物料：INJ相关 R列 Bom Status=生效 的 H列产品大类去重（11 项）+ 自由输入
+- **机台→机型联动**：Workcenter A列机台号 + D列 Final Machine Type；D列含「闲置/报废」的机台排除
+- **多选字段**：适用SKU、物料支持多选 + 手动新增；存储用分号 `; ` 连接
+- **任务编辑/删除**：编辑复用新建弹窗（全字段预填）；删除级联工艺记录，已转正任务禁止删除
+- **版本历史**：提交后「创建新版本」继续修订（isLatest 动态切换）；历史列表可查看每个版本的完整参数
+- **转正 PPMS**：已提交记录可转正 → 写入 PPMS `INJ_New` 审核队列（按 PPMS 真实表头映射：机型/模具编码/BigBundle/工艺卡编号/工艺参数/状态=复核/原因或备注），重复转正拦截
+- **缓存策略**：Bundle 列表、SKU+颜色、物料选项、BOM 文件索引均 CacheService 6h（GAS 上限）
+
+### 数据源清单
+| 数据源 | ID / 位置 | 用途 |
+|------|------|------|
+| EDS_NPI_Data | `1092k9V4BT-WhD9GPoF6sRQC2TtdZfdjeRe8pK6v1rmQ` | NPI_TestTasks / NPI_ProcessRecords / NPI_Samples |
+| TB BOM masterdata | `1Ikmgrv9jdTjBsa9-bNsMfyuZ5OY3ObBjA1mmPQjcROY` | TF BOM Header（产品/SKU）、INJ相关（物料） |
+| 共享盘 01 GS TB BOM | `1JFw67bGsVeOUFfh5pksaBJ6Zvxz0VyBs` | BOM# 同名表格（SKU关系表颜色） |
+| Workcenter | `12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM` | 机台号 + 机型 |
+| PPMS | `164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ` | INJ_New 转正目标 + 卡号去重 |
+| 2026 Test Plan | `17ys3UDFWjhfaPnk0TErqqeU0FnMP7nsRoRsTmlmm2fg` | 测试排期草稿源（Phase 2 对接，数据待清洗） |
+
+### 遗留事项
+- 发起部门 reqDept 暂无录入入口——计划 Phase 2 与测试排期联动时补齐（数据源 2026 Test Plan）
+- 工艺卡 196 字段模板硬编码在 `NPI_ProcessRecord-js.html` 的 `TEMPLATE_SECTIONS`，模板表驱动化待做
+- TF/PK 工序的 SKU 联动语义待确认（当前按注塑口径解析）
+
+---
+
 ## 后续 Phase 规划
 
 | Phase | 模块 | 核心内容 |
 |-------|------|---------|
-| 2 | 测试排期 | 周计划/紧急插入、机台状态、计划部确认流程、甘特图视图 |
+| 2 | 测试排期 | 周计划/紧急插入、机台状态、计划部确认流程、甘特图视图；reqDept/测试人员等任务字段从 2026 Test Plan 联动 |
 | 3 | 样品管理 | 数量/去向/库位/留存策略 |
 | 4 | 报告评审 | 测试报告生成、评审流程、复盘记录 |
 

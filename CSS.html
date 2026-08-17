@@ -186,6 +186,16 @@
     display: none !important;
   }
 
+  /* NPI新建任务弹窗多选（适用SKU/物料）：恢复标签移除按钮（全局规则隐藏了它） */
+  #newTaskModal .select2-selection__choice__remove {
+    display: inline-block !important;
+  }
+
+  /* 必填校验红框：Select2选择框 */
+  .select2-selection.is-invalid {
+    border-color: #dc3545 !important;
+  }
+
   /* 故障报告确认按钮统一宽度 */
   .btn-confirm-action {
     min-width: 130px;

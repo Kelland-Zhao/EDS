@@ -171,6 +171,11 @@ function doGet(e) {
   Route.path("getSuggestedCardNumber", getSuggestedCardNumber);
   Route.path("loadBOMBundleList", loadBOMBundleList);
   Route.path("getBundleYabingSKUs", getBundleYabingSKUs);
+  Route.path("loadMaterialOptions", loadMaterialOptions);
+  Route.path("loadNPIProcessRecordHistory", loadNPIProcessRecordHistory);
+  Route.path("createNPIProcessRecordVersion", createNPIProcessRecordVersion);
+  Route.path("updateNPITestTask", updateNPITestTask);
+  Route.path("deleteNPITestTask", deleteNPITestTask);
 
   ensureDailyBriefTrigger_();
 
@@ -14691,6 +14696,10 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
     if (data.length && !String(data[0][19] || '').trim()) {
       ws.getRange(1, 20).setValue('适用SKU\nSKU');
     }
+    // 第21列表头：机型/Machine Model（新增列，向后兼容）
+    if (data.length && !String(data[0][20] || '').trim()) {
+      ws.getRange(1, 21).setValue('机型\nMachine Model');
+    }
     var todayCount = 0;
     for (var i = 1; i < data.length; i++) {
       var tid = String(data[i][0] || '');
@@ -14723,12 +14732,19 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
       taskData.remark || '',
       now, now,
       taskData.processType || 'IM',  // S: 工序
-      taskData.sku || ''             // T: 适用SKU
+      taskData.sku || '',            // T: 适用SKU
+      taskData.machineModel || ''    // U: 机型
     ]);
     return JSON.stringify({ success: true, taskID: taskID, message: "任务已创建 / Task created" });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
+}
+
+// Workcenter行过滤：D列机型含「闲置」「报废」等状态词的机台不参与选择
+function isValidWorkcenterModel_(model) {
+  var m = String(model || '').trim();
+  return !(/闲置|报废/.test(m));
 }
 
 function loadNPIWorkcenterList(processType) {
@@ -14748,7 +14764,10 @@ function loadNPIWorkcenterList(processType) {
     var result = [];
     for (var i = 1; i < data.length; i++) {
       var wc = String(data[i][0] || '').trim();
-      if (wc) result.push({ id: wc, text: wc });
+      if (!wc) continue;
+      var model = String(data[i][3] || '').trim(); // D列 Final Machine Type
+      if (!isValidWorkcenterModel_(model)) continue; // 闲置/报废机台排除
+      result.push({ id: wc, text: wc, model: model });
     }
     return JSON.stringify({ success: true, data: result });
   } catch (e) {
@@ -14780,7 +14799,8 @@ function loadNPITestTaskList() {
         remark: String(data[i][15] || ''),
         createdAt: String(data[i][16] || ''),
         processType: String(data[i][18] || '') || 'IM',
-        sku: String(data[i][19] || '')
+        sku: String(data[i][19] || ''),
+        machineModel: String(data[i][20] || '')
       });
     }
     return JSON.stringify({ success: true, data: result });
@@ -14853,6 +14873,12 @@ function saveNPIProcessRecord(recordJSON) {
     } else {
       var seq = ('000' + (Date.now() % 10000)).slice(-4);
       var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
+      // 同一任务的旧记录置为非最新，避免孤儿isLatest
+      for (var k = 1; k < data.length; k++) {
+        if (String(data[k][1] || '').trim() === record.testTaskID) {
+          ws.getRange(k + 1, 4).setValue('FALSE');
+        }
+      }
       ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, operatorIdPR, cardNumber]);
       record.recordID = recordID;
       record.cardNumber = cardNumber;
@@ -14969,6 +14995,14 @@ function getSuggestedCardNumber(testTaskID) {
   }
 }
 
+// 从任务行提取转正所需字段（列位置与createNPITestTask写入一致）
+function extractTaskPromoteInfo_(taskRow) {
+  return {
+    productName: String(taskRow[3] || '').trim(),
+    moldNo: String(taskRow[4] || '').trim()
+  };
+}
+
 function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
   try {
     if (!recordID) return JSON.stringify({ success: false, message: 'Missing params' });
@@ -14992,7 +15026,7 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
       if (String(taskData[j][0] || '').trim() === testTaskID) { taskRow = taskData[j]; break; }
     }
     if (!taskRow) return JSON.stringify({ success: false, message: 'Task not found' });
-    var productName = String(taskRow[4] || '').trim(), moldNo = String(taskRow[5] || '').trim();
+    var info = extractTaskPromoteInfo_(taskRow);
     var ppmsSs = SpreadsheetApp.openById(PPMS_SS_ID);
     var injNew = ppmsSs.getSheetByName('INJ_New'), injData = injNew.getDataRange().getValues();
     var maxSeq = 0, prefix = 'TBX-Parameter-' + tbxType + '-';
@@ -15005,11 +15039,13 @@ function promoteNPItoTBX(recordID, machineType, operatorSAPID) {
     }
     var seqStr = String(maxSeq + 1); while (seqStr.length < 4) seqStr = '0' + seqStr;
     var tbxCard = prefix + seqStr + '-00';
+    // 重复转正检查：原因或备注列（index 20）
     for (var m = 1; m < injData.length; m++) {
-      if (String(injData[m][20] || '').indexOf('NPI-' + testTaskID) !== -1) return JSON.stringify({ success: false, message: 'Already promoted' });
+      if (String(injData[m][20] || '').indexOf('TEST-' + testTaskID) !== -1) return JSON.stringify({ success: false, message: 'Already promoted' });
     }
     var now = Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyy-MM-dd HH:mm:ss');
-    injNew.appendRow([machineType, '', moldNo, '', productName, tbxCard, '', '', JSON.stringify(fields), '', '', '', operatorSAPID + '|' + now, '', '', '', '', '', '', '', '复核', 'NPI转正 TEST-' + testTaskID + ' | ' + productName, '']);
+    // PPMS INJ_New 列序：机型/自动化分组/模具编码/BigBundle/SKU/工艺卡编号/模穴数/分序类别/工艺参数/取代编号/GSID/PDFID/创建信息/复核信息/技术审核/模具审核/设备审核/QA审批/设备文控/状态/原因或备注/创建人邮箱
+    injNew.appendRow([machineType, '', info.moldNo, info.productName, '', tbxCard, '', '', JSON.stringify(fields), '', '', '', operatorSAPID + '|' + now, '', '', '', '', '', '', '复核', 'NPI转正 TEST-' + testTaskID + ' | ' + info.productName, '']);
     npiWs.getRange(recordIdx, 3).setValue('已转正');
     npiWs.getRange(recordIdx, 6).setValue(now);
     npiWs.getRange(recordIdx, 9).setValue(tbxCard);
@@ -15026,15 +15062,111 @@ function loadNPIProcessRecordHistory(testTaskID) {
     var data = ws.getDataRange().getValues();
     var result = [];
     for (var i = data.length - 1; i >= 1; i--) {
-      if (String(data[i][1] || '').trim() === testTaskID) {
-        result.push({
-          recordID: String(data[i][0] || ''), status: String(data[i][2] || ''), cardNumber: String(data[i][8] || ''), cardNumber: String(data[i][8] || ''),
-          isLatest: String(data[i][3] || '') === 'true',
-          updatedAt: String(data[i][201] || ''), createdBy: String(data[i][202] || '')
-        });
-      }
+      if (String(data[i][1] || '').trim() !== testTaskID) continue;
+      var fields = [];
+      try { fields = JSON.parse(String(data[i][4] || '[]')); } catch (e) {}
+      result.push({
+        recordID: String(data[i][0] || ''),
+        status: String(data[i][2] || ''),
+        isLatest: String(data[i][3] || '').toUpperCase() === 'TRUE',
+        fields: fields,
+        cardNumber: String(data[i][8] || ''),
+        createdAt: String(data[i][5] || ''),
+        updatedAt: String(data[i][6] || ''),
+        createdBy: String(data[i][7] || '')
+      });
     }
     return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 创建新版本：复制指定记录为新草稿行（isLatest切换，卡号保留，提交时版本号递增）
+function createNPIProcessRecordVersion(recordID) {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
+    if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
+    var data = ws.getDataRange().getValues();
+    var srcRow = null;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === recordID) { srcRow = data[i]; break; }
+    }
+    if (!srcRow) return JSON.stringify({ success: false, message: "记录未找到 / Record not found" });
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var taskID = String(srcRow[1] || '').trim();
+    // 同一任务的旧记录置为非最新
+    for (var k = 1; k < data.length; k++) {
+      if (String(data[k][1] || '').trim() === taskID) {
+        ws.getRange(k + 1, 4).setValue('FALSE');
+      }
+    }
+    var seq = ('000' + (Date.now() % 10000)).slice(-4);
+    var newID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
+    ws.appendRow([newID, taskID, '草稿', true, String(srcRow[4] || '[]'), now, now, String(srcRow[7] || ''), String(srcRow[8] || '')]);
+    return JSON.stringify({ success: true, recordID: newID, message: "新版本已创建 / New version created" });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 更新测试任务（编辑弹窗保存，列位置与createNPITestTask写入一致）
+function updateNPITestTask(taskID, taskDataJSON, operatorSAPID) {
+  try {
+    var taskData = typeof taskDataJSON === 'string' ? JSON.parse(taskDataJSON) : taskDataJSON;
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
+    if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
+    var data = ws.getDataRange().getValues();
+    var rowIdx = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim() === taskID) { rowIdx = i + 1; break; }
+    }
+    if (rowIdx < 0) return JSON.stringify({ success: false, message: "任务未找到 / Task not found" });
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    var sourceMap = { 'weekly': '周计划 Weekly', 'urgent': '紧急 Urgent' };
+    ws.getRange(rowIdx, 2).setValue(sourceMap[taskData.source] || (taskData.source || ''));
+    ws.getRange(rowIdx, 4).setValue(taskData.productName || '');
+    ws.getRange(rowIdx, 5).setValue(taskData.moldNo || '');
+    ws.getRange(rowIdx, 6).setValue(taskData.machineNo || '');
+    ws.getRange(rowIdx, 7).setValue(taskData.material || '');
+    ws.getRange(rowIdx, 10).setValue(taskData.planDate || '');
+    ws.getRange(rowIdx, 16).setValue(taskData.remark || '');
+    ws.getRange(rowIdx, 18).setValue(now);
+    ws.getRange(rowIdx, 19).setValue(taskData.processType || 'IM');
+    ws.getRange(rowIdx, 20).setValue(taskData.sku || '');
+    ws.getRange(rowIdx, 21).setValue(taskData.machineModel || '');
+    return JSON.stringify({ success: true, message: "任务已更新 / Task updated" });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 删除测试任务（连同其工艺参数记录；已转正的任务禁止删除）
+function deleteNPITestTask(taskID) {
+  try {
+    var ss = SpreadsheetApp.openById(NPI_SS_ID);
+    var ws = ss.getSheetByName("NPI_TestTasks");
+    if (!ws) return JSON.stringify({ success: false, message: "Sheet not found" });
+    var prWs = ss.getSheetByName("NPI_ProcessRecords");
+    if (prWs) {
+      var prData = prWs.getDataRange().getValues();
+      var rowsToDel = [];
+      for (var i = 1; i < prData.length; i++) {
+        if (String(prData[i][1] || '').trim() === taskID) {
+          if (String(prData[i][2] || '').trim() === '已转正') {
+            return JSON.stringify({ success: false, message: "该任务工艺卡已转正，不可删除 / Promoted task cannot be deleted" });
+          }
+          rowsToDel.push(i + 1);
+        }
+      }
+      for (var d = rowsToDel.length - 1; d >= 0; d--) prWs.deleteRow(rowsToDel[d]);
+    }
+    var data = ws.getDataRange().getValues();
+    for (var j = 1; j < data.length; j++) {
+      if (String(data[j][0] || '').trim() === taskID) { ws.deleteRow(j + 1); break; }
+    }
+    return JSON.stringify({ success: true, message: "任务已删除 / Task deleted" });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
@@ -15140,6 +15272,37 @@ function getBomFileIndex_() {
     if (Object.keys(index).length) cache.put('npi_bom_file_index', JSON.stringify(index), 21600);
   } catch (e) {}
   return index;
+}
+
+// 物料选项提取：R列 Bom Status=生效 的 H列产品大类去重（保持出现顺序）
+function extractMaterialOptions_(hValues, rValues) {
+  var out = [];
+  var n = Math.min((hValues || []).length, (rValues || []).length);
+  for (var i = 0; i < n; i++) {
+    if (String(rValues[i] || '').trim() !== '生效') continue;
+    var h = String(hValues[i] || '').trim();
+    if (h && out.indexOf(h) < 0) out.push(h);
+  }
+  return out;
+}
+
+// 物料选项：INJ相关 中 R列 Bom Status=生效 的 H列产品大类去重列表（缓存6h）
+function loadMaterialOptions() {
+  try {
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get('npi_material_options');
+    if (cached) return cached;
+    var ws = SpreadsheetApp.openById(BOM_SS_ID).getSheetByName('INJ相关');
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var lastRow = ws.getLastRow();
+    var hCol = lastRow >= 2 ? ws.getRange(2, 8, lastRow - 1, 1).getValues().map(function (r) { return r[0]; }) : [];
+    var rCol = lastRow >= 2 ? ws.getRange(2, 18, lastRow - 1, 1).getValues().map(function (r) { return r[0]; }) : [];
+    var result = JSON.stringify({ success: true, data: extractMaterialOptions_(hCol, rCol) });
+    cache.put('npi_material_options', result, 21600);
+    return result;
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
 }
 
 // 指定 Bundle 的牙柄 SKU 列表 + 颜色

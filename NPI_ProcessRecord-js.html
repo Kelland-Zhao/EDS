@@ -144,6 +144,9 @@ let allTasks = [];
 let fieldKeyMap = {}; // Maps section-row-column → index in 196-array
 let barrelEnabled = { barrelA: false, barrelB: false, barrelC: false, barrelD: false };
 let hotRunnerEnabled = false;
+let editingTaskID = null;  // 编辑模式：当前编辑的任务ID
+let viewingHistory = false; // 正在查看历史版本
+let latestRecord = null;   // 最新版本记录（返回最新用）
 
 $(document).ready(function () {
   var perm = sessionStorage.getItem('EDSTaskPermission') || '';
@@ -159,6 +162,7 @@ $(document).ready(function () {
   loadTaskList();
   loadWorkcenterList();
   loadBOMBundleList();
+  loadMaterialOptions();
 
   // Init Select2 for machine select in modal
   $('#newMachineNo').select2({
@@ -186,14 +190,33 @@ $(document).ready(function () {
     dropdownParent: $('#newTaskModal'),
     templateSelection: function (data) { return skuSelectionText(data.id, data.text); }
   });
+  // 物料 Select2（多选，BOM产品大类选项 + 可自由输入新增）
+  $('#newMaterial').select2({
+    placeholder: '选择或输入物料 / Select or type',
+    allowClear: true,
+    width: '100%',
+    multiple: true,
+    closeOnSelect: false,
+    tags: true,
+    dropdownParent: $('#newTaskModal')
+  });
 
   $('#taskSelect').on('change', function () { var tid = $(this).val(); if (tid) selectTask(tid); else clearForm(); });
   $('#btnNewTask').on('click', function () {
-    $('#newPlanDate').val(new Date().toISOString().split('T')[0]);
-    hideSkuControls();
+    resetTaskModal();
     $('#newTaskModal').modal('show');
   });
+  // 必填字段输入/变更时清除红框
+  $(document).on('input change', '#newProductName, #newMoldNo, #newMachineNo, #newMaterial, #newPlanDate', function () {
+    $(this).removeClass('is-invalid');
+    $(this).next('.select2').find('.select2-selection').removeClass('is-invalid');
+  });
   $('#newProductName').on('change', function () { onProductSelected($(this).val()); });
+  // 选中机台后自动带出机型（Workcenter D列）
+  $('#newMachineNo').on('change', function () {
+    var opt = $(this).find('option:selected');
+    $('#newMachineModel').val(opt.data('model') || '');
+  });
   $('#newSku').on('change', function () {
     var vals = $(this).val() || [];
     var hasNew = vals.indexOf('__new__') >= 0;
@@ -217,6 +240,10 @@ $(document).ready(function () {
   $('#btnSubmit').on('click', submitRecord);
   $('#btnPromote').on('click', promoteToTBX);
   $('#btnFillTest').on('click', fillTestData);
+  $('#btnEditTask').on('click', openEditModal);
+  $('#btnDeleteTask').on('click', doDeleteTask);
+  $('#btnNewVersion').on('click', createNewVersion);
+  $('#btnBackToLatest').on('click', backToLatest);
 });
 
 // Build a flat index: key = "section_row_subcol" → position in 196-element array
@@ -592,20 +619,52 @@ function loadTaskList(callback) {
     .loadNPITestTaskList();
 }
 
-function loadWorkcenterList(processType) {
+function loadWorkcenterList(processType, callback) {
   var pt = processType || $('#newProcessType').val() || 'IM';
+  var sel = $('#newMachineNo');
+  // 加载占位
+  sel.empty().append('<option value="">加载机台清单... / Loading machines...</option>').val(null).trigger('change');
+  $('#machineHint').addClass('d-none');
   google.script.run
     .withSuccessHandler(function (result) {
       var r = JSON.parse(result || '{}');
       var data = r.success ? r.data : [];
-      var sel = $('#newMachineNo');
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
       data.forEach(function (wc) {
-        sel.append('<option value="' + wc.id + '">' + wc.text + '</option>');
+        sel.append('<option value="' + wc.id + '" data-model="' + (wc.model || '') + '">' + wc.text + '</option>');
       });
       sel.val(null).trigger('change');
+      if (!data.length) {
+        $('#machineHint').removeClass('d-none').text(pt === 'IM' ? '未找到机台清单 / No machines found' : '该工序暂未配置机台清单 / No machine list configured');
+      }
+      if (callback) callback();
+    })
+    .withFailureHandler(function () {
+      sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>').val(null).trigger('change');
+      $('#machineHint').removeClass('d-none').text('机台清单加载失败 / Failed to load machines');
+      if (callback) callback();
     })
     .loadNPIWorkcenterList(pt);
+}
+
+// 打开弹窗时自动清空全部字段
+function resetTaskModal() {
+  editingTaskID = null;
+  $('#newTaskModal .modal-title').text('新建测试任务 / New Test Task');
+  $('#btnCreateTask').html('创建 / Create');
+
+  $('#newProductName').val(null).trigger('change');
+  showSkuHint();
+  $('#newMoldNo, #newRemark, #newMachineModel').val('').removeClass('is-invalid');
+  $('#newMachineNo, #newMaterial').val(null).removeClass('is-invalid');
+  $('#newMachineNo').next('.select2').find('.select2-selection').removeClass('is-invalid');
+  $('#newMaterial').next('.select2').find('.select2-selection').removeClass('is-invalid');
+  $('#newProcessType').val('IM');
+  $('#newSource').val('weekly');
+  $('#newPlanDate').val(new Date().toISOString().split('T')[0]);
+  $('#machineHint').addClass('d-none');
+  // 工序重置回IM，若机台选项为空（此前加载过TF/PK）则重新加载IM清单
+  if ($('#newMachineNo option').length <= 1) loadWorkcenterList('IM');
 }
 
 // Reload workcenters when process type changes
@@ -649,29 +708,44 @@ function loadBOMBundleList() {
     .loadBOMBundleList();
 }
 
-// 选中产品后决定SKU控件形态：唯一自动 / 多选 / 手动输入 / 隐藏
-function onProductSelected(bundle) {
-  if (!bundle) { hideSkuControls(); return; }
-  // 全新产品为自由输入，不在BOM选项里 → 保持手填流程
+// 物料选项：INJ相关 中 R列 Bom Status=生效 的 H列产品大类去重列表；失败时仍可自由输入
+function loadMaterialOptions() {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      if (!r.success) return;
+      var sel = $('#newMaterial');
+      (r.data || []).forEach(function (m) { sel.append('<option value="' + m + '">' + m + '</option>'); });
+      sel.trigger('change');
+    })
+    .loadMaterialOptions();
+}
+
+// 选中产品后决定SKU控件形态：唯一自动 / 多选 / 手动输入 / 提示
+function onProductSelected(bundle, callback) {
+  if (!bundle) { showSkuHint(); if (callback) callback(); return; }
+  // 全新产品为自由输入，不在BOM选项里 → 显示可手输输入框
   var exists = $('#newProductName option').toArray().some(function (o) { return o.value === bundle; });
-  if (!exists) { hideSkuControls(); return; }
+  if (!exists) { showSkuCustom(''); if (callback) callback(); return; }
   showSkuLoading();
   google.script.run
     .withSuccessHandler(function (result) {
       hideSkuLoading();
       var r = JSON.parse(result || '{}');
-      if (!r.success) { showSkuCustom(''); return; }
+      if (!r.success) { showSkuCustom(''); if (callback) callback(); return; }
       modalSkus = r.data || [];
-      if (modalSkus.length === 0) { showSkuCustom(''); return; }
-      if (modalSkus.length === 1) { showSkuFixed(modalSkus[0]); return; }
+      if (modalSkus.length === 0) { showSkuCustom(''); if (callback) callback(); return; }
+      if (modalSkus.length === 1) { showSkuFixed(modalSkus[0]); if (callback) callback(); return; }
       showSkuSelect(modalSkus);
+      if (callback) callback();
     })
-    .withFailureHandler(function () { hideSkuLoading(); showSkuCustom(''); })
+    .withFailureHandler(function () { hideSkuLoading(); showSkuCustom(''); if (callback) callback(); })
     .getBundleYabingSKUs(bundle);
 }
 
 function showSkuLoading() {
   $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
   setSkuSelectVisible(false);
   $('#newSkuCustom').hide();
   $('#skuLoading').removeClass('d-none');
@@ -679,14 +753,19 @@ function showSkuLoading() {
 
 function hideSkuLoading() { $('#skuLoading').addClass('d-none'); }
 
-function hideSkuControls() {
+function hideSkuControls() { showSkuHint(); }
+
+// SKU组常驻：未选产品时显示提示，控件隐藏
+function showSkuHint() {
   modalSkus = [];
   selectedSkuCodes = [];
   skuChangeGuard = false;
-  $('#skuGroup').hide();
+  $('#skuGroup').show();
   hideSkuLoading();
+  setSkuSelectVisible(false);
   $('#newSku').empty().val(null).trigger('change');
   $('#newSkuCustom').hide().val('').prop('readonly', false);
+  $('#skuHint').removeClass('d-none');
 }
 
 // Select2 容器与原始 select 分离，需同步显示/隐藏
@@ -697,6 +776,7 @@ function setSkuSelectVisible(visible) {
 
 function showSkuFixed(o) {
   $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
   hideSkuLoading();
   selectedSkuCodes = [o.sku];
   setSkuSelectVisible(false);
@@ -705,6 +785,7 @@ function showSkuFixed(o) {
 
 function showSkuSelect(skus) {
   $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
   hideSkuLoading();
   selectedSkuCodes = [];
   $('#newSkuCustom').hide();
@@ -718,6 +799,7 @@ function showSkuSelect(skus) {
 
 function showSkuCustom(prefill) {
   $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
   hideSkuLoading();
   selectedSkuCodes = [];
   setSkuSelectVisible(false);
@@ -740,10 +822,16 @@ function selectTask(taskID) {
   if (currentTask.productName) info.push('<span class="task-info-item">产品<br><small>Product</small>: ' + currentTask.productName + '</span>');
   if (currentTask.moldNo) info.push('<span class="task-info-item">模具<br><small>Mold</small>: ' + currentTask.moldNo + '</span>');
   if (currentTask.machineNo) info.push('<span class="task-info-item">机台<br><small>Machine</small>: ' + currentTask.machineNo + '</span>');
+  if (currentTask.reqPerson) info.push('<span class="task-info-item">发起人<br><small>Requestor</small>: ' + currentTask.reqPerson + '</span>');
   if (currentTask.status) info.push('<span class="task-info-item">状态<br><small>Status</small>: ' + currentTask.status + '</span>');
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
   $('#paramFormCard, #btnFillTest').show();
+  $('#btnEditTask, #btnDeleteTask').show();
+  $('#historyCard').show();
+  hideHistoryBanner();
+  setFormReadonly(false);
+  loadHistory(taskID);
 
   var pendingLoads = 1; // loadRecord (+1 if getSuggestedCardNumber needed)
   function loadDone() { if (--pendingLoads <= 0) Swal.close(); }
@@ -766,8 +854,12 @@ function selectTask(taskID) {
         var promoted = currentRecord.status === '已转正';
         $('#btnSaveDraft, #btnSubmit').prop('disabled', submitted || promoted);
         $('#btnPromote').toggle(submitted && !promoted);
+        $('#btnNewVersion').toggle(submitted && !promoted);
         $('#saveStatus').text(promoted ? '已转正 / Promoted' : (submitted ? '已提交 / Submitted' : '草稿 / Draft'));
+        latestRecord = currentRecord;
       } else {
+        $('#btnNewVersion').hide();
+        latestRecord = null;
         clearFormFields();
         applyTaskPrefill();
         console.log('No record found for task');
@@ -887,7 +979,7 @@ function rebuildFieldIndex() {
 
 function clearFormFields() { $('.npi-field').val(''); }
 
-// 选中任务后预填产品信息：产品名称/模具编号/适用SKU（仅填空字段，不覆盖已保存值）
+// 选中任务后预填产品信息：产品名称/模具编号/适用SKU/机型（仅填空字段，不覆盖已保存值）
 function applyTaskPrefill() {
   if (!currentTask) return;
   var nameField = $('[data-key="productInfo_9"]');
@@ -896,6 +988,8 @@ function applyTaskPrefill() {
   if (currentTask.moldNo && !String(moldField.val() || '').trim()) moldField.val(currentTask.moldNo);
   var skuField = $('[data-key="productInfo_11"]');
   if (currentTask.sku && !String(skuField.val() || '').trim()) skuField.val(currentTask.sku);
+  var modelField = $('[data-key="productInfo_12"]');
+  if (currentTask.machineModel && !String(modelField.val() || '').trim()) modelField.val(currentTask.machineModel);
 }
 
 function collectFormFields() {
@@ -910,7 +1004,15 @@ function collectFormFields() {
 
 function clearForm() {
   currentTask = null; currentRecord = null;
+  latestRecord = null;
+  viewingHistory = false;
   $('#taskInfo').html(''); $('#paramFormCard, #btnFillTest').hide(); clearFormFields();
+  $('#btnEditTask, #btnDeleteTask, #btnNewVersion, #btnPromote').hide();
+  $('#historyCard').hide(); $('#historyList').html('');
+  hideHistoryBanner();
+  setFormReadonly(false);
+  $('#btnSaveDraft, #btnSubmit').prop('disabled', false);
+  $('#saveStatus').text('');
   // Reset barrel toggles
   ['barrelA','barrelB','barrelC','barrelD'].forEach(function (id) {
     barrelEnabled[id] = false;
@@ -923,16 +1025,173 @@ function clearForm() {
   $('#section_hotRunner .hot-runner-content').addClass('barrel-disabled');
 }
 
+// ===== 版本历史 =====
+function hideHistoryBanner() {
+  viewingHistory = false;
+  $('#historyViewBanner').hide();
+}
+
+function setFormReadonly(on) {
+  $('.npi-field').prop('disabled', on);
+  $('#btnSaveDraft, #btnSubmit, #btnFillTest').toggle(!on);
+}
+
+function loadHistory(taskID) {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      var data = r.success ? r.data : [];
+      data.forEach(function (v) { historyCache[v.recordID] = v; });
+      renderHistory(data);
+    })
+    .loadNPIProcessRecordHistory(taskID);
+}
+
+function renderHistory(versions) {
+  var html = '';
+  if (!versions.length) {
+    html = '<div class="text-muted">暂无历史版本 / No versions yet</div>';
+  } else {
+    html += '<table class="table table-sm table-hover mb-0" style="font-size:12px;">';
+    html += '<thead><tr><th>记录编号<br><small>Record ID</small></th><th>状态<br><small>Status</small></th><th>工艺卡<br><small>Card</small></th><th>更新时间<br><small>Updated</small></th><th>创建人<br><small>Created By</small></th><th>操作<br><small>Action</small></th></tr></thead><tbody>';
+    versions.forEach(function (v) {
+      html += '<tr>';
+      html += '<td>' + v.recordID + (v.isLatest ? ' <span class="badge bg-success">最新<br><small>Latest</small></span>' : '') + '</td>';
+      html += '<td>' + v.status + '</td>';
+      html += '<td>' + (v.cardNumber || '-') + '</td>';
+      html += '<td>' + (v.updatedAt || v.createdAt || '-') + '</td>';
+      html += '<td>' + (v.createdBy || '-') + '</td>';
+      html += '<td><button class="btn btn-sm btn-outline-secondary" style="font-size:11px;" onclick="viewHistoryVersion(\'' + v.recordID + '\')">查看<br><small>View</small></button></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+  $('#historyList').html(html);
+}
+
+var historyCache = {}; // recordID → 版本数据（含fields）
+
+function viewHistoryVersion(recordID) {
+  var v = historyCache[recordID];
+  if (!v) return;
+  setFormReadonly(true);
+  clearFormFields();
+  fillFormFields(v.fields);
+  $('#historyViewInfo').text('#' + recordID + ' | ' + (v.cardNumber || '-') + ' | ' + v.status);
+  $('#historyViewBanner').show();
+  viewingHistory = true;
+}
+
+function backToLatest() {
+  hideHistoryBanner();
+  setFormReadonly(false);
+  if (latestRecord) {
+    clearFormFields();
+    fillFormFields(latestRecord.fields);
+    var submitted = latestRecord.status === '已提交';
+    var promoted = latestRecord.status === '已转正';
+    $('#btnSaveDraft, #btnSubmit').prop('disabled', submitted || promoted);
+    $('#btnPromote').toggle(submitted && !promoted);
+    $('#btnNewVersion').toggle(submitted && !promoted);
+  }
+}
+
+// 提交后创建新版本继续修订
+function createNewVersion() {
+  if (!currentRecord || !currentRecord.recordID) return;
+  Swal.fire({
+    title: swalTitle('确认创建新版本', 'Confirm New Version'),
+    html: swalHtml('将以当前已提交版本为基准创建草稿新版本，继续修订。', 'A new draft version will be created based on the submitted version.'),
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel'
+  }).then(function (r2) {
+    if (!r2.isConfirmed) return;
+    Swal.fire(swalLoading('创建中...', { title: 'Creating...', html: '正在创建新版本' }));
+    google.script.run
+      .withSuccessHandler(function (raw) {
+        Swal.close();
+        var r = parseResponse(raw);
+        if (r.success) {
+          selectTask(currentTask.taskID);
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '创建失败', 'Failed') });
+        }
+      })
+      .withFailureHandler(function (err) { Swal.close(); Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(err.message || String(err), 'Failed') }); })
+      .createNPIProcessRecordVersion(currentRecord.recordID);
+  });
+}
+
+// ===== 任务编辑/删除 =====
+function openEditModal() {
+  if (!currentTask) return;
+  resetTaskModal();
+  editingTaskID = currentTask.taskID;
+  $('#newTaskModal .modal-title').text('编辑测试任务 / Edit Test Task');
+  $('#btnCreateTask').html('保存修改<br><small>Save Changes</small>');
+  $('#newMoldNo').val(currentTask.moldNo || '');
+  $('#newMaterial').val((currentTask.material || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean)).trigger('change');
+  $('#newMachineModel').val(currentTask.machineModel || '');
+  $('#newProcessType').val(currentTask.processType || 'IM');
+  $('#newSource').val((currentTask.source || '').indexOf('urgent') >= 0 ? 'urgent' : 'weekly');
+  $('#newPlanDate').val(currentTask.planDate || '');
+  $('#newRemark').val(currentTask.remark || '');
+  $('#newProductName').val(currentTask.productName || null);
+  var skuTokens = (currentTask.sku || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean);
+  onProductSelected(currentTask.productName || '', function () {
+    if (skuTokens.length) {
+      if (!$('#newSku').is(':visible')) {
+        $('#newSkuCustom').val(skuTokens.join('; '));
+      } else {
+        $('#newSku').val(skuTokens).trigger('change');
+      }
+    }
+  });
+  loadWorkcenterList(currentTask.processType || 'IM', function () {
+    $('#newMachineNo').val(currentTask.machineNo || null).trigger('change');
+  });
+  $('#newTaskModal').modal('show');
+}
+
+function doDeleteTask() {
+  if (!currentTask) return;
+  Swal.fire({
+    title: swalTitle('确认删除任务', 'Confirm Delete'),
+    html: swalHtml('将删除任务 <b>' + currentTask.taskID + '</b> 及其全部工艺参数记录，且不可恢复。', 'Task ' + currentTask.taskID + ' and all its process records will be deleted permanently.'),
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '确认删除 / Delete', cancelButtonText: '取消 / Cancel',
+    confirmButtonColor: '#dc3545'
+  }).then(function (r2) {
+    if (!r2.isConfirmed) return;
+    Swal.fire(swalLoading('删除中...', { title: 'Deleting...', html: '正在删除任务' }));
+    google.script.run
+      .withSuccessHandler(function (raw) {
+        Swal.close();
+        var r = parseResponse(raw);
+        if (r.success) {
+          clearForm();
+          loadTaskList();
+          Swal.fire({ icon: 'success', title: swalTitle('已删除', 'Deleted'), html: swalHtml(r.message, ''), timer: 2000, showConfirmButton: false });
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '删除失败', 'Failed') });
+        }
+      })
+      .withFailureHandler(function (err) { Swal.close(); Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(err.message || String(err), 'Failed') }); })
+      .deleteNPITestTask(currentTask.taskID);
+  });
+}
+
 function createTask() {
   var taskData = {
     source: $('#newSource').val(), productName: $('#newProductName').val().trim(),
     moldNo: $('#newMoldNo').val().trim(), machineNo: $('#newMachineNo').val().trim(),
-    material: $('#newMaterial').val().trim(), planDate: $('#newPlanDate').val(),
+    material: ($('#newMaterial').val() || []).join('; ').trim(), machineModel: $('#newMachineModel').val().trim(),
+    planDate: $('#newPlanDate').val(),
     processType: $('#newProcessType').val() || 'IM',
     sku: getSelectedSku(),
     remark: $('#newRemark').val().trim()
   };
-  // 必填验证（除备注外）
+  // 必填验证（除备注外）：缺失字段红框高亮
   var missing = [];
   if (!taskData.productName) missing.push('产品名称 / Product Name');
   if (!taskData.moldNo) missing.push('模具编号 / Mold No.');
@@ -940,6 +1199,13 @@ function createTask() {
   if (!taskData.material) missing.push('物料 / Material');
   if (!taskData.planDate) missing.push('计划日期 / Plan Date');
   if (missing.length > 0) {
+    ['newProductName', 'newMoldNo', 'newMachineNo', 'newMaterial', 'newPlanDate'].forEach(function (id) {
+      var el = $('#' + id);
+      if (!String(el.val() || '').trim()) {
+        el.addClass('is-invalid');
+        el.next('.select2').find('.select2-selection').addClass('is-invalid');
+      }
+    });
     Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项','Required fields missing'), html: swalHtml(missing.join('<br>'), missing.join('<br>')) });
     return;
   }
@@ -953,19 +1219,27 @@ function createTask() {
   }).then(function (r) {
     if (!r.isConfirmed) return;
     Swal.fire(swalLoading('创建中...', { title: 'Creating...', html: '正在创建测试任务' }));
-    google.script.run
-      .withSuccessHandler(function (result) {
-        Swal.close();
-        var r2 = JSON.parse(result || '{}');
-        if (r2.success) {
-          $('#newTaskModal').modal('hide');
-          Swal.fire({ icon:'success', title:swalTitle('创建成功','Task Created'), html:swalHtml('任务 ' + r2.taskID + ' 已创建', 'Task ' + r2.taskID + ' created'), timer:3000, showConfirmButton:false });
-          loadTaskList(function () { $('#taskSelect').val(r2.taskID); selectTask(r2.taskID); });
-        } else {
-          Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(r2.message,'') });
-        }
-      })
-      .createNPITestTask(JSON.stringify(taskData), sessionStorage.getItem('ID') || '');
+    var payload = JSON.stringify(taskData);
+    var op = sessionStorage.getItem('ID') || '';
+    var onDone = function (result) {
+      Swal.close();
+      var r2 = JSON.parse(result || '{}');
+      if (r2.success) {
+        $('#newTaskModal').modal('hide');
+        var tid = editingTaskID || r2.taskID;
+        editingTaskID = null;
+        resetTaskModal();
+        Swal.fire({ icon: 'success', title: swalTitle('保存成功', 'Saved'), html: swalHtml('任务 ' + tid + ' 已保存', 'Task ' + tid + ' saved'), timer: 2000, showConfirmButton: false });
+        loadTaskList(function () { $('#taskSelect').val(tid); selectTask(tid); });
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
+      }
+    };
+    if (editingTaskID) {
+      google.script.run.withSuccessHandler(onDone).updateNPITestTask(editingTaskID, payload, op);
+    } else {
+      google.script.run.withSuccessHandler(onDone).createNPITestTask(payload, op);
+    }
   });
 }
 
@@ -1058,11 +1332,14 @@ function submitRecord() {
           currentRecord.status = '已提交';
           $('#saveStatus').text('已提交 / Submitted');
           $('#btnSaveDraft, #btnSubmit').prop('disabled', true);
+          $('#btnNewVersion').show();
+          latestRecord = currentRecord;
           if (sub.cardNumber) {
             currentRecord.cardNumber = sub.cardNumber;
             $('#cardNumberDisplay').html('工艺卡<br><small>Card</small>: <span style="color:#0d47a1;">' + sub.cardNumber + '</span>');
             $('[data-key="productInfo_10"]').val(sub.cardNumber);
           }
+          loadHistory(currentTask.taskID);
         }
         else Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml(sub.message,'') });
       }).submitNPIProcessRecord(rid);
