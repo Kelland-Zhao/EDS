@@ -172,6 +172,36 @@
                 </div>
               </div>
 
+              <!-- 被询问组员（组长代提） -->
+              <div class="card mb-3 mt-3">
+                <div class="card-header bg-light">
+                  <h6 class="mb-0">被询问组员 / Asked Team Members</h6>
+                </div>
+                <div class="card-body">
+                  <div class="row">
+                    <div class="col-md-9">
+                      <div id="roster_chips" class="d-flex flex-wrap"></div>
+                      <div id="roster_empty_hint" class="text-muted small">名单加载中... / Loading roster...</div>
+                    </div>
+                    <div class="col-md-3">
+                      <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="roster_select_all">全选 / All</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="roster_clear_all">清空 / Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row mt-2">
+                    <div class="col-md-9">
+                      <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="roster_manual_input" placeholder="手动添加组员姓名 / Add member manually">
+                        <button class="btn btn-outline-primary" type="button" id="roster_manual_add">添加 / Add</button>
+                      </div>
+                      <small class="text-muted">自动加载今日在岗名单（按你的工序/车间筛选），可手动添加或移除；名单加载失败时请直接手动输入。</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- 提交按钮 -->
               <div class="row mt-4">
                 <div class="col-12">

@@ -5,6 +5,9 @@
 .preview/**
 .superpowers/**
 tests/**
+# Node 测试文件（含 import 语法，GAS 无法执行）
+*.test.mjs
+check4.test.mjs
 
 # 文档（不需要部署到 GAS）
 docs/**

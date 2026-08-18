@@ -9947,31 +9947,27 @@ function submitSafety4Check(checkData) {
       };
     }
     
-    // 格式化检查项数据
-    let check1Data = formatCheckItemData(checkData.checks[0]);
-    let check2Data = formatCheckItemData(checkData.checks[1]);
-    let check3Data = formatCheckItemData(checkData.checks[2]);
-    let check4Data = formatCheckItemData(checkData.checks[3]);
-    
-    // 准备提交数据
+    // 计算提交时间
     let now = new Date();
     let submitDate = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     let submitTime = Utilities.formatDate(now, Session.getScriptTimeZone(), 'HH:mm:ss');
-    
-    let submitRow = [
-      checkData.process || '',                    // A: 工序 / Process
-      checkData.workshop || '',                   // B: 车间 / Workshop  
-      check1Data,                                 // C: 检查项1
-      check2Data,                                 // D: 检查项2
-      check3Data,                                 // E: 检查项3
-      check4Data,                                 // F: 检查项4
-      checkData.submitter || '',                   // G: 提交人 / Submitter
-      submitDate,                                 // H: 提交日期 / Date
-      submitTime                                  // I: 提交时间 / Time
-    ];
-    
+
+    // 构建提交行（含被询问组员校验，纯函数见 buildSafety4SubmitRow）
+    let built = buildSafety4SubmitRow(checkData, submitDate, submitTime);
+    if (!built.ok) {
+      return { success: false, message: built.message };
+    }
+
+    // 表头补齐：仅当 A1 确认为表头时才在 J 列补表头（避免误改数据行）
+    let a1 = String(ws.getRange(1, 1).getValue() || '');
+    if (a1.indexOf('工序') !== -1 || a1.toLowerCase().indexOf('process') !== -1) {
+      if (String(ws.getRange(1, 10).getValue() || '') === '') {
+        ws.getRange(1, 10).setValue('被询问组员 / Asked Members');
+      }
+    }
+
     // 追加新行
-    ws.appendRow(submitRow);
+    ws.appendRow(built.row);
     
     // 生成检查编号 (格式: S4C + YYYYMMDD + 4位序号)
     let dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyyMMdd');
@@ -10001,8 +9997,8 @@ function submitSafety4Check(checkData) {
  * @returns {string} 格式化后的字符串
  */
 function formatCheckItemData(checkItem) {
-  let status = checkItem.status || '';
-  let details = checkItem.details || '';
+  let status = (checkItem && checkItem.status) || '';
+  let details = (checkItem && checkItem.details) || '';
   
   let result = '【状态 / Status】：' + status;
   
@@ -10013,6 +10009,101 @@ function formatCheckItemData(checkItem) {
   }
   
   return result;
+}
+
+/**
+ * 过滤今日在岗组员名单（Check 4 组长代提用）
+ * 规则：车间精确匹配；工序匹配且 INJ/IM 等价；出勤状态为「在岗」或空；
+ * 无工序字段的行（IM 排班降级源）仅当请求工序为 IM/INJ 时保留
+ * @param {Array} roster - [{name, sapID, process, workshop, attendanceStatus}]
+ * @param {string} process - 请求工序（IM/INJ/TF/PK，可为空）
+ * @param {string} workshop - 请求车间（TB1/TB2，可为空）
+ * @returns {Array} [{name, sapID}]
+ */
+function filterRosterByProcessWorkshop(roster, process, workshop) {
+  const reqP = String(process || '').trim().toUpperCase();
+  const reqW = String(workshop || '').trim();
+  return (roster || [])
+    .filter(r => !reqW || String(r.workshop || '').trim() === reqW)
+    .filter(r => {
+      const st = String(r.attendanceStatus || '').trim();
+      return !st || st === '在岗';
+    })
+    .filter(r => {
+      if (!reqP) return true;
+      const p = String(r.process || '').trim().toUpperCase();
+      if (!p) return reqP === 'IM' || reqP === 'INJ'; // 无工序数据视为注塑
+      return p === reqP || (p === 'INJ' && reqP === 'IM') || (p === 'IM' && reqP === 'INJ');
+    })
+    .map(r => ({ name: String(r.name || '').trim(), sapID: String(r.sapID || '').trim() }))
+    .filter(r => r.name);
+}
+
+/**
+ * 构建安全4检查提交行（纯函数，便于测试）
+ * 10 列：A工序 B车间 C-F检查项1-4 G提交人 H日期 I时间 J被询问组员（顿号分隔去重）
+ * @param {object} checkData - {process, workshop, checks[4], submitter, askedMembers[]}
+ * @param {string} submitDate - yyyy-MM-dd
+ * @param {string} submitTime - HH:mm:ss
+ * @returns {{ok:boolean, row?:Array, message?:string}}
+ */
+function buildSafety4SubmitRow(checkData, submitDate, submitTime) {
+  const checks = (checkData && checkData.checks) || [];
+  const members = ((checkData && checkData.askedMembers) || [])
+    .map(m => String(m || '').trim())
+    .filter(Boolean);
+  const seen = {};
+  const unique = [];
+  members.forEach(m => {
+    if (!seen[m]) { seen[m] = 1; unique.push(m); }
+  });
+  if (unique.length === 0) {
+    return { ok: false, message: '请选择被询问组员 / Please select asked team members' };
+  }
+  const row = [
+    checkData.process || '',              // A: 工序 / Process
+    checkData.workshop || '',             // B: 车间 / Workshop
+    formatCheckItemData(checks[0]),       // C: 检查项1
+    formatCheckItemData(checks[1]),       // D: 检查项2
+    formatCheckItemData(checks[2]),       // E: 检查项3
+    formatCheckItemData(checks[3]),       // F: 检查项4
+    checkData.submitter || '',            // G: 提交人 / Submitter
+    submitDate,                           // H: 提交日期 / Date
+    submitTime,                           // I: 提交时间 / Time
+    unique.join('、'),                    // J: 被询问组员 / Asked Members
+  ];
+  return { ok: true, row: row };
+}
+
+/**
+ * 获取今日在岗组员名单（Check 4 组长代提用）
+ * 数据源：AttendanceSync 优先，IM 排班降级，两者皆失败返回 error
+ * @param {string} process - 登录人工序（IM/INJ/TF/PK，可为空）
+ * @param {string} workshop - 登录人车间（TB1/TB2）
+ * @returns {{success:boolean, data:Array<{name,sapID}>, source:string, message?:string}}
+ */
+function getTodayRoster(process, workshop) {
+  try {
+    const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    let roster = [];
+    let source = 'none';
+    const attResult = JSON.parse(loadAttendanceSync(today));
+    if (attResult.success && attResult.data.length > 0) {
+      roster = attResult.data;
+      source = 'AttendanceSync';
+    } else {
+      const imResult = JSON.parse(loadIMStaffByDate(today));
+      if (!imResult.success) {
+        return { success: false, data: [], source: 'error', message: imResult.message || 'IM 排班数据读取失败' };
+      }
+      roster = imResult.data;
+      source = 'IM';
+    }
+    const data = filterRosterByProcessWorkshop(roster, process, workshop);
+    return { success: true, data: data, source: source };
+  } catch (e) {
+    return { success: false, data: [], source: 'error', message: String(e) };
+  }
 }
 
 // ==========================================

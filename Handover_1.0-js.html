@@ -113,13 +113,29 @@
       return;
     }
 
+    // 校验被询问组员不能为空
+    let askedMembers = [];
+    $('#roster_chips .roster-cb:checked').each(function() {
+      askedMembers.push($(this).val());
+    });
+    if (askedMembers.length === 0) {
+      Swal.fire({
+        title: '验证失败 / Validation Failed',
+        text: '请选择被询问组员 / Please select asked team members',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
     // 收集数据
     let checkData = {
       timestamp: new Date().toISOString(),
       submitter: sessionStorage.getItem('Name') || '',
       process: sessionStorage.getItem('Process') || '',
       workshop: sessionStorage.getItem('Workshop') || '',
-      checks: []
+      checks: [],
+      askedMembers: askedMembers
     };
 
     for (let i = 1; i <= 4; i++) {
@@ -148,6 +164,10 @@
             $(`#safety4_${i}_status`).val('');
             $(`#safety4_${i}_details`).val('');
           }
+
+          // 重置组员名单（重新加载今日在岗名单，清除手动添加项）
+          $('#roster_manual_input').val('');
+          loadTodayRoster();
           
           // 显示成功提示
           Swal.fire({
@@ -634,6 +654,94 @@
       .replace(/'/g, '&#039;');
   }
 
+  // ==========================================
+  // 被询问组员名单 / Asked Team Members Roster
+  // ==========================================
+  let rosterNames = []; // 当前名单上的所有姓名（含手动添加），用于防重复
+
+  function renderRosterChip(name, sapID, isManual) {
+    const chip = $('<span class="btn btn-outline-primary btn-sm roster-chip m-1 mb-0"></span>');
+    const cb = $('<input type="checkbox" class="roster-cb" checked>').val(name);
+    chip.append(cb).append(' ' + escapeHtml(name));
+    if (sapID) chip.attr('title', '工号 / SAP ID: ' + escapeHtml(sapID));
+    if (isManual) {
+      chip.append($('<span class="roster-remove text-danger ms-1" style="cursor:pointer" title="移除 / Remove">✕</span>'));
+    }
+    return chip;
+  }
+
+  // 加载今日在岗名单
+  function loadTodayRoster() {
+    const process = sessionStorage.getItem('Process') || '';
+    const workshop = sessionStorage.getItem('Workshop') || '';
+    google.script.run
+      .withSuccessHandler(function(response) {
+        rosterNames = [];
+        $('#roster_chips').empty();
+        if (response.success && response.data.length > 0) {
+          $('#roster_empty_hint').addClass('d-none');
+          response.data.forEach(function(m) {
+            rosterNames.push(m.name);
+            $('#roster_chips').append(renderRosterChip(m.name, m.sapID, false));
+          });
+        } else {
+          $('#roster_empty_hint').removeClass('d-none').html(
+            '今日在岗名单为空或获取失败，请手动输入组员姓名。 / Roster unavailable, please enter members manually.'
+          );
+        }
+      })
+      .withFailureHandler(function(error) {
+        console.error('加载今日在岗名单失败:', error);
+        $('#roster_empty_hint').removeClass('d-none').html(
+          '今日在岗名单获取失败，请手动输入组员姓名。 / Failed to load roster, please enter members manually.'
+        );
+      })
+      .getTodayRoster(process, workshop);
+  }
+
+  // 初始化组员名单卡片
+  function initRosterCard() {
+    $('#roster_select_all').on('click', function() {
+      $('#roster_chips .roster-cb').prop('checked', true);
+    });
+    $('#roster_clear_all').on('click', function() {
+      $('#roster_chips .roster-cb').prop('checked', false);
+    });
+    $('#roster_manual_add').on('click', function() {
+      const name = $('#roster_manual_input').val().trim();
+      if (!name) {
+        Swal.fire({
+          title: '提示 / Notice',
+          text: '请输入姓名 / Please enter a name',
+          icon: 'warning',
+          confirmButtonText: '确定 / OK'
+        });
+        return;
+      }
+      if (rosterNames.indexOf(name) !== -1) {
+        Swal.fire({
+          title: '提示 / Notice',
+          text: '该组员已在名单中 / This member is already in the list',
+          icon: 'info',
+          confirmButtonText: '确定 / OK'
+        });
+        return;
+      }
+      rosterNames.push(name);
+      $('#roster_chips').append(renderRosterChip(name, '', true));
+      $('#roster_manual_input').val('');
+    });
+    $('#roster_chips').on('click', '.roster-remove', function() {
+      const chip = $(this).closest('.roster-chip');
+      const name = chip.find('.roster-cb').val();
+      rosterNames = rosterNames.filter(function(n) { return n !== name; });
+      chip.remove();
+    });
+    loadTodayRoster();
+  }
+
   // 初始化留言板
   initMessageBoard();
+  // 初始化组员名单
+  initRosterCard();
 </script>
