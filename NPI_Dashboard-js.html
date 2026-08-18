@@ -2,10 +2,12 @@
 // ============================================================
 //  测试计划 JS / Test Scheduling JS
 // ============================================================
-var siWebPage = '<?!= webPage ?>';
-var intoWebID = '<?!= intoWebID ?>';
-var intoWebName = '<?!= intoWebName ?>';
-var intoWebType = '<?!= intoWebType ?>';
+// 注意：本文件经 include() 以原始内容内联，GAS 模板脚本标记不会求值；
+// 与其它页面一致，从 sessionStorage 取基址与用户信息（新标签页会复制打开者的 sessionStorage）
+var siWebPage = sessionStorage.getItem('siWebPage') || window.location.href.split('?')[0];
+var intoWebID = sessionStorage.getItem('ID') || '';
+var intoWebName = sessionStorage.getItem('Name') || '';
+var intoWebType = sessionStorage.getItem('Process') || '';
 
 const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
 const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;

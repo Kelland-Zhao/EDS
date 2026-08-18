@@ -13,8 +13,14 @@
     body { background:#f5f6f8; color:#333; max-width:100vw; }
     /* 红色 navbar（UI规范 §2.1 主品牌色；bg-nav 全局未定义，页面内补充） */
     .bg-nav { background-color: #E60012 !important; }
-    /* 分组卡片 + 分组标题（§4.2） */
-    .section-card { background:#fff; border-radius:8px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    /* 欢迎条（与新品测试工艺参数页一致） */
+    .welcome-bar { background:#fff; border-left:4px solid #E60012; padding:10px 18px; margin:12px 0 18px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.04); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .welcome-bar .greet { color:#333; font-size:16px; }
+    .welcome-bar .greet #name { color:#E60012; font-weight:600; }
+    .welcome-bar .perm-info { font-size:12px; color:#6c757d; }
+    .welcome-bar .perm-info .badge { font-size:11px; vertical-align:middle; }
+    /* 分组卡片 + 分组标题（§4.2）；卡片加默认边框 #e9ecef 增强与页面底色的层次 */
+    .section-card { background:#fff; border:1px solid #e9ecef; border-radius:8px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
     .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
     .section-title .toolbar { display:flex; align-items:center; gap:8px; }
     .section-title .toolbar .btn { font-size:13px; }
@@ -82,14 +88,18 @@
           <span style="font-size:14px;font-weight:400;opacity:0.85;">Test Scheduling</span>
         </span>
       </a>
-      <div class="d-flex align-items-center gap-2 text-white" style="font-size:14px;">
-        <span id="name"><?= intoWebName ?></span>
-        <span id="userLevelBadge" class="badge bg-secondary">加载中... / Loading...</span>
-      </div>
     </div>
   </nav>
 
-  <div class="container-fluid py-3 px-3" style="max-width:1400px;">
+  <div class="container-fluid py-3 px-3">
+    <div class="welcome-bar">
+      <div class="greet">
+        <span id="name"><?= intoWebName ?></span>，测试计划 / Test Scheduling
+      </div>
+      <div class="perm-info">
+        <span id="userLevelBadge" class="badge bg-secondary">加载中... / Loading...</span>
+      </div>
+    </div>
     <div class="section-card">
       <div class="section-title">
         <span>测试计划<br><small style="font-weight:400;color:#888;">Test Scheduling</small></span>
