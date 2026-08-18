@@ -241,8 +241,28 @@
               <label class="form-label small">发表留言<br><small>Post Message</small></label>
               <textarea class="form-control form-control-sm" id="msg_content" rows="3" placeholder="输入留言内容... / Enter message..."></textarea>
             </div>
+
+            <!-- 标签多选（必选） -->
+            <div class="mb-3">
+              <label class="form-label small">标签<br><small>Tags <span class="text-danger">*</span></small></label>
+              <div class="d-flex flex-wrap gap-2" id="msg_tags">
+                <button type="button" class="btn btn-outline-secondary btn-sm msg-tag-btn" data-tag="安全 / EHS">安全 / EHS</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm msg-tag-btn" data-tag="质量 / Quality">质量 / Quality</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm msg-tag-btn" data-tag="新品 &amp; 新设备/自动化 / NPI &amp; New Equip./Auto">新品 &amp; 新设备/自动化 / NPI &amp; New Equip./Auto</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm msg-tag-btn" data-tag="FP&amp;R / SM &amp; 5S">FP&amp;R / SM &amp; 5S</button>
+              </div>
+            </div>
             <div class="d-grid mb-3">
               <button class="btn btn-primary btn-sm" id="btn_post_message">发表<br><small>Post</small></button>
+            </div>
+
+            <!-- 标签筛选 -->
+            <div class="d-flex flex-wrap gap-2 mb-3" id="msg_tag_filter">
+              <button type="button" class="btn btn-outline-primary btn-sm msg-filter-btn active" data-tag="">全部 / All</button>
+              <button type="button" class="btn btn-outline-primary btn-sm msg-filter-btn" data-tag="安全 / EHS">安全 / EHS</button>
+              <button type="button" class="btn btn-outline-primary btn-sm msg-filter-btn" data-tag="质量 / Quality">质量 / Quality</button>
+              <button type="button" class="btn btn-outline-primary btn-sm msg-filter-btn" data-tag="新品 &amp; 新设备/自动化 / NPI &amp; New Equip./Auto">新品 &amp; 新设备/自动化 / NPI &amp; New Equip./Auto</button>
+              <button type="button" class="btn btn-outline-primary btn-sm msg-filter-btn" data-tag="FP&amp;R / SM &amp; 5S">FP&amp;R / SM &amp; 5S</button>
             </div>
 
             <!-- 留言列表 -->

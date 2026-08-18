@@ -210,6 +210,15 @@
   let currentUserName = sessionStorage.getItem('Name') || '';
   let pageLoadingSwalShown = false;
 
+  // 留言板标签（canonical 值 = 双语显示）与 badge 颜色
+  const TAG_COLORS = {
+    '安全 / EHS': 'bg-danger',
+    '质量 / Quality': 'bg-info text-dark',
+    '新品 & 新设备/自动化 / NPI & New Equip./Auto': 'bg-success',
+    'FP&R / SM & 5S': 'bg-warning text-dark'
+  };
+  let currentTagFilter = ''; // 当前标签筛选（空 = 全部）
+
 
   function finalizeMessageRender(afterRenderCallback, retryCount) {
     retryCount = retryCount || 0;
@@ -234,16 +243,27 @@
   function initMessageBoard() {
     // 填充车间和工序下拉选项
     populateWorkshopProcessOptions();
-    
+
     // 检查用户权限
     checkUserEditPermission();
-    
+
     // 加载留言列表
     loadMessages();
-    
+
     // 绑定事件
     $('#msg_workshop, #msg_process').on('change', loadMessages);
     $('#btn_post_message').on('click', postMessage);
+    // 标签多选切换
+    $('#msg_tags').on('click', '.msg-tag-btn', function() {
+      $(this).toggleClass('active btn-primary btn-outline-secondary');
+    });
+    // 标签筛选（单选切换，再点全部恢复）
+    $('#msg_tag_filter').on('click', '.msg-filter-btn', function() {
+      currentTagFilter = $(this).data('tag') || '';
+      $('#msg_tag_filter .msg-filter-btn').removeClass('active btn-primary').addClass('btn-outline-primary');
+      $(this).addClass('active btn-primary').removeClass('btn-outline-primary');
+      loadMessages();
+    });
   }
 
   // Process 映射到工序名称
@@ -370,28 +390,38 @@
 
   // 渲染留言列表
   function renderMessageList(messages, afterRenderCallback) {
-    if (!messages || messages.length === 0) {
+    const visible = (messages || []).filter(function(msg) {
+      if (!currentTagFilter) return true;
+      return (msg.tags || []).indexOf(currentTagFilter) !== -1;
+    });
+    if (visible.length === 0) {
       $('#message_list').html('<div class="text-center text-muted small py-3">暂无留言 / No messages</div>');
       finalizeMessageRender(afterRenderCallback);
       return;
     }
 
     let html = '';
-    messages.forEach(function(msg) {
+    visible.forEach(function(msg) {
       const canEdit = userHasEditPermission;
       const rawContentAttr = encodeURIComponent(msg.content || '');
-      const actionButtons = canEdit ? 
+      const rawTagsAttr = encodeURIComponent((msg.tags || []).join('、'));
+      const tagBadges = (msg.tags || []).map(function(t) {
+        const cls = TAG_COLORS[t] || 'bg-secondary';
+        return '<span class="badge ' + cls + ' me-1">' + escapeHtml(t) + '</span>';
+      }).join('');
+      const actionButtons = canEdit ?
         '<div class="message-actions d-flex flex-column align-items-end ms-3" style="min-width:70px;">' +
           '<button type="button" class="btn btn-outline-primary btn-sm small mb-1 message-action w-100" data-action="edit" data-message-id="' + msg.messageId + '">编辑 / Edit</button>' +
           '<button type="button" class="btn btn-outline-danger btn-sm small message-action w-100" data-action="delete" data-message-id="' + msg.messageId + '">删除 / Delete</button>' +
         '</div>' : '';
-      
+
       html += '<div class="card mb-2" data-message-id="' + msg.messageId + '">' +
         '<div class="card-body p-2">' +
           '<div class="d-flex justify-content-between align-items-start">' +
             '<div class="flex-grow-1 pe-2">' +
               '<small class="text-muted">' + formatDate(msg.timestamp) + '</small>' +
-              '<div class="small message-content mt-1" data-raw="' + rawContentAttr + '">' + escapeHtml(msg.content).replace(/\n/g, '<br>') + '</div>' +
+              '<div class="small message-content mt-1" data-raw="' + rawContentAttr + '" data-tags="' + rawTagsAttr + '">' + escapeHtml(msg.content).replace(/\n/g, '<br>') + '</div>' +
+              (tagBadges ? '<div class="mt-1">' + tagBadges + '</div>' : '') +
               (msg.editTime && msg.editTime !== msg.timestamp ? '<div class="mt-1 small text-muted"><i>(已编辑 / Edited: ' + formatDateTime(msg.editTime) + ')</i></div>' : '') +
               '<div class="mt-2">' +
                 '<strong class="small">' + escapeHtml(msg.author) + '</strong>' +
@@ -460,6 +490,21 @@
       return;
     }
 
+    // 收集选中的标签（必选）
+    const tags = [];
+    $('#msg_tags .msg-tag-btn.active').each(function() {
+      tags.push($(this).data('tag'));
+    });
+    if (tags.length === 0) {
+      Swal.fire({
+        title: '提示 / Notice',
+        text: '请至少选择一个标签 / Please select at least one tag',
+        icon: 'warning',
+        confirmButtonText: '确定 / OK'
+      });
+      return;
+    }
+
     const author = sessionStorage.getItem('Name') || '';
 
     $('#btn_post_message').prop('disabled', true).text('提交中... / Submitting...');
@@ -476,6 +521,8 @@
       .withSuccessHandler(function(response) {
         if (response.success) {
           $('#msg_content').val('');
+          // 重置标签选择
+          $('#msg_tags .msg-tag-btn').removeClass('active btn-primary').addClass('btn-outline-secondary');
           loadMessages(function() {
             $('#btn_post_message').prop('disabled', false).text('发表 / Post');
             Swal.close();
@@ -508,7 +555,7 @@
           confirmButtonText: '确定 / OK'
         });
       })
-      .addMessageBoardMessage(author, workshop, process, content);
+      .addMessageBoardMessage(author, workshop, process, content, tags);
   }
 
   // 编辑留言（全局函数供onclick调用）
@@ -525,20 +572,47 @@
         currentContent = '';
       }
     }
+    // 读取当前标签
+    let currentTags = [];
+    const tagEl = $('.card[data-message-id="' + messageId + '"] .message-content');
+    if (tagEl.length) {
+      try {
+        currentTags = decodeURIComponent(tagEl.attr('data-tags') || '').split('、').filter(Boolean);
+      } catch (e) {
+        currentTags = [];
+      }
+    }
+    const tagButtons = Object.keys(TAG_COLORS).map(function(t) {
+      const isActive = currentTags.indexOf(t) !== -1;
+      return '<button type="button" class="btn btn-sm swal-tag-btn ' + (isActive ? 'btn-primary active' : 'btn-outline-secondary') + '" data-tag="' + escapeHtml(t) + '">' + escapeHtml(t) + '</button>';
+    }).join('');
     Swal.fire({
       title: '编辑留言 / Edit Message',
-      input: 'textarea',
-      inputValue: currentContent,
-      inputAttributes: {
-        rows: 4
-      },
+      html: '<textarea id="swal-edit-content" class="swal2-textarea" rows="4">' + escapeHtml(currentContent) + '</textarea>' +
+        '<div class="d-flex flex-wrap gap-2 mt-2" id="swal-edit-tags">' + tagButtons + '</div>',
       showCancelButton: true,
       confirmButtonText: '保存 / Save',
       cancelButtonText: '取消 / Cancel',
-      inputValidator: function(value) {
-        if (!value || !value.trim()) {
-          return '请输入内容 / Please enter content';
+      didOpen: function() {
+        $('#swal-edit-tags').on('click', '.swal-tag-btn', function() {
+          $(this).toggleClass('active btn-primary btn-outline-secondary');
+        });
+      },
+      preConfirm: function() {
+        const content = $('#swal-edit-content').val().trim();
+        if (!content) {
+          Swal.showValidationMessage('请输入内容 / Please enter content');
+          return false;
         }
+        const tags = [];
+        $('#swal-edit-tags .swal-tag-btn.active').each(function() {
+          tags.push($(this).data('tag'));
+        });
+        if (tags.length === 0) {
+          Swal.showValidationMessage('请至少选择一个标签 / Please select at least one tag');
+          return false;
+        }
+        return { content: content, tags: tags };
       }
     }).then(function(result) {
       if (result.isConfirmed) {
@@ -582,7 +656,7 @@
               confirmButtonText: '确定 / OK'
             });
           })
-          .editMessageBoardMessage(messageId, result.value.trim(), editor);
+          .editMessageBoardMessage(messageId, result.value.content, editor, result.value.tags);
       }
     });
   };
@@ -661,7 +735,8 @@
 
   function renderRosterChip(name, sapID, isManual) {
     const chip = $('<span class="btn btn-outline-primary btn-sm roster-chip m-1 mb-0"></span>');
-    const cb = $('<input type="checkbox" class="roster-cb" checked>').val(name);
+    // 名单加载的组员默认不勾选（需时用「全选」）；手动添加的默认勾选
+    const cb = $('<input type="checkbox" class="roster-cb"' + (isManual ? ' checked' : '') + '>').val(name);
     chip.append(cb).append(' ' + escapeHtml(name));
     if (sapID) chip.attr('title', '工号 / SAP ID: ' + escapeHtml(sapID));
     if (isManual) {

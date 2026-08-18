@@ -10113,6 +10113,44 @@ const HANDBOARD_SS_ID = '1PlLYcuCA3H3MsQyOaA0AIPpuEPNR0fXWCsBvQtT-bEQ';
 const HANDBOARD_SHEET_NAME = 'Handover_MessageBoard';
 const USER_PERMISSION_SS_ID = '1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM';
 const USER_PERMISSION_SHEET_NAME = 'userID';
+// 留言板标签（canonical 存储值 = 双语显示）
+const MESSAGE_BOARD_TAGS = [
+  '安全 / EHS',
+  '质量 / Quality',
+  '新品 & 新设备/自动化 / NPI & New Equip./Auto',
+  'FP&R / SM & 5S',
+];
+
+/**
+ * 规范化留言板标签（纯函数）：去空白、去重、必选、仅接受合法标签
+ * @param {Array} tags - 标签数组
+ * @returns {{ok:boolean, value?:Array, message?:string}}
+ */
+function normalizeTags(tags) {
+  const list = ((tags || []).map(t => String(t || '').trim())).filter(Boolean);
+  const seen = {};
+  const unique = [];
+  list.forEach(t => {
+    if (!seen[t]) { seen[t] = 1; unique.push(t); }
+  });
+  if (unique.length === 0) {
+    return { ok: false, message: '请至少选择一个标签 / Please select at least one tag' };
+  }
+  const invalid = unique.filter(t => MESSAGE_BOARD_TAGS.indexOf(t) === -1);
+  if (invalid.length > 0) {
+    return { ok: false, message: '无效标签 / Invalid tag: ' + invalid.join('、') };
+  }
+  return { ok: true, value: unique };
+}
+
+/**
+ * 解析表内标签单元格（顿号分隔；历史空值返回空数组）
+ * @param {*} cellValue
+ * @returns {Array}
+ */
+function parseTagsFromCell(cellValue) {
+  return String(cellValue || '').split('、').map(t => t.trim()).filter(Boolean);
+}
 
 /**
  * 检查用户是否有留言板编辑权限
@@ -10386,7 +10424,8 @@ function getMessageBoardList(workshop, process, limit) {
         workshop: rowWorkshop,
         process: rowProcess,
         content: String(row[6] || ''),
-        editTime: String(row[7] || '')
+        editTime: String(row[7] || ''),
+        tags: parseTagsFromCell(row[8])
       });
     }
     
@@ -10413,24 +10452,38 @@ function getMessageBoardList(workshop, process, limit) {
  * @param {string} content - 内容
  * @returns {Object}
  */
-function addMessageBoardMessage(author, workshop, process, content) {
+function addMessageBoardMessage(author, workshop, process, content, tags) {
   try {
     const ss = SpreadsheetApp.openById(HANDBOARD_SS_ID);
     const sheet = ss.getSheetByName(HANDBOARD_SHEET_NAME);
     if (!sheet) {
       return { success: false, message: '留言板工作表不存在 / Message board sheet not found' };
     }
-    
+
+    // 校验并规范化标签（必选）
+    const normalized = normalizeTags(tags);
+    if (!normalized.ok) {
+      return { success: false, message: normalized.message };
+    }
+
     const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     const messageId = Utilities.getUuid();
-    
+
     // 计算序号：当前行数（含表头）即下一行的序号
     const lastRow = sheet.getLastRow();
     const seqNo = lastRow > 0 ? lastRow : 1;
-    
-    // 列顺序：序号(0),留言ID(1),车间(2),工序(3),留言人(4),留言时间(5),留言内容(6),最后编辑时间(7)
-    sheet.appendRow([seqNo, messageId, workshop, process, author, timestamp, content, timestamp]);
-    
+
+    // 表头补齐：仅当 A1 确认为表头时才在 I 列补表头（避免误改数据行）
+    const a1 = String(sheet.getRange(1, 1).getValue() || '');
+    if (a1.indexOf('序号') !== -1 || a1.toLowerCase().indexOf('seq') !== -1) {
+      if (String(sheet.getRange(1, 9).getValue() || '') === '') {
+        sheet.getRange(1, 9).setValue('标签 / Tags');
+      }
+    }
+
+    // 列顺序：序号(0),留言ID(1),车间(2),工序(3),留言人(4),留言时间(5),留言内容(6),最后编辑时间(7),标签(8)
+    sheet.appendRow([seqNo, messageId, workshop, process, author, timestamp, content, timestamp, normalized.value.join('、')]);
+
     return { success: true, message: '留言添加成功 / Message added successfully' };
   } catch (error) {
     return { success: false, message: '添加留言失败 / Failed to add message: ' + error.toString() };
@@ -10445,27 +10498,34 @@ function addMessageBoardMessage(author, workshop, process, content) {
  * @param {string} editor - 编辑人
  * @returns {Object}
  */
-function editMessageBoardMessage(messageId, content, editor) {
+function editMessageBoardMessage(messageId, content, editor, tags) {
   try {
     const ss = SpreadsheetApp.openById(HANDBOARD_SS_ID);
     const sheet = ss.getSheetByName(HANDBOARD_SHEET_NAME);
     if (!sheet) {
       return { success: false, message: '留言板工作表不存在 / Message board sheet not found' };
     }
-    
+
+    // 校验并规范化标签（必选）
+    const normalized = normalizeTags(tags);
+    if (!normalized.ok) {
+      return { success: false, message: normalized.message };
+    }
+
     const values = sheet.getDataRange().getValues();
-    
+
     // 查找留言
     for (let i = 1; i < values.length; i++) {
       if (String(values[i][1]) === messageId) {
         const editTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-        // 更新内容（G列，索引7）和编辑时间（H列，索引8）
+        // 更新内容（G列）、编辑时间（H列）和标签（I列）
         sheet.getRange(i + 1, 7).setValue(content);
         sheet.getRange(i + 1, 8).setValue(editTime);
+        sheet.getRange(i + 1, 9).setValue(normalized.value.join('、'));
         return { success: true, message: '留言编辑成功 / Message edited successfully' };
       }
     }
-    
+
     return { success: false, message: '留言不存在 / Message not found' };
   } catch (error) {
     return { success: false, message: '编辑留言失败 / Failed to edit message: ' + error.toString() };
