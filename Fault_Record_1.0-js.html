@@ -47,7 +47,7 @@
         $('#followone,#followedone').val('');
         $('.dynamic-follow-group').remove();
       } else {
-        $(`#${item.yesId}`).prop('checked', true);
+        $(`#${item.noId}`).prop('checked', true); // 默认恢复为「否」
         $(`#${item.descId}`).val('');
       }
     });
@@ -147,11 +147,11 @@
               <label>${item.Description}</label>
             </div>
             <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="${yesId}" name="${key}" checked>
+              <input class="form-check-input" type="radio" id="${yesId}" name="${key}">
               <label class="form-check-label" for="${yesId}">是/ Yes</label>
             </div>
             <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="${noId}" name="${key}">
+              <input class="form-check-input" type="radio" id="${noId}" name="${key}" checked>
               <label class="form-check-label" for="${noId}">否/ No</label>
             </div>
             <div class="col-5">
@@ -230,11 +230,11 @@
               <label>${item.Description}</label>
             </div>
             <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="${yesId}" name="${key}${idSuffix}" checked>
+              <input class="form-check-input" type="radio" id="${yesId}" name="${key}${idSuffix}">
               <label class="form-check-label" for="${yesId}">是/ Yes</label>
             </div>
             <div class="col-1 form-check form-check-inline">
-              <input class="form-check-input" type="radio" id="${noId}" name="${key}${idSuffix}">
+              <input class="form-check-input" type="radio" id="${noId}" name="${key}${idSuffix}" checked>
               <label class="form-check-label" for="${noId}">否/ No</label>
             </div>
             <div class="col-5">
@@ -1319,62 +1319,102 @@
       'SuggestedAction'
     ];
     const suffix = id === 'ModalSubmit' ? '2' : '';
-    let allFixedFieldsFilled = fixedFields.every(field => {
-      let value = $(`#${field}${suffix}`).val() || '';
-      return value.trim() !== '';
+
+    // 收集固定字段值
+    const fieldValues = {};
+    fixedFields.forEach(field => {
+      fieldValues[field] = ($(`#${field}${suffix}`).val() || '').trim();
     });
 
-    let yesOptionsWithDescriptions = {};
-    if (id === 'ModalSubmit') {
-      globalFailureProcessItemsModal.forEach((item) => {
-        if (item.isFollow) {
-          yesOptionsWithDescriptions[`#${item.yesId}`] = `.follow-cavity${suffix}, .followed-cavity${suffix}`;
-        } else {
-          yesOptionsWithDescriptions[`#${item.yesId}`] = `#${item.descId}`;
+    // 收集「是」勾选项及其描述值（跟从项取所有穴号输入框）
+    const items = id === 'ModalSubmit' ? globalFailureProcessItemsModal : globalFailureProcessItems;
+    const yesItems = [];
+    items.forEach((item) => {
+      if (item.isFollow) {
+        const checked = $(`#${item.yesId}`).is(':checked');
+        if (checked) {
+          yesItems.push({
+            label: item.Description,
+            checked: true,
+            descValues: $(`.follow-cavity${suffix}, .followed-cavity${suffix}`).toArray().map(input => $(input).val())
+          });
         }
-      });
-    } else {
-      globalFailureProcessItems.forEach((item) => {
-        if (item.isFollow) {
-          yesOptionsWithDescriptions[`#${item.yesId}`] = `.follow-cavity, .followed-cavity`;
-        } else {
-          yesOptionsWithDescriptions[`#${item.yesId}`] = `#${item.descId}`;
+      } else {
+        const checked = $(`#${item.yesId}`).is(':checked');
+        if (checked) {
+          yesItems.push({
+            label: item.Description,
+            checked: true,
+            descValues: [($(`#${item.descId}`).val() || '')]
+          });
         }
-      });
-    }
-    // 检查是否至少有一个"是"选项被选中
-    const atLeastOneYes = Object.keys(yesOptionsWithDescriptions).some(selector => $(selector).is(':checked'));
-
-    // console.log('atLeastOneYes', atLeastOneYes)
-    // 检查所有被选中的"是"选项后面的描述输入框是否不为空
-    const allDescriptionsFilled = Object.entries(yesOptionsWithDescriptions).every(([yesSelector, descSelector]) => {
-      // 如果"是"选项被选中，检查对应的描述输入框是否不为空
-      if ($(yesSelector).is(':checked')) {
-        // 对于热流道跟从的特殊处理，需要检查两个输入框
-        if (yesSelector === `#Follow_Y${suffix}` || yesSelector === '#Follow_Y') {
-          return $(descSelector).toArray().every(input => $(input).val().trim() !== '');
-        }
-        // 对于其他描述输入框，只需要检查对应的一个输入框
-        return $(descSelector).val().trim() !== '';
       }
-      return true; // 如果"是"选项未被选中，则不需要检查描述输入框，返回 true
     });
-    // console.log('allDescriptionsFilled', allDescriptionsFilled)
 
-    // 如果所有字段都已填写（含直接原因、建议措施必填）
-    if (allFixedFieldsFilled && atLeastOneYes && allDescriptionsFilled) {
+    // 纯函数计算缺失项（computeMissingFields 供测试）
+    const missing = computeMissingFields(fieldValues, yesItems);
+
+    if (missing.length === 0) {
       console.log('数据填写完整', true);
       return true;
     } else {
-      // 如果有字段未填写，显示错误提示
+      // 具体列出缺失内容，让技术员知道缺什么
       Swal.fire({
         icon: "error",
-        title: "请将数据填写完整/ Please fill in the data completely",
-        timer: 2000
+        title: '数据填写不完整 / Incomplete Data',
+        html: '以下内容缺失 / Missing:<br>' + missing.map(m => '• ' + escapeHtml(m)).join('<br>'),
+        timer: 5000
       });
-      console.log('数据未填写完整', false);
+      console.log('数据未填写完整', false, missing);
       return false;
     }
+  }
+
+  // 校验报告纯函数（供测试）：返回缺失项列表
+  const FAILURE_FIXED_FIELD_LABELS = {
+    workcenter: '机台号/ Workcenter',
+    workshop: '车间/ Workshop',
+    shift: '班次/ Shift',
+    owner: '维修人/ Maintenance Owner',
+    errorCode: '故障代码/ Failure Code',
+    Status: '状态/ Status',
+    MaintenanceDuration: '维修时间/ Maintenance Time',
+    Description: '故障描述/ Failure Description',
+    DirectCause: '直接原因/ Direct Cause',
+    SuggestedAction: '建议措施/ Suggested Action'
+  };
+  function computeMissingFields(fixedFieldValues, yesItems) {
+    const missing = [];
+    Object.keys(FAILURE_FIXED_FIELD_LABELS).forEach(function(k) {
+      if (!String(fixedFieldValues[k] || '').trim()) {
+        missing.push(FAILURE_FIXED_FIELD_LABELS[k]);
+      }
+    });
+    let anyYes = false;
+    (yesItems || []).forEach(function(it) {
+      if (it.checked) {
+        anyYes = true;
+        const emptyDesc = (it.descValues || []).some(function(d) { return !String(d || '').trim(); });
+        if (emptyDesc) {
+          missing.push('处理项描述/ Process Description: ' + (it.label || ''));
+        }
+      }
+    });
+    if (!anyYes) {
+      missing.push('至少勾选一项处理「是」/ At least one "Yes" item');
+    }
+    return missing;
+  }
+
+  // HTML 转义（弹窗展示用）
+  function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   function extractTextBetweenBraces(input) {
