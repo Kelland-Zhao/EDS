@@ -303,7 +303,15 @@
         if (!result.isConfirmed) return;
         Swal.fire({ title: swalTitle('处理中', 'Processing...'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         google.script.run.withSuccessHandler(async r => {
-          if (r && r.ok) { await loadMasterData(); renderMasterTable(); Swal.fire({ icon: 'success', title: swalTitle('操作成功', 'Done') }); }
+          if (r && r.ok) {
+            try {
+              await loadMasterData(); renderMasterTable(); applyFilters();
+              Swal.fire({ icon: 'success', title: swalTitle('操作成功', 'Done') });
+            } catch (e) {
+              Swal.close();
+              Swal.fire({ icon: 'warning', title: swalTitle('操作成功但刷新失败', 'Done but refresh failed'), html: swalHtml('请手动刷新。', 'Please refresh manually.') });
+            }
+          }
           else Swal.fire({ icon: 'error', title: swalTitle('操作失败', 'Failed'), html: swalHtml(String((r && r.message) || r), '') });
         }).withFailureHandler(e => Swal.fire({ icon: 'error', title: swalTitle('操作失败', 'Failed'), html: swalHtml(String(e.message || e), '') }))
           .confirm_PM_MasterData(ids, result.value.code, result.value.name, result.value.pwd, action);
@@ -345,8 +353,13 @@
               unlockedIds[id] = true;
               const $row = tableMaster.$(`tr[data-id="${id}"]`);
               $row.find('.cell-input, .cell-select').prop('disabled', false);
-            } else Swal.fire({ icon: 'error', title: swalTitle('验证失败', 'Verification Failed') });
+            } else {
+              $(this).data('lockPrompted', false);
+              Swal.fire({ icon: 'error', title: swalTitle('验证失败', 'Verification Failed') });
+            }
           }).verifyPM_MasterAuditor(result.value.code, result.value.name, result.value.pwd);
+        } else {
+          $(this).data('lockPrompted', false);
         }
       });
     }
@@ -361,7 +374,15 @@
       if (!result.isConfirmed) return;
       Swal.fire({ title: swalTitle('导入中', 'Importing...'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       google.script.run.withSuccessHandler(async r => {
-        if (r && r.ok) { await loadMasterData(); renderMasterTable(); Swal.fire({ icon: 'success', title: swalTitle('导入成功', 'Imported'), html: swalHtml(String(r.message || ''), '') }); }
+        if (r && r.ok) {
+          try {
+            await loadMasterData(); renderMasterTable(); applyFilters();
+            Swal.fire({ icon: 'success', title: swalTitle('导入成功', 'Imported'), html: swalHtml(String(r.message || ''), '') });
+          } catch (e) {
+            Swal.close();
+            Swal.fire({ icon: 'warning', title: swalTitle('导入成功但刷新失败', 'Imported but refresh failed'), html: swalHtml('请手动刷新。', 'Please refresh manually.') });
+          }
+        }
         else Swal.fire({ icon: 'error', title: swalTitle('导入失败', 'Import Failed'), html: swalHtml(String((r && r.message) || r), '') });
       }).withFailureHandler(e => Swal.fire({ icon: 'error', title: swalTitle('导入失败', 'Import Failed'), html: swalHtml(String(e.message || e), '') }))
         .import_PM_MasterData(global_ID, global_Name);
