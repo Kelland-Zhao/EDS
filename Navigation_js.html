@@ -90,6 +90,16 @@
         $('#pmModal').modal('hide');
     });
 
+    $('#PM_MasterData').click(() => {
+        let url = siWebPage + '?v=PM_MasterData'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#pmModal').modal('hide');
+    });
+
     $('#PM_ShiftFollowUp').click(() => {
         // TODO: 请提供具体的跳转页面URL
         let url = siWebPage + '?v=PM_ShiftFollowUp'
