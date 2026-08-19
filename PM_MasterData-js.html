@@ -223,6 +223,7 @@
       masterRows.push(copy);
     });
     renderMasterTable();
+    applyFilters();
   });
 
   $('#btnDelete').on('click', function () {
@@ -261,8 +262,13 @@
       google.script.run.withSuccessHandler(async r => {
         if (r && r.ok) {
           deletedIds = [];
-          await loadMasterData(); renderMasterTable();
-          Swal.fire({ icon: 'success', title: swalTitle('保存成功', 'Saved') });
+          try {
+            await loadMasterData(); renderMasterTable(); applyFilters();
+            Swal.fire({ icon: 'success', title: swalTitle('保存成功', 'Saved') });
+          } catch (e) {
+            Swal.close();
+            Swal.fire({ icon: 'warning', title: swalTitle('保存成功但刷新失败', 'Saved but refresh failed'), html: swalHtml('请手动刷新。', 'Please refresh manually.') });
+          }
         } else {
           Swal.fire({ icon: 'error', title: swalTitle('保存失败', 'Save Failed'), html: swalHtml(String((r && r.message) || r), '') });
         }
