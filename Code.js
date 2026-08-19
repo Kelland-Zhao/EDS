@@ -9702,6 +9702,34 @@ function confirm_PM_MasterData(ids, code, name, pwd, action) {
   }
 }
 
+function import_PM_MasterData(userCode, userName) {
+  try {
+    let ss = SpreadsheetApp.openById(PM_MASTER_SS_ID);
+    let ws = getPM_MasterSheet(ss);
+    if (ws.getLastRow() >= 2) {
+      return { ok: false, message: "正式表非空，禁止重复导入（请先清空正式表）" };
+    }
+    let dss = SpreadsheetApp.openById(PM_MASTER_DRAFT_SS_ID);
+    let dws = dss.getSheetByName("MasterData");
+    if (!dws) return { ok: false, message: "草稿表 MasterData sheet 未找到" };
+    let lastRow = dws.getLastRow();
+    if (lastRow < 2) return { ok: false, message: "草稿表无数据" };
+    let draft = dws.getRange(2, 1, lastRow - 1, 15).getValues();
+    let rows = [];
+    draft.forEach(function (r, idx) {
+      // 全空行跳过
+      if (r.every(function (c) { return c === "" || c === undefined || c === null; })) return;
+      rows.push(buildMasterRecordFromDraft(r, "PM-MD-" + String(rows.length + 1).padStart(4, "0")));
+    });
+    if (rows.length === 0) return { ok: false, message: "草稿表无有效数据" };
+    ws.getRange(2, 1, rows.length, 20).setValues(rows);
+    appendPM_MasterAuditLog(ss, userCode, userName, "导入", "", "", "", "导入 " + rows.length + " 条");
+    return { ok: true, message: "导入成功 " + rows.length + " 条", count: rows.length };
+  } catch (e) {
+    return { ok: false, message: e.toString() };
+  }
+}
+
 function get_PM_Workorder() {
   try {
     let ID = "1YzMGIQ2RcBlGIadWh5yfxlCmOpCuOBHpgKfEVz8_W98";
