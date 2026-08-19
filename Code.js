@@ -9500,6 +9500,41 @@ function buildMasterRecordFromDraft(draftRow, masterId) {
   return rec;
 }
 
+function getPM_MasterSheet(ss) {
+  let ws = ss.getSheetByName(PM_MASTER_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(PM_MASTER_SHEET_NAME);
+    ws.getRange(1, 1, 1, PM_MASTER_HEADERS.length).setValues([PM_MASTER_HEADERS]);
+  }
+  return ws;
+}
+
+function getPM_MasterAuditSheet(ss) {
+  let ws = ss.getSheetByName(PM_MASTER_AUDIT_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(PM_MASTER_AUDIT_SHEET_NAME);
+    ws.getRange(1, 1, 1, PM_MASTER_AUDIT_HEADERS.length).setValues([PM_MASTER_AUDIT_HEADERS]);
+  }
+  return ws;
+}
+
+function get_PM_MasterData() {
+  try {
+    let ss = SpreadsheetApp.openById(PM_MASTER_SS_ID);
+    let ws = getPM_MasterSheet(ss);
+    let lastRow = ws.getLastRow();
+    let rows = [];
+    if (lastRow >= 2) {
+      let head = ws.getRange(1, 1, 1, PM_MASTER_HEADERS.length).getValues()[0];
+      let data = ws.getRange(2, 1, lastRow - 1, PM_MASTER_HEADERS.length).getValues();
+      rows = data.map(function (row) { return buildRowObject(head, row); });
+    }
+    return { headers: PM_MASTER_HEADERS, rows: rows };
+  } catch (e) {
+    return { headers: PM_MASTER_HEADERS, rows: [], error: e.toString() };
+  }
+}
+
 function get_PM_Workorder() {
   try {
     let ID = "1YzMGIQ2RcBlGIadWh5yfxlCmOpCuOBHpgKfEVz8_W98";
