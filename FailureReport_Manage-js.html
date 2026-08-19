@@ -440,7 +440,11 @@
                     const value = escapeHtml((row.repairTime || '').toString());
                     return `<input type="number" class="form-control form-control-sm manual-input manual-input-numeric" data-field="repairTime" data-report="${identifier}" placeholder="请输入维修时间 / Enter Repair Time" inputmode="numeric" pattern="\\d*" min="0" step="1" value="${value}">`;
                 }
-                return escapeHtml(data);
+                const base = escapeHtml((data || '').toString());
+                if (row && row.belowThreshold) {
+                    return base + ' <span class="badge bg-info ms-1">未达时间 / Below Time</span>';
+                }
+                return base;
             },
             status: createManualSelectRenderer('status', '请选择状态 / Select Status', [
                 { value: '已解决', text: '已解决 / Resolved' },
@@ -592,6 +596,8 @@
                 imTable = $('#imTable').DataTable({
                     pageLength: 10,
                     responsive: true,
+                    // 大列表性能：延迟创建行 DOM（开关开启后约 1.4 万行，逐行建 TR+责任人下拉会卡死页面）
+                    deferRender: true,
                     columns: buildColumnsConfig('IM'),
                     order: [[5, 'desc']]  // 按提交日期降序
                 });
@@ -614,6 +620,8 @@
                 tfTable = $('#tfTable').DataTable({
                     pageLength: 10,
                     responsive: true,
+                    // 大列表性能：延迟创建行 DOM（开关开启后约 1.4 万行，逐行建 TR+责任人下拉会卡死页面）
+                    deferRender: true,
                     columns: buildColumnsConfig('TF'),
                     order: [[5, 'desc']]  // 按提交日期降序
                 });
@@ -636,6 +644,8 @@
                 pkTable = $('#pkTable').DataTable({
                     pageLength: 10,
                     responsive: true,
+                    // 大列表性能：延迟创建行 DOM（开关开启后约 1.4 万行，逐行建 TR+责任人下拉会卡死页面）
+                    deferRender: true,
                     columns: buildColumnsConfig('PK'),
                     order: [[5, 'desc']]  // 按提交日期降序
                 });
@@ -650,6 +660,32 @@
             }
         } catch (e) {
             console.error('初始化 pkTable 出错 / Error initializing pkTable:', e);
+        }
+
+        // 完整列表数据（含未达标行），开关切换时前端过滤，不重复请求后端
+        let loadedData = { IM: [], TF: [], PK: [] };
+
+        // 按「显示未达标」开关过滤并重绘三个工序表格
+        function applyFilters() {
+            const showBelow = $('#showBelowThresholdSwitch').is(':checked');
+            const isPending = item => ['pending', '', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决');
+            // 未达时间条目：不限状态、不排除转规格（已人工判定过的由后端按 T 列排除）
+            const isBelow = item => item.belowThreshold === true;
+            const filteredIM = (loadedData.IM || []).filter(item => isPending(item) || (showBelow && isBelow(item)));
+            const filteredTF = (loadedData.TF || []).filter(item => (isPending(item) && String(item.submitDate || '') > '2026-05-31' && !String(item.problemDescription || '').includes('转规格')) || (showBelow && isBelow(item)));
+            const filteredPK = (loadedData.PK || []).filter(item => isPending(item) || (showBelow && isBelow(item)));
+            if (imTable) {
+                imTable.clear().rows.add(filteredIM).draw();
+                enhanceResponsibleSelects($('#imTable'));
+            }
+            if (tfTable) {
+                tfTable.clear().rows.add(filteredTF).draw();
+                enhanceResponsibleSelects($('#tfTable'));
+            }
+            if (pkTable) {
+                pkTable.clear().rows.add(filteredPK).draw();
+                enhanceResponsibleSelects($('#pkTable'));
+            }
         }
 
         // 加载各工序的故障报告数据
@@ -682,21 +718,8 @@
                                 item.responsiblePerson = item.responsiblePerson || '';
                             });
                         });
-                        const filteredIM = (parsedData.IM || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决'));
-                        const filteredTF = (parsedData.TF || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决') && String(item.submitDate || '') > '2026-05-31' && !String(item.problemDescription || '').includes('转规格'));
-                        const filteredPK = (parsedData.PK || []).filter(item => ['pending','', undefined, null].includes(item.needFailureReport) && String(item.status || '').includes('已解决'));
-                        if (imTable) {
-                            imTable.clear().rows.add(filteredIM).draw();
-                            enhanceResponsibleSelects($('#imTable'));
-                        }
-                        if (tfTable) {
-                            tfTable.clear().rows.add(filteredTF).draw();
-                            enhanceResponsibleSelects($('#tfTable'));
-                        }
-                        if (pkTable) {
-                            pkTable.clear().rows.add(filteredPK).draw();
-                            enhanceResponsibleSelects($('#pkTable'));
-                        }
+                        loadedData = parsedData;
+                        applyFilters();
                         refreshResponsibleColumnRenders();
                         Swal.close();
                     })
@@ -845,6 +868,11 @@
             addManualRow();
         });
 
+        // 「显示未达标」开关：切换时重新过滤（数据已在 loadedData 中，不重新请求后端）
+        $('#showBelowThresholdSwitch').on('change', function () {
+            applyFilters();
+        });
+
         $(document).on('input', '.manual-input', function () {
             const reportId = $(this).data('report');
             const field = $(this).data('field');
@@ -934,6 +962,8 @@
                 return;
             }
             rowData.needFailureReport = needReport;
+            // 判定后未达标行不再可导入（后端已写 是/否（已确认）），避免开关重过滤后重新出现
+            rowData.belowThreshold = false;
             if (typeof responsiblePerson !== 'undefined') {
                 rowData.responsiblePerson = responsiblePerson || '';
             }

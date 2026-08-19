@@ -6298,14 +6298,16 @@ function updateFailureReportConfirmation(
           if (rowNum > -1) break;
         }
         if (rowNum > -1) {
-          wsMerged.getRange(rowNum, 20).setValue(needReport ? "是" : "否");
+          var rowForProcessing = wsMerged.getRange(rowNum, 1, 1, wsMerged.getLastColumn()).getValues()[0];
+          // 未达标行人工判"不需要"时写"否（已确认）"，与系统自动"否"区分（防刷新后重新出现）
+          var belowThreshold = classifyFaultRowForReport(rowForProcessing, process).belowThreshold;
+          wsMerged.getRange(rowNum, 20).setValue(getNeedReportCellValue(needReport, belowThreshold));
           if (needReport) {
             if (!responsibleName) {
               throw new Error(
                 "需要故障报告前必须分配责任人 / Please assign a responsible person before requesting a failure report"
               );
             }
-            var rowForProcessing = wsMerged.getRange(rowNum, 1, 1, wsMerged.getLastColumn()).getValues()[0];
             try {
               writeToFailureDatabase(rowForProcessing, process, responsibleName);
               sendFailureReportNotification(rowForProcessing, process, responsibleName);
@@ -6349,9 +6351,11 @@ function updateFailureReportConfirmation(
           }
 
           if (rowIndex !== -1) {
+            // 未达标行人工判"不需要"时写"否（已确认）"，与系统自动"否"区分（防刷新后重新出现）
+            const belowThreshold = classifyFaultRowForReport(data[rowIndex], process).belowThreshold;
             sheet
               .getRange(rowIndex + 1, 20)
-              .setValue(needReport ? "是" : "否");
+              .setValue(getNeedReportCellValue(needReport, belowThreshold));
 
             if (needReport) {
               if (!responsibleName) {
@@ -7133,16 +7137,72 @@ function _formatDateStr(raw) {
   return yyyy + '-' + mm + '-' + dd;
 }
 
+/** 维修时间字符串解析为分钟数（"2小时30分"→150、"120"→120、无法解析→0） */
+function parseRepairTimeMinutes(repairTimeStr) {
+  const s = String(repairTimeStr || '');
+  const timeMatch = s.match(/(\d+)/g);
+  if (!timeMatch) return 0;
+  if (s.includes('小时')) {
+    return parseInt(timeMatch[0]) * 60 + (timeMatch.length > 1 ? parseInt(timeMatch[1]) : 0);
+  }
+  return parseInt(timeMatch[0]);
+}
+
+/**
+ * 判定 Shift_Records 故障行是否纳入故障报告管理列表
+ * @param {Array} row Shift 行数据（索引：3=问题描述 7=维修时间 11=提交日期 19=是否需要填写故障报告）
+ * @param {string} process 已归一化工序代码（IM/TF/PK，INJ 视为 IM）
+ * @returns {{include: boolean, belowThreshold: boolean}}
+ *   达标行纳入时 belowThreshold=false；未达标（低于阈值）且未被人工判定过的行也纳入并标记 belowThreshold=true
+ */
+function classifyFaultRowForReport(row, process) {
+  const timeThresholds = { IM: 240, TF: 120, PK: 60 };
+  const threshold = timeThresholds[process];
+  if (!threshold) return { include: false, belowThreshold: false };
+
+  const repairTimeStr = String(row[7] || '');
+  if (!repairTimeStr.match(/\d+/)) return { include: false, belowThreshold: false };
+  const repairTime = parseRepairTimeMinutes(repairTimeStr);
+
+  if (repairTime >= threshold) {
+    // 达标行：PK 保留现状排除规则（提交日期早于 2026-05-15、问题描述含转规格）
+    if (process === 'PK') {
+      if (row[11]) {
+        if (_formatDateStr(row[11]) < '2026-05-15') return { include: false, belowThreshold: false };
+      }
+      if (String(row[3] || '').includes('转规格')) return { include: false, belowThreshold: false };
+    }
+    return { include: true, belowThreshold: false };
+  }
+
+  // 未达标行：仅纳入未被人工判定过的（T列=空或系统自动"否"；已导入"是"或已确认"否（已确认）"均排除）
+  const needReport = String(row[19] || '').trim();
+  if (needReport === '是' || needReport === '否（已确认）') {
+    return { include: false, belowThreshold: false };
+  }
+  return { include: true, belowThreshold: true };
+}
+
+/** T列写入值：需要→"是"；不需要时未达标行写"否（已确认）"以区分系统自动"否"，达标行保持"否" */
+function getNeedReportCellValue(needReport, belowThreshold) {
+  if (needReport) return '是';
+  return belowThreshold ? '否（已确认）' : '否';
+}
+
+/**
+ * needFailureReport 返回给前端的展示值：
+ * 未达标且 T 列为空的历史行（自动判定逻辑上线前写入）按系统默认「否」处理，
+ * 避免前端把空值映射为「待判定」后混入默认列表
+ */
+function getNeedReportDisplayValue(rawCell, belowThreshold) {
+  const v = String(rawCell || '').trim();
+  if (belowThreshold && v === '') return '否';
+  return v;
+}
+
 function getFilteredFailureReportData() {
   let id = "10Fnrqc1AUiPqOi-b2UsKgR-Ww-BNdIla_HB_HjVdI0w";
   let spreadsheet = SpreadsheetApp.openById(id);
-
-  // 定义筛选条件（维修时间，单位：分钟）
-  let timeThresholds = {
-    IM: 240,
-    TF: 120,
-    PK: 60,
-  };
 
   // 存储筛选后的数据
   let result = {
@@ -7163,48 +7223,28 @@ function getFilteredFailureReportData() {
         var rowProcess = String(row[15] || '').trim();
         // INJ → IM 映射
         var mappedProcess = rowProcess === 'INJ' ? 'IM' : rowProcess;
-        var threshold = timeThresholds[mappedProcess];
-        if (!threshold) continue;
+        // 达标行与未达标（未被人工判定过）行均纳入；未达标行由前端开关控制显示
+        var disposition = classifyFaultRowForReport(row, mappedProcess);
+        if (!disposition.include) continue;
 
-        // 维修时间处理（同旧逻辑）
         var repairTimeStr = row[7] ? row[7].toString() : "0";
-        var repairTime = 0;
-        var timeMatch = repairTimeStr.match(/(\d+)/g);
-        if (timeMatch) {
-          if (repairTimeStr.includes("小时")) {
-            repairTime = parseInt(timeMatch[0]) * 60;
-            if (timeMatch.length > 1) repairTime += parseInt(timeMatch[1]);
-          } else {
-            repairTime = parseInt(timeMatch[0]);
-          }
-        }
-        if (repairTime >= threshold) {
-          if (mappedProcess === 'PK') {
-            var rawSubmitDate = row[11];
-            if (rawSubmitDate) {
-              var dateStr = _formatDateStr(row[11]);
-              if (dateStr < '2026-05-15') continue;
-            }
-            var problemDesc = String(row[3] || '');
-            if (problemDesc.includes('转规格')) continue;
-          }
-          result[mappedProcess].push({
-            reportNo: row[0] || "",
-            machineNo: row[2] || "",
-            problemDescription: String(row[3] || ''),
-            status: row[5] || "",
-            repairTime: repairTimeStr,
-            submitDate: row[11] ? row[11].toString() : "",
-            shift: row[1] || "",
-            maintenancePerson: row[6] || "",
-            workshop: rowWorkshop || "",
-            process: rowProcess || mappedProcess,
-            submitter: row[13] || "",
-            confirmation: row[18] || "待确认 / Pending Confirmation",
-            needFailureReport: row[19] || "",
-            responsiblePerson: "",
-          });
-        }
+        result[mappedProcess].push({
+          reportNo: row[0] || "",
+          machineNo: row[2] || "",
+          problemDescription: String(row[3] || ''),
+          status: row[5] || "",
+          repairTime: repairTimeStr,
+          submitDate: row[11] ? row[11].toString() : "",
+          shift: row[1] || "",
+          maintenancePerson: row[6] || "",
+          workshop: rowWorkshop || "",
+          process: rowProcess || mappedProcess,
+          submitter: row[13] || "",
+          confirmation: row[18] || "待确认 / Pending Confirmation",
+          needFailureReport: getNeedReportDisplayValue(row[19], disposition.belowThreshold),
+          responsiblePerson: "",
+          belowThreshold: disposition.belowThreshold,
+        });
       }
     }
   } else {
@@ -7216,7 +7256,6 @@ function getFilteredFailureReportData() {
     };
     for (var process in sheets) {
       var sheetNames = sheets[process];
-      var threshold = timeThresholds[process];
       for (var s = 0; s < sheetNames.length; s++) {
         var sheetName = sheetNames[s];
         var sheet = spreadsheet.getSheetByName(sheetName);
@@ -7225,44 +7264,27 @@ function getFilteredFailureReportData() {
           Logger.log("Sheet " + sheetName + " 数据行数 / Data rows: " + data.length);
           for (var i = 1; i < data.length; i++) {
             var row = data[i];
+            // 达标行与未达标（未被人工判定过）行均纳入；未达标行由前端开关控制显示
+            var disposition = classifyFaultRowForReport(row, process);
+            if (!disposition.include) continue;
             var repairTimeStr = row[7] ? row[7].toString() : "0";
-            var repairTime = 0;
-            var timeMatch = repairTimeStr.match(/(\d+)/g);
-            if (timeMatch) {
-              if (repairTimeStr.includes("小时")) {
-                repairTime = parseInt(timeMatch[0]) * 60;
-                if (timeMatch.length > 1) repairTime += parseInt(timeMatch[1]);
-              } else {
-                repairTime = parseInt(timeMatch[0]);
-              }
-            }
-            if (repairTime >= threshold) {
-              if (process === 'PK') {
-                var rawSubmitDate = row[11];
-                if (rawSubmitDate) {
-                  var dateStr = _formatDateStr(row[11]);
-                  if (dateStr < '2026-05-15') continue;
-                }
-                var problemDesc = String(row[3] || '');
-                if (problemDesc.includes('转规格')) continue;
-              }
-              result[process].push({
-                reportNo: row[0] || "",
-                machineNo: row[2] || "",
-                problemDescription: String(row[3] || ''),
-                status: row[5] || "",
-                repairTime: repairTimeStr,
-                submitDate: row[11] ? row[11].toString() : "",
-                shift: row[1] || "",
-                maintenancePerson: row[6] || "",
-                workshop: row[14] || "",
-                process: row[15] || process,
-                submitter: row[13] || "",
-                confirmation: row[18] || "待确认 / Pending Confirmation",
-                needFailureReport: row[19] || "",
-                responsiblePerson: "",
-              });
-            }
+            result[process].push({
+              reportNo: row[0] || "",
+              machineNo: row[2] || "",
+              problemDescription: String(row[3] || ''),
+              status: row[5] || "",
+              repairTime: repairTimeStr,
+              submitDate: row[11] ? row[11].toString() : "",
+              shift: row[1] || "",
+              maintenancePerson: row[6] || "",
+              workshop: row[14] || "",
+              process: row[15] || process,
+              submitter: row[13] || "",
+              confirmation: row[18] || "待确认 / Pending Confirmation",
+              needFailureReport: getNeedReportDisplayValue(row[19], disposition.belowThreshold),
+              responsiblePerson: "",
+              belowThreshold: disposition.belowThreshold,
+            });
           }
         } else {
           Logger.log("Sheet " + sheetName + " 未找到 / Not found");

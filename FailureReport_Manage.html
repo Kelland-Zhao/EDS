@@ -56,6 +56,41 @@
         .section-title .toolbar { display: flex; gap: 6px; }
         .section-title .toolbar .btn { font-size: 12px; padding: 4px 10px; }
 
+        /* iOS 风格开关（苹果样式） */
+        .apple-switch {
+            position: relative;
+            display: inline-block;
+            width: 42px;
+            height: 25px;
+            flex: 0 0 auto;
+            align-self: center;
+            cursor: pointer;
+        }
+        .apple-switch input { opacity: 0; width: 0; height: 0; }
+        .apple-switch .track {
+            position: absolute;
+            inset: 0;
+            border-radius: 25px;
+            background: #e9e9ea;
+            transition: background-color 0.25s ease;
+        }
+        .apple-switch .track::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 21px;
+            height: 21px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: transform 0.25s ease;
+        }
+        .apple-switch input:checked + .track { background: #34c759; }
+        .apple-switch input:checked + .track::before { transform: translateX(17px); }
+        .apple-switch input:focus-visible + .track { outline: 2px solid #34c759; outline-offset: 2px; }
+        .apple-switch-label { cursor: pointer; align-self: center; margin: 0; line-height: 1.2; }
+
         /* 规则芯片 */
         .rule-chips {
             display: flex;
@@ -297,6 +332,14 @@
         <div class="section-title">
             <span class="title-text">故障报告列表 / FAILURE REPORT LIST</span>
             <div class="toolbar">
+                <label class="apple-switch ms-2" title="显示维修时间低于报告阈值且尚未人工判定的故障条目 / Show unjudged fault entries below the report time threshold">
+                    <input type="checkbox" role="switch" id="showBelowThresholdSwitch">
+                    <span class="track"></span>
+                </label>
+                <label class="apple-switch-label" for="showBelowThresholdSwitch">
+                    <span class="label-cn">显示未达故障时间条目</span>
+                    <span class="label-en">Show Below Fault-Time Entries</span>
+                </label>
                 <button id="manualAddBtn" class="btn btn-outline-primary">
                     <i class="bi bi-plus-circle"></i>
                     <span class="label-cn">手动添加</span>
