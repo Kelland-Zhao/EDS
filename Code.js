@@ -9555,6 +9555,75 @@ function appendPM_MasterAuditLog(ss, userCode, userName, action, masterId, field
   ws.appendRow([now, userCode || "", userName || "", action, masterId || "", field || "", oldValue || "", newValue || ""]);
 }
 
+function save_PM_MasterData(changes, userCode, userName) {
+  try {
+    let ss = SpreadsheetApp.openById(PM_MASTER_SS_ID);
+    let ws = getPM_MasterSheet(ss);
+    let lastRow = ws.getLastRow();
+    let data = lastRow >= 2
+      ? ws.getRange(2, 1, lastRow - 1, PM_MASTER_HEADERS.length).getValues()
+      : [];
+    let head = PM_MASTER_HEADERS;
+
+    // 现有行索引：主数据ID(第16列, index 15) → 行号(从2起)
+    let idToRow = {};
+    for (let i = 0; i < data.length; i++) {
+      let id = String(data[i][15] || "");
+      if (id) idToRow[id] = i + 2;
+    }
+
+    let nextIdNum = 1;
+    Object.keys(idToRow).forEach(function (id) {
+      let m = String(id).match(/^PM-MD-(\d+)$/);
+      if (m && parseInt(m[1], 10) >= nextIdNum) nextIdNum = parseInt(m[1], 10) + 1;
+    });
+
+    changes.forEach(function (ch) {
+      let masterId = ch["主数据ID"] || "";
+      if (ch.deleted) {
+        if (idToRow[masterId]) {
+          ws.deleteRow(idToRow[masterId]);
+          delete idToRow[masterId];
+          appendPM_MasterAuditLog(ss, userCode, userName, "删除", masterId, "", "", "");
+        }
+        return;
+      }
+      let rowArr = head.map(function (h) {
+        let v = ch.row[h];
+        return v === undefined || v === null ? "" : v;
+      });
+      if (!masterId || !idToRow[masterId]) {
+        // 新增
+        masterId = "PM-MD-" + String(nextIdNum).padStart(4, "0");
+        nextIdNum++;
+        rowArr[15] = masterId;
+        rowArr[14] = "未确认";
+        rowArr[18] = userName || "";
+        rowArr[19] = Utilities.formatDate(new Date(), "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
+        ws.appendRow(rowArr);
+        appendPM_MasterAuditLog(ss, userCode, userName, "新增", masterId, "", "", "");
+      } else {
+        // 修改：先对比差异写日志，再整行写回
+        let oldObj = buildRowObject(head, data[idToRow[masterId] - 2]);
+        let diffs = computeFieldDiffs(oldObj, ch.row);
+        rowArr[15] = masterId;
+        rowArr[16] = oldObj["确认人"] || "";
+        rowArr[17] = oldObj["确认时间"] || "";
+        rowArr[14] = oldObj["是否确认"] || "未确认";
+        rowArr[18] = userName || "";
+        rowArr[19] = Utilities.formatDate(new Date(), "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
+        ws.getRange(idToRow[masterId], 1, 1, head.length).setValues([rowArr]);
+        diffs.forEach(function (d) {
+          appendPM_MasterAuditLog(ss, userCode, userName, "修改", masterId, d.field, d.oldValue, d.newValue);
+        });
+      }
+    });
+    return { ok: true, message: "保存成功" };
+  } catch (e) {
+    return { ok: false, message: e.toString() };
+  }
+}
+
 function get_PM_Workorder() {
   try {
     let ID = "1YzMGIQ2RcBlGIadWh5yfxlCmOpCuOBHpgKfEVz8_W98";
