@@ -277,4 +277,109 @@
       }).save_PM_MasterData(changes, global_ID, global_Name);
     });
   });
+  // 审核人验证弹窗（镜像 PM_Task 的 planner 弹窗样式）
+  function auditPrompt(titleCn, titleEn) {
+    return Swal.fire({
+      title: swalTitle(titleCn, titleEn),
+      html: `
+        <div class="mb-2"><label>工号：</label><input type="text" id="auditCode" class="swal2-input" placeholder="请输入工号" autocomplete="off"></div>
+        <div class="mb-2"><label>姓名：</label><input type="text" id="auditName" class="swal2-input" placeholder="请输入姓名" autocomplete="off"></div>
+        <div class="mb-2"><label>密码：</label><input type="password" id="auditPwd" class="swal2-input" placeholder="请输入密码"></div>
+      `,
+      focusConfirm: false, showCancelButton: true, confirmButtonText: '确认', cancelButtonText: '取消',
+      preConfirm: () => {
+        const code = document.getElementById('auditCode').value.trim();
+        const name = document.getElementById('auditName').value.trim();
+        const pwd = document.getElementById('auditPwd').value.trim();
+        if (!code || !name || !pwd) { Swal.showValidationMessage('请完整填写工号、姓名和密码'); return false; }
+        return { code, name, pwd };
+      }
+    });
+  }
+
+  function runConfirm(ids, action) {
+    auditPrompt(action === 'confirm' ? '确认(审核)' : '取消确认', action === 'confirm' ? 'Confirm (Audit)' : 'Unconfirm')
+      .then(result => {
+        if (!result.isConfirmed) return;
+        Swal.fire({ title: swalTitle('处理中', 'Processing...'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        google.script.run.withSuccessHandler(async r => {
+          if (r && r.ok) { await loadMasterData(); renderMasterTable(); Swal.fire({ icon: 'success', title: swalTitle('操作成功', 'Done') }); }
+          else Swal.fire({ icon: 'error', title: swalTitle('操作失败', 'Failed'), html: swalHtml(String((r && r.message) || r), '') });
+        }).withFailureHandler(e => Swal.fire({ icon: 'error', title: swalTitle('操作失败', 'Failed'), html: swalHtml(String(e.message || e), '') }))
+          .confirm_PM_MasterData(ids, result.value.code, result.value.name, result.value.pwd, action);
+      });
+  }
+
+  $('#btnConfirm').on('click', function () {
+    const ids = collectSelectedIds();
+    if (ids.length === 0) { Swal.fire({ icon: 'warning', title: swalTitle('请先选择行', 'Select a row first') }); return; }
+    const confirmed = ids.filter(id => (masterRows.find(r => r['主数据ID'] === id) || {})['是否确认'] === '已确认');
+    if (confirmed.length > 0) {
+      Swal.fire({ icon: 'warning', title: swalTitle('包含已确认行', 'Contains confirmed rows'), html: swalHtml('已确认的行将被跳过。', 'Confirmed rows will be skipped.') });
+    }
+    const todo = ids.filter(id => (masterRows.find(r => r['主数据ID'] === id) || {})['是否确认'] !== '已确认');
+    if (todo.length === 0) return;
+    runConfirm(todo, 'confirm');
+  });
+
+  $('#btnUnconfirm').on('click', function () {
+    const ids = collectSelectedIds();
+    if (ids.length === 0) { Swal.fire({ icon: 'warning', title: swalTitle('请先选择行', 'Select a row first') }); return; }
+    const todo = ids.filter(id => (masterRows.find(r => r['主数据ID'] === id) || {})['是否确认'] === '已确认');
+    if (todo.length === 0) { Swal.fire({ icon: 'info', title: swalTitle('所选行均未确认', 'Nothing to unconfirm') }); return; }
+    runConfirm(todo, 'unconfirm');
+  });
+
+  // 解锁已确认行（审核验证后本次会话可编辑，保存走后端差异日志）
+  $('#tableMaster').on('click', 'tbody tr', function () {
+    const id = $(this).attr('data-id');
+    const r = masterRows.find(x => x['主数据ID'] === id);
+    if (!r || r['是否确认'] !== '已确认' || unlockedIds[id]) return;
+    // 已确认行点击时提示解锁
+    if (!$(this).data('lockPrompted')) {
+      $(this).data('lockPrompted', true);
+      auditPrompt('解锁编辑', 'Unlock for editing').then(result => {
+        if (result.isConfirmed) {
+          google.script.run.withSuccessHandler(v => {
+            if (v && v.ok) {
+              unlockedIds[id] = true;
+              const $row = tableMaster.$(`tr[data-id="${id}"]`);
+              $row.find('.cell-input, .cell-select').prop('disabled', false);
+            } else Swal.fire({ icon: 'error', title: swalTitle('验证失败', 'Verification Failed') });
+          }).verifyPM_MasterAuditor(result.value.code, result.value.name, result.value.pwd);
+        }
+      });
+    }
+  });
+
+  $('#btnImport').on('click', function () {
+    Swal.fire({
+      title: swalTitle('导入草稿？', 'Import draft?'),
+      html: swalHtml('将把草稿表 MasterData 全部导入正式表（状态=未确认）。正式表非空时会被拒绝。', 'Import all draft rows as unconfirmed. Rejected if the master table is not empty.'),
+      icon: 'question', showCancelButton: true, confirmButtonText: '确认', cancelButtonText: '取消'
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      Swal.fire({ title: swalTitle('导入中', 'Importing...'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      google.script.run.withSuccessHandler(async r => {
+        if (r && r.ok) { await loadMasterData(); renderMasterTable(); Swal.fire({ icon: 'success', title: swalTitle('导入成功', 'Imported'), html: swalHtml(String(r.message || ''), '') }); }
+        else Swal.fire({ icon: 'error', title: swalTitle('导入失败', 'Import Failed'), html: swalHtml(String((r && r.message) || r), '') });
+      }).withFailureHandler(e => Swal.fire({ icon: 'error', title: swalTitle('导入失败', 'Import Failed'), html: swalHtml(String(e.message || e), '') }))
+        .import_PM_MasterData(global_ID, global_Name);
+    });
+  });
+
+  let tableAuditLog = null;
+  $('#btnAuditLog').on('click', function () {
+    $('#auditLogModal').modal('show');
+    google.script.run.withSuccessHandler(r => {
+      const rows = (r && r.rows) || [];
+      if (tableAuditLog) tableAuditLog.destroy();
+      tableAuditLog = $('#tableAuditLog').DataTable({
+        data: rows,
+        columns: ['时间', '工号', '姓名', '动作', '主数据ID', '字段', '旧值', '新值'].map(h => ({ title: h, data: h })),
+        order: [[0, 'desc']],
+        pageLength: 15
+      });
+    }).get_PM_MasterAuditLog();
+  });
 </script>
