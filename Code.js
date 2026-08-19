@@ -13088,7 +13088,7 @@ function readINJSDMRows_() {
   const ws = getINJSDMSheet_();
   const lastRow = ws.getLastRow();
   if (lastRow < 3) return [];
-  return ws.getRange(3, 1, lastRow - 2, 15).getValues();
+  return ws.getRange(3, 1, lastRow - 2, 16).getValues();
 }
 
 // Read only the last N rows for performance (estimates ~30 rows/day)
@@ -13099,7 +13099,7 @@ function readRecentINJSDMRows_(daysBack) {
   if (lastRow < 3) return { rows: [], startRow: 3 };
   var limit = Math.max(100, (daysBack || 90) * 30);
   var startRow = Math.max(3, lastRow - limit + 1);
-  return { rows: ws.getRange(startRow, 1, lastRow - startRow + 1, 15).getValues(), startRow: startRow };
+  return { rows: ws.getRange(startRow, 1, lastRow - startRow + 1, 16).getValues(), startRow: startRow };
 }
 
 function rowToINJSDMItem_(row) {
@@ -13120,7 +13120,8 @@ function rowToINJSDMItem_(row) {
     createdAt: formatINJSDMDateTime_(row[11]),
     updatedAt: formatINJSDMDateTime_(row[12]),
     status: String(row[13] || ''),
-    editHistoryJSON: String(row[14] || '[]')
+    editHistoryJSON: String(row[14] || '[]'),
+    expectedCompletionDate: formatINJSDMDate_(row[15])
   };
 }
 
@@ -13152,7 +13153,7 @@ function groupINJSDMReports_(rows, includeClosed) {
     } else if (item.category === 'OUTSTANDING') {
       report.outstanding.push({ itemId: item.itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
     } else if (item.category === 'COMMUNICATION') {
-      report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate });
+      report.communication.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate, expectedCompletionDate: item.expectedCompletionDate });
     } else if (item.category === 'TODO') {
       report.todo.push({ itemId: item.itemId, description: item.description, owners: item.owners, itemStatus: item.status, reportDate: item.reportDate });
     }
@@ -13212,7 +13213,7 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
           r.outstanding.push({ itemId: itemId, workshop: item.workshop, machineNo: item.machineNo, description: item.description });
         } else if (category === 'COMMUNICATION') {
           var commAtts = []; try { commAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
-          r.communication.push({ itemId: itemId, description: item.description, owners: item.owners, itemStatus: status, reportDate: itemDate, attachments: commAtts });
+          r.communication.push({ itemId: itemId, description: item.description, owners: item.owners, itemStatus: status, reportDate: itemDate, attachments: commAtts, expectedCompletionDate: item.expectedCompletionDate });
         } else if (category === 'TODO') {
           var todoAtts = []; try { todoAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
           r.todo.push({ itemId: itemId, description: item.description, owners: item.owners, itemStatus: status, reportDate: itemDate, attachments: todoAtts });
@@ -13224,7 +13225,7 @@ function getINJSDMInitData(userName, userEmail, reportDate, includeClosed) {
           if (showClosed && status !== 'ACTIVE' && status !== 'FOLLOW_UP' && status !== 'CLOSED') continue;
           var itemStatus = (status === 'CLOSED') ? 'CLOSED' : 'HISTORY';
           var hAtts = []; try { hAtts = JSON.parse(item.attachmentsJSON || '[]'); } catch (e) {}
-          historyCommItems.push({ itemId: itemId, description: item.description, owners: item.owners, reportDate: itemDate, itemStatus: itemStatus, attachments: hAtts });
+          historyCommItems.push({ itemId: itemId, description: item.description, owners: item.owners, reportDate: itemDate, itemStatus: itemStatus, attachments: hAtts, expectedCompletionDate: item.expectedCompletionDate });
         } else if (category === 'TODO') {
           if (!item.owners || item.owners.indexOf(userName) === -1) continue;
           if (!showClosed && status !== 'ACTIVE' && status !== 'FOLLOW_UP') continue;
@@ -13276,9 +13277,17 @@ function validateINJSDMPayload_(payload) {
   communication.forEach(function (item) {
     if (!String(item.description || '').trim()) throw new Error('Communication description is required');
     if (!Array.isArray(item.owners) || !item.owners.length) throw new Error('Communication owner is required');
+    if (item.expectedCompletionDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(item.expectedCompletionDate))) throw new Error('Expected completion date is invalid');
   });
   todo.forEach(function (item) {
     if (!String(item.description || '').trim()) throw new Error('Todo description is required');
+  });
+  const historyUpdates = Array.isArray(payload.historyUpdates) ? payload.historyUpdates : [];
+  historyUpdates.forEach(function (item) {
+    if (!String(item.itemId || '').trim()) throw new Error('History update itemId is required');
+    if (item.description !== undefined && !String(item.description).trim()) throw new Error('Communication description is required');
+    if (item.owners !== undefined && (!Array.isArray(item.owners) || !item.owners.length)) throw new Error('Communication owner is required');
+    if (item.expectedCompletionDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(item.expectedCompletionDate))) throw new Error('Expected completion date is invalid');
   });
   return {
     reportDate: reportDate,
@@ -13287,7 +13296,8 @@ function validateINJSDMPayload_(payload) {
     major: major,
     outstanding: outstanding,
     communication: communication,
-    todo: todo
+    todo: todo,
+    historyUpdates: historyUpdates
   };
 }
 
@@ -13300,7 +13310,7 @@ function saveINJSDMReport(payload, userName, userEmail) {
     }
     const data = validateINJSDMPayload_(payload);
     const ws = getINJSDMSheet_();
-    var recent = readRecentINJSDMRows_(7);
+    var recent = readRecentINJSDMRows_(90); // 90 days: also covers history items updated on save
     var rows = recent.rows;
     var startRow = recent.startRow;
     var existingActiveRows = [];
@@ -13354,7 +13364,8 @@ function saveINJSDMReport(payload, userName, userEmail) {
       output.push([
         reportId, data.reportDate, data.dataStartDate, data.dataEndDate, itemId, category,
         String(item.workshop || ''), String(item.machineNo || ''), String(item.description || '').trim(),
-        owners.join('、'), JSON.stringify(owners), createdAt, now, finalStatus, historyJSON
+        owners.join('、'), JSON.stringify(owners), createdAt, now, finalStatus, historyJSON,
+        String(item.expectedCompletionDate || '')
       ]);
     }
     data.major.forEach(function (item) { addItem('MAJOR', item); });
@@ -13365,8 +13376,25 @@ function saveINJSDMReport(payload, userName, userEmail) {
       addItem('TODO', item);
     });
 
-    ws.getRange(ws.getLastRow() + 1, 1, output.length, 15).setValues(output);
-    return JSON.stringify({ success: true, reportId: reportId, updated: existingActive.length > 0 });
+    ws.getRange(ws.getLastRow() + 1, 1, output.length, 16).setValues(output);
+
+    // Apply history item updates (description / owners / expected completion date) to their original rows
+    var historyUpdated = 0;
+    data.historyUpdates.forEach(function (update) {
+      for (var i = 0; i < rows.length; i++) {
+        if (String(rows[i][4] || '') === update.itemId && (String(rows[i][13] || '') === 'ACTIVE' || String(rows[i][13] || '') === 'FOLLOW_UP')) {
+          var sheetRow = startRow + i;
+          var ownerNames = Array.isArray(update.owners) ? update.owners.join('、') : String(rows[i][9] || '');
+          var ownersJSON = Array.isArray(update.owners) ? JSON.stringify(update.owners) : String(rows[i][10] || '[]');
+          var newDate = Object.prototype.hasOwnProperty.call(update, 'expectedCompletionDate') ? formatINJSDMDate_(update.expectedCompletionDate) : String(rows[i][15] || '');
+          ws.getRange(sheetRow, 9, 1, 3).setValues([[String(update.description || '').trim(), ownerNames, ownersJSON]]);
+          ws.getRange(sheetRow, 13, 1, 4).setValues([[now, String(rows[i][13] || ''), String(rows[i][14] || '[]'), newDate]]);
+          historyUpdated++;
+          break;
+        }
+      }
+    });
+    return JSON.stringify({ success: true, reportId: reportId, updated: existingActive.length > 0, historyUpdated: historyUpdated });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
   } finally {
