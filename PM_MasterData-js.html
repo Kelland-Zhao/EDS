@@ -14,4 +14,144 @@
     }
     return null;
   }
+
+  // 双语 Swal 提示 helper：中文在上，英文在下
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+  let global_Name = sessionStorage.getItem('Name') || '';
+  let global_ID = sessionStorage.getItem('ID') || '';
+  $('#name').text(global_Name);
+
+  let masterRows = [];        // 后端原始行（键为表头名）
+  let tableMaster = null;
+  let unlockedIds = {};       // 解锁编辑的已确认行 ID 集合（本次会话）
+
+  const PROCESS_OPTIONS = ['FA', 'IM', 'PK', 'TF', 'WH'];
+  const STRATEGY_OPTIONS = ['TBM', 'RBM', 'CBM'];
+  const WORKORDER_TYPE_OPTIONS = ['PM02', 'PM10', 'NA', 'ZPM4'];
+  const SELECT_FIELDS = { '工序': PROCESS_OPTIONS, '策略 / Strategy': STRATEGY_OPTIONS, '工单类型': WORKORDER_TYPE_OPTIONS, '是否创工单': ['Y', 'N'], '是否计入AEM': ['Y', 'NA'] };
+
+  function loadMasterData() {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler((r) => {
+        if (r && r.rows) { masterRows = r.rows; resolve(); }
+        else reject(new Error(r && r.error ? r.error : '加载失败'));
+      }).withFailureHandler(reject).get_PM_MasterData();
+    });
+  }
+
+  // 频率变化 → 自动换算 H 列；识别不了标黄
+  function autoFillH(row) {
+    const months = convertFrequencyToMonths($(row).find('[data-field="PM Frequency"]').val());
+    const $h = $(row).find('[data-field="强制保养频率/ Month"]');
+    if (months !== null) { $h.val(months).removeClass('bg-warning'); }
+    else { $h.addClass('bg-warning'); }
+    return months;
+  }
+
+  function renderMasterTable() {
+    const head = [
+      { title: '状态<br>Status', render: (d, t, row) => (row['是否确认'] === '已确认'
+          ? '<span class="badge badge-confirmed">已确认</span>'
+          : '<span class="badge badge-unconfirmed">未确认</span>') },
+      { title: '主数据ID', data: '主数据ID' },
+      { title: '工序<br>Process', data: '工序' },
+      { title: '机型<br>Machine Type', data: 'Machine Type' },
+      { title: '频率<br>Frequency', data: 'PM Frequency' },
+      { title: '强制频率/月', data: '强制保养频率/ Month' },
+      { title: '策略<br>Strategy', data: '策略 / Strategy' },
+      { title: '保养描述<br>PM Description', data: 'PM Description' },
+      { title: '工单类型', data: '工单类型' },
+      { title: '创工单', data: '是否创工单' },
+      { title: '计入AEM', data: '是否计入AEM' },
+      { title: 'RBM间隔', data: 'RBM保养间隔时间' },
+      { title: 'RBM提醒', data: 'RBM保养提醒间隔时间' },
+      { title: '停机/h', data: '单次停机时间/ h' },
+      { title: '任务清单<br>Tasklist', data: 'TasklistName' },
+      { title: '备注', data: '备注' },
+      { title: '确认人', data: '确认人' },
+      { title: '确认时间', data: '确认时间' }
+    ];
+    if (tableMaster) tableMaster.destroy();
+    tableMaster = $('#tableMaster').DataTable({
+      data: masterRows,
+      columns: head,
+      columnDefs: [
+        { targets: [17], visible: false }
+      ],
+      order: [[1, 'asc']],
+      pageLength: 25,
+      scrollX: true,
+      createdRow: function (row, data) {
+        $(row).attr('data-id', data['主数据ID'] || '');
+        // 行内编辑控件（Task 10 使用；先渲染占位）
+        const fields = [
+          ['工序', 'select'], ['Machine Type', 'text'], ['PM Frequency', 'text'],
+          ['强制保养频率/ Month', 'text'], ['策略 / Strategy', 'select'],
+          ['PM Description', 'text'], ['工单类型', 'select'], ['是否创工单', 'select'],
+          ['是否计入AEM', 'select'], ['RBM保养间隔时间', 'text'], ['RBM保养提醒间隔时间', 'text'],
+          ['单次停机时间/ h', 'text'], ['TasklistName', 'text'], ['备注', 'text']
+        ];
+        fields.forEach(([f, type], idx) => {
+          const $cell = $('td', row).eq(idx + 2);
+          const val = data[f] || '';
+          if (type === 'select' && SELECT_FIELDS[f]) {
+            const opts = ['<option value=""></option>'].concat(SELECT_FIELDS[f].map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`)).join('');
+            $cell.html(`<select class="form-select form-select-sm cell-select" data-field="${f}">${opts}</select>`);
+          } else {
+            $cell.html(`<input type="text" class="form-control form-control-sm cell-input" data-field="${f}" value="${val}" placeholder="${f === 'PM Frequency' ? '如：半年' : ''}">`);
+          }
+        });
+        applyRowLock(row, data);
+      }
+    });
+    // 频率输入联动 H 列
+    $('#tableMaster').on('change', '.cell-input[data-field="PM Frequency"]', function () {
+      autoFillH($(this).closest('tr'));
+    });
+  }
+
+  // 已确认且未解锁的行：编辑控件禁用
+  function applyRowLock(row, data) {
+    const locked = data['是否确认'] === '已确认' && !unlockedIds[data['主数据ID']];
+    $(row).find('.cell-input, .cell-select').prop('disabled', locked);
+  }
+
+  function initFilters() {
+    $('#filterProcess').empty().append(PROCESS_OPTIONS.map(o => `<option>${o}</option>`).join(''));
+    $('#filterStrategy').empty().append(STRATEGY_OPTIONS.map(o => `<option>${o}</option>`).join(''));
+    $('#filterConfirm').empty().append(['未确认', '已确认'].map(o => `<option>${o}</option>`).join(''));
+    $('select[multiple]').select2({ theme: 'bootstrap', width: '100%' });
+    $('#filterProcess, #filterStrategy, #filterConfirm, #filterKeyword').on('change keyup', applyFilters);
+  }
+
+  function applyFilters() {
+    const procs = $('#filterProcess').val() || [];
+    const strats = $('#filterStrategy').val() || [];
+    const confirms = $('#filterConfirm').val() || [];
+    const kw = String($('#filterKeyword').val() || '').trim().toLowerCase();
+    tableMaster.rows().every(function () {
+      const d = this.data();
+      const ok = (procs.length === 0 || procs.indexOf(d['工序']) !== -1)
+        && (strats.length === 0 || strats.indexOf(d['策略 / Strategy']) !== -1)
+        && (confirms.length === 0 || confirms.indexOf(d['是否确认']) !== -1)
+        && (kw === '' || (String(d['Machine Type'] || '') + ' ' + String(d['PM Description'] || '')).toLowerCase().indexOf(kw) !== -1);
+      $(this.node()).toggle(ok);
+    });
+  }
+
+  $(document).ready(async function () {
+    initFilters();
+    try {
+      await loadMasterData();
+      renderMasterTable();
+    } catch (e) {
+      Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(String(e.message || e), '') });
+    }
+    $('#btnRefresh').on('click', async function () {
+      try { await loadMasterData(); renderMasterTable(); }
+      catch (e) { Swal.fire({ icon: 'error', title: swalTitle('刷新失败', 'Refresh Failed'), html: swalHtml(String(e.message || e), '') }); }
+    });
+  });
 </script>
