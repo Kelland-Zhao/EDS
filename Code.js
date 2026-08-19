@@ -9651,6 +9651,57 @@ function save_PM_MasterData(changes, userCode, userName) {
   }
 }
 
+function verifyPM_MasterAuditor(code, name, pwd) {
+  try {
+    let ss = SpreadsheetApp.openById(PM_MASTER_USERID_SS_ID);
+    let ws = ss.getSheetByName("userID");
+    let rows = ws.getRange(3, 1, ws.getLastRow() - 2, PM_MASTER_AUDIT_COL).getDisplayValues();
+    for (let i = 0; i < rows.length; i++) {
+      let r = rows[i];
+      if (String(r[0] || "").trim() === String(code || "").trim() &&
+          String(r[1] || "").trim() === String(name || "").trim() &&
+          String(r[2] || "").trim() === String(pwd || "").trim() &&
+          String(r[64] || "").trim() === "Y") {
+        return { ok: true, name: r[1] };
+      }
+    }
+    return { ok: false, name: "" };
+  } catch (e) {
+    return { ok: false, name: "", error: e.toString() };
+  }
+}
+
+function confirm_PM_MasterData(ids, code, name, pwd, action) {
+  let v = verifyPM_MasterAuditor(code, name, pwd);
+  if (!v.ok) return { ok: false, message: "审核权限验证失败，请检查工号/姓名/密码或审核权限" };
+  try {
+    let ss = SpreadsheetApp.openById(PM_MASTER_SS_ID);
+    let ws = getPM_MasterSheet(ss);
+    let lastRow = ws.getLastRow();
+    if (lastRow < 2) return { ok: false, message: "正式表无数据" };
+    let data = ws.getRange(2, 1, lastRow - 1, PM_MASTER_HEADERS.length).getValues();
+    let now = Utilities.formatDate(new Date(), "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
+    let isConfirm = action !== "unconfirm";
+    let newStatus = isConfirm ? "已确认" : "未确认";
+    let oldStatus = isConfirm ? "未确认" : "已确认";
+    ids.forEach(function (id) {
+      for (let i = 0; i < data.length; i++) {
+        if (String(data[i][15]) === String(id)) {
+          let rowNum = i + 2;
+          ws.getRange(rowNum, 15).setValue(newStatus);             // O 是否确认
+          ws.getRange(rowNum, 17).setValue(isConfirm ? code + "/" + name : ""); // Q 确认人
+          ws.getRange(rowNum, 18).setValue(isConfirm ? now : "");  // R 确认时间
+          appendPM_MasterAuditLog(ss, code, name, isConfirm ? "确认" : "取消确认", id, "是否确认", oldStatus, newStatus);
+          break;
+        }
+      }
+    });
+    return { ok: true, message: isConfirm ? "确认成功" : "取消确认成功" };
+  } catch (e) {
+    return { ok: false, message: e.toString() };
+  }
+}
+
 function get_PM_Workorder() {
   try {
     let ID = "1YzMGIQ2RcBlGIadWh5yfxlCmOpCuOBHpgKfEVz8_W98";
