@@ -1,0 +1,17 @@
+<script>
+  // 频率文本 → 月数换算；无法识别返回 null（调用方留空并标黄提醒）
+  // 匹配按“前缀”判断：频率词须位于文本开头（“每周”等“每”开头文本视为不可识别）
+  function convertFrequencyToMonths(freqText) {
+    if (freqText === undefined || freqText === null) return null;
+    let s = String(freqText).trim();
+    const MAP = [
+      ["半年", 6], ["三年", 36], ["双年", 24], ["五年", 60], ["季度", 3],
+      ["双月", 2], ["双周", 0.5], ["三周", 0.75], ["五周", 1.25], ["0.5周", 0.125],
+      ["年", 12], ["季", 3], ["月", 1], ["周", 0.25]
+    ];
+    for (let i = 0; i < MAP.length; i++) {
+      if (s.startsWith(MAP[i][0])) return MAP[i][1];
+    }
+    return null;
+  }
+</script>
