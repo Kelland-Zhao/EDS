@@ -35,7 +35,7 @@
   function loadMasterData() {
     return new Promise((resolve, reject) => {
       google.script.run.withSuccessHandler((r) => {
-        if (r && r.rows) { masterRows = r.rows; resolve(); }
+        if (r && r.rows) { masterRows = r.rows; deletedIds = []; resolve(); }
         else reject(new Error(r && r.error ? r.error : '加载失败'));
       }).withFailureHandler(reject).get_PM_MasterData();
     });
@@ -152,6 +152,123 @@
     $('#btnRefresh').on('click', async function () {
       try { await loadMasterData(); renderMasterTable(); applyFilters(); }
       catch (e) { Swal.fire({ icon: 'error', title: swalTitle('刷新失败', 'Refresh Failed'), html: swalHtml(String(e.message || e), '') }); }
+    });
+  });
+
+  let deletedIds = []; // 本次会话中标记删除的主数据ID（保存后清空）
+
+  // 从表格 DOM 收集一行当前编辑值（键为表头名）
+  function collectRowFromDom($row) {
+    const out = {};
+    $row.find('.cell-input, .cell-select').each(function () {
+      out[$(this).attr('data-field')] = $(this).val() || '';
+    });
+    return out;
+  }
+
+  // 收集整表变更：新增（无ID）/ 修改（对比 masterRows 原值）/ 删除（deletedIds）
+  function collectChanges() {
+    const changes = [];
+    tableMaster.rows().every(function () {
+      const $row = $(this.node());
+      const id = $row.attr('data-id') || '';
+      const domRow = collectRowFromDom($row);
+      if (!id) {
+        changes.push({ '主数据ID': '', isNew: true, deleted: false, row: domRow });
+        return;
+      }
+      const orig = masterRows.find(r => r['主数据ID'] === id);
+      if (!orig) return;
+      // 关键字段对比（14 个可编辑字段）
+      const FIELDS = ['工序', 'Machine Type', 'PM Frequency', '强制保养频率/ Month', '策略 / Strategy', 'PM Description', '工单类型', '是否创工单', '是否计入AEM', 'RBM保养间隔时间', 'RBM保养提醒间隔时间', '单次停机时间/ h', 'TasklistName', '备注'];
+      const dirty = FIELDS.some(f => String(orig[f] || '') !== String(domRow[f] || ''));
+      if (dirty) changes.push({ '主数据ID': id, isNew: false, deleted: false, row: domRow });
+    });
+    deletedIds.forEach(id => changes.push({ '主数据ID': id, isNew: false, deleted: true, row: {} }));
+    return changes;
+  }
+
+  function collectSelectedIds() {
+    const ids = [];
+    tableMaster.$('tr.row-selected').each(function () {
+      const id = $(this).attr('data-id');
+      if (id) ids.push(id);
+    });
+    return ids;
+  }
+
+  $('#tableMaster').on('click', 'tbody tr', function () {
+    $(this).toggleClass('row-selected');
+  });
+
+  $('#btnAdd').on('click', function () {
+    const empty = {};
+    ['工序','Machine Type','PM Frequency','强制保养频率/ Month','策略 / Strategy','PM Description','工单类型','是否创工单','是否计入AEM','RBM保养间隔时间','RBM保养提醒间隔时间','单次停机时间/ h','TasklistName','备注','是否确认','主数据ID'].forEach(k => empty[k] = '');
+    empty['是否确认'] = '未确认';
+    masterRows.push(empty);
+    renderMasterTable();
+    tableMaster.search('').draw();
+  });
+
+  $('#btnCopy').on('click', function () {
+    const ids = collectSelectedIds();
+    if (ids.length === 0) { Swal.fire({ icon: 'warning', title: swalTitle('请先选择行', 'Select a row first') }); return; }
+    ids.forEach(id => {
+      const src = masterRows.find(r => r['主数据ID'] === id);
+      if (!src) return;
+      const copy = Object.assign({}, src);
+      copy['主数据ID'] = '';
+      copy['是否确认'] = '未确认';
+      copy['确认人'] = ''; copy['确认时间'] = '';
+      masterRows.push(copy);
+    });
+    renderMasterTable();
+  });
+
+  $('#btnDelete').on('click', function () {
+    const ids = collectSelectedIds();
+    if (ids.length === 0) { Swal.fire({ icon: 'warning', title: swalTitle('请先选择行', 'Select a row first') }); return; }
+    const lockedIds = ids.filter(id => {
+      const r = masterRows.find(x => x['主数据ID'] === id);
+      return r && r['是否确认'] === '已确认' && !unlockedIds[id];
+    });
+    if (lockedIds.length > 0) {
+      Swal.fire({ icon: 'error', title: swalTitle('已确认行不可删除', 'Confirmed rows cannot be deleted'), html: swalHtml('请先取消确认。', 'Unconfirm first.') });
+      return;
+    }
+    Swal.fire({
+      title: swalTitle('确认删除？', 'Confirm delete?'),
+      html: swalHtml(`将删除 ${ids.length} 行。`, `${ids.length} row(s) will be deleted.`),
+      icon: 'warning', showCancelButton: true, confirmButtonText: '确认', cancelButtonText: '取消'
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      ids.forEach(id => { if (deletedIds.indexOf(id) === -1) deletedIds.push(id); });
+      masterRows = masterRows.filter(r => ids.indexOf(r['主数据ID']) === -1);
+      renderMasterTable();
+    });
+  });
+
+  $('#btnSave').on('click', function () {
+    const changes = collectChanges();
+    if (changes.length === 0) { Swal.fire({ icon: 'info', title: swalTitle('没有改动', 'No changes') }); return; }
+    Swal.fire({
+      title: swalTitle('确认保存？', 'Confirm save?'),
+      html: swalHtml(`共 ${changes.length} 项改动将写入正式表。`, `${changes.length} change(s) will be saved.`),
+      icon: 'question', showCancelButton: true, confirmButtonText: '确认', cancelButtonText: '取消'
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      Swal.fire({ title: swalTitle('保存中', 'Saving...'), allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      google.script.run.withSuccessHandler(async r => {
+        if (r && r.ok) {
+          deletedIds = [];
+          await loadMasterData(); renderMasterTable();
+          Swal.fire({ icon: 'success', title: swalTitle('保存成功', 'Saved') });
+        } else {
+          Swal.fire({ icon: 'error', title: swalTitle('保存失败', 'Save Failed'), html: swalHtml(String((r && r.message) || r), '') });
+        }
+      }).withFailureHandler(e => {
+        Swal.fire({ icon: 'error', title: swalTitle('保存失败', 'Save Failed'), html: swalHtml(String(e.message || e), '') });
+      }).save_PM_MasterData(changes, global_ID, global_Name);
     });
   });
 </script>
