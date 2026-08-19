@@ -9565,11 +9565,15 @@ function save_PM_MasterData(changes, userCode, userName) {
       : [];
     let head = PM_MASTER_HEADERS;
 
-    // 现有行索引：主数据ID(第16列, index 15) → 行号(从2起)
+    // 现有行索引：主数据ID(第16列, index 15) → 行号(从2起)；内容快照按 ID 保存（删除只影响行号、不影响内容）
     let idToRow = {};
+    let idToContent = {};
     for (let i = 0; i < data.length; i++) {
       let id = String(data[i][15] || "");
-      if (id) idToRow[id] = i + 2;
+      if (id) {
+        idToRow[id] = i + 2;
+        idToContent[id] = data[i];
+      }
     }
 
     let nextIdNum = 1;
@@ -9578,16 +9582,39 @@ function save_PM_MasterData(changes, userCode, userName) {
       if (m && parseInt(m[1], 10) >= nextIdNum) nextIdNum = parseInt(m[1], 10) + 1;
     });
 
+    // 第一遍：删除。按行号从大到小处理，避免删除后行号位移使后续删除指向错误行
+    let delRows = [];
     changes.forEach(function (ch) {
+      if (!ch.deleted) return;
       let masterId = ch["主数据ID"] || "";
-      if (ch.deleted) {
-        if (idToRow[masterId]) {
-          ws.deleteRow(idToRow[masterId]);
-          delete idToRow[masterId];
-          appendPM_MasterAuditLog(ss, userCode, userName, "删除", masterId, "", "", "");
-        }
-        return;
+      if (idToRow[masterId]) {
+        delRows.push({ masterId: masterId, row: idToRow[masterId] });
+        delete idToRow[masterId];
       }
+    });
+    delRows.sort(function (a, b) { return b.row - a.row; });
+    delRows.forEach(function (d) {
+      ws.deleteRow(d.row);
+      appendPM_MasterAuditLog(ss, userCode, userName, "删除", d.masterId, "", "", "");
+    });
+
+    // 删除后重新读取，重建 主数据ID→行号 索引（内容快照不受删除影响，仅行号需要重算）
+    if (delRows.length > 0) {
+      lastRow = ws.getLastRow();
+      data = lastRow >= 2
+        ? ws.getRange(2, 1, lastRow - 1, PM_MASTER_HEADERS.length).getValues()
+        : [];
+      idToRow = {};
+      for (let i = 0; i < data.length; i++) {
+        let id = String(data[i][15] || "");
+        if (id) idToRow[id] = i + 2;
+      }
+    }
+
+    // 第二遍：新增 / 修改
+    changes.forEach(function (ch) {
+      if (ch.deleted) return;
+      let masterId = ch["主数据ID"] || "";
       let rowArr = head.map(function (h) {
         let v = ch.row[h];
         return v === undefined || v === null ? "" : v;
@@ -9603,8 +9630,8 @@ function save_PM_MasterData(changes, userCode, userName) {
         ws.appendRow(rowArr);
         appendPM_MasterAuditLog(ss, userCode, userName, "新增", masterId, "", "", "");
       } else {
-        // 修改：先对比差异写日志，再整行写回
-        let oldObj = buildRowObject(head, data[idToRow[masterId] - 2]);
+        // 修改：先对比差异写日志，再整行写回（旧值用内容快照，删除不影响）
+        let oldObj = buildRowObject(head, idToContent[masterId]);
         let diffs = computeFieldDiffs(oldObj, ch.row);
         rowArr[15] = masterId;
         rowArr[16] = oldObj["确认人"] || "";
