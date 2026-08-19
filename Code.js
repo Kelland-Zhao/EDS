@@ -9471,6 +9471,35 @@ function buildRowObject(head, row) {
   return obj;
 }
 
+// 保养主数据：常量（A 阶段）
+var PM_MASTER_SS_ID = "1Iw0-TEvX0m7kIBLSmIpAkF8Z4B6Ri_nQRrmrcfPNlEQ";
+var PM_MASTER_SHEET_NAME = "MasterData";
+var PM_MASTER_AUDIT_SHEET_NAME = "变更日志";
+var PM_MASTER_DRAFT_SS_ID = "1KxudsNbAs6w8S110Cqi3bYtVvqycrzokxGbudrHg5-8";
+var PM_MASTER_USERID_SS_ID = "1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM";
+var PM_MASTER_AUDIT_COL = 65; // userID BM 列：第1行 EDS，第2行 PM策略审核，人员行 Y/N
+var PM_MASTER_HEADERS = [
+  "工序", "Machine Type", "PM Frequency", "单次停机时间/ h", "PM Description",
+  "RBM保养间隔时间", "RBM保养提醒间隔时间", "强制保养频率/ Month", "策略 / Strategy", "TasklistName",
+  "是否创工单", "工单类型", "是否计入AEM", "备注", "是否确认",
+  "主数据ID", "确认人", "确认时间", "最后修改人", "最后修改时间"
+];
+var PM_MASTER_AUDIT_HEADERS = ["时间", "工号", "姓名", "动作", "主数据ID", "字段", "旧值", "新值"];
+
+// 草稿行(15列) → 正式表记录(20列)；导入一律"未确认"，#VALUE! 等公式错误置空
+function buildMasterRecordFromDraft(draftRow, masterId) {
+  let rec = [];
+  for (let i = 0; i < 20; i++) rec.push("");
+  for (let i = 0; i < 15; i++) {
+    let v = draftRow[i];
+    if (v !== undefined && v !== null && String(v).includes("#VALUE!")) v = "";
+    rec[i] = v === undefined || v === null ? "" : v;
+  }
+  rec[14] = "未确认"; // 是否确认
+  rec[15] = masterId; // 主数据ID
+  return rec;
+}
+
 function get_PM_Workorder() {
   try {
     let ID = "1YzMGIQ2RcBlGIadWh5yfxlCmOpCuOBHpgKfEVz8_W98";
