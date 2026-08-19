@@ -150,7 +150,7 @@
       Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(String(e.message || e), '') });
     }
     $('#btnRefresh').on('click', async function () {
-      try { await loadMasterData(); renderMasterTable(); }
+      try { await loadMasterData(); renderMasterTable(); applyFilters(); }
       catch (e) { Swal.fire({ icon: 'error', title: swalTitle('刷新失败', 'Refresh Failed'), html: swalHtml(String(e.message || e), '') }); }
     });
   });
