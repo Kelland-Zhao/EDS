@@ -9638,7 +9638,13 @@ function save_PM_MasterData(changes, userCode, userName) {
         return v === undefined || v === null ? "" : v;
       });
       if (!masterId || !idToRow[masterId]) {
-        // 新增
+        // 新增：14 个可编辑字段全部为空（含空白字符）的新行不落库
+        let editFields = ["工序", "Machine Type", "PM Frequency", "强制保养频率/ Month", "策略 / Strategy", "PM Description", "工单类型", "是否创工单", "是否计入AEM", "RBM保养间隔时间", "RBM保养提醒间隔时间", "单次停机时间/ h", "TasklistName", "备注"];
+        let allEmpty = editFields.every(function (f) {
+          let v = ch.row[f];
+          return v === undefined || v === null || String(v).trim() === "";
+        });
+        if (allEmpty) return;
         masterId = "PM-MD-" + String(nextIdNum).padStart(4, "0");
         nextIdNum++;
         rowArr[15] = masterId;
@@ -9648,7 +9654,7 @@ function save_PM_MasterData(changes, userCode, userName) {
         ws.appendRow(rowArr);
         appendPM_MasterAuditLog(ss, userCode, userName, "新增", masterId, "", "", "");
       } else {
-        // 修改：先对比差异写日志，再整行写回（旧值用内容快照，删除不影响）
+        // 修改：对比差异后整行写回，再逐字段写变更日志（旧值用内容快照，删除不影响）
         let oldObj = buildRowObject(head, idToContent[masterId]);
         let diffs = computeFieldDiffs(oldObj, ch.row);
         rowArr[15] = masterId;
@@ -9735,8 +9741,8 @@ function import_PM_MasterData(userCode, userName) {
     let draft = dws.getRange(2, 1, lastRow - 1, 15).getValues();
     let rows = [];
     draft.forEach(function (r, idx) {
-      // 全空行跳过
-      if (r.every(function (c) { return c === "" || c === undefined || c === null; })) return;
+      // 全空行跳过（含纯空白字符行：先 trim 再判空）
+      if (r.every(function (c) { return c === undefined || c === null || String(c).trim() === ""; })) return;
       rows.push(buildMasterRecordFromDraft(r, "PM-MD-" + String(rows.length + 1).padStart(4, "0")));
     });
     if (rows.length === 0) return { ok: false, message: "草稿表无有效数据" };

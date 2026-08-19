@@ -1,6 +1,6 @@
 <script>
   // 频率文本 → 月数换算；无法识别返回 null（调用方留空并标黄提醒）
-  // 匹配按“前缀”判断：频率词须位于文本开头（“每周”等“每”开头文本视为不可识别）
+  // 匹配为精确比较：trim 后须与标准频率词完全一致才换算（“每周”“月度”等变体词视为不可识别）
   function convertFrequencyToMonths(freqText) {
     if (freqText === undefined || freqText === null) return null;
     let s = String(freqText).trim();
@@ -10,7 +10,7 @@
       ["年", 12], ["季", 3], ["月", 1], ["周", 0.25]
     ];
     for (let i = 0; i < MAP.length; i++) {
-      if (s.startsWith(MAP[i][0])) return MAP[i][1];
+      if (s === MAP[i][0]) return MAP[i][1];
     }
     return null;
   }
@@ -18,6 +18,11 @@
   // 双语 Swal 提示 helper：中文在上，英文在下
   const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
   const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+  // HTML 属性值转义（用于行内编辑控件 value 等属性）
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 
   let global_Name = sessionStorage.getItem('Name') || '';
   let global_ID = sessionStorage.getItem('ID') || '';
@@ -100,7 +105,7 @@
             const opts = ['<option value=""></option>'].concat(SELECT_FIELDS[f].map(o => `<option ${o === val ? 'selected' : ''}>${o}</option>`)).join('');
             $cell.html(`<select class="form-select form-select-sm cell-select" data-field="${f}">${opts}</select>`);
           } else {
-            $cell.html(`<input type="text" class="form-control form-control-sm cell-input" data-field="${f}" value="${val}" placeholder="${f === 'PM Frequency' ? '如：半年' : ''}">`);
+            $cell.html(`<input type="text" class="form-control form-control-sm cell-input" data-field="${f}" value="${escapeAttr(val)}" placeholder="${f === 'PM Frequency' ? '如：半年' : ''}">`);
           }
         });
         applyRowLock(row, data);
@@ -169,18 +174,21 @@
   // 收集整表变更：新增（无ID）/ 修改（对比 masterRows 原值）/ 删除（deletedIds）
   function collectChanges() {
     const changes = [];
+    // 14 个可编辑字段（新增行全空时判定为垃圾行，不发 isNew change）
+    const FIELDS = ['工序', 'Machine Type', 'PM Frequency', '强制保养频率/ Month', '策略 / Strategy', 'PM Description', '工单类型', '是否创工单', '是否计入AEM', 'RBM保养间隔时间', 'RBM保养提醒间隔时间', '单次停机时间/ h', 'TasklistName', '备注'];
     tableMaster.rows().every(function () {
       const $row = $(this.node());
       const id = $row.attr('data-id') || '';
       const domRow = collectRowFromDom($row);
       if (!id) {
+        const allEmpty = FIELDS.every(f => String(domRow[f] || '').trim() === '');
+        if (allEmpty) return;
         changes.push({ '主数据ID': '', isNew: true, deleted: false, row: domRow });
         return;
       }
       const orig = masterRows.find(r => r['主数据ID'] === id);
       if (!orig) return;
       // 关键字段对比（14 个可编辑字段）
-      const FIELDS = ['工序', 'Machine Type', 'PM Frequency', '强制保养频率/ Month', '策略 / Strategy', 'PM Description', '工单类型', '是否创工单', '是否计入AEM', 'RBM保养间隔时间', 'RBM保养提醒间隔时间', '单次停机时间/ h', 'TasklistName', '备注'];
       const dirty = FIELDS.some(f => String(orig[f] || '') !== String(domRow[f] || ''));
       if (dirty) changes.push({ '主数据ID': id, isNew: false, deleted: false, row: domRow });
     });
@@ -192,7 +200,7 @@
     const ids = [];
     tableMaster.$('tr.row-selected').each(function () {
       const id = $(this).attr('data-id');
-      if (id) ids.push(id);
+      ids.push(id || ''); // 无 ID 的新行也允许选中/删除
     });
     return ids;
   }
@@ -208,6 +216,7 @@
     masterRows.push(empty);
     renderMasterTable();
     tableMaster.search('').draw();
+    applyFilters();
   });
 
   $('#btnCopy').on('click', function () {
@@ -243,9 +252,19 @@
       icon: 'warning', showCancelButton: true, confirmButtonText: '确认', cancelButtonText: '取消'
     }).then(result => {
       if (!result.isConfirmed) return;
-      ids.forEach(id => { if (deletedIds.indexOf(id) === -1) deletedIds.push(id); });
-      masterRows = masterRows.filter(r => ids.indexOf(r['主数据ID']) === -1);
+      const selRows = [];
+      tableMaster.$('tr.row-selected').each(function () {
+        const d = tableMaster.row($(this)).data();
+        if (d) selRows.push(d);
+      });
+      selRows.forEach(d => {
+        const id = String(d['主数据ID'] || '');
+        if (id && deletedIds.indexOf(id) === -1) deletedIds.push(id); // deletedIds 只接受真实主数据ID
+      });
+      // 真实 ID 按 ID 移除；无 ID 新行按对象引用直接从 masterRows 移除
+      masterRows = masterRows.filter(r => selRows.indexOf(r) === -1);
       renderMasterTable();
+      applyFilters();
     });
   });
 
@@ -397,7 +416,7 @@
       if (tableAuditLog) tableAuditLog.destroy();
       tableAuditLog = $('#tableAuditLog').DataTable({
         data: rows,
-        columns: ['时间', '工号', '姓名', '动作', '主数据ID', '字段', '旧值', '新值'].map(h => ({ title: h, data: h })),
+        columns: ['时间', '工号', '姓名', '动作', '主数据ID', '字段', '旧值', '新值'].map(h => ({ title: h, data: h, render: DataTable.render.text() })),
         order: [[0, 'desc']],
         pageLength: 15
       });
