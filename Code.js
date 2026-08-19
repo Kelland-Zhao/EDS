@@ -154,6 +154,7 @@ function doGet(e) {
   Route.path("PM_RecordQuery", loadPM_RecordQuery); // 新增记录查询页面路由
   Route.path("Inspection2.0", loadInspection2_0); // 新增点检2.0路由
   Route.path("PM_ShiftFollowUp", loadPM_ShiftFollowUp); // 新增三班转保养跟进页面路由
+  Route.path("PM_MasterData", loadPM_MasterData); // 保养主数据管理页
   Route.path("Handover_1.0", loadHandover_1_0); // 新增交接班页面路由
   Route.path("Fault_Record_1.0", loadFault_Record_1_0); // 新增故障记录页面路由
   Route.path("FailureReport_Template", loadFailureReport_Template);
@@ -285,6 +286,23 @@ function loadPM_Plan_new(
     intoWebType: intoWebLoginType || "",
   })
     .setTitle("保养计划 | PM Plan")
+    .setFaviconUrl(webIconUrl);
+}
+
+function loadPM_MasterData(
+  intoWebUrl,
+  intoWebLoginId,
+  intoWebLoginName,
+  intoWebLoginType
+) {
+  let webPage = getReleaseWebPage();
+  return render("PM_MasterData", {
+    webPage: webPage,
+    intoWebID: intoWebLoginId || "",
+    intoWebName: intoWebLoginName || "",
+    intoWebType: intoWebLoginType || "",
+  })
+    .setTitle("保养主数据 | PM Master Data")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -9727,6 +9745,24 @@ function import_PM_MasterData(userCode, userName) {
     return { ok: true, message: "导入成功 " + rows.length + " 条", count: rows.length };
   } catch (e) {
     return { ok: false, message: e.toString() };
+  }
+}
+
+function get_PM_MasterAuditLog() {
+  try {
+    let ss = SpreadsheetApp.openById(PM_MASTER_SS_ID);
+    let ws = getPM_MasterAuditSheet(ss);
+    let lastRow = ws.getLastRow();
+    let rows = [];
+    if (lastRow >= 2) {
+      let head = PM_MASTER_AUDIT_HEADERS;
+      let data = ws.getRange(2, 1, lastRow - 1, head.length).getDisplayValues();
+      data.forEach(function (r) { rows.push(buildRowObject(head, r)); });
+      rows.reverse(); // 新的在前
+    }
+    return { rows: rows };
+  } catch (e) {
+    return { rows: [], error: e.toString() };
   }
 }
 
