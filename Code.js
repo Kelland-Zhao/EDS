@@ -9535,6 +9535,26 @@ function get_PM_MasterData() {
   }
 }
 
+// 对比两行（表头名为键的对象），返回变化的字段列表（值统一 String 归一）
+function computeFieldDiffs(oldRow, newRow) {
+  let diffs = [];
+  let keys = {};
+  Object.keys(oldRow).forEach(function (k) { keys[k] = true; });
+  Object.keys(newRow).forEach(function (k) { keys[k] = true; });
+  Object.keys(keys).forEach(function (k) {
+    let ov = String(oldRow[k] === undefined || oldRow[k] === null ? "" : oldRow[k]);
+    let nv = String(newRow[k] === undefined || newRow[k] === null ? "" : newRow[k]);
+    if (ov !== nv) diffs.push({ field: k, oldValue: ov, newValue: nv });
+  });
+  return diffs;
+}
+
+function appendPM_MasterAuditLog(ss, userCode, userName, action, masterId, field, oldValue, newValue) {
+  let ws = getPM_MasterAuditSheet(ss);
+  let now = Utilities.formatDate(new Date(), "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
+  ws.appendRow([now, userCode || "", userName || "", action, masterId || "", field || "", oldValue || "", newValue || ""]);
+}
+
 function get_PM_Workorder() {
   try {
     let ID = "1YzMGIQ2RcBlGIadWh5yfxlCmOpCuOBHpgKfEVz8_W98";
