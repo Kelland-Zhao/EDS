@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("Kez_Select2@4.0.13_css");?>
   <?!=include("Kez_Select2-bootstrap_css");?>
   <?!=include("CSS");?>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -144,7 +145,7 @@
         </div>
         <div class="modal-body" style="max-height:60vh;overflow-y:auto;">
           <div class="mb-2 d-flex align-items-center gap-3" style="font-size:12px;">
-            <label><input type="checkbox" id="importCheckAll" checked> 全选 / Check All</label>
+            <label><input type="checkbox" id="importCheckAll"> 全选 / Check All</label>
             <span class="text-muted" id="importHint"></span>
           </div>
           <table class="table table-sm table-hover mb-0" id="importTable" style="font-size:12px;">
@@ -164,9 +165,13 @@
     </div>
   </div>
 
+  <?!=include("NPI_TaskModal") ?>
+
   <?!=include("Kez_jquery@3.6.4_js") ?>
   <?!=include("Kez_bootstrap@5.3.1_js") ?>
+  <?!=include("Kez_select2@4.0.13_js") ?>
   <?!=include("Kez_sweetalert2_js") ?>
+  <?!=include("NPI_TaskModal-js") ?>
   <?!=include("NPI_Dashboard-js") ?>
 </body>
 </html>

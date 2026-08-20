@@ -176,84 +176,13 @@
     </div>
   </div>
 
-  <div class="modal fade" id="newTaskModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">新建测试任务 / New Test Task</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="row g-2">
-            <div class="col-12">
-              <label class="form-label-sm">产品名称<span class="text-danger">*</span><br><small>Product Name</small></label>
-              <select class="form-select form-select-sm" id="newProductName" style="width:100%;">
-                <option value="">-- 选择或输入产品名称 / Select or type --</option>
-              </select>
-            </div>
-            <div class="col-12" id="skuGroup">
-              <label class="form-label-sm">适用SKU<br><small>SKU</small></label>
-              <select class="form-select form-select-sm" id="newSku" style="width:100%;"></select>
-              <input type="text" class="form-control form-control-sm" id="newSkuCustom" style="display:none;margin-top:6px;" placeholder="编辑新SKU / Edit SKU">
-              <small id="skuLoading" class="text-muted d-none">加载中... / Loading...</small>
-              <small id="skuHint" class="text-muted d-none">请先选择产品 / Select a product first</small>
-            </div>
-            <div class="col-6">
-              <label class="form-label-sm">模具编号<span class="text-danger">*</span><br><small>Mold No.</small></label>
-              <input type="text" class="form-control form-control-sm" id="newMoldNo">
-            </div>
-            <div class="col-6">
-              <label class="form-label-sm">机台编号<span class="text-danger">*</span><br><small>Machine No.</small></label>
-              <select class="form-select form-select-sm" id="newMachineNo" style="width:100%;">
-                <option value="">-- 选择机台 / Select Machine --</option>
-              </select>
-              <small id="machineHint" class="text-muted d-none"></small>
-            </div>
-            <div class="col-6">
-              <label class="form-label-sm">物料<span class="text-danger">*</span><br><small>Material</small></label>
-              <select class="form-select form-select-sm" id="newMaterial" style="width:100%;"></select>
-            </div>
-            <div class="col-6">
-              <label class="form-label-sm">机型<br><small>Machine Model</small></label>
-              <input type="text" class="form-control form-control-sm" id="newMachineModel">
-            </div>
-            <div class="col-6">
-              <label class="form-label-sm">工序<br><small>Process Type</small></label>
-              <select class="form-select form-select-sm" id="newProcessType">
-                <option value="IM">注塑<br><small>Injection Molding</small></option>
-                <option value="TF">植磨毛<br><small>TF</small></option>
-                <option value="PK">包装<br><small>Packing</small></option>
-              </select>
-            </div>
-            <div class="col-6">
-              <label class="form-label-sm">来源<br><small>Source</small></label>
-              <select class="form-select form-select-sm" id="newSource">
-                <option value="weekly" selected>周计划<br><small>Weekly</small></option>
-                <option value="urgent">紧急<br><small>Urgent</small></option>
-              </select>
-            </div>
-            <div class="col-6">
-              <label class="form-label-sm">计划日期<span class="text-danger">*</span><br><small>Plan Date</small></label>
-              <input type="date" class="form-control form-control-sm" id="newPlanDate">
-            </div>
-            <div class="col-12">
-              <label class="form-label-sm">备注<br><small>Remark</small></label>
-              <input type="text" class="form-control form-control-sm" id="newRemark">
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
-          <button type="button" class="btn btn-sm btn-primary" id="btnCreateTask">创建 / Create</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <?!=include("NPI_TaskModal") ?>
 
   <?!=include("Kez_jquery@3.6.4_js") ?>
   <?!=include("Kez_datatables@1.13.6_js") ?>
   <?!=include("Kez_bootstrap@5.3.1_js") ?>
   <?!=include("Kez_select2@4.0.13_js") ?>
+  <?!=include("NPI_TaskModal-js") ?>
   <?!=include("NPI_ProcessRecord-js") ?>
 </body>
 </html>

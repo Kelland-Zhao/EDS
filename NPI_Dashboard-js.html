@@ -77,10 +77,17 @@ $(document).ready(function () {
     .addClass(perm === 'admin' ? 'bg-danger' : (perm === 'supervisor' ? 'bg-warning text-dark' : 'bg-secondary'))
     .text(permLabels[perm] || ('员工 / Employee'));
 
+  // 任务列表加载 toast（UI规范 §4.11）
+  Swal.fire({
+    title: swalTitle('加载数据中...', 'Loading Data...'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
   loadTasks();
 
   $('#weekFilter, #statusFilter, #machineFilter, #sourceFilter, #reqFilter').on('change', renderTable);
-  $('#btnNewTask').on('click', function () { openProcessPage('new=1'); });
+  // 新建任务按钮由共享弹窗组件 NPI_TaskModal-js 绑定（就地弹窗）
   $('#btnImport').on('click', openImportModal);
   $('#importCheckAll').on('change', function () {
     $('#importTable tbody input[type=checkbox]').prop('checked', $(this).prop('checked'));
@@ -100,15 +107,22 @@ function openProcessPage(extraParam) {
 function loadTasks() {
   google.script.run
     .withSuccessHandler(function (result) {
+      Swal.close();
       var r = parseResponse(result);
       allTasks = r.success ? r.data : [];
       buildFilters();
       renderTable();
     })
     .withFailureHandler(function (err) {
+      Swal.close();
       Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('任务列表加载失败', 'Failed to load task list') });
     })
     .loadNPITestTaskList();
+}
+
+// 共享弹窗保存成功后的页面钩子：刷新任务列表
+function onTaskSaved() {
+  loadTasks();
 }
 
 function buildFilters() {
@@ -217,8 +231,16 @@ function statusBtn(taskID, newStatus, cn, en, extra) {
 
 function doStatusChange(taskID, newStatus) {
   var applyStatus = function () {
+    // 状态流转加载提示（UI规范 §4.11 加载 toast 配置）
+    Swal.fire({
+      title: swalTitle('更新状态中...', 'Updating status...'),
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: function () { Swal.showLoading(); }
+    });
     google.script.run
       .withSuccessHandler(function (raw) {
+        Swal.close();
         var r = parseResponse(raw);
         if (r.success) {
           loadTasks();
@@ -227,6 +249,7 @@ function doStatusChange(taskID, newStatus) {
         }
       })
       .withFailureHandler(function (err) {
+        Swal.close();
         Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(err.message || String(err), 'Failed') });
       })
       .updateNPITaskStatus(taskID, newStatus);
@@ -259,15 +282,17 @@ function openImportModal() {
         return;
       }
       importCandidates = r.data || [];
+      // 按日期降序（新→旧）
+      importCandidates.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
       var html = '';
       importCandidates.forEach(function (c, idx) {
         html += '<tr class="' + (c.imported ? 'text-muted' : '') + '">' +
-          '<td><input type="checkbox" data-idx="' + idx + '" ' + (c.imported ? 'disabled' : 'checked') + '></td>' +
+          '<td><input type="checkbox" data-idx="' + idx + '" ' + (c.imported ? 'disabled' : '') + '></td>' +
           '<td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.productName) + '</td><td>' + escapeHtml(c.moldNo) + '</td>' +
           '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
       });
       $('#importTable tbody').html(html);
-      $('#importCheckAll').prop('checked', true);
+      $('#importCheckAll').prop('checked', false);
       var unimported = importCandidates.filter(function (c) { return !c.imported; }).length;
       $('#importHint').text('共 ' + importCandidates.length + ' 行，未导入 ' + unimported + ' 行（已导入行置灰跳过）');
       $('#importModal').modal('show');

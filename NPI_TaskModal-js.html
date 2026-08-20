@@ -1,0 +1,349 @@
+<script>
+// ============================================================
+//  新建/编辑测试任务弹窗共享组件（工艺参数页 + 测试计划页共用）
+//  依赖页面级全局：swalTitle/swalHtml（各页面各自定义）
+// ============================================================
+let editingTaskID = null;   // 编辑模式：当前编辑的任务ID
+
+$(document).ready(function () {
+  // Init Select2 for machine select in modal
+  $('#newMachineNo').select2({
+    placeholder: '选择机台 / Select Machine',
+    allowClear: true,
+    width: '100%',
+    dropdownParent: $('#newTaskModal')
+  });
+
+  // 产品名称 Select2：BOM Bundle 选项 + 自由输入（全新产品）
+  $('#newProductName').select2({
+    placeholder: '选择或输入产品名称 / Select or type',
+    allowClear: true,
+    width: '100%',
+    dropdownParent: $('#newTaskModal'),
+    tags: true
+  });
+  // 适用SKU Select2（多选，选项随产品联动）
+  $('#newSku').select2({
+    placeholder: '选择SKU / Select SKU',
+    allowClear: true,
+    width: '100%',
+    multiple: true,
+    closeOnSelect: false,
+    dropdownParent: $('#newTaskModal'),
+    templateSelection: function (data) { return skuSelectionText(data.id, data.text); }
+  });
+  // 物料 Select2（多选，BOM产品大类选项 + 可自由输入新增）
+  $('#newMaterial').select2({
+    placeholder: '选择或输入物料 / Select or type',
+    allowClear: true,
+    width: '100%',
+    multiple: true,
+    closeOnSelect: false,
+    tags: true,
+    dropdownParent: $('#newTaskModal')
+  });
+
+  $('#btnNewTask').on('click', function () {
+    resetTaskModal();
+    $('#newTaskModal').modal('show');
+  });
+  // 必填字段输入/变更时清除红框
+  $(document).on('input change', '#newProductName, #newMoldNo, #newMachineNo, #newMaterial, #newPlanDate', function () {
+    $(this).removeClass('is-invalid');
+    $(this).next('.select2').find('.select2-selection').removeClass('is-invalid');
+  });
+  $('#newProductName').on('change', function () { onProductSelected($(this).val()); });
+  // 选中机台后自动带出机型（Workcenter D列）
+  $('#newMachineNo').on('change', function () {
+    var opt = $(this).find('option:selected');
+    $('#newMachineModel').val(opt.data('model') || '');
+  });
+  $('#newSku').on('change', function () {
+    var vals = $(this).val() || [];
+    var hasNew = vals.indexOf('__new__') >= 0;
+    var real = vals.filter(function (v) { return v !== '__new__'; });
+    if (hasNew) {
+      // 「＋新增」：展开可编辑输入框（默认 New），已选SKU保留，列表可继续选
+      var custom = $('#newSkuCustom');
+      if (!custom.val().trim()) custom.val('New');
+      custom.show().prop('readonly', false);
+      selectedSkuCodes = real;
+      skuChangeGuard = true;
+      $(this).val(real).trigger('change');
+      return;
+    }
+    if (skuChangeGuard) { skuChangeGuard = false; return; }
+    $('#newSkuCustom').hide();
+    selectedSkuCodes = real;
+  });
+  $('#btnCreateTask').on('click', createTask);
+
+  loadWorkcenterList();
+  loadBOMBundleList();
+  loadMaterialOptions();
+});
+
+function loadWorkcenterList(processType, callback) {
+  var pt = processType || $('#newProcessType').val() || 'IM';
+  var sel = $('#newMachineNo');
+  // 加载占位
+  sel.empty().append('<option value="">加载机台清单... / Loading machines...</option>').val(null).trigger('change');
+  $('#machineHint').addClass('d-none');
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      var data = r.success ? r.data : [];
+      sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
+      data.forEach(function (wc) {
+        sel.append('<option value="' + wc.id + '" data-model="' + (wc.model || '') + '">' + wc.text + '</option>');
+      });
+      sel.val(null).trigger('change');
+      if (!data.length) {
+        $('#machineHint').removeClass('d-none').text(pt === 'IM' ? '未找到机台清单 / No machines found' : '该工序暂未配置机台清单 / No machine list configured');
+      }
+      if (callback) callback();
+    })
+    .withFailureHandler(function () {
+      sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>').val(null).trigger('change');
+      $('#machineHint').removeClass('d-none').text('机台清单加载失败 / Failed to load machines');
+      if (callback) callback();
+    })
+    .loadNPIWorkcenterList(pt);
+}
+
+// 打开弹窗时自动清空全部字段
+function resetTaskModal() {
+  editingTaskID = null;
+  $('#newTaskModal .modal-title').text('新建测试任务 / New Test Task');
+  $('#btnCreateTask').html('创建 / Create');
+  $('#newProductName').val(null).trigger('change');
+  showSkuHint();
+  $('#newMoldNo, #newRemark, #newMachineModel').val('').removeClass('is-invalid');
+  $('#newMachineNo, #newMaterial').val(null).removeClass('is-invalid');
+  $('#newMachineNo').next('.select2').find('.select2-selection').removeClass('is-invalid');
+  $('#newMaterial').next('.select2').find('.select2-selection').removeClass('is-invalid');
+  $('#newProcessType').val('IM');
+  $('#newSource').val('weekly');
+  $('#newPlanDate').val(new Date().toISOString().split('T')[0]);
+  $('#machineHint').addClass('d-none');
+  // 工序重置回IM，若机台选项为空（此前加载过TF/PK）则重新加载IM清单
+  if ($('#newMachineNo option').length <= 1) loadWorkcenterList('IM');
+}
+
+// Reload workcenters when process type changes
+$(document).on('change', '#newProcessType', function () {
+  var sel = $('#newMachineNo');
+  sel.val(null).empty().append('<option value="">-- 选择机台 / Select Machine --</option>').trigger('change');
+  loadWorkcenterList($(this).val());
+});
+
+var modalSkus = [];         // 当前产品可选的牙柄SKU [{sku, color, bomFound}]
+var selectedSkuCodes = [];  // 当前已选中的SKU编码（不含颜色，多选）
+var skuChangeGuard = false; // 移除__new__令牌时抑制change回调
+
+function skuDisplayText(o) {
+  return o.sku + (o.color ? ' ' + o.color : (o.bomFound ? '' : ' 无对应BOM'));
+}
+
+// Select2 选中后的输入框文案：普通SKU只显示纯C#；特殊选项显示其原文
+function skuSelectionText(id, text) {
+  if (id === '__new__') return text;
+  return id || text;
+}
+
+// 产品名称选项：BOM主数据表 AR列（Bundle）去重列表；失败时可手输
+function loadBOMBundleList() {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      if (!r.success) {
+        Swal.fire({ icon: 'warning', title: swalTitle('产品列表加载失败', 'Product list failed'), html: swalHtml('可手动输入产品名称', 'You can type the product name manually'), timer: 2500, showConfirmButton: false });
+        return;
+      }
+      var data = r.data || [];
+      var sel = $('#newProductName');
+      data.forEach(function (b) { sel.append('<option value="' + b + '">' + b + '</option>'); });
+      sel.trigger('change');
+    })
+    .withFailureHandler(function () {
+      Swal.fire({ icon: 'warning', title: swalTitle('产品列表加载失败', 'Product list failed'), html: swalHtml('可手动输入产品名称', 'You can type the product name manually'), timer: 2500, showConfirmButton: false });
+    })
+    .loadBOMBundleList();
+}
+
+// 物料选项：INJ相关 中 R列 Bom Status=生效 的 H列产品大类去重列表；失败时仍可自由输入
+function loadMaterialOptions() {
+  google.script.run
+    .withSuccessHandler(function (result) {
+      var r = JSON.parse(result || '{}');
+      if (!r.success) return;
+      var sel = $('#newMaterial');
+      (r.data || []).forEach(function (m) { sel.append('<option value="' + m + '">' + m + '</option>'); });
+      sel.trigger('change');
+    })
+    .loadMaterialOptions();
+}
+
+// 选中产品后决定SKU控件形态：唯一自动 / 多选 / 手动输入 / 提示
+function onProductSelected(bundle, callback) {
+  if (!bundle) { showSkuHint(); if (callback) callback(); return; }
+  // 全新产品为自由输入，不在BOM选项里 → 显示可手输输入框
+  var exists = $('#newProductName option').toArray().some(function (o) { return o.value === bundle; });
+  if (!exists) { showSkuCustom(''); if (callback) callback(); return; }
+  showSkuLoading();
+  google.script.run
+    .withSuccessHandler(function (result) {
+      hideSkuLoading();
+      var r = JSON.parse(result || '{}');
+      if (!r.success) { showSkuCustom(''); if (callback) callback(); return; }
+      modalSkus = r.data || [];
+      if (modalSkus.length === 0) { showSkuCustom(''); if (callback) callback(); return; }
+      if (modalSkus.length === 1) { showSkuFixed(modalSkus[0]); if (callback) callback(); return; }
+      showSkuSelect(modalSkus);
+      if (callback) callback();
+    })
+    .withFailureHandler(function () { hideSkuLoading(); showSkuCustom(''); if (callback) callback(); })
+    .getBundleYabingSKUs(bundle);
+}
+
+function showSkuLoading() {
+  $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
+  setSkuSelectVisible(false);
+  $('#newSkuCustom').hide();
+  $('#skuLoading').removeClass('d-none');
+}
+
+function hideSkuLoading() { $('#skuLoading').addClass('d-none'); }
+
+function hideSkuControls() { showSkuHint(); }
+
+// SKU组常驻：未选产品时显示提示，控件隐藏
+function showSkuHint() {
+  modalSkus = [];
+  selectedSkuCodes = [];
+  skuChangeGuard = false;
+  $('#skuGroup').show();
+  hideSkuLoading();
+  setSkuSelectVisible(false);
+  $('#newSku').empty().val(null).trigger('change');
+  $('#newSkuCustom').hide().val('').prop('readonly', false);
+  $('#skuHint').removeClass('d-none');
+}
+
+// Select2 容器与原始 select 分离，需同步显示/隐藏
+function setSkuSelectVisible(visible) {
+  $('#newSku').toggle(visible);
+  $('#newSku').next('.select2').toggle(visible);
+}
+
+function showSkuFixed(o) {
+  $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
+  hideSkuLoading();
+  selectedSkuCodes = [o.sku];
+  setSkuSelectVisible(false);
+  $('#newSkuCustom').show().val(o.sku).prop('readonly', true);
+}
+
+function showSkuSelect(skus) {
+  $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
+  hideSkuLoading();
+  selectedSkuCodes = [];
+  $('#newSkuCustom').hide();
+  setSkuSelectVisible(true);
+  var sel = $('#newSku');
+  sel.empty();
+  skus.forEach(function (o) { sel.append('<option value="' + o.sku + '">' + skuDisplayText(o) + '</option>'); });
+  sel.append('<option value="__new__">＋在现有SKU基础上新增 / New SKU from existing</option>');
+  sel.val(null).trigger('change');
+}
+
+function showSkuCustom(prefill) {
+  $('#skuGroup').show();
+  $('#skuHint').addClass('d-none');
+  hideSkuLoading();
+  selectedSkuCodes = [];
+  setSkuSelectVisible(false);
+  $('#newSkuCustom').show().val(prefill || '').prop('readonly', false);
+}
+
+// 多选结果：已选SKU + （如有）新增输入框内容，分号连接
+function getSelectedSku() {
+  if (!$('#skuGroup').is(':visible')) return '';
+  var parts = selectedSkuCodes.slice();
+  var custom = $('#newSkuCustom');
+  if (custom.is(':visible') && !custom.prop('readonly') && custom.val().trim()) parts.push(custom.val().trim());
+  return parts.join('; ');
+}
+
+function createTask() {
+  var taskData = {
+    source: $('#newSource').val(), productName: $('#newProductName').val().trim(),
+    moldNo: $('#newMoldNo').val().trim(), machineNo: $('#newMachineNo').val().trim(),
+    material: ($('#newMaterial').val() || []).join('; ').trim(), machineModel: $('#newMachineModel').val().trim(),
+    planDate: $('#newPlanDate').val(),
+    processType: $('#newProcessType').val() || 'IM',
+    sku: getSelectedSku(),
+    remark: $('#newRemark').val().trim()
+  };
+  // 必填验证（除备注外）：缺失字段红框高亮
+  var missing = [];
+  if (!taskData.productName) missing.push('产品名称 / Product Name');
+  if (!taskData.moldNo) missing.push('模具编号 / Mold No.');
+  if (!taskData.machineNo) missing.push('机台编号 / Machine No.');
+  if (!taskData.material) missing.push('物料 / Material');
+  if (!taskData.planDate) missing.push('计划日期 / Plan Date');
+  if (missing.length > 0) {
+    ['newProductName', 'newMoldNo', 'newMachineNo', 'newMaterial', 'newPlanDate'].forEach(function (id) {
+      var el = $('#' + id);
+      if (!String(el.val() || '').trim()) {
+        el.addClass('is-invalid');
+        el.next('.select2').find('.select2-selection').addClass('is-invalid');
+      }
+    });
+    Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项','Required fields missing'), html: swalHtml(missing.join('<br>'), missing.join('<br>')) });
+    return;
+  }
+  Swal.fire({
+    title: swalTitle('确认创建', 'Confirm Create'),
+    html: swalHtml('确认创建此测试任务？', 'Confirm to create this test task?'),
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '确认 / Confirm',
+    cancelButtonText: '取消 / Cancel'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    Swal.fire({
+      title: swalTitle('创建中...', 'Creating...'),
+      html: swalHtml('正在创建测试任务', 'Creating test task'),
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: function () { Swal.showLoading(); }
+    });
+    var payload = JSON.stringify(taskData);
+    var op = sessionStorage.getItem('ID') || '';
+    var onDone = function (result) {
+      Swal.close();
+      var r2 = JSON.parse(result || '{}');
+      if (r2.success) {
+        $('#newTaskModal').modal('hide');
+        var tid = editingTaskID || r2.taskID;
+        editingTaskID = null;
+        resetTaskModal();
+        Swal.fire({ icon: 'success', title: swalTitle('保存成功', 'Saved'), html: swalHtml('任务 ' + tid + ' 已保存', 'Task ' + tid + ' saved'), timer: 2000, showConfirmButton: false });
+        // 页面级钩子：各页面定义保存成功后的刷新/选中行为
+        if (typeof onTaskSaved === 'function') onTaskSaved(tid);
+      } else {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
+      }
+    };
+    if (editingTaskID) {
+      google.script.run.withSuccessHandler(onDone).updateNPITestTask(editingTaskID, payload, op);
+    } else {
+      google.script.run.withSuccessHandler(onDone).createNPITestTask(payload, op);
+    }
+  });
+}
+</script>
