@@ -1525,6 +1525,14 @@
     }
   }
 
+  // 纯函数（供测试）：根据 radio 基础名（已去掉弹窗后缀）和 suffix 定位故障处理项
+  // baseName 形如 'FP_3'；弹窗 yesId 为 'FP_3_Y2'，主页面为 'FP_3_Y'
+  function resolveFailureProcessRadio(baseName, suffix, items) {
+    const yesId = baseName + '_Y' + suffix;
+    const noId = baseName + '_N' + suffix;
+    return (items || []).find(it => it.yesId === yesId || it.noId === noId) || null;
+  }
+
   // 使用事件委托为所有单选按钮组添加事件监听器
   $(document).on('change', 'input[type=radio]', handleRadioButtonChange);
 
@@ -1533,6 +1541,16 @@
     let name = $(this).attr('name');
     let suffix = name.endsWith('2') ? '2' : ''; // 检查是否有后缀 '2'
     name = name.replace('2', ''); // 移除后缀 '2' 以获取基本名称
+
+    // 动态故障处理项（FP_*）：切换 是/否 时联动描述框启用/禁用
+    if (name.startsWith('FP_')) {
+      const items = suffix === '2' ? globalFailureProcessItemsModal : globalFailureProcessItems;
+      const item = resolveFailureProcessRadio(name, suffix, items);
+      if (item && !item.isFollow) {
+        toggleInputBasedOnRadio(item.yesId, item.noId, item.descId);
+      }
+      return;
+    }
 
     switch (name) {
       case 'EquM':

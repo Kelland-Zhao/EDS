@@ -92,3 +92,24 @@ test('多项同时缺失 → 全部列出', () => {
   ]);
   assert.equal(r.length, 4);
 });
+
+// ===== resolveFailureProcessRadio =====
+const fpItems = [
+  { Description: '设备维修', isFollow: false, yesId: 'FP_3_Y', noId: 'FP_3_N', descId: 'FP_3_Description' },
+  { Description: '模具维修', isFollow: false, yesId: 'FP_3_Y2', noId: 'FP_3_N2', descId: 'FP_3_Description2' },
+  { Description: '热流道', isFollow: true, yesId: 'Follow_Y', noId: 'Follow_N' },
+];
+
+test('resolveFailureProcessRadio 主页面 FP 项 → 按 yes/no id 找到对应项', () => {
+  const item = globalThis.resolveFailureProcessRadio('FP_3', '', fpItems);
+  assert.equal(item.Description, '设备维修');
+});
+
+test('resolveFailureProcessRadio 弹窗 FP 项（基础名+suffix=2）→ 正确解析', () => {
+  const item = globalThis.resolveFailureProcessRadio('FP_3', '2', fpItems);
+  assert.equal(item.Description, '模具维修');
+});
+
+test('resolveFailureProcessRadio 非 FP 名称 → 返回 null', () => {
+  assert.equal(globalThis.resolveFailureProcessRadio('EquM', '', fpItems), null);
+});
