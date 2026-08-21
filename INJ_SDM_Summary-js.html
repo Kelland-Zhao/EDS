@@ -93,6 +93,17 @@
       updateCounts();
     }
 
+    function sortCommByDate(items) {
+      return (items || []).slice().sort(function (a, b) {
+        var x = (a && a.expectedCompletionDate) || '';
+        var y = (b && b.expectedCompletionDate) || '';
+        if (!x && !y) return 0;
+        if (!x) return -1;
+        if (!y) return 1;
+        return x.localeCompare(y);
+      });
+    }
+
     function addCommunicationRow(data) {
       const item = data || {};
       const name = `communication-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -185,8 +196,7 @@
             resetForm();
             $('#ReportDate').val(selectedDate);
             if (historyCommItems.length) {
-              $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
-              historyCommItems.forEach(item => addCommunicationRow(item));
+              sortCommByDate(historyCommItems).forEach(item => addCommunicationRow(item));
             }
             if (historyTodoItems.length) {
               $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
@@ -208,17 +218,14 @@
       $('.item-list').empty();
       (report.major.length ? report.major : [{}]).forEach(item => addIssueRow('major', item));
       (report.outstanding.length ? report.outstanding : [{}]).forEach(item => addIssueRow('outstanding', item));
-      (report.communication.length ? report.communication : [{}]).forEach(item => addCommunicationRow(item));
-      (report.todo.length ? report.todo : [{}]).forEach(item => addTodoRow(item));
       // Historical carry-over items (exclude items already rendered as part of the report being edited)
       const reportItemIds = new Set([...report.communication, ...report.todo].map(item => item.itemId).filter(Boolean));
       editingReportItemIds = reportItemIds;
       const extraCommItems = historyCommItems.filter(item => !reportItemIds.has(item.itemId));
       const extraTodoItems = historyTodoItems.filter(item => !reportItemIds.has(item.itemId));
-      if (extraCommItems.length) {
-        $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
-        extraCommItems.forEach(item => addCommunicationRow(item));
-      }
+      const mergedCommItems = sortCommByDate(report.communication.concat(extraCommItems));
+      (mergedCommItems.length ? mergedCommItems : [{}]).forEach(item => addCommunicationRow(item));
+      (report.todo.length ? report.todo : [{}]).forEach(item => addTodoRow(item));
       if (extraTodoItems.length) {
         $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
         extraTodoItems.forEach(item => addTodoRow(item));
@@ -708,8 +715,7 @@
           populateForm(result.todayReport);
         } else {
           if (historyCommItems.length) {
-            $('#CommunicationCard .item-list').append('<div class="history-divider"><span>历史跟进事项 / Historical Follow-Up</span></div>');
-            historyCommItems.forEach(item => addCommunicationRow(item));
+            sortCommByDate(historyCommItems).forEach(item => addCommunicationRow(item));
           }
           if (historyTodoItems.length) {
             $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
