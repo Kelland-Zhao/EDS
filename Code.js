@@ -12550,7 +12550,113 @@ function loadAllPMTasks(filterJSON) {
   }
 }
 
-// 合并任务列表加载：手动任务 + PM 任务 一次调用返回，服务端去重
+// ============================================================
+//  NPI 测试任务合并源 — EDS 只读展示（V20260821 NPI→EDS 合并）
+//  录入与关闭仍在 NPI 侧；EDS 任务列表/看板/甘特/我的任务只读合并
+// ============================================================
+
+// NPI 状态 → EDS 状态映射（仅展示用，NPI 状态机本身不变）
+function mapNPIStatusToEDS_(status) {
+  var s = String(status || '').trim();
+  if (s.indexOf('待确认') === 0) return '等待中';
+  if (s.indexOf('已排期') === 0) return '未开始';
+  if (s.indexOf('执行中') === 0) return '进行中';
+  if (s.indexOf('已完成') === 0) return '已完成';
+  if (s.indexOf('已取消') === 0) return '已取消';
+  return '未开始';
+}
+
+// 读取 NPI_TestTasks 并映射为 EDS 任务格式（负责人取 reqPerson 列，姓名|工号）
+function loadAllNPITasks(filterJSON) {
+  try {
+    var filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+    // 缓存：按小时缓存 NPI 测试任务（forceRefresh 时跳过缓存）
+    var cache = CacheService.getScriptCache();
+    var cacheKey = 'TaskList_NPI_v1_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMddHH');
+    if (!filter._forceRefresh) {
+      var cached = cache.get(cacheKey);
+      if (cached) return cached;
+    }
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_TestTasks');
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var data = ws.getDataRange().getValues();
+    var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var sapToName = null;
+    var result = [];
+    for (var i = 1; i < data.length; i++) {
+      var taskID = String(data[i][0] || '').trim();
+      if (!taskID) continue;
+      var planDate = data[i][9] instanceof Date
+        ? Utilities.formatDate(data[i][9], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+        : normalizeDate_(data[i][9]);
+      var status = mapNPIStatusToEDS_(data[i][2]);
+      // 未关闭且计划日期已过 → 已超期（与 PM 任务口径一致）
+      if (status !== '已完成' && status !== '已取消' && planDate && planDate < today) status = '已超期';
+      var machineNo = String(data[i][5] || '').trim();
+      var productName = String(data[i][3] || '').trim();
+      var titleParts = [];
+      if (machineNo) titleParts.push(machineNo);
+      if (productName) titleParts.push(productName);
+      var title = 'NPI: ' + (titleParts.length ? titleParts.join(' - ') : taskID);
+      var descParts = [];
+      if (String(data[i][4] || '').trim()) descParts.push('模具: ' + String(data[i][4] || '').trim());
+      if (String(data[i][6] || '').trim()) descParts.push('物料: ' + String(data[i][6] || '').trim());
+      if (String(data[i][19] || '').trim()) descParts.push('SKU: ' + String(data[i][19] || '').trim());
+      if (String(data[i][20] || '').trim()) descParts.push('机型: ' + String(data[i][20] || '').trim());
+      if (String(data[i][15] || '').trim()) descParts.push('备注: ' + String(data[i][15] || '').trim());
+      var description = descParts.join(' | ');
+      // 负责人：reqPerson 列，格式 姓名|工号（裸工号时解析姓名）
+      var rawPerson = String(data[i][8] || '').trim();
+      var pipeIdx = rawPerson.indexOf('|');
+      var ownerName = pipeIdx > 0 ? rawPerson.substring(0, pipeIdx) : '';
+      var sapID = pipeIdx > 0 ? rawPerson.substring(pipeIdx + 1) : rawPerson;
+      if (sapID && !ownerName) {
+        if (!sapToName) sapToName = getSapToNameMap_();
+        ownerName = sapToName[sapID] || '';
+      }
+      var task = {
+        taskID: taskID,
+        title: title,
+        description: description,
+        taskType: '测试',
+        priority: '中',
+        status: status,
+        planStartDate: planDate,
+        dueDate: planDate,
+        completedAt: '',
+        createdBy: 'NPI Module',
+        closedBy: '',
+        remark: String(data[i][15] || ''),
+        process: String(data[i][18] || '').trim() || 'IM',
+        owners: sapID ? [sapID] : [],
+        collaborators: [],
+        ownerNames: ownerName ? [ownerName] : [],
+        collaboratorNames: [],
+        createdAt: String(data[i][16] || ''),
+        updatedAt: String(data[i][17] || '')
+      };
+      // Apply filters
+      if (filter.status && task.status !== filter.status) continue;
+      if (filter.process) {
+        var pc = task.process.toUpperCase();
+        if (filter.process === 'INJ') { if (pc !== 'INJ' && pc !== 'IM') continue; }
+        else if (pc !== filter.process) continue;
+      }
+      if (filter.search) {
+        var q = String(filter.search).toLowerCase();
+        if (task.title.toLowerCase().indexOf(q) === -1 && task.description.toLowerCase().indexOf(q) === -1 && task.taskID.toLowerCase().indexOf(q) === -1) continue;
+      }
+      result.push(task);
+    }
+    var jsonResult = JSON.stringify({ success: true, data: result });
+    try { cache.put(cacheKey, jsonResult, 300); } catch (e) { /* 缓存过大时静默跳过 */ }
+    return jsonResult;
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 合并任务列表加载：手动任务 + PM 任务 + NPI 测试任务 一次调用返回，服务端去重
 // forceRefresh: 跳过缓存，强制从 Sheet 重新读取（创建/编辑任务后使用）
 function loadAllTasksForList(forceRefresh) {
   try {
@@ -12558,21 +12664,24 @@ function loadAllTasksForList(forceRefresh) {
     var filter = forceRefresh ? JSON.stringify({ _forceRefresh: true }) : JSON.stringify({});
     var manualResult = JSON.parse(loadTasks(filter));
     var pmResult = JSON.parse(loadAllPMTasks(filter));
+    var npiResult = JSON.parse(loadAllNPITasks(filter));
     var manualData = manualResult.success ? manualResult.data : [];
     var pmData = pmResult.success ? pmResult.data : [];
+    var npiData = npiResult.success ? npiResult.data : [];
 
-    console.log('loadAllTasksForList: manual=' + manualData.length + ' tasks, pm=' + pmData.length + ' tasks, forceRefresh=' + !!forceRefresh);
+    console.log('loadAllTasksForList: manual=' + manualData.length + ' tasks, pm=' + pmData.length + ' tasks, npi=' + npiData.length + ' tasks, forceRefresh=' + !!forceRefresh);
     if (!pmResult.success) {
       console.error('loadAllPMTasks failed: ' + (pmResult.message || 'unknown'));
     }
 
-    // 服务端去重（PM taskID 优先）
+    // 服务端去重（PM/NPI taskID 优先；NPI- 前缀与手动 TASK-/PM- 天然不冲突）
     var seen = {};
     pmData.forEach(function (t) { seen[t.taskID] = true; });
-    var merged = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    npiData.forEach(function (t) { seen[t.taskID] = true; });
+    var merged = pmData.concat(npiData).concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
 
     console.log('loadAllTasksForList: merged=' + merged.length + ' tasks');
-    return JSON.stringify({ success: true, manual: manualData, pm: pmData, merged: merged });
+    return JSON.stringify({ success: true, manual: manualData, pm: pmData, npi: npiData, merged: merged });
   } catch (e) {
     console.error('loadAllTasksForList error: ' + e.message);
     return JSON.stringify({ success: false, message: e.message });
@@ -12587,12 +12696,15 @@ function loadAllTasksForListFast() {
   try {
     var manualResult = JSON.parse(loadTasks(JSON.stringify({ _forceRefresh: true })));
     var pmResult = JSON.parse(loadAllPMTasks(JSON.stringify({})));
+    var npiResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
     var manualData = manualResult.success ? manualResult.data : [];
     var pmData = pmResult.success ? pmResult.data : [];
+    var npiData = npiResult.success ? npiResult.data : [];
     var seen = {};
     pmData.forEach(function (t) { seen[t.taskID] = true; });
-    var merged = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
-    return JSON.stringify({ success: true, manual: manualData, pm: pmData, merged: merged });
+    npiData.forEach(function (t) { seen[t.taskID] = true; });
+    var merged = pmData.concat(npiData).concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    return JSON.stringify({ success: true, manual: manualData, pm: pmData, npi: npiData, merged: merged });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
@@ -12795,6 +12907,9 @@ function loadTodayDashboardData(date, sapID) {
     // Merge PM tasks from PM_Records
     const pmTasks = loadPMTasksByDate(date);
     allTasks = pmTasks.concat(allTasks);
+    // Merge NPI 测试任务（只读展示，负责人=reqPerson）
+    const npiResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
+    if (npiResult.success) allTasks = allTasks.concat(npiResult.data);
     // Today tasks: status != 已取消 AND in date range (include 已完成)
     const todayTasks = allTasks.filter(function (t) {
       if (t.status === '已取消') return false;
@@ -12892,6 +13007,8 @@ function inferResourceGroup_(person, task) {
 
   if (workshop === 'TB1') return 'tb1';
   if (workshop === 'TB2') return 'tb2';
+  // 测试类任务（NPI 合并任务 taskType=测试）优先归测试组，避免描述中「模具」等关键词误导
+  if (task && String(task.taskType || '') === '测试') return 'test';
   if (roleText.indexOf('模具') !== -1 || /MOLD/i.test(roleText)) return 'mold';
   if (roleText.indexOf('测试') !== -1 || /TEST|TF/i.test(roleText) || process === 'TF') return 'test';
   if (roleText.indexOf('保养') !== -1 || /PM/i.test(roleText)) return 'pm';
@@ -13034,6 +13151,11 @@ function loadResourceGanttData(startDate, daysCount) {
     const allPMTasks = allPMResult.success ? allPMResult.data : [];
     allPMTasks.forEach(addTask_);
 
+    // NPI 测试任务（只读合并源）
+    const allNPIResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
+    const allNPITasks = allNPIResult.success ? allNPIResult.data : [];
+    allNPITasks.forEach(addTask_);
+
     // ---- Grouping logic (unchanged) ----
     const groupMap = {};
     getResourceGroupDefs_().forEach(function (g) {
@@ -13049,29 +13171,31 @@ function loadResourceGanttData(startDate, daysCount) {
       if (members.length === 0) members.push('未分配');
 
       members.forEach(function (memberID) {
-        const person = staffLookup[memberID] || userMap[memberID] || { sapID: memberID, name: memberID };
-        // BL列为空的人不在项目管理范围内，跳过
-        if (!person.internalGroup) return;
-        const groupKey = inferResourceGroup_(person, task);
+        var person = memberID === '未分配' ? null : (staffLookup[memberID] || userMap[memberID] || { sapID: memberID, name: memberID });
+        // BL列为空的人不在项目管理范围内，归入「未分配」行
+        if (person && !person.internalGroup) person = null;
+        var unassigned = !person;
+        var groupKey = unassigned ? inferResourceGroup_(null, task) : inferResourceGroup_(person, task);
         if (!groupMap[groupKey]) {
           groupMap[groupKey] = { key: groupKey, name: groupKey, en: groupKey, people: {}, dailyCounts: {} };
           days.forEach(function (d) { groupMap[groupKey].dailyCounts[d] = 0; });
         }
         const group = groupMap[groupKey];
-        if (!group.people[memberID]) {
-          group.people[memberID] = {
-            sapID: memberID,
-            name: person.name || memberID,
-            workshop: person.workshop || task.workshop || '',
-            process: person.process || task.process || '',
-            team: person.team || person.workRole || '',
-            shift: person.shift || '',
+        var pid = unassigned ? 'unassigned' : memberID;
+        if (!group.people[pid]) {
+          group.people[pid] = {
+            sapID: pid,
+            name: unassigned ? '未分配 / Unassigned' : (person.name || memberID),
+            workshop: unassigned ? '' : (person.workshop || task.workshop || ''),
+            process: unassigned ? (task.process || '') : (person.process || task.process || ''),
+            team: unassigned ? '' : (person.team || person.workRole || ''),
+            shift: unassigned ? '' : (person.shift || ''),
             hasTasks: true,
             tasks: [],
-            dailyStatus: dailyStatusByPerson[memberID] || {}
+            dailyStatus: unassigned ? {} : (dailyStatusByPerson[pid] || {})
           };
         }
-        group.people[memberID].tasks.push({
+        group.people[pid].tasks.push({
           taskID: task.taskID,
           title: task.title || task.taskID,
           taskType: task.taskType || '',
@@ -13155,9 +13279,14 @@ function loadMyTasks(sapID) {
   try {
     const tasksData = JSON.parse(loadTasks(JSON.stringify({})));
     const allTasks = tasksData.success ? tasksData.data : [];
+    const npiResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
+    const npiTasks = npiResult.success ? npiResult.data : [];
     const ownerTasks = allTasks.filter(function (t) {
       return t.owners.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
     });
+    ownerTasks.push.apply(ownerTasks, npiTasks.filter(function (t) {
+      return t.owners.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
+    }));
     const collaboratorTasks = allTasks.filter(function (t) {
       return t.collaborators.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
     });
