@@ -903,10 +903,12 @@ function openEditModal() {
   $('#btnCreateTask').html('保存修改<br><small>Save Changes</small>');
   $('#newMoldNo').val(currentTask.moldNo || '');
   $('#newMaterial').val((currentTask.material || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean)).trigger('change');
+  $('#newCollaborators').val((currentTask.collaborators || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean)).trigger('change');
   $('#newMachineModel').val(currentTask.machineModel || '');
   $('#newProcessType').val(currentTask.processType || 'IM');
   $('#newSource').val((currentTask.source || '').indexOf('urgent') >= 0 ? 'urgent' : 'weekly');
   $('#newPlanDate').val(currentTask.planDate || '');
+  $('#newDueDate').val(currentTask.dueDate || '');
   $('#newRemark').val(currentTask.remark || '');
   $('#newProductName').val(currentTask.productName || null);
   var skuTokens = (currentTask.sku || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean);

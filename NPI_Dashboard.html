@@ -144,13 +144,12 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body" style="max-height:60vh;overflow-y:auto;">
-          <div class="mb-2 d-flex align-items-center gap-3" style="font-size:12px;">
-            <label><input type="checkbox" id="importCheckAll"> 全选 / Check All</label>
+          <div class="mb-2" style="font-size:12px;">
             <span class="text-muted" id="importHint"></span>
           </div>
           <table class="table table-sm table-hover mb-0" id="importTable" style="font-size:12px;">
             <thead><tr>
-              <th></th><th>日期<br><small>Date</small></th><th>产品名称<br><small>Product</small></th>
+              <th>操作<br><small>Action</small></th><th>日期<br><small>Date</small></th><th>产品名称<br><small>Product</small></th>
               <th>模具号<br><small>Mold</small></th><th>机台<br><small>Machine</small></th>
               <th>状态<br><small>Status</small></th><th>测试说明<br><small>Remark</small></th>
             </tr></thead>
@@ -159,7 +158,6 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
-          <button type="button" class="btn btn-sm btn-primary" id="btnDoImport">导入 / Import</button>
         </div>
       </div>
     </div>
