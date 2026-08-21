@@ -59,7 +59,7 @@ $(document).ready(function () {
     $('#newTaskModal').modal('show');
   });
   // 必填字段输入/变更时清除红框
-  $(document).on('input change', '#newProductName, #newMoldNo, #newMachineNo, #newMaterial, #newPlanDate', function () {
+  $(document).on('input change', '#newProductName, #newMoldNo, #newMachineNo, #newMaterial, #newPlanDate, #newDueDate', function () {
     $(this).removeClass('is-invalid');
     $(this).next('.select2').find('.select2-selection').removeClass('is-invalid');
   });
@@ -332,8 +332,9 @@ function createTask() {
   if (!taskData.machineNo) missing.push('机台编号 / Machine No.');
   if (!taskData.material) missing.push('物料 / Material');
   if (!taskData.planDate) missing.push('计划日期 / Plan Date');
+  if (!taskData.dueDate) missing.push('预计完成日期 / Due Date');
   if (missing.length > 0) {
-    ['newProductName', 'newMoldNo', 'newMachineNo', 'newMaterial', 'newPlanDate'].forEach(function (id) {
+    ['newProductName', 'newMoldNo', 'newMachineNo', 'newMaterial', 'newPlanDate', 'newDueDate'].forEach(function (id) {
       var el = $('#' + id);
       if (!String(el.val() || '').trim()) {
         el.addClass('is-invalid');
