@@ -155,11 +155,21 @@ function loadNPIProcessRecordHistory(testTaskID) // 版本历史
 
 ---
 
-## Phase 1 实现现状与扩展（2026-08-17 更新）
+## 实现现状与扩展（2026-08-21 更新）
 
-Phase 1 已完整上线，以下为原设计之外的扩展与实现细节：
+Phase 1 已完整上线；Phase 2A（测试排期第一迭代）已上线生产（@567）。以下为原设计之外的扩展与实现细节：
 
-### 已实现扩展
+### Phase 2A 落地现状（2026-08-17 设计文档 → 实现）
+
+- **测试计划页 `NPI_Dashboard`**（导航「测试计划 / Test Scheduling」）：周列表视图（周五起始周）、五态状态机（待确认→已排期→执行中→已完成，任意未完成态可取消；服务端 `NPI_STATUS_FLOW` 校验）、机台冲突黄标提示（同机台同天≥2条活跃任务）、紧急置顶红色高亮、任务行跳转工艺参数页自动选中
+- **新建任务就地弹窗**：弹窗组件抽为共享文件 `NPI_TaskModal.html` + `NPI_TaskModal-js.html`，工艺参数页与测试计划页共用（BOM 联动/机型联动/校验/编辑全一致）；各页面通过 `onTaskSaved(tid)` 钩子做保存后刷新
+- **草稿表单条导入**（2026-08-20 变更，替代批量导入）：导入弹窗逐行「导入」→ 打开共享弹窗预填（产品/模具/机台/日期/备注/初始状态）→ 走标准创建路径；`createNPITestTask` 支持 `initialStatus`（五态白名单，导入场景一步到位）；四元组（产品+模具+机台+日期）去重置灰
+- **协作人**（2026-08-21 新增）：`NPI_TestTasks` 第 22 列，弹窗多选（数据源 `getUseID`，与任务安排一致，存储 `姓名|工号` 分号分隔）
+- **预计完成日期**（2026-08-21 新增，必填）：第 23 列；桥接映射到任务安排 dueDate（空则回退计划日期），超期口径（dueDate < 今天且未完成）与任务安排一致
+- **任务安排侧联动**：`loadAllNPITasks` 桥接函数（状态映射 `mapNPIStatusToEDS_`：待确认→等待中/已排期→未开始/执行中→进行中/已完成→已完成/已取消→已取消）已接入 任务列表/今日看板/我的任务/资源甘特/早会日报 五个入口（NPI 任务只读展示，点击跳转工艺参数页）
+
+### 已实现扩展（Phase 1 期间）
+
 - **BOM 主数据联动**（数据源：TB BOM 主数据表）
   - 产品名称：Select2 模糊搜索 + 自由输入，选项 = TF BOM Header AR列（Bundle）去重（333 个）
   - 适用SKU：选中产品后从 E列相关SKU 解析以「牙柄」开头的行（烫印/打印牙柄为注塑后另加工序，排除）
@@ -180,12 +190,15 @@ Phase 1 已完整上线，以下为原设计之外的扩展与实现细节：
 | 共享盘 01 GS TB BOM | `1JFw67bGsVeOUFfh5pksaBJ6Zvxz0VyBs` | BOM# 同名表格（SKU关系表颜色） |
 | Workcenter | `12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM` | 机台号 + 机型 |
 | PPMS | `164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ` | INJ_New 转正目标 + 卡号去重 |
-| 2026 Test Plan | `17ys3UDFWjhfaPnk0TErqqeU0FnMP7nsRoRsTmlmm2fg` | 测试排期草稿源（Phase 2 对接，数据待清洗） |
+| 2026 Test Plan | `17ys3UDFWjhfaPnk0TErqqeU0FnMP7nsRoRsTmlmm2fg` | 测试排期草稿源（单条导入数据源） |
+| userID | `1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM` | 协作人选择（getUseID，与任务安排一致） |
 
 ### 遗留事项
-- 发起部门 reqDept 暂无录入入口——计划 Phase 2 与测试排期联动时补齐（数据源 2026 Test Plan）
+- 发起部门 reqDept 暂无录入入口——计划 Phase 2B 与测试排期联动时补齐
 - 工艺卡 196 字段模板硬编码在 `NPI_ProcessRecord-js.html` 的 `TEMPLATE_SECTIONS`，模板表驱动化待做
 - TF/PK 工序的 SKU 联动语义待确认（当前按注塑口径解析）
+- Phase 2B：计划部确认流程、甘特图/机台占用视图、草稿表迁移决策（并行过渡期观察后定）
+- 转正 PPMS 真实业务验证（涉及其他部门，待执行）
 
 ---
 
