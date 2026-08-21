@@ -41,6 +41,7 @@ $(document).ready(function () {
     multiple: true,
     closeOnSelect: false,
     tags: true,
+    selectOnClose: true, // 关闭下拉时提交输入文本，避免「看似已填实则丢弃」
     dropdownParent: $('#newTaskModal')
   });
   // 协作人 Select2（多选，人员数据源与任务安排一致：getUseID）

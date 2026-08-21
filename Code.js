@@ -12635,7 +12635,9 @@ function loadAllNPITasks(filterJSON) {
         priority: '中',
         status: status,
         planStartDate: planDate,
-        dueDate: String(data[i][22] || '').trim() || planDate,
+        dueDate: (data[i][22] instanceof Date
+          ? Utilities.formatDate(data[i][22], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+          : String(data[i][22] || '').trim()) || planDate,
         completedAt: '',
         createdBy: 'NPI Module',
         closedBy: '',
@@ -15120,7 +15122,9 @@ function loadNPITestTaskList() {
         sku: String(data[i][19] || ''),
         machineModel: String(data[i][20] || ''),
         collaborators: String(data[i][21] || ''),
-        dueDate: String(data[i][22] || '')
+        dueDate: data[i][22] instanceof Date
+          ? Utilities.formatDate(data[i][22], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+          : String(data[i][22] || '')
       });
     }
     return JSON.stringify({ success: true, data: result });
