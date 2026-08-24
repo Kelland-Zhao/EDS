@@ -18,12 +18,43 @@
     let showTodoClosedFilter = false;
 
     $('#name').text(userName);
+    $(document).on('click', '#Safety4DClose', function () {
+      $('#Safety4DBanner').addClass('d-none');
+      sessionStorage.setItem('safety4d_banner_' + formatLocalDate(new Date()), '1');
+    });
 
     const pad = n => String(n).padStart(2, '0');
     const formatLocalDate = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
+
+    // ===== 周一安全 4D 提醒 / Monday Safety 4D Reminder =====
+    const SAFETY4D_OWNERS = ['Kelland', '赵阳'];
+    function isSafety4DOwner() {
+      const n = String(userName || '').trim().toLowerCase();
+      return SAFETY4D_OWNERS.some(function (name) { return name.toLowerCase() === n; });
+    }
+    function isMondayOrTest() {
+      const force = new URLSearchParams(window.location.search).get('safety4d') === '1';
+      return force || new Date().getDay() === 1;
+    }
+    function initSafety4DReminder() {
+      if (!isSafety4DOwner() || !isMondayOrTest()) return;
+      const dateKey = formatLocalDate(new Date());
+      if (sessionStorage.getItem('safety4d_banner_' + dateKey) !== '1') {
+        $('#Safety4DBanner').removeClass('d-none');
+      }
+      if (sessionStorage.getItem('safety4d_popup_' + dateKey) !== '1') {
+        sessionStorage.setItem('safety4d_popup_' + dateKey, '1');
+        Swal.fire({
+          icon: 'warning',
+          title: swalTitle('今天周一 / Monday', 'Weekly Safety 4D Reminder'),
+          html: swalHtml('请准备安全 4D 问题讲述。', 'Please prepare for the Safety 4D issue presentation.'),
+          confirmButtonText: '知道了 / Got it'
+        });
+      }
+    }
 
     function showLoading(cn, en) {
       Swal.fire({
@@ -696,6 +727,7 @@
         historyTodoItems = result.historyTodoItems || [];
         historyTodoItemIds = new Set(historyTodoItems.map(function (item) { return item.itemId; }).filter(Boolean));
         $('#AppContent').removeClass('d-none');
+        initSafety4DReminder();
         resetForm();
         // 初始化拖拽排序
         function initSortable() {

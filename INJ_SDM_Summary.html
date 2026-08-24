@@ -16,6 +16,7 @@
     
     .welcome-bar { background:#fff; border-left:4px solid #E60012; padding:10px 18px; margin:12px 0 16px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.04); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
     .welcome-bar #name { color:#E60012; font-weight:600; }
+    .safety4d-banner { background:#fff5f5; border:1px solid #f5c2c7; border-left:4px solid #E60012; color:#842029; padding:10px 16px; margin:12px 0 0; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,.04); font-size:14px; }
     .section-title { font-size:13px; font-weight:700; color:#6c757d; letter-spacing:1px; margin:18px 0 10px; border-left:3px solid #E60012; padding-left:10px; }
     .card { border-color:#e9ecef; box-shadow:0 1px 3px rgba(0,0,0,.04); }
     .nav-tabs { border-bottom:2px solid #e9ecef; }
@@ -127,6 +128,12 @@
   </nav>
 
   <main class="container-fluid px-3">
+    <div id="Safety4DBanner" class="safety4d-banner d-none">
+      <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+        <span><i class="bi bi-megaphone-fill"></i> <strong>今天周一 / Monday</strong> — 请准备安全 4D 问题讲述。 <span class="text-muted">/ Please prepare for the Safety 4D issue presentation.</span></span>
+        <button type="button" class="btn-close" id="Safety4DClose" aria-label="关闭 / Close"></button>
+      </div>
+    </div>
     <div class="welcome-bar">
       <div><span id="name"></span>，欢迎进入 INJ SDM 问题汇总 / Welcome to INJ SDM Issue Summary</div>
       <span class="badge bg-secondary">INJ 管理员 / INJ Admin</span>
