@@ -383,7 +383,8 @@ function renderEquipCards(uid) {
     html += '<div class="equip-card mb-2' + disabledClass + '" id="equipCard_' + uid + '_' + idx + '">';
     html += '<div class="d-flex justify-content-between align-items-center mb-1">';
     html += '<label class="barrel-toggle mb-0"><input type="checkbox" ' + (ae.enabled ? 'checked' : '') + ' onchange="toggleEquipment(\'' + uid + '\', ' + idx + ')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + t.cn + ' <small style="color:#888;">' + t.en + '</small></strong></label>';
-    html += '<button class="btn btn-sm btn-outline-danger" onclick="removeEquipment(\'' + uid + '\', ' + idx + ')" title="移除 / Remove" style="font-size:10px;padding:1px 6px;">× 移除<br><small>Remove</small></button>';
+    html += '<div class="d-flex gap-1 align-items-center"><button class="btn btn-sm btn-outline-secondary" onclick="clearContainerPrompt(\'equipCard_' + uid + '_' + idx + '\', \'' + t.cn + '\')" title="清空 / Clear" style="font-size:10px;padding:1px 6px;">🗑 清空<br><small>Clear</small></button>';
+    html += '<button class="btn btn-sm btn-outline-danger" onclick="removeEquipment(\'' + uid + '\', ' + idx + ')" title="移除 / Remove" style="font-size:10px;padding:1px 6px;">× 移除<br><small>Remove</small></button></div>';
     html += '</div>';
     html += '<div class="row g-1">';
     t.fields.forEach(function (f) {
@@ -454,13 +455,17 @@ function renderCardSections(inst, rows) {
       currentHotRunnerInst = inst;
       html += '<div class="col-12 mb-2" id="section_' + uid + '">';
       html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + uid + '" ' + (!defaultDisabled ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + sec + '<br><small>' + secEn + '</small></strong></label>';
+      html += '<button class="btn btn-sm btn-link p-0 ms-1" style="font-size:11px;color:#6c757d;" onclick="clearContainerPrompt(\'section_' + uid + '\', \'' + sec + '\')" title="清空 / Clear"><i class="bi bi-trash"></i></button>';
       html += '<div class="hot-runner-content' + (defaultDisabled ? ' barrel-disabled' : '') + '">';
       var hrCount = HOT_RUNNER_DEFAULT_COUNT;
       secRows.forEach(function (r) { if (r.key === 'hotRunner_temp' && r.segs && r.segs.length) hrCount = r.segs.length; });
       html += renderHotRunner(hrCount, inst);
       html += '</div></div>';
     } else if (multi) {
-      html += '<div class="col-12 mb-2"><strong style="font-size:12px;">' + sec + '<br><small>' + secEn + '</small></strong><div class="row g-2 mt-1">';
+      var uidM = 'sec_' + inst.idx + '_' + (secOrder.indexOf(sec) + 1);
+      enabledSections[uidM] = true;
+      html += '<div class="col-12 mb-2" id="section_' + uidM + '"><strong style="font-size:12px;">' + sec + '<br><small>' + secEn + '</small></strong>';
+      html += '<button class="btn btn-sm btn-link p-0 ms-1" style="font-size:11px;color:#6c757d;" onclick="clearContainerPrompt(\'section_' + uidM + '\', \'' + sec + '\')" title="清空 / Clear"><i class="bi bi-trash"></i></button><div class="row g-2 mt-1">';
       secRows.forEach(function (r) { html += renderTemplateRow(inst, r); });
       html += '</div></div>';
     } else {
@@ -474,6 +479,7 @@ function renderCardSections(inst, rows) {
         html += '<label class="barrel-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="toggle_' + uid2 + '" ' + (!defaultDisabled ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid2 + '\')"><span class="toggle-switch"></span></label>';
       }
       html += '<button class="accordion-button flex-grow-1' + (isFirst ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' + sec + '<br><small>' + secEn + '</small></button>';
+      html += '<button class="btn btn-sm btn-link p-0 ms-1 me-2" style="font-size:11px;color:#6c757d;" onclick="event.stopPropagation();clearContainerPrompt(\'section_' + uid2 + '\', \'' + sec + '\')" title="清空 / Clear"><i class="bi bi-trash"></i></button>';
       html += '</h2>';
       html += '<div id="' + collapseId + '" class="accordion-collapse collapse' + (isFirst ? ' show' : '') + '" data-bs-parent="#paramAccordion">';
       html += '<div class="accordion-body' + (defaultDisabled ? ' barrel-disabled' : '') + '" id="section_' + uid2 + '">';
@@ -561,6 +567,48 @@ function ensureSegmentsForObject(obj) {
   });
 }
 
+// 清空容器内全部字段（有数据时确认弹窗；清空不改变区块开关状态）
+function clearContainerPrompt(containerId, name) {
+  var fields = $('#' + containerId + ' .npi-field');
+  var hasData = false;
+  fields.each(function () { if (String($(this).val() || '').trim()) hasData = true; });
+  if (!hasData) {
+    Swal.fire({ icon: 'info', title: swalTitle('无需清空', 'Nothing to Clear'), html: swalHtml('「' + name + '」无内容。', 'No data in "' + name + '".'), timer: 1500, showConfirmButton: false });
+    return;
+  }
+  Swal.fire({
+    title: swalTitle('清空区块', 'Clear Section'),
+    html: swalHtml('确认清空「' + name + '」的全部内容？此操作不可撤销。', 'Clear all values in "' + name + '"? This cannot be undone.'),
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '清空 / Clear', cancelButtonText: '取消 / Cancel', confirmButtonColor: '#dc3545'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    fields.val('');
+    fields.filter('.hr-pos-select').each(function () { updateHRPosColor(this); });
+  });
+}
+
+// 整表单清空（保留区块开关状态与设备卡片结构）
+function clearAllPrompt() {
+  var fields = $('.npi-field');
+  var hasData = false;
+  fields.each(function () { if (String($(this).val() || '').trim()) hasData = true; });
+  if (!hasData) {
+    Swal.fire({ icon: 'info', title: swalTitle('无需清空', 'Nothing to Clear'), html: swalHtml('表单无内容。', 'The form is empty.'), timer: 1500, showConfirmButton: false });
+    return;
+  }
+  Swal.fire({
+    title: swalTitle('清空全部', 'Clear All'),
+    html: swalHtml('确认清空表单全部内容？此操作不可撤销。', 'Clear all form values? This cannot be undone.'),
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '清空 / Clear', cancelButtonText: '取消 / Cancel', confirmButtonColor: '#dc3545'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    fields.val('');
+    fields.filter('.hr-pos-select').each(function () { updateHRPosColor(this); });
+  });
+}
+
 function toggleNpiSection(uid) {
   // 以状态表为准取反（DOM class 状态在热流道等结构上不可靠）
   var cur = !!enabledSections[uid];
@@ -628,7 +676,7 @@ function selectTask(taskID) {
   if (currentTask.status) info.push('<span class="task-info-item">状态<br><small>Status</small>: ' + currentTask.status + '</span>');
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
-  $('#paramFormCard, #btnFillTest').show();
+  $('#paramFormCard, #btnFillTest, #btnClearAll').show();
   $('#btnEditTask, #btnDeleteTask').show();
   $('#historyCard').show();
   hideHistoryBanner();
@@ -796,7 +844,7 @@ function clearForm() {
   currentTask = null; currentRecord = null;
   latestRecord = null;
   viewingHistory = false;
-  $('#taskInfo').html(''); $('#paramFormCard, #btnFillTest').hide();
+  $('#taskInfo').html(''); $('#paramFormCard, #btnFillTest, #btnClearAll').hide();
   $('#paramAccordion').html('');
   $('#btnEditTask, #btnDeleteTask, #btnNewVersion, #btnPromote').hide();
   $('#historyCard').hide(); $('#historyList').html('');
@@ -816,7 +864,7 @@ function hideHistoryBanner() {
 
 function setFormReadonly(on) {
   $('.npi-field').prop('disabled', on);
-  $('#btnSaveDraft, #btnSubmit, #btnFillTest').toggle(!on);
+  $('#btnSaveDraft, #btnSubmit, #btnFillTest, #btnClearAll').toggle(!on);
 }
 
 function loadHistory(taskID) {
