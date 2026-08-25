@@ -255,6 +255,20 @@ function renderTemplate() {
   var html = '';
   enabledSections = {};
   currentHotRunnerInst = null;
+  // 任务级产品信息：所有卡一致，只渲染一次，key 不带实例前缀
+  var piInst = { card: 'shared', count: 1, instance: 1, idx: 0, prefix: '' };
+  var piRows = getSharedProductInfoRows();
+  if (piRows.length) {
+    var collapseId = 'collapse_shared_productInfo';
+    html += '<div class="accordion-item">';
+    html += '<h2 class="accordion-header">';
+    html += '<button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">产品信息<br><small>Product Info</small></button>';
+    html += '</h2>';
+    html += '<div id="' + collapseId + '" class="accordion-collapse collapse show" data-bs-parent="#paramAccordion">';
+    html += '<div class="accordion-body"><div class="row g-2">';
+    piRows.forEach(function (r) { html += renderTemplateRow(piInst, r); });
+    html += '</div></div></div></div>';
+  }
   currentCompose.forEach(function (inst, i) {
     var rows = (templateData && templateData.cards && templateData.cards[inst.card]) || [];
     if (!rows.length) {
@@ -280,15 +294,28 @@ function renderTemplate() {
   $('#paramAccordion').html(html);
 }
 
+// 任务级产品信息行：取组合首卡的产品信息行；无则回退 FCS/ENG 卡
+function getSharedProductInfoRows() {
+  var out = [];
+  var sources = (currentCompose || []).map(function (c) { return c.card; }).concat(['FCS/ENG']);
+  var seen = {};
+  sources.forEach(function (card) {
+    (templateData && templateData.cards && templateData.cards[card] || []).forEach(function (r) {
+      if (r.sec === '产品信息' && !seen[r.key]) { seen[r.key] = true; out.push(r); }
+    });
+  });
+  return out;
+}
+
 // 单卡模式：区块 = accordion 项（首个展开）；多卡模式：区块 = 子标题块
 function renderCardSections(inst, rows) {
   var multi = currentCompose.length > 1;
   var secOrder = [];
-  rows.forEach(function (r) { if (secOrder.indexOf(r.sec) < 0) secOrder.push(r.sec); });
+  rows.forEach(function (r) { if (r.sec !== '产品信息' && secOrder.indexOf(r.sec) < 0) secOrder.push(r.sec); });
   var html = '';
   var isFirst = true;
   secOrder.forEach(function (sec) {
-    var secRows = rows.filter(function (r) { return r.sec === sec; });
+    var secRows = rows.filter(function (r) { return r.sec === sec && r.sec !== '产品信息'; });
     var secEn = secRows[0].secEn || '';
     var isHR = secRows.some(function (r) { return String(r.key || '').indexOf('hotRunner_') === 0; });
     var defaultDisabled = isHR || ((DEFAULT_DISABLED_SECTIONS[inst.card] || []).indexOf(sec) >= 0);

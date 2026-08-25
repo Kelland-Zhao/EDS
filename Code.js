@@ -15117,7 +15117,7 @@ function loadNPIWorkcenterList(processType) {
 function loadNPITemplateData() {
   try {
     var cache = CacheService.getScriptCache();
-    var CKEY = 'NPI_TEMPLATE_CACHE_v1';
+    var CKEY = 'NPI_TEMPLATE_CACHE_v2';
     var cached = cache.get(CKEY);
     if (cached) return cached;
     var ss = SpreadsheetApp.openById(NPI_SS_ID);
