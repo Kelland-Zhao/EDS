@@ -549,9 +549,9 @@ function ensureSegmentsForObject(obj) {
 }
 
 function toggleNpiSection(uid) {
-  var section = $('#section_' + uid);
-  var isEnabled = !section.hasClass('barrel-disabled');
-  setNpiSectionEnabled(uid, isEnabled);
+  // 以状态表为准取反（DOM class 状态在热流道等结构上不可靠）
+  var cur = !!enabledSections[uid];
+  setNpiSectionEnabled(uid, !cur);
 }
 
 function setNpiSectionEnabled(uid, on) {
