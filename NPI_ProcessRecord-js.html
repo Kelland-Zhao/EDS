@@ -567,7 +567,7 @@ function setNpiSectionEnabled(uid, on) {
     if (collapse.length) collapse.collapse('show');
   } else {
     targets.forEach(function (t) { t.addClass('barrel-disabled'); });
-    section.find('.npi-field').val('');
+    // 不清空数据：禁用区块不会被收集保存，重新开启时数据还在
     var collapse2 = section.closest('.accordion-item').find('.accordion-collapse').first();
     if (collapse2.length) collapse2.collapse('hide');
   }
