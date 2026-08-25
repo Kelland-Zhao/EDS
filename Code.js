@@ -15068,6 +15068,14 @@ function isValidWorkcenterModel_(model) {
   return !(/闲置|报废/.test(m));
 }
 
+// 原始机型 → 中间层（byRaw 查不到即原值；已是中间层值则原样，幂等）
+function mapRawModelToDisplay_(rawModel, byRaw) {
+  var raw = String(rawModel || '').trim();
+  if (!raw) return '';
+  if (byRaw && byRaw.hasOwnProperty(raw)) return byRaw[raw];
+  return raw;
+}
+
 function loadNPIWorkcenterList(processType) {
   try {
     var pt = (processType || 'IM').toString().trim();
@@ -15081,6 +15089,13 @@ function loadNPIWorkcenterList(processType) {
     if (!ssId) return JSON.stringify({ success: true, data: [] }); // not configured yet
     var ws = SpreadsheetApp.openById(ssId).getSheetByName("Workcenter");
     if (!ws) return JSON.stringify({ success: true, data: [] });
+    // 机型中间层映射（复用模板数据缓存，失败则回退原始值）
+    var byRaw = {};
+    try {
+      var tplOut = loadNPITemplateData();
+      var tpl = JSON.parse(tplOut);
+      if (tpl.success) byRaw = tpl.data.machineMap.byRaw || {};
+    } catch (e) {}
     var data = ws.getDataRange().getValues();
     var result = [];
     for (var i = 1; i < data.length; i++) {
@@ -15088,7 +15103,7 @@ function loadNPIWorkcenterList(processType) {
       if (!wc) continue;
       var model = String(data[i][3] || '').trim(); // D列 Final Machine Type
       if (!isValidWorkcenterModel_(model)) continue; // 闲置/报废机台排除
-      result.push({ id: wc, text: wc, model: model });
+      result.push({ id: wc, text: wc, model: model, displayModel: mapRawModelToDisplay_(model, byRaw) });
     }
     return JSON.stringify({ success: true, data: result });
   } catch (e) {

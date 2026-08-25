@@ -125,7 +125,8 @@ function loadWorkcenterList(processType, callback) {
       var data = r.success ? r.data : [];
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
       data.forEach(function (wc) {
-        sel.append('<option value="' + wc.id + '" data-model="' + (wc.model || '') + '">' + wc.text + '</option>');
+        // data-model = 中间层（存入任务 machineModel）；data-raw = Workcenter D列原始值
+        sel.append('<option value="' + wc.id + '" data-model="' + (wc.displayModel || wc.model || '') + '" data-raw="' + (wc.model || '') + '">' + wc.text + '</option>');
       });
       sel.val(null).trigger('change');
       if (!data.length) {
