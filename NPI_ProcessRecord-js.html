@@ -362,11 +362,15 @@ function renderTemplateRow(inst, r) {
   var readonly = r.cn === '工艺卡编号' || r.key === 'productInfo_10';
   var html = '';
   if (segs.length) {
-    html += '<div class="col-12 mb-2"><label class="form-label-sm">' + label + '</label><div class="row g-1 align-items-end">';
+    var baseKey = fieldKeyFor(inst, r.key, '');
+    var rowId = 'row_' + baseKey.replace(/[^A-Za-z0-9_]/g, '_');
+    html += '<div class="col-12 mb-2" id="' + rowId + '"><label class="form-label-sm">' + label + '</label><div class="row g-1 align-items-end">';
     segs.forEach(function (seg) {
       var key = fieldKeyFor(inst, r.key, seg);
-      html += '<div class="col-4 col-md-2 seg-cell"><input type="' + (isNumber ? 'number' : 'text') + '" class="form-control form-control-sm npi-field" data-key="' + key + '" data-unit="' + (r.unit || '') + '" placeholder="' + seg + '"' + (isNumber ? ' step="any" min="0"' : '') + '></div>';
+      html += '<div class="col-4 col-md-2 seg-cell"><input type="' + (isNumber ? 'number' : 'text') + '" class="form-control form-control-sm npi-field" data-key="' + key + '" data-base="' + baseKey + '" data-unit="' + (r.unit || '') + '" placeholder="' + seg + '"' + (isNumber ? ' step="any" min="0"' : '') + '></div>';
     });
+    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="addSegmentDynamic(\'' + rowId + '\', \'' + baseKey + '\', \'' + (isNumber ? 'number' : 'text') + '\', \'' + (r.unit || '') + '\')" title="增加一段 / Add"><i class="bi bi-plus"></i></button></div>';
+    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="removeSegmentDynamic(\'' + rowId + '\')" title="减少一段 / Remove"><i class="bi bi-dash"></i></button></div>';
     html += '</div></div>';
   } else if (isTextarea) {
     var key = fieldKeyFor(inst, r.key, '');
@@ -380,6 +384,49 @@ function renderTemplateRow(inst, r) {
     html += '</div>';
   }
   return html;
+}
+
+// 分段动态增删（存储为键值，多出的段保存/回填均按 key 处理）
+function addSegmentDynamic(rowId, baseKey, inputType, unit) {
+  var cells = $('#' + rowId).find('.seg-cell');
+  var n = cells.length + 1;
+  var first = cells.first().find('input').attr('placeholder') || '';
+  var label;
+  if (/^\d+段$/.test(first)) label = n + '段';
+  else if (/^\d+$/.test(first)) label = String(n);
+  else if (/^[一二三四五六七八九十]+段$/.test(first)) {
+    var cn = ['一','二','三','四','五','六','七','八','九','十'];
+    label = (n <= 10 ? cn[n - 1] : n) + '段';
+  } else label = String(n);
+  ensureSegmentInput(rowId, baseKey, label, inputType, unit);
+}
+
+function ensureSegmentInput(rowId, baseKey, label, inputType, unit) {
+  var key = baseKey + '_' + label;
+  if ($('[data-key="' + key + '"]').length) return; // 已存在
+  var cell = '<div class="col-4 col-md-2 seg-cell"><input type="' + inputType + '" class="form-control form-control-sm npi-field" data-key="' + key + '" data-base="' + baseKey + '" data-unit="' + unit + '" placeholder="' + label + '"' + (inputType === 'number' ? ' step="any" min="0"' : '') + '></div>';
+  $('#' + rowId).find('.col-auto').first().before(cell);
+}
+
+function removeSegmentDynamic(rowId) {
+  var cells = $('#' + rowId).find('.seg-cell');
+  if (cells.length <= 1) return;
+  cells.last().remove();
+}
+
+// 回填时：对象中多出的分段（此前动态加段保存的）自动补渲染
+function ensureSegmentsForObject(obj) {
+  if (!obj || typeof obj !== 'object') return;
+  Object.keys(obj).forEach(function (k) {
+    if ($('[data-key="' + k + '"]').length) return;
+    var m = k.match(/^(.+)_(.+)$/);
+    if (!m) return;
+    var baseEl = $('[data-base="' + m[1] + '"]').first();
+    if (!baseEl.length) return;
+    var rowEl = baseEl.closest('[id]');
+    var rowId = rowEl.attr('id');
+    ensureSegmentInput(rowId, m[1], m[2], baseEl.attr('type') || 'text', baseEl.data('unit') || '');
+  });
 }
 
 function toggleNpiSection(uid) {
@@ -500,6 +547,7 @@ function fillFormFields(fields) {
     obj = convertOldFieldsToObject(fields, fcRows);
   }
   if (!obj || typeof obj !== 'object') return;
+  ensureSegmentsForObject(obj);
   var legacy = [];
   Object.keys(obj).forEach(function (k) {
     var el = $('[data-key="' + k + '"]');
