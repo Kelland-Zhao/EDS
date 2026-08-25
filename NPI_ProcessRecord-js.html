@@ -294,6 +294,116 @@ function renderTemplate() {
   $('#paramAccordion').html(html);
 }
 
+// ===== 配套设备（旧交互：下拉选设备 + 添加 + 卡片开关；类型/字段来自模板行 key） =====
+var equipmentTypes = {};  // uid → [{id, cn, en, fields: [row...]}]
+var equipmentInst = {};   // uid → 卡实例
+var activeEquipment = []; // [{uid, typeId, enabled}]
+
+function renderEquipmentBlock(inst, rows) {
+  var uid = 'equip_' + inst.idx;
+  equipmentInst[uid] = inst;
+  // 从行 key 解析设备类型：auxEquip_{type}_{field}
+  var types = [];
+  rows.forEach(function (r) {
+    var m = String(r.key || '').match(/auxEquip_([^_]+)_/);
+    if (!m) return;
+    var t = null;
+    types.forEach(function (x) { if (x.id === m[1]) t = x; });
+    if (!t) {
+      var cn = String(r.cn || '').split(' ')[0];
+      var en = String(r.en || '').replace(/\s+\S+$/, '');
+      t = { id: m[1], cn: cn, en: en, fields: [] };
+      types.push(t);
+    }
+    t.fields.push(r);
+  });
+  equipmentTypes[uid] = types;
+  var html = '<div class="col-12 mb-2" id="' + uid + '"><strong style="font-size:12px;">配套设备信息<br><small>Auxiliary Equipment</small></strong>';
+  html += '<div class="d-flex align-items-center gap-2 mb-2"><select id="' + uid + '_select" class="form-select form-select-sm" style="width:auto;"><option value="">-- 选择设备 / Select Device --</option>';
+  types.forEach(function (t) {
+    html += '<option value="' + t.id + '">' + t.cn + (t.en ? ' / ' + t.en : '') + '</option>';
+  });
+  html += '</select><button class="btn btn-sm btn-outline-secondary" onclick="addEquipment(\'' + uid + '\')"><i class="bi bi-plus"></i> 添加 / Add</button></div>';
+  html += '<div id="' + uid + '_list"></div></div>';
+  return html;
+}
+
+function addEquipment(uid) {
+  var sel = $('#' + uid + '_select').val();
+  if (!sel) return;
+  if (activeEquipment.some(function (a) { return a.uid === uid && a.typeId === sel; })) {
+    Swal.fire({ icon: 'warning', title: swalTitle('已添加', 'Already Added'), html: swalHtml('该设备已存在。', 'Device already exists.'), timer: 1500, showConfirmButton: false });
+    return;
+  }
+  activeEquipment.push({ uid: uid, typeId: sel, enabled: true });
+  renderEquipCards(uid);
+}
+
+function removeEquipment(uid, idx) {
+  activeEquipment = activeEquipment.filter(function (a, i2) { return !(a.uid === uid && i2 === idx); });
+  renderEquipCards(uid);
+}
+
+function toggleEquipment(uid, idx) {
+  var ae = activeEquipment[idx];
+  if (!ae) return;
+  ae.enabled = !ae.enabled;
+  var card = $('#equipCard_' + uid + '_' + idx);
+  if (ae.enabled) {
+    card.removeClass('barrel-disabled');
+  } else {
+    card.addClass('barrel-disabled');
+    card.find('.npi-field').val('');
+  }
+}
+
+function renderEquipCards(uid) {
+  var inst = equipmentInst[uid];
+  if (!inst) return;
+  var html = '';
+  activeEquipment.forEach(function (ae, idx) {
+    if (ae.uid !== uid) return;
+    var t = null;
+    (equipmentTypes[uid] || []).forEach(function (x) { if (x.id === ae.typeId) t = x; });
+    if (!t) return;
+    var disabledClass = ae.enabled ? '' : ' barrel-disabled';
+    html += '<div class="equip-card mb-2' + disabledClass + '" id="equipCard_' + uid + '_' + idx + '">';
+    html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+    html += '<label class="barrel-toggle mb-0"><input type="checkbox" ' + (ae.enabled ? 'checked' : '') + ' onchange="toggleEquipment(\'' + uid + '\', ' + idx + ')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + t.cn + ' <small style="color:#888;">' + t.en + '</small></strong></label>';
+    html += '<button class="btn btn-sm btn-outline-danger" onclick="removeEquipment(\'' + uid + '\', ' + idx + ')" title="移除 / Remove" style="font-size:10px;padding:1px 6px;">× 移除<br><small>Remove</small></button>';
+    html += '</div>';
+    html += '<div class="row g-1">';
+    t.fields.forEach(function (f) {
+      var key = fieldKeyFor(inst, f.key, '');
+      var fcn = String(f.cn || '').split(' ').slice(1).join(' ') || f.cn;
+      var fen = String(f.en || '').replace(/^\S+\s/, '');
+      var isNum = f.type === 'number';
+      html += '<div class="col-6 col-md-4 col-lg-3"><label class="form-label-sm">' + fcn + (fen ? '<br><small>' + fen + '</small>' : '') + '</label>';
+      html += '<input type="' + (isNum ? 'number' : 'text') + '" class="form-control form-control-sm npi-field" data-key="' + key + '" data-unit="' + (f.unit || '') + '"' + (isNum ? ' step="any" min="0"' : '') + '>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+  $('#' + uid + '_list').html(html);
+}
+
+// 回填：记录中含设备值（含实例前缀 key）时自动添加对应设备卡片
+function ensureEquipmentForKey(key) {
+  var m = String(key).match(/auxEquip_([^_]+)_/);
+  if (!m) return;
+  var typeId = m[1];
+  (currentCompose || []).forEach(function (inst) {
+    var rows = (templateData && templateData.cards && templateData.cards[inst.card]) || [];
+    var has = rows.some(function (r) { return String(r.key || '').indexOf('auxEquip_' + typeId + '_') >= 0; });
+    if (!has) return;
+    var uid = 'equip_' + inst.idx;
+    if (!$('#' + uid).length) return;
+    if (activeEquipment.some(function (a) { return a.uid === uid && a.typeId === typeId; })) return;
+    activeEquipment.push({ uid: uid, typeId: typeId, enabled: true });
+    renderEquipCards(uid);
+  });
+}
+
 // 任务级产品信息行：取组合首卡的产品信息行；无则回退 FCS/ENG 卡
 function getSharedProductInfoRows() {
   var out = [];
@@ -318,7 +428,12 @@ function renderCardSections(inst, rows) {
     var secRows = rows.filter(function (r) { return r.sec === sec && r.sec !== '产品信息'; });
     var secEn = secRows[0].secEn || '';
     var isHR = secRows.some(function (r) { return String(r.key || '').indexOf('hotRunner_') === 0; });
+    var isBarrel = /^炮筒[ABCD]$/.test(sec);
     var defaultDisabled = isHR || ((DEFAULT_DISABLED_SECTIONS[inst.card] || []).indexOf(sec) >= 0);
+    if (sec === '配套设备') {
+      html += renderEquipmentBlock(inst, secRows);
+      return;
+    }
     if (isHR) {
       // 热流道：开关 + 表格
       var uid = 'hr_' + inst.idx;
@@ -339,9 +454,13 @@ function renderCardSections(inst, rows) {
       var uid2 = 'sec_' + inst.idx + '_' + (secOrder.indexOf(sec) + 1);
       enabledSections[uid2] = !defaultDisabled;
       var collapseId = 'collapse_' + uid2;
+      var toggleable = isBarrel || defaultDisabled;
       html += '<div class="accordion-item">';
-      html += '<h2 class="accordion-header">';
-      html += '<button class="accordion-button' + (isFirst ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' + sec + '<br><small>' + secEn + '</small>' + (defaultDisabled ? '<span class="ms-2 badge bg-secondary">关<br><small>Off</small></span>' : '') + '</button>';
+      html += '<h2 class="accordion-header d-flex align-items-center gap-2">';
+      if (toggleable) {
+        html += '<label class="barrel-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="toggle_' + uid2 + '" ' + (!defaultDisabled ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid2 + '\')"><span class="toggle-switch"></span></label>';
+      }
+      html += '<button class="accordion-button flex-grow-1' + (isFirst ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' + sec + '<br><small>' + secEn + '</small></button>';
       html += '</h2>';
       html += '<div id="' + collapseId + '" class="accordion-collapse collapse' + (isFirst ? ' show' : '') + '" data-bs-parent="#paramAccordion">';
       html += '<div class="accordion-body' + (defaultDisabled ? ' barrel-disabled' : '') + '" id="section_' + uid2 + '">';
@@ -439,12 +558,15 @@ function setNpiSectionEnabled(uid, on) {
   enabledSections[uid] = on;
   var section = $('#section_' + uid);
   if (!section.length) return;
+  var targets = [section];
+  var content = section.find('.hot-runner-content').first();
+  if (content.length) targets.push(content); // 热流道禁用类在内容层
   if (on) {
-    section.removeClass('barrel-disabled');
+    targets.forEach(function (t) { t.removeClass('barrel-disabled'); });
     var collapse = section.closest('.accordion-item').find('.accordion-collapse').first();
     if (collapse.length) collapse.collapse('show');
   } else {
-    section.addClass('barrel-disabled');
+    targets.forEach(function (t) { t.addClass('barrel-disabled'); });
     section.find('.npi-field').val('');
     var collapse2 = section.closest('.accordion-item').find('.accordion-collapse').first();
     if (collapse2.length) collapse2.collapse('hide');
@@ -547,6 +669,7 @@ function fillFormFields(fields) {
     obj = convertOldFieldsToObject(fields, fcRows);
   }
   if (!obj || typeof obj !== 'object') return;
+  Object.keys(obj).forEach(function (k) { if (String(k).indexOf('auxEquip_') >= 0) ensureEquipmentForKey(k); });
   ensureSegmentsForObject(obj);
   var legacy = [];
   Object.keys(obj).forEach(function (k) {
