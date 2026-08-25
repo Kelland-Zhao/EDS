@@ -177,6 +177,7 @@ function doGet(e) {
   Route.path("getBundleYabingSKUs", getBundleYabingSKUs);
   Route.path("loadMaterialOptions", loadMaterialOptions);
   Route.path("loadNPIProcessRecordHistory", loadNPIProcessRecordHistory);
+  Route.path("loadNPITemplateData", loadNPITemplateData);
   Route.path("createNPIProcessRecordVersion", createNPIProcessRecordVersion);
   Route.path("updateNPITestTask", updateNPITestTask);
   Route.path("deleteNPITestTask", deleteNPITestTask);
@@ -15090,6 +15091,57 @@ function loadNPIWorkcenterList(processType) {
       result.push({ id: wc, text: wc, model: model });
     }
     return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 表驱动模板：读 NPI_Templates（已确认行）+ NPI_MachineMap（已确认行），CacheService 6h
+// NPI_Templates 列：A卡 B工序 C区块 D区块EN E字段CN F字段EN G字段key H类型 I单位 J下限 K上限 L检查部门 M预设值 N分段 O状态 P备注
+// NPI_MachineMap 列：A原始机型 B中间层 C工序 D卡 E卡数 F排序 G状态 H备注
+function loadNPITemplateData() {
+  try {
+    var cache = CacheService.getScriptCache();
+    var CKEY = 'NPI_TEMPLATE_CACHE_v1';
+    var cached = cache.get(CKEY);
+    if (cached) return cached;
+    var ss = SpreadsheetApp.openById(NPI_SS_ID);
+    var tplWs = ss.getSheetByName('NPI_Templates');
+    var mapWs = ss.getSheetByName('NPI_MachineMap');
+    if (!tplWs || !mapWs) return JSON.stringify({ success: false, message: 'Template sheets missing' });
+    var cards = {};
+    var tplData = tplWs.getDataRange().getValues();
+    for (var i = 1; i < tplData.length; i++) {
+      var r = tplData[i];
+      var card = String(r[0] || '').trim();
+      var status = String(r[14] || '').trim();
+      if (!card || status !== '已确认') continue;
+      if (!cards[card]) cards[card] = [];
+      cards[card].push({
+        sec: String(r[2] || '').trim(), secEn: String(r[3] || '').trim(),
+        cn: String(r[4] || '').trim(), en: String(r[5] || '').trim(),
+        key: String(r[6] || '').trim(), type: String(r[7] || '').trim(),
+        unit: String(r[8] || '').trim(), lo: String(r[9] || '').trim(), hi: String(r[10] || '').trim(),
+        dept: String(r[11] || '').trim(), preset: String(r[12] || '').trim(),
+        segs: String(r[13] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+      });
+    }
+    var byRaw = {}, byDisplay = {};
+    var mapData = mapWs.getDataRange().getValues();
+    for (var m = 1; m < mapData.length; m++) {
+      var rr = mapData[m];
+      var st2 = String(rr[6] || '').trim();
+      if (st2 !== '已确认') continue;
+      var raw = String(rr[0] || '').trim(), disp = String(rr[1] || '').trim();
+      var card2 = String(rr[3] || '').trim(), count = parseInt(rr[4] || '1', 10), order = parseInt(rr[5] || '1', 10);
+      if (!raw || !disp || !card2) continue;
+      byRaw[raw] = disp;
+      if (!byDisplay[disp]) byDisplay[disp] = [];
+      byDisplay[disp].push({ card: card2, count: count, order: order });
+    }
+    var out = JSON.stringify({ success: true, data: { cards: cards, machineMap: { byRaw: byRaw, byDisplay: byDisplay } } });
+    cache.put(CKEY, out, 21600);
+    return out;
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
