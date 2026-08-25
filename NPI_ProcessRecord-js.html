@@ -347,6 +347,19 @@ function removeEquipment(uid, idx) {
 function toggleEquipment(uid, idx) {
   var ae = activeEquipment[idx];
   if (!ae) return;
+  if (ae.enabled) {
+    // 已有数据的设备禁止关闭
+    var card = $('#equipCard_' + uid + '_' + idx);
+    var hasData = false;
+    card.find('.npi-field').each(function () {
+      if (String($(this).val() || '').trim()) hasData = true;
+    });
+    if (hasData) {
+      card.find('input[type="checkbox"]').prop('checked', true);
+      Swal.fire({ icon: 'warning', title: swalTitle('无法关闭', 'Cannot Disable'), html: swalHtml('该设备已有数据，如需关闭请先清空其内容。', 'This device has data. Clear its values before disabling.'), timer: 2500, showConfirmButton: false });
+      return;
+    }
+  }
   ae.enabled = !ae.enabled;
   var card = $('#equipCard_' + uid + '_' + idx);
   if (ae.enabled) {
@@ -551,6 +564,18 @@ function ensureSegmentsForObject(obj) {
 function toggleNpiSection(uid) {
   // 以状态表为准取反（DOM class 状态在热流道等结构上不可靠）
   var cur = !!enabledSections[uid];
+  if (cur) {
+    // 已有数据的区块禁止关闭，防止保存时数据被静默丢弃
+    var hasData = false;
+    $('#section_' + uid + ' .npi-field').each(function () {
+      if (String($(this).val() || '').trim()) hasData = true;
+    });
+    if (hasData) {
+      $('#toggle_' + uid).prop('checked', true);
+      Swal.fire({ icon: 'warning', title: swalTitle('无法关闭', 'Cannot Disable'), html: swalHtml('该区块已有数据，如需关闭请先清空区块内容。', 'This section has data. Clear its values before disabling.'), timer: 2500, showConfirmButton: false });
+      return;
+    }
+  }
   setNpiSectionEnabled(uid, !cur);
 }
 
