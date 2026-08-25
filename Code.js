@@ -15261,6 +15261,7 @@ function saveNPIProcessRecord(recordJSON) {
       ws.getRange(rowIndex, 5).setValue(fieldsJSON);
       ws.getRange(rowIndex, 6).setValue(now);
       if (finalCardNumber) ws.getRange(rowIndex, 9).setValue(finalCardNumber);
+      ws.getRange(rowIndex, 10).setValue(JSON.stringify(record.templateRef || {})); // 模板快照引用
     } else {
       var seq = ('000' + (Date.now() % 10000)).slice(-4);
       var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
@@ -15270,7 +15271,7 @@ function saveNPIProcessRecord(recordJSON) {
           ws.getRange(k + 1, 4).setValue('FALSE');
         }
       }
-      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, operatorIdPR, cardNumber]);
+      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, operatorIdPR, cardNumber, JSON.stringify(record.templateRef || {})]);
       record.recordID = recordID;
       record.cardNumber = cardNumber;
     }
@@ -15320,11 +15321,13 @@ function loadNPIProcessRecordData(testTaskID) {
         var row = data[i];
         var fields = [];
         try { fields = JSON.parse(String(row[4] || '[]')); } catch (e) {}
+        var templateRef = null;
+        try { templateRef = JSON.parse(String(row[9] || 'null')); } catch (e) {}
         return JSON.stringify({ success: true, data: {
           recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
           isLatest: String(row[3] || '') === 'TRUE', fields: fields,
           createdAt: String(row[5] || ''), updatedAt: String(row[6] || ''), createdBy: String(row[7] || ''),
-          cardNumber: String(row[8] || '')
+          cardNumber: String(row[8] || ''), templateRef: templateRef
         }});
       }
     }
@@ -15498,12 +15501,15 @@ function loadNPIProcessRecordHistory(testTaskID) {
       if (String(data[i][1] || '').trim() !== testTaskID) continue;
       var fields = [];
       try { fields = JSON.parse(String(data[i][4] || '[]')); } catch (e) {}
+      var templateRefH = null;
+      try { templateRefH = JSON.parse(String(data[i][9] || 'null')); } catch (e) {}
       result.push({
         recordID: String(data[i][0] || ''),
         status: String(data[i][2] || ''),
         isLatest: String(data[i][3] || '').toUpperCase() === 'TRUE',
         fields: fields,
         cardNumber: String(data[i][8] || ''),
+        templateRef: templateRefH,
         createdAt: String(data[i][5] || ''),
         updatedAt: String(data[i][6] || ''),
         createdBy: String(data[i][7] || '')
