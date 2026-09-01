@@ -12163,16 +12163,7 @@ function loadTodayStaffForSelect(dateStr) {
     var staff = staffResult.success ? staffResult.data : [];
     const seen = {};
     const users = [];
-    // Fallback 1: IM 排班主数据
-    if (staff.length === 0) {
-      staffResult = JSON.parse(loadIMStaffByDate(dateStr));
-      staff = staffResult.success ? staffResult.data : [];
-    }
-    // Fallback 2: AttendanceSync 最新可用日期的出勤人员（当天数据未生成，如排班/考勤尚未录入）
-    if (staff.length === 0) {
-      staff = getLatestAttendanceSyncStaff_(dateStr);
-    }
-    // Fallback 3: userID 全量人员（出勤数据源全空时保证下拉不为空）
+    // 兜底：当天考勤无数据时用 userID 全量人员（保证下拉不为空）
     if (staff.length === 0) {
       staff = getAllStaffFromUserID_();
     }
@@ -12194,57 +12185,7 @@ function loadTodayStaffForSelect(dateStr) {
   }
 }
 
-// 兜底2：AttendanceSync 中不晚于 dateStr 的最新日期的出勤人员
-// （当天排班/考勤数据尚未生成时，取最近一天的名册，避免负责人/协作人下拉为空）
-function getLatestAttendanceSyncStaff_(dateStr) {
-  try {
-    var ws = SpreadsheetApp.openById(TASK_SS_ID).getSheetByName('AttendanceSync');
-    if (!ws) return [];
-    var lastRow = ws.getLastRow();
-    if (lastRow <= 1) return [];
-    var data = ws.getRange(2, 1, lastRow - 1, 11).getValues();
-    var latest = '';
-    for (var i = 0; i < data.length; i++) {
-      var rowDate = data[i][0] instanceof Date
-        ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : String(data[i][0] || '').trim();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(rowDate)) continue; // 跳过旧版无日期行
-      if (rowDate > dateStr) continue;                    // 只取不晚于请求日的数据
-      if (rowDate > latest) latest = rowDate;
-    }
-    if (!latest) return [];
-    var result = [];
-    var seen = {};
-    for (var j = 0; j < data.length; j++) {
-      var d2 = data[j][0] instanceof Date
-        ? Utilities.formatDate(data[j][0], Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : String(data[j][0] || '').trim();
-      if (d2 !== latest) continue;
-      var sapID = String(data[j][1] || '').trim();
-      var name = String(data[j][2] || '').trim();
-      if (!sapID && !name) continue;
-      var key = sapID || name;
-      if (seen[key]) continue;
-      seen[key] = true;
-      result.push({
-        sapID: sapID, name: name,
-        process: String(data[j][3] || '').trim(),
-        workshop: String(data[j][5] || '').trim(),
-        shift: String(data[j][6] || '').trim(),
-        hours: parseFloat(data[j][7]) || 0,
-        attendanceStatus: String(data[j][8] || '').trim() || '在岗',
-        workRole: String(data[j][3] || '').trim(),
-        team: String(data[j][4] || '').trim()
-      });
-    }
-    return result;
-  } catch (e) {
-    console.error('getLatestAttendanceSyncStaff_ error: ' + e.message);
-    return [];
-  }
-}
-
-// 兜底3：userID 全量人员（出勤数据源全空时保证下拉不为空）
+// 兜底：userID 全量人员（当天考勤无数据时保证下拉不为空）
 function getAllStaffFromUserID_() {
   try {
     var ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);

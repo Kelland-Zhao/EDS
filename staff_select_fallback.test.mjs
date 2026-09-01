@@ -70,8 +70,8 @@ function selectUsers(dateStr) {
   return JSON.parse(globalThis.loadTodayStaffForSelect(dateStr));
 }
 
-// ===== 1. 当天无数据 → 兜底 AttendanceSync 最新可用日期 =====
-test('当天两数据源均无数据时，兜底返回 AttendanceSync 最新日期人员', () => {
+// ===== 1. 当天无数据 → 直接兜底 userID 全量（不再走 IM/最近日期） =====
+test('当天 AttendanceSync 无数据时，直接兜底返回 userID 全量人员', () => {
   resetFakes();
   fakeSS[TASK_SS_ID] = {
     'AttendanceSync': fakeSheet([
@@ -83,6 +83,7 @@ test('当天两数据源均无数据时，兜底返回 AttendanceSync 最新日�
       attRow('2026-08-31', '90002', '李四', '在岗'),
     ]),
   };
+  // IM 排班即使有昨日数据也不参与（Fallback 1 已移除）
   fakeSS[IM_SCHEDULING_SS_ID] = {
     'MasterData': fakeSheet([
       pad(5, ['日期班次']),
@@ -90,27 +91,15 @@ test('当天两数据源均无数据时，兜底返回 AttendanceSync 最新日�
     ]),
   };
   fakeSS[USER_PERMISSION_SS_ID] = {
-    'userID': fakeSheet([pad(64, ['工号']), pad(64, ['']), pad(64, ['90001', '张三'])]),
-  };
-  const users = selectUsers('2026-09-01');
-  assert.deepEqual(users.map(u => u.id).sort(), ['张三|90001', '李四|90002'].sort());
-  assert.ok(users.every(u => u.text.includes('TB1')), '带车间后缀');
-});
-
-// ===== 2. 兜底日期不晚于请求日（未来日期数据不可用） =====
-test('兜底只取不晚于请求日的最新日期，未来数据被排除', () => {
-  resetFakes();
-  fakeSS[TASK_SS_ID] = {
-    'AttendanceSync': fakeSheet([
-      pad(11, ['日期']),
-      attRow('2026-08-31', '90001', '张三', '在岗'),
-      attRow('2026-09-02', '90002', '李四', '在岗'), // 未来日期
+    'userID': fakeSheet([
+      pad(64, ['工号', '姓名']),
+      pad(64, ['', '']),
+      pad(64, ['90001', '张三']),
+      pad(64, ['90003', '王五']),
     ]),
   };
-  fakeSS[IM_SCHEDULING_SS_ID] = { 'MasterData': fakeSheet([pad(5, ['日期班次'])]) };
-  fakeSS[USER_PERMISSION_SS_ID] = { 'userID': fakeSheet([pad(64, ['工号']), pad(64, [''])]) };
   const users = selectUsers('2026-09-01');
-  assert.deepEqual(users.map(u => u.id), ['张三|90001']);
+  assert.deepEqual(users.map(u => u.id).sort(), ['张三|90001', '王五|90003'].sort());
 });
 
 // ===== 3. 所有出勤数据源全空 → userID 全量人员 =====
