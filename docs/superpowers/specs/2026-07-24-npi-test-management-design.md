@@ -155,11 +155,21 @@ function loadNPIProcessRecordHistory(testTaskID) // 版本历史
 
 ---
 
-## Phase 1 实现现状与扩展（2026-08-17 更新）
+## 实现现状与扩展（2026-08-21 更新）
 
-Phase 1 已完整上线，以下为原设计之外的扩展与实现细节：
+Phase 1 已完整上线；Phase 2A（测试排期第一迭代）已上线生产（@567）。以下为原设计之外的扩展与实现细节：
 
-### 已实现扩展
+### Phase 2A 落地现状（2026-08-17 设计文档 → 实现）
+
+- **测试计划页 `NPI_Dashboard`**（导航「测试计划 / Test Scheduling」）：周列表视图（周五起始周）、五态状态机（待确认→已排期→执行中→已完成，任意未完成态可取消；服务端 `NPI_STATUS_FLOW` 校验）、机台冲突黄标提示（同机台同天≥2条活跃任务）、紧急置顶红色高亮、任务行跳转工艺参数页自动选中
+- **新建任务就地弹窗**：弹窗组件抽为共享文件 `NPI_TaskModal.html` + `NPI_TaskModal-js.html`，工艺参数页与测试计划页共用（BOM 联动/机型联动/校验/编辑全一致）；各页面通过 `onTaskSaved(tid)` 钩子做保存后刷新
+- **草稿表单条导入**（2026-08-20 变更，替代批量导入）：导入弹窗逐行「导入」→ 打开共享弹窗预填（产品/模具/机台/日期/备注/初始状态）→ 走标准创建路径；`createNPITestTask` 支持 `initialStatus`（五态白名单，导入场景一步到位）；四元组（产品+模具+机台+日期）去重置灰
+- **协作人**（2026-08-21 新增）：`NPI_TestTasks` 第 22 列，弹窗多选（数据源 `getUseID`，与任务安排一致，存储 `姓名|工号` 分号分隔）
+- **预计完成日期**（2026-08-21 新增，必填）：第 23 列；桥接映射到任务安排 dueDate（空则回退计划日期），超期口径（dueDate < 今天且未完成）与任务安排一致
+- **任务安排侧联动**：`loadAllNPITasks` 桥接函数（状态映射 `mapNPIStatusToEDS_`：待确认→等待中/已排期→未开始/执行中→进行中/已完成→已完成/已取消→已取消）已接入 任务列表/今日看板/我的任务/资源甘特/早会日报 五个入口（NPI 任务只读展示，点击跳转工艺参数页）
+
+### 已实现扩展（Phase 1 期间）
+
 - **BOM 主数据联动**（数据源：TB BOM 主数据表）
   - 产品名称：Select2 模糊搜索 + 自由输入，选项 = TF BOM Header AR列（Bundle）去重（333 个）
   - 适用SKU：选中产品后从 E列相关SKU 解析以「牙柄」开头的行（烫印/打印牙柄为注塑后另加工序，排除）
@@ -180,12 +190,62 @@ Phase 1 已完整上线，以下为原设计之外的扩展与实现细节：
 | 共享盘 01 GS TB BOM | `1JFw67bGsVeOUFfh5pksaBJ6Zvxz0VyBs` | BOM# 同名表格（SKU关系表颜色） |
 | Workcenter | `12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM` | 机台号 + 机型 |
 | PPMS | `164BO94VJR6qNdJmJDwbz3w7u9QZfNQUv0U6eXSiM3kQ` | INJ_New 转正目标 + 卡号去重 |
-| 2026 Test Plan | `17ys3UDFWjhfaPnk0TErqqeU0FnMP7nsRoRsTmlmm2fg` | 测试排期草稿源（Phase 2 对接，数据待清洗） |
+| 2026 Test Plan | `17ys3UDFWjhfaPnk0TErqqeU0FnMP7nsRoRsTmlmm2fg` | 测试排期草稿源（单条导入数据源） |
+| userID | `1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM` | 协作人选择（getUseID，与任务安排一致） |
 
 ### 遗留事项
-- 发起部门 reqDept 暂无录入入口——计划 Phase 2 与测试排期联动时补齐（数据源 2026 Test Plan）
-- 工艺卡 196 字段模板硬编码在 `NPI_ProcessRecord-js.html` 的 `TEMPLATE_SECTIONS`，模板表驱动化待做
+- 发起部门 reqDept 暂无录入入口——计划 Phase 2B 与测试排期联动时补齐
 - TF/PK 工序的 SKU 联动语义待确认（当前按注塑口径解析）
+- Phase 2B：计划部确认流程、甘特图/机台占用视图、草稿表迁移决策（并行过渡期观察后定；**2026-08-21 用户决定 2B 暂时不做**）
+- 转正 PPMS 真实业务验证（涉及其他部门，待执行）；fields 改键值格式后 PPMS 侧解析需适配（用户维护 PPMS 侧）
+- H Auto / 6AX / 3AX 的自动化参数卡为占位字段（4/7/4），待用户修订；3AX 复合结构（1×VIM + 3AX自动化）已定，原「1×HT+1×FT」推测作废
+
+---
+
+## 机型模板固化改造（2026-08-25）
+
+> **模板表驱动化落地：按机型（中间层）渲染不同工艺参数模板，替代 196 字段硬编码。**（2026-08-25 用户决策：方案 B 表驱动，NPI_Templates 为正式模板源，不实时读 PPMS。）
+
+### 机型三层模型
+
+```
+原始机型（Workcenter D列，如 HT160）→ 中间层（前端显示+存储，如 HIM）→ 卡组合（模板，如 [HIM×1] / [HIM×1, VIM×3, 6AX自动化×1]）
+```
+
+**NPI_MachineMap**（EDS_NPI_Data，主数据）：原始机型 | 中间层 | 工序 | 卡 | 卡数 | 排序 | 状态 | 备注
+
+| 中间层 | 原始机型 | 卡组合 |
+|---|---|---|
+| FCS/ENG | ENG, FCS | FCS/ENG×1 |
+| HIM | HT160, HT250, HT250 W | HIM×1 |
+| H Auto | H Auto, H Auto S | HIM×1 + H Auto机械手×1 |
+| 6AX | 6AX | HIM×1 + VIM×3（前端卡开关）+ 6AX自动化×1 |
+| 3AX | 3AX | VIM×1 + 3AX自动化×1 |
+| VIM | FT400 | VIM×1 |
+| OMNI-DB | DB | OMNI-DB×1 |
+| DP | DP | DP×1 |
+| HS | HS | HS×1 |
+
+**NPI_Templates**（EDS_NPI_Data，模板行，9 张卡 286 行）：
+`卡 Card | 工序 Process Type | 区块 Section(+EN) | 字段名 CN/EN | 字段key Field Key | 类型 Type(number/text/select) | 单位 | 下限 | 上限 | 检查部门 | 预设值 | 分段 Segments | 状态 | 备注`
+
+- FC 卡字段key 沿用原 fieldKeyMap 键（`productInfo_9`、`barrel_barrelA_35_1段`…），旧 196 数组记录按「FC 卡行序展开分段」重建位置表即可兼容
+- 分段字段一行多输入（FC 风格），PPMS「每段一行」已合并
+- 状态=已确认 的行参与渲染；暂缓组（Automation_3Aixs/3Aixs_Full/6Aixs_956 共 534 行）已移除，本地备份
+- 运行时缓存：CacheService 6h（与 BOM/物料一致）
+
+### 运行时链路
+
+```
+任务弹窗选机台号 → Workcenter D列原始机型 → 查 MachineMap 得中间层 → 任务 machineModel 列存中间层
+工艺参数页加载 → (工序, 中间层) → 查 MachineMap 卡组合 → 读 Templates 已确认行 → 组装渲染（卡数>1 的卡渲染开关）
+保存 → fields 键值 JSON 快照（key = 字段key + 多卡实例前缀）+ templateRef（卡组合）→ NPI_ProcessRecords 第5列
+```
+
+- 旧任务 machineModel 原始值一次性迁移为中间层（13 个值映射）
+- 任务安排四页面显示 machineModel → 自动显示中间层，零改造
+- 转正 PPMS：fields 键值 JSON 原样透传（PPMS 侧解析适配由用户维护）
+- 模板表后续修改即时生效（缓存刷新后），旧记录快照不受影响；被删字段的历史值保留在快照中
 
 ---
 
