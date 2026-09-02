@@ -177,12 +177,12 @@ function doGet(e) {
   Route.path("getBundleYabingSKUs", getBundleYabingSKUs);
   Route.path("loadMaterialOptions", loadMaterialOptions);
   Route.path("loadNPIProcessRecordHistory", loadNPIProcessRecordHistory);
+  Route.path("loadNPITemplateData", loadNPITemplateData);
   Route.path("createNPIProcessRecordVersion", createNPIProcessRecordVersion);
   Route.path("updateNPITestTask", updateNPITestTask);
   Route.path("deleteNPITestTask", deleteNPITestTask);
   Route.path("updateNPITaskStatus", updateNPITaskStatus);
   Route.path("loadTestPlanImportCandidates", loadTestPlanImportCandidates);
-  Route.path("importTestPlanRows", importTestPlanRows);
 
   ensureDailyBriefTrigger_();
 
@@ -12153,20 +12153,19 @@ function getNameToSapMap_() {
 
 function loadTodayStaffForSelect(dateStr) {
   try {
-    // 人员列表缓存（按天，30分钟有效）
+    // 人员列表缓存（按天，30分钟有效；空结果不缓存，保证兜底逻辑与数据更新后可即时生效）
     var staffCache = CacheService.getScriptCache();
-    var staffCacheKey = 'StaffSelect_v2_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMdd');
+    var staffCacheKey = 'StaffSelect_v3_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMdd');
     var staffCached = staffCache.get(staffCacheKey);
     if (staffCached) return staffCached;
     // 优先从 AttendanceSync 读取当天在岗人员
-    let staffResult = JSON.parse(loadAttendanceSync(dateStr));
-    let staff = staffResult.success ? staffResult.data : [];
+    var staffResult = JSON.parse(loadAttendanceSync(dateStr));
+    var staff = staffResult.success ? staffResult.data : [];
     const seen = {};
     const users = [];
-    // Fallback 1: IM 排班主数据
+    // 兜底：当天考勤无数据时用 userID 全量人员（保证下拉不为空）
     if (staff.length === 0) {
-      staffResult = JSON.parse(loadIMStaffByDate(dateStr));
-      staff = staffResult.success ? staffResult.data : [];
+      staff = getAllStaffFromUserID_();
     }
     staff.forEach(function (s) {
       const sapID = s.sapID || s.name;
@@ -12177,10 +12176,40 @@ function loadTodayStaffForSelect(dateStr) {
       }
     });
     var result = JSON.stringify(users);
-    try { staffCache.put(staffCacheKey, result, 1800); } catch (e) { /* 静默跳过 */ }
+    if (users.length > 0) {
+      try { staffCache.put(staffCacheKey, result, 1800); } catch (e) { /* 静默跳过 */ }
+    }
     return result;
   } catch (e) {
     return JSON.stringify({ error: e.message });
+  }
+}
+
+// 兜底：userID 全量人员（当天考勤无数据时保证下拉不为空）
+function getAllStaffFromUserID_() {
+  try {
+    var ws = SpreadsheetApp.openById(USER_PERMISSION_SS_ID).getSheetByName(USER_PERMISSION_SHEET_NAME);
+    if (!ws) return [];
+    var data = ws.getDataRange().getValues();
+    var result = [];
+    var seen = {};
+    for (var i = 2; i < data.length; i++) {
+      var sapID = String(data[i][0] || '').trim();
+      var name = String(data[i][1] || '').trim();
+      if (!sapID || !name) continue;
+      if (seen[sapID]) continue;
+      seen[sapID] = true;
+      result.push({
+        sapID: sapID, name: name,
+        workshop: String(data[i][13] || '').trim(),
+        process: String(data[i][14] || '').trim(),
+        attendanceStatus: '在岗'
+      });
+    }
+    return result;
+  } catch (e) {
+    console.error('getAllStaffFromUserID_ error: ' + e.message);
+    return [];
   }
 }
 
@@ -12550,7 +12579,129 @@ function loadAllPMTasks(filterJSON) {
   }
 }
 
-// 合并任务列表加载：手动任务 + PM 任务 一次调用返回，服务端去重
+// ============================================================
+//  NPI 测试任务合并源 — EDS 只读展示（V20260821 NPI→EDS 合并）
+//  录入与关闭仍在 NPI 侧；EDS 任务列表/看板/甘特/我的任务只读合并
+// ============================================================
+
+// NPI 状态 → EDS 状态映射（仅展示用，NPI 状态机本身不变）
+function mapNPIStatusToEDS_(status) {
+  var s = String(status || '').trim();
+  if (s.indexOf('待确认') === 0) return '等待中';
+  if (s.indexOf('已排期') === 0) return '未开始';
+  if (s.indexOf('执行中') === 0) return '进行中';
+  if (s.indexOf('已完成') === 0) return '已完成';
+  if (s.indexOf('已取消') === 0) return '已取消';
+  return '未开始';
+}
+
+// 解析协作人字符串（分号分隔的 姓名|工号）→ {names, sapIDs}；裸工号兼容（姓名为空）
+function parseCollaboratorPairs_(str) {
+  var names = [], sapIDs = [];
+  String(str || '').split(';').forEach(function (tok) {
+    var t = tok.trim();
+    if (!t) return;
+    var pipe = t.indexOf('|');
+    if (pipe > 0) { names.push(t.substring(0, pipe).trim()); sapIDs.push(t.substring(pipe + 1).trim()); }
+    else { names.push(''); sapIDs.push(t); }
+  });
+  return { names: names, sapIDs: sapIDs };
+}
+
+// 读取 NPI_TestTasks 并映射为 EDS 任务格式（负责人取 reqPerson 列，姓名|工号）
+function loadAllNPITasks(filterJSON) {
+  try {
+    var filter = typeof filterJSON === 'string' ? JSON.parse(filterJSON) : (filterJSON || {});
+    // 缓存：按小时缓存 NPI 测试任务（forceRefresh 时跳过缓存）
+    var cache = CacheService.getScriptCache();
+    var cacheKey = 'TaskList_NPI_v1_' + Utilities.formatDate(new Date(), 'Asia/Shanghai', 'yyyyMMddHH');
+    if (!filter._forceRefresh) {
+      var cached = cache.get(cacheKey);
+      if (cached) return cached;
+    }
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_TestTasks');
+    if (!ws) return JSON.stringify({ success: true, data: [] });
+    var data = ws.getDataRange().getValues();
+    var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var sapToName = null;
+    var result = [];
+    for (var i = 1; i < data.length; i++) {
+      var taskID = String(data[i][0] || '').trim();
+      if (!taskID) continue;
+      var planDate = data[i][9] instanceof Date
+        ? Utilities.formatDate(data[i][9], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+        : normalizeDate_(data[i][9]);
+      var status = mapNPIStatusToEDS_(data[i][2]);
+      // 未关闭且计划日期已过 → 已超期（与 PM 任务口径一致）
+      if (status !== '已完成' && status !== '已取消' && planDate && planDate < today) status = '已超期';
+      var machineNo = String(data[i][5] || '').trim();
+      var productName = String(data[i][3] || '').trim();
+      var titleParts = [];
+      if (machineNo) titleParts.push(machineNo);
+      if (productName) titleParts.push(productName);
+      var title = 'NPI: ' + (titleParts.length ? titleParts.join(' - ') : taskID);
+      var descParts = [];
+      if (String(data[i][4] || '').trim()) descParts.push('模具: ' + String(data[i][4] || '').trim());
+      if (String(data[i][6] || '').trim()) descParts.push('物料: ' + String(data[i][6] || '').trim());
+      if (String(data[i][19] || '').trim()) descParts.push('SKU: ' + String(data[i][19] || '').trim());
+      if (String(data[i][20] || '').trim()) descParts.push('机型: ' + String(data[i][20] || '').trim());
+      if (String(data[i][15] || '').trim()) descParts.push('备注: ' + String(data[i][15] || '').trim());
+      var description = descParts.join(' | ');
+      // 负责人：reqPerson 列，格式 姓名|工号（裸工号时解析姓名）
+      var rawPerson = String(data[i][8] || '').trim();
+      var pipeIdx = rawPerson.indexOf('|');
+      var ownerName = pipeIdx > 0 ? rawPerson.substring(0, pipeIdx) : '';
+      var sapID = pipeIdx > 0 ? rawPerson.substring(pipeIdx + 1) : rawPerson;
+      if (sapID && !ownerName) {
+        if (!sapToName) sapToName = getSapToNameMap_();
+        ownerName = sapToName[sapID] || '';
+      }
+      var collab = parseCollaboratorPairs_(data[i][21]);
+      var task = {
+        taskID: taskID,
+        title: title,
+        description: description,
+        taskType: '测试',
+        priority: '中',
+        status: status,
+        planStartDate: planDate,
+        dueDate: (data[i][22] instanceof Date
+          ? Utilities.formatDate(data[i][22], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+          : String(data[i][22] || '').trim()) || planDate,
+        completedAt: '',
+        createdBy: 'NPI Module',
+        closedBy: '',
+        remark: String(data[i][15] || ''),
+        process: String(data[i][18] || '').trim() || 'IM',
+        owners: sapID ? [sapID] : [],
+        collaborators: collab.sapIDs,
+        ownerNames: ownerName ? [ownerName] : [],
+        collaboratorNames: collab.names,
+        createdAt: String(data[i][16] || ''),
+        updatedAt: String(data[i][17] || '')
+      };
+      // Apply filters
+      if (filter.status && task.status !== filter.status) continue;
+      if (filter.process) {
+        var pc = task.process.toUpperCase();
+        if (filter.process === 'INJ') { if (pc !== 'INJ' && pc !== 'IM') continue; }
+        else if (pc !== filter.process) continue;
+      }
+      if (filter.search) {
+        var q = String(filter.search).toLowerCase();
+        if (task.title.toLowerCase().indexOf(q) === -1 && task.description.toLowerCase().indexOf(q) === -1 && task.taskID.toLowerCase().indexOf(q) === -1) continue;
+      }
+      result.push(task);
+    }
+    var jsonResult = JSON.stringify({ success: true, data: result });
+    try { cache.put(cacheKey, jsonResult, 300); } catch (e) { /* 缓存过大时静默跳过 */ }
+    return jsonResult;
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 合并任务列表加载：手动任务 + PM 任务 + NPI 测试任务 一次调用返回，服务端去重
 // forceRefresh: 跳过缓存，强制从 Sheet 重新读取（创建/编辑任务后使用）
 function loadAllTasksForList(forceRefresh) {
   try {
@@ -12558,21 +12709,24 @@ function loadAllTasksForList(forceRefresh) {
     var filter = forceRefresh ? JSON.stringify({ _forceRefresh: true }) : JSON.stringify({});
     var manualResult = JSON.parse(loadTasks(filter));
     var pmResult = JSON.parse(loadAllPMTasks(filter));
+    var npiResult = JSON.parse(loadAllNPITasks(filter));
     var manualData = manualResult.success ? manualResult.data : [];
     var pmData = pmResult.success ? pmResult.data : [];
+    var npiData = npiResult.success ? npiResult.data : [];
 
-    console.log('loadAllTasksForList: manual=' + manualData.length + ' tasks, pm=' + pmData.length + ' tasks, forceRefresh=' + !!forceRefresh);
+    console.log('loadAllTasksForList: manual=' + manualData.length + ' tasks, pm=' + pmData.length + ' tasks, npi=' + npiData.length + ' tasks, forceRefresh=' + !!forceRefresh);
     if (!pmResult.success) {
       console.error('loadAllPMTasks failed: ' + (pmResult.message || 'unknown'));
     }
 
-    // 服务端去重（PM taskID 优先）
+    // 服务端去重（PM/NPI taskID 优先；NPI- 前缀与手动 TASK-/PM- 天然不冲突）
     var seen = {};
     pmData.forEach(function (t) { seen[t.taskID] = true; });
-    var merged = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    npiData.forEach(function (t) { seen[t.taskID] = true; });
+    var merged = pmData.concat(npiData).concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
 
     console.log('loadAllTasksForList: merged=' + merged.length + ' tasks');
-    return JSON.stringify({ success: true, manual: manualData, pm: pmData, merged: merged });
+    return JSON.stringify({ success: true, manual: manualData, pm: pmData, npi: npiData, merged: merged });
   } catch (e) {
     console.error('loadAllTasksForList error: ' + e.message);
     return JSON.stringify({ success: false, message: e.message });
@@ -12587,12 +12741,15 @@ function loadAllTasksForListFast() {
   try {
     var manualResult = JSON.parse(loadTasks(JSON.stringify({ _forceRefresh: true })));
     var pmResult = JSON.parse(loadAllPMTasks(JSON.stringify({})));
+    var npiResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
     var manualData = manualResult.success ? manualResult.data : [];
     var pmData = pmResult.success ? pmResult.data : [];
+    var npiData = npiResult.success ? npiResult.data : [];
     var seen = {};
     pmData.forEach(function (t) { seen[t.taskID] = true; });
-    var merged = pmData.concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
-    return JSON.stringify({ success: true, manual: manualData, pm: pmData, merged: merged });
+    npiData.forEach(function (t) { seen[t.taskID] = true; });
+    var merged = pmData.concat(npiData).concat(manualData.filter(function (t) { return !seen[t.taskID]; }));
+    return JSON.stringify({ success: true, manual: manualData, pm: pmData, npi: npiData, merged: merged });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
@@ -12795,6 +12952,9 @@ function loadTodayDashboardData(date, sapID) {
     // Merge PM tasks from PM_Records
     const pmTasks = loadPMTasksByDate(date);
     allTasks = pmTasks.concat(allTasks);
+    // Merge NPI 测试任务（只读展示，负责人=reqPerson）
+    const npiResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
+    if (npiResult.success) allTasks = allTasks.concat(npiResult.data);
     // Today tasks: status != 已取消 AND in date range (include 已完成)
     const todayTasks = allTasks.filter(function (t) {
       if (t.status === '已取消') return false;
@@ -12892,6 +13052,8 @@ function inferResourceGroup_(person, task) {
 
   if (workshop === 'TB1') return 'tb1';
   if (workshop === 'TB2') return 'tb2';
+  // 测试类任务（NPI 合并任务 taskType=测试）优先归测试组，避免描述中「模具」等关键词误导
+  if (task && String(task.taskType || '') === '测试') return 'test';
   if (roleText.indexOf('模具') !== -1 || /MOLD/i.test(roleText)) return 'mold';
   if (roleText.indexOf('测试') !== -1 || /TEST|TF/i.test(roleText) || process === 'TF') return 'test';
   if (roleText.indexOf('保养') !== -1 || /PM/i.test(roleText)) return 'pm';
@@ -13034,6 +13196,11 @@ function loadResourceGanttData(startDate, daysCount) {
     const allPMTasks = allPMResult.success ? allPMResult.data : [];
     allPMTasks.forEach(addTask_);
 
+    // NPI 测试任务（只读合并源）
+    const allNPIResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
+    const allNPITasks = allNPIResult.success ? allNPIResult.data : [];
+    allNPITasks.forEach(addTask_);
+
     // ---- Grouping logic (unchanged) ----
     const groupMap = {};
     getResourceGroupDefs_().forEach(function (g) {
@@ -13049,29 +13216,31 @@ function loadResourceGanttData(startDate, daysCount) {
       if (members.length === 0) members.push('未分配');
 
       members.forEach(function (memberID) {
-        const person = staffLookup[memberID] || userMap[memberID] || { sapID: memberID, name: memberID };
-        // BL列为空的人不在项目管理范围内，跳过
-        if (!person.internalGroup) return;
-        const groupKey = inferResourceGroup_(person, task);
+        var person = memberID === '未分配' ? null : (staffLookup[memberID] || userMap[memberID] || { sapID: memberID, name: memberID });
+        // BL列为空的人不在项目管理范围内，归入「未分配」行
+        if (person && !person.internalGroup) person = null;
+        var unassigned = !person;
+        var groupKey = unassigned ? inferResourceGroup_(null, task) : inferResourceGroup_(person, task);
         if (!groupMap[groupKey]) {
           groupMap[groupKey] = { key: groupKey, name: groupKey, en: groupKey, people: {}, dailyCounts: {} };
           days.forEach(function (d) { groupMap[groupKey].dailyCounts[d] = 0; });
         }
         const group = groupMap[groupKey];
-        if (!group.people[memberID]) {
-          group.people[memberID] = {
-            sapID: memberID,
-            name: person.name || memberID,
-            workshop: person.workshop || task.workshop || '',
-            process: person.process || task.process || '',
-            team: person.team || person.workRole || '',
-            shift: person.shift || '',
+        var pid = unassigned ? 'unassigned' : memberID;
+        if (!group.people[pid]) {
+          group.people[pid] = {
+            sapID: pid,
+            name: unassigned ? '未分配 / Unassigned' : (person.name || memberID),
+            workshop: unassigned ? '' : (person.workshop || task.workshop || ''),
+            process: unassigned ? (task.process || '') : (person.process || task.process || ''),
+            team: unassigned ? '' : (person.team || person.workRole || ''),
+            shift: unassigned ? '' : (person.shift || ''),
             hasTasks: true,
             tasks: [],
-            dailyStatus: dailyStatusByPerson[memberID] || {}
+            dailyStatus: unassigned ? {} : (dailyStatusByPerson[pid] || {})
           };
         }
-        group.people[memberID].tasks.push({
+        group.people[pid].tasks.push({
           taskID: task.taskID,
           title: task.title || task.taskID,
           taskType: task.taskType || '',
@@ -13155,9 +13324,14 @@ function loadMyTasks(sapID) {
   try {
     const tasksData = JSON.parse(loadTasks(JSON.stringify({})));
     const allTasks = tasksData.success ? tasksData.data : [];
+    const npiResult = JSON.parse(loadAllNPITasks(JSON.stringify({})));
+    const npiTasks = npiResult.success ? npiResult.data : [];
     const ownerTasks = allTasks.filter(function (t) {
       return t.owners.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
     });
+    ownerTasks.push.apply(ownerTasks, npiTasks.filter(function (t) {
+      return t.owners.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
+    }));
     const collaboratorTasks = allTasks.filter(function (t) {
       return t.collaborators.indexOf(sapID) !== -1 && t.status !== '已完成' && t.status !== '已取消';
     });
@@ -14863,6 +15037,14 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
     if (data.length && !String(data[0][20] || '').trim()) {
       ws.getRange(1, 21).setValue('机型\nMachine Model');
     }
+    // 第22列表头：协作人/Collaborators（新增列，向后兼容）
+    if (data.length && !String(data[0][21] || '').trim()) {
+      ws.getRange(1, 22).setValue('协作人\nCollaborators');
+    }
+    // 第23列表头：预计完成日期/Due Date（新增列，向后兼容）
+    if (data.length && !String(data[0][22] || '').trim()) {
+      ws.getRange(1, 23).setValue('预计完成日期\nDue Date');
+    }
     var todayCount = 0;
     for (var i = 1; i < data.length; i++) {
       var tid = String(data[i][0] || '');
@@ -14880,10 +15062,13 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
     var operatorName = sapToName[operatorSAPID] || '';
     var operatorId = operatorName ? operatorName + '|' + operatorSAPID : operatorSAPID;
 
+    // 初始状态：导入场景可一步到位（五态白名单校验），常规创建默认待确认
+    var initialStatus = NPI_STATUS_FLOW.hasOwnProperty(taskData.initialStatus) ? taskData.initialStatus : '待确认 Pending';
+
     ws.appendRow([
       taskID,
       sourceBilingual,
-      '待确认 Pending',
+      initialStatus,
       taskData.productName || '',
       taskData.moldNo || '',
       taskData.machineNo || '',
@@ -14891,12 +15076,14 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
       taskData.reqDept || '',
       operatorId,
       taskData.planDate || dateStr,
-      '待确认 Pending', '', '', '', '',
+      initialStatus === '待确认 Pending' ? '待确认 Pending' : '已确认 Confirmed', '', '', '', '',
       taskData.remark || '',
       now, now,
       taskData.processType || 'IM',  // S: 工序
       taskData.sku || '',            // T: 适用SKU
-      taskData.machineModel || ''    // U: 机型
+      taskData.machineModel || '',   // U: 机型
+      taskData.collaborators || '',  // V: 协作人
+      taskData.dueDate || ''         // W: 预计完成日期
     ]);
     return JSON.stringify({ success: true, taskID: taskID, message: "任务已创建 / Task created" });
   } catch (e) {
@@ -14908,6 +15095,14 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
 function isValidWorkcenterModel_(model) {
   var m = String(model || '').trim();
   return !(/闲置|报废/.test(m));
+}
+
+// 原始机型 → 中间层（byRaw 查不到即原值；已是中间层值则原样，幂等）
+function mapRawModelToDisplay_(rawModel, byRaw) {
+  var raw = String(rawModel || '').trim();
+  if (!raw) return '';
+  if (byRaw && byRaw.hasOwnProperty(raw)) return byRaw[raw];
+  return raw;
 }
 
 function loadNPIWorkcenterList(processType) {
@@ -14923,6 +15118,13 @@ function loadNPIWorkcenterList(processType) {
     if (!ssId) return JSON.stringify({ success: true, data: [] }); // not configured yet
     var ws = SpreadsheetApp.openById(ssId).getSheetByName("Workcenter");
     if (!ws) return JSON.stringify({ success: true, data: [] });
+    // 机型中间层映射（复用模板数据缓存，失败则回退原始值）
+    var byRaw = {};
+    try {
+      var tplOut = loadNPITemplateData();
+      var tpl = JSON.parse(tplOut);
+      if (tpl.success) byRaw = tpl.data.machineMap.byRaw || {};
+    } catch (e) {}
     var data = ws.getDataRange().getValues();
     var result = [];
     for (var i = 1; i < data.length; i++) {
@@ -14930,9 +15132,60 @@ function loadNPIWorkcenterList(processType) {
       if (!wc) continue;
       var model = String(data[i][3] || '').trim(); // D列 Final Machine Type
       if (!isValidWorkcenterModel_(model)) continue; // 闲置/报废机台排除
-      result.push({ id: wc, text: wc, model: model });
+      result.push({ id: wc, text: wc, model: model, displayModel: mapRawModelToDisplay_(model, byRaw) });
     }
     return JSON.stringify({ success: true, data: result });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
+  }
+}
+
+// 表驱动模板：读 NPI_Templates（已确认行）+ NPI_MachineMap（已确认行），CacheService 6h
+// NPI_Templates 列：A卡 B工序 C区块 D区块EN E字段CN F字段EN G字段key H类型 I单位 J下限 K上限 L检查部门 M预设值 N分段 O状态 P备注
+// NPI_MachineMap 列：A原始机型 B中间层 C工序 D卡 E卡数 F排序 G状态 H备注
+function loadNPITemplateData() {
+  try {
+    var cache = CacheService.getScriptCache();
+    var CKEY = 'NPI_TEMPLATE_CACHE_v2';
+    var cached = cache.get(CKEY);
+    if (cached) return cached;
+    var ss = SpreadsheetApp.openById(NPI_SS_ID);
+    var tplWs = ss.getSheetByName('NPI_Templates');
+    var mapWs = ss.getSheetByName('NPI_MachineMap');
+    if (!tplWs || !mapWs) return JSON.stringify({ success: false, message: 'Template sheets missing' });
+    var cards = {};
+    var tplData = tplWs.getDataRange().getValues();
+    for (var i = 1; i < tplData.length; i++) {
+      var r = tplData[i];
+      var card = String(r[0] || '').trim();
+      var status = String(r[14] || '').trim();
+      if (!card || status !== '已确认') continue;
+      if (!cards[card]) cards[card] = [];
+      cards[card].push({
+        sec: String(r[2] || '').trim(), secEn: String(r[3] || '').trim(),
+        cn: String(r[4] || '').trim(), en: String(r[5] || '').trim(),
+        key: String(r[6] || '').trim(), type: String(r[7] || '').trim(),
+        unit: String(r[8] || '').trim(), lo: String(r[9] || '').trim(), hi: String(r[10] || '').trim(),
+        dept: String(r[11] || '').trim(), preset: String(r[12] || '').trim(),
+        segs: String(r[13] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+      });
+    }
+    var byRaw = {}, byDisplay = {};
+    var mapData = mapWs.getDataRange().getValues();
+    for (var m = 1; m < mapData.length; m++) {
+      var rr = mapData[m];
+      var st2 = String(rr[6] || '').trim();
+      if (st2 !== '已确认') continue;
+      var raw = String(rr[0] || '').trim(), disp = String(rr[1] || '').trim();
+      var card2 = String(rr[3] || '').trim(), count = parseInt(rr[4] || '1', 10), order = parseInt(rr[5] || '1', 10);
+      if (!raw || !disp || !card2) continue;
+      byRaw[raw] = disp;
+      if (!byDisplay[disp]) byDisplay[disp] = [];
+      byDisplay[disp].push({ card: card2, count: count, order: order });
+    }
+    var out = JSON.stringify({ success: true, data: { cards: cards, machineMap: { byRaw: byRaw, byDisplay: byDisplay } } });
+    cache.put(CKEY, out, 21600);
+    return out;
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
@@ -14963,7 +15216,11 @@ function loadNPITestTaskList() {
         createdAt: String(data[i][16] || ''),
         processType: String(data[i][18] || '') || 'IM',
         sku: String(data[i][19] || ''),
-        machineModel: String(data[i][20] || '')
+        machineModel: String(data[i][20] || ''),
+        collaborators: String(data[i][21] || ''),
+        dueDate: data[i][22] instanceof Date
+          ? Utilities.formatDate(data[i][22], Session.getScriptTimeZone(), 'yyyy-MM-dd')
+          : String(data[i][22] || '')
       });
     }
     return JSON.stringify({ success: true, data: result });
@@ -15033,6 +15290,7 @@ function saveNPIProcessRecord(recordJSON) {
       ws.getRange(rowIndex, 5).setValue(fieldsJSON);
       ws.getRange(rowIndex, 6).setValue(now);
       if (finalCardNumber) ws.getRange(rowIndex, 9).setValue(finalCardNumber);
+      ws.getRange(rowIndex, 10).setValue(JSON.stringify(record.templateRef || {})); // 模板快照引用
     } else {
       var seq = ('000' + (Date.now() % 10000)).slice(-4);
       var recordID = 'NPI-PR-' + dateStr.replace(/-/g, '') + '-' + seq;
@@ -15042,7 +15300,7 @@ function saveNPIProcessRecord(recordJSON) {
           ws.getRange(k + 1, 4).setValue('FALSE');
         }
       }
-      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, operatorIdPR, cardNumber]);
+      ws.appendRow([recordID, record.testTaskID || '', '草稿', true, fieldsJSON, now, now, operatorIdPR, cardNumber, JSON.stringify(record.templateRef || {})]);
       record.recordID = recordID;
       record.cardNumber = cardNumber;
     }
@@ -15092,11 +15350,13 @@ function loadNPIProcessRecordData(testTaskID) {
         var row = data[i];
         var fields = [];
         try { fields = JSON.parse(String(row[4] || '[]')); } catch (e) {}
+        var templateRef = null;
+        try { templateRef = JSON.parse(String(row[9] || 'null')); } catch (e) {}
         return JSON.stringify({ success: true, data: {
           recordID: String(row[0] || ''), testTaskID: String(row[1] || ''), status: String(row[2] || ''),
           isLatest: String(row[3] || '') === 'TRUE', fields: fields,
           createdAt: String(row[5] || ''), updatedAt: String(row[6] || ''), createdBy: String(row[7] || ''),
-          cardNumber: String(row[8] || '')
+          cardNumber: String(row[8] || ''), templateRef: templateRef
         }});
       }
     }
@@ -15270,12 +15530,15 @@ function loadNPIProcessRecordHistory(testTaskID) {
       if (String(data[i][1] || '').trim() !== testTaskID) continue;
       var fields = [];
       try { fields = JSON.parse(String(data[i][4] || '[]')); } catch (e) {}
+      var templateRefH = null;
+      try { templateRefH = JSON.parse(String(data[i][9] || 'null')); } catch (e) {}
       result.push({
         recordID: String(data[i][0] || ''),
         status: String(data[i][2] || ''),
         isLatest: String(data[i][3] || '').toUpperCase() === 'TRUE',
         fields: fields,
         cardNumber: String(data[i][8] || ''),
+        templateRef: templateRefH,
         createdAt: String(data[i][5] || ''),
         updatedAt: String(data[i][6] || ''),
         createdBy: String(data[i][7] || '')
@@ -15341,6 +15604,8 @@ function updateNPITestTask(taskID, taskDataJSON, operatorSAPID) {
     ws.getRange(rowIdx, 19).setValue(taskData.processType || 'IM');
     ws.getRange(rowIdx, 20).setValue(taskData.sku || '');
     ws.getRange(rowIdx, 21).setValue(taskData.machineModel || '');
+    ws.getRange(rowIdx, 22).setValue(taskData.collaborators || '');
+    ws.getRange(rowIdx, 23).setValue(taskData.dueDate || '');
     return JSON.stringify({ success: true, message: "任务已更新 / Task updated" });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
@@ -15614,74 +15879,6 @@ function loadTestPlanImportCandidates() {
       });
     }
     return JSON.stringify({ success: true, data: candidates });
-  } catch (e) {
-    return JSON.stringify({ success: false, message: e.message });
-  }
-}
-
-// 批量导入选中的草稿表行（客户端传候选对象数组；服务端再次四元组去重；机型由Workcenter带出）
-function importTestPlanRows(rowsJSON, operatorSAPID) {
-  try {
-    var rows = typeof rowsJSON === 'string' ? JSON.parse(rowsJSON) : rowsJSON;
-    if (!rows || !rows.length) return JSON.stringify({ success: true, imported: 0, skipped: 0, message: '无可导入行 / Nothing to import' });
-    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
-    if (!ws) return JSON.stringify({ success: false, message: 'Sheet not found' });
-    var data = ws.getDataRange().getValues();
-    var existingKeys = {};
-    for (var i = 1; i < data.length; i++) {
-      if (!String(data[i][0] || '').trim()) continue;
-      var d = data[i][9] instanceof Date ? Utilities.formatDate(data[i][9], Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(data[i][9] || '').trim();
-      existingKeys[taskImportKey_(data[i][3], data[i][4], data[i][5], d)] = true;
-    }
-    var wcModel = {};
-    try {
-      var wcData = SpreadsheetApp.openById(NPI_WORKCENTER_SS_ID).getSheetByName('Workcenter').getDataRange().getValues();
-      for (var w = 1; w < wcData.length; w++) {
-        var model = String(wcData[w][3] || '').trim();
-        if (!isValidWorkcenterModel_(model)) continue;
-        wcModel[String(wcData[w][0] || '').trim()] = model;
-      }
-    } catch (e) {}
-    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-    var todayPrefix = 'NPI-' + dateStr.replace(/-/g, '');
-    var todayCount = 0;
-    for (var c = 1; c < data.length; c++) {
-      if (String(data[c][0] || '').indexOf(todayPrefix) === 0) todayCount++;
-    }
-    var sapToName = getSapToNameMap_();
-    var opName = sapToName[operatorSAPID] || '';
-    var operatorId = opName ? opName + '|' + operatorSAPID : operatorSAPID;
-    var imported = 0, skipped = 0;
-    rows.forEach(function (r) {
-      var key = taskImportKey_(r.productName, r.moldNo, r.machineNo, r.date);
-      if (existingKeys[key]) { skipped++; return; }
-      existingKeys[key] = true;
-      todayCount++;
-      var seq = ('000' + todayCount).slice(-4);
-      var status = NPI_STATUS_FLOW.hasOwnProperty(r.status) ? r.status : '待确认 Pending'; // 白名单校验；未知/空值归待确认
-      ws.appendRow([
-        todayPrefix + '-' + seq,             // 0 任务ID
-        '周计划 Weekly',                      // 1 来源
-        status,                              // 2 状态
-        String(r.productName || ''),         // 3 产品名称
-        String(r.moldNo || ''),              // 4 模具编号
-        String(r.machineNo || ''),           // 5 机台编号
-        '',                                  // 6 物料（留空）
-        '',                                  // 7 发起部门（Phase 2B 联动）
-        operatorId,                          // 8 发起人（导入人）
-        String(r.date || dateStr),           // 9 计划日期
-        status === '待确认 Pending' ? '待确认 Pending' : '已确认 Confirmed', // 10 计划部确认
-        '', '', '', '',                      // 11-14
-        String(r.remark || ''),              // 15 备注
-        now, now,                            // 16-17
-        'IM',                                // 18 工序
-        '',                                  // 19 SKU（留空）
-        wcModel[String(r.machineNo || '').trim()] || '' // 20 机型
-      ]);
-      imported++;
-    });
-    return JSON.stringify({ success: true, imported: imported, skipped: skipped, message: '导入完成 / Import done' });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }

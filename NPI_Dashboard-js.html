@@ -89,10 +89,6 @@ $(document).ready(function () {
   $('#weekFilter, #statusFilter, #machineFilter, #sourceFilter, #reqFilter').on('change', renderTable);
   // 新建任务按钮由共享弹窗组件 NPI_TaskModal-js 绑定（就地弹窗）
   $('#btnImport').on('click', openImportModal);
-  $('#importCheckAll').on('change', function () {
-    $('#importTable tbody input[type=checkbox]').prop('checked', $(this).prop('checked'));
-  });
-  $('#btnDoImport').on('click', doImport);
 });
 
 function openProcessPage(extraParam) {
@@ -190,7 +186,7 @@ function renderTable() {
     html += '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead><tr>' +
       '<th>任务号<br><small>Task ID</small></th><th>产品<br><small>Product</small></th><th>模具<br><small>Mold</small></th>' +
       '<th>机台(机型)<br><small>Machine(Model)</small></th><th>SKU<br><small>SKU</small></th><th>物料<br><small>Material</small></th>' +
-      '<th>状态<br><small>Status</small></th><th>计划日期<br><small>Plan Date</small></th><th>负责人<br><small>Requestor</small></th>' +
+      '<th>状态<br><small>Status</small></th><th>计划日期<br><small>Plan Date</small></th><th>计划完成<br><small>Due Date</small></th><th>负责人<br><small>Requestor</small></th>' +
       '<th>操作<br><small>Action</small></th></tr></thead><tbody>';
     list.sort(function (a, b) {
       var au = (a.source || '').indexOf('urgent') >= 0 ? 1 : 0;
@@ -214,7 +210,7 @@ function renderTable() {
         '<td>' + escapeHtml(t.productName) + '</td><td>' + escapeHtml(t.moldNo) + '</td><td>' + machineCell + '</td>' +
         '<td>' + escapeHtml(t.sku) + '</td><td>' + escapeHtml(t.material) + '</td>' +
         '<td><span class="badge ' + badge + '">' + escapeHtml(t.status) + '</span></td>' +
-        '<td>' + escapeHtml(t.planDate) + '</td><td>' + escapeHtml(t.reqPerson) + '</td>' +
+        '<td>' + escapeHtml(t.planDate) + '</td><td>' + escapeHtml(t.dueDate || '') + '</td><td>' + escapeHtml(t.reqPerson) + '</td>' +
         '<td class="text-center align-middle" onclick="event.stopPropagation();">' + actions + '</td></tr>';
     });
     html += '</tbody></table></div>';
@@ -286,15 +282,17 @@ function openImportModal() {
       importCandidates.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
       var html = '';
       importCandidates.forEach(function (c, idx) {
+        var action = c.imported
+          ? '<span class="badge bg-secondary">已导入<br><small>Imported</small></span>'
+          : '<button class="btn btn-sm btn-outline-primary" style="font-size:11px;" onclick="openImportTaskModal(' + idx + ')">导入<br><small>Import</small></button>';
         html += '<tr class="' + (c.imported ? 'text-muted' : '') + '">' +
-          '<td><input type="checkbox" data-idx="' + idx + '" ' + (c.imported ? 'disabled' : '') + '></td>' +
+          '<td>' + action + '</td>' +
           '<td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.productName) + '</td><td>' + escapeHtml(c.moldNo) + '</td>' +
           '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
       });
       $('#importTable tbody').html(html);
-      $('#importCheckAll').prop('checked', false);
       var unimported = importCandidates.filter(function (c) { return !c.imported; }).length;
-      $('#importHint').text('共 ' + importCandidates.length + ' 行，未导入 ' + unimported + ' 行（已导入行置灰跳过）');
+      $('#importHint').text('共 ' + importCandidates.length + ' 行，未导入 ' + unimported + ' 行；点击行内「导入」逐条导入，弹窗预填信息确认后保存');
       $('#importModal').modal('show');
     })
     .withFailureHandler(function () {
@@ -304,34 +302,26 @@ function openImportModal() {
     .loadTestPlanImportCandidates();
 }
 
-function doImport() {
-  var selected = [];
-  $('#importTable tbody input[type=checkbox]:checked').each(function () {
-    var idx = parseInt($(this).data('idx'), 10);
-    if (!isNaN(idx) && importCandidates[idx]) selected.push(importCandidates[idx]);
+// 单条导入：打开新建任务弹窗预填草稿行信息（走标准创建路径，保证数据一致性）
+function openImportTaskModal(idx) {
+  var c = importCandidates[idx];
+  if (!c || c.imported) return;
+  $('#importModal').modal('hide');
+  resetTaskModal();
+  importInitialStatus = c.status || '待确认 Pending';
+  $('#newTaskModal .modal-title').text('导入测试计划 / Import from Test Plan');
+  $('#importStatusHint').removeClass('d-none').html('初始状态：' + escapeHtml(importInitialStatus) + '（保存后生效 / applied on save）');
+  $('#newMoldNo').val(c.moldNo || '');
+  $('#newPlanDate').val(c.date || '');
+  $('#newDueDate').val(c.date || '');
+  $('#newRemark').val(c.remark || '');
+  $('#newSource').val('weekly');
+  $('#newProcessType').val('IM');
+  $('#newProductName').val(c.productName || null);
+  onProductSelected(c.productName || '', function () {});
+  loadWorkcenterList('IM', function () {
+    $('#newMachineNo').val(c.machineNo || null).trigger('change');
   });
-  if (!selected.length) { Swal.fire({ icon: 'warning', title: swalTitle('未选择', 'Nothing selected'), html: swalHtml('请勾选要导入的行', 'Please select rows to import') }); return; }
-  Swal.fire({ title: swalTitle('确认导入', 'Confirm Import'), html: swalHtml('将导入 ' + selected.length + ' 条测试计划', 'Will import ' + selected.length + ' rows'), icon: 'warning', showCancelButton: true, confirmButtonText: '确认 / Confirm', cancelButtonText: '取消 / Cancel' })
-    .then(function (r2) {
-      if (!r2.isConfirmed) return;
-      Swal.fire({ title: swalTitle('导入中...', 'Importing...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => { Swal.showLoading(); } });
-      google.script.run
-        .withSuccessHandler(function (raw) {
-          Swal.close();
-          var r = parseResponse(raw);
-          if (r.success) {
-            $('#importModal').modal('hide');
-            Swal.fire({ icon: 'success', title: swalTitle('导入完成', 'Imported'), html: swalHtml('成功 ' + r.imported + ' 条，跳过已导入 ' + r.skipped + ' 条', 'Imported ' + r.imported + ', skipped ' + r.skipped), timer: 1500, showConfirmButton: false });
-            loadTasks();
-          } else {
-            Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '导入失败', 'Failed') });
-          }
-        })
-        .withFailureHandler(function (err) {
-          Swal.close();
-          Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(err.message || String(err), 'Failed') });
-        })
-        .importTestPlanRows(JSON.stringify(selected), sessionStorage.getItem('ID') || '');
-    });
+  $('#newTaskModal').modal('show');
 }
 </script>

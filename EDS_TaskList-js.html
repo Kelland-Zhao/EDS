@@ -134,6 +134,7 @@ function finalInit(usersData) {
       { data: 'taskType', render: function (d, type, row) {
         if (d === '保养' && (row.createdBy === 'PM Module' || row.createdBy === 'PM Plan')) return '保养';
         if (d === '非常规保养') return '保养（非常规）';
+        if (row.createdBy === 'NPI Module') return '测试 <span class="badge bg-info text-dark" style="font-size:10px;">NPI</span>';
         return d;
       }},
       { data: 'planStartDate' },
@@ -144,8 +145,13 @@ function finalInit(usersData) {
         var btnStyle = 'font-size:0.7rem;width:70px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;white-space:normal;';
         var html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
         var isPM = row.taskType === '保养' && (row.createdBy === 'PM Module' || row.createdBy === 'PM Plan');
-        html += '<button class="btn btn-sm btn-outline-primary edit-task-btn" data-tid="' + row.taskID + '" style="' + btnStyle + '"><i class="bi bi-pencil-square"></i> 编辑<br>Edit</button>';
-        if (!isPM && row.status !== '已完成' && row.status !== '已取消') {
+        var isNPI = String(row.taskID).indexOf('NPI-') === 0;
+        if (isNPI) {
+          html += '<button class="btn btn-sm btn-outline-info view-task-btn" data-tid="' + row.taskID + '" style="' + btnStyle + '"><i class="bi bi-eye"></i> 查看<br>View</button>';
+        } else {
+          html += '<button class="btn btn-sm btn-outline-primary edit-task-btn" data-tid="' + row.taskID + '" style="' + btnStyle + '"><i class="bi bi-pencil-square"></i> 编辑<br>Edit</button>';
+        }
+        if (!isPM && !isNPI && row.status !== '已完成' && row.status !== '已取消') {
           if (currentPermission === 'admin' || currentPermission === 'supervisor' ||
               row.owners.indexOf(currentSapID) !== -1 || row.collaborators.indexOf(currentSapID) !== -1) {
             html += '<select class="form-select form-select-sm status-quick" data-tid="' + row.taskID + '" style="font-size:10px;width:70px;padding:2px;">';
@@ -287,6 +293,17 @@ function bindEvents() {
     openTaskModal(tid);
   });
 
+  // View NPI task (read-only, delegated)
+  $(document).on('click', '.view-task-btn', function () {
+    var tid = $(this).data('tid');
+    openTaskModal(tid);
+  });
+
+  // Jump to NPI dashboard
+  $('#btnOpenNPIDashboard').on('click', function () {
+    window.open(buildUrl('NPI_Dashboard'));
+  });
+
   // Quick status change (delegated)
   $(document).on('change', '.status-quick', function () {
     var tid = $(this).data('tid');
@@ -403,6 +420,13 @@ function applyFiltersAndRender() {
 // ============================================================
 function openTaskModal(taskID) {
   if (taskID) {
+    // NPI 任务只读查看：直接从合并缓存取（loadTasks 不含 NPI 源）
+    if (String(taskID).indexOf('NPI-') === 0) {
+      var cached = allTasksCache.filter(function (t) { return t.taskID === taskID; })[0];
+      if (cached) fillTaskForm(cached);
+      else Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('任务未找到', 'Task not found') });
+      return;
+    }
     showLoading();
     google.script.run
       .withSuccessHandler(function (result) {
@@ -432,6 +456,7 @@ function openTaskModal(taskID) {
     $('#btnSaveTask').show();
     $('#btnCompleteTask').hide();
     $('#btnCancelTask').hide();
+    $('#btnOpenNPIDashboard').hide();
     $('#taskLogsContent').html('新任务，暂无日志 / New task, no logs yet');
     $('#taskDetailModal').modal('show');
   }
@@ -439,11 +464,12 @@ function openTaskModal(taskID) {
 
 function fillTaskForm(task) {
   var isPM = task.taskType === '保养' && (task.createdBy === 'PM Module' || task.createdBy === 'PM Plan');
+  var isNPI = String(task.taskID || '').indexOf('NPI-') === 0;
   var isAdmin = currentPermission === 'admin';
   var isSupervisor = currentPermission === 'supervisor';
   var isOwner = task.owners.indexOf(currentSapID) !== -1;
   var isCollab = task.collaborators.indexOf(currentSapID) !== -1;
-  var canEdit = !isPM && (isAdmin || isSupervisor || isOwner || (task.status !== '已完成' && task.status !== '已取消' && isCollab));
+  var canEdit = !isPM && !isNPI && (isAdmin || isSupervisor || isOwner || (task.status !== '已完成' && task.status !== '已取消' && isCollab));
   var isCompleted = task.status === '已完成' || task.status === '已取消';
 
   $('#taskDetailTitle').text(canEdit ? '编辑任务 / Edit Task' : '任务详情 / Task Detail');
@@ -456,7 +482,7 @@ function fillTaskForm(task) {
   }
   $('#taskType').val(task.taskType).prop('disabled', !canEdit);
   $('#taskPriority').val(task.priority).prop('disabled', !canEdit);
-  $('#taskStatus').val(task.status).prop('disabled', !canEdit && !isAdmin && !isSupervisor);
+  $('#taskStatus').val(task.status).prop('disabled', isNPI || (!canEdit && !isAdmin && !isSupervisor));
   $('#taskPlanStart').val(task.planStartDate).prop('readonly', !canEdit);
   $('#taskDueDate').val(task.dueDate).prop('readonly', !canEdit);
   $('#taskRemark').val(task.remark).prop('readonly', !canEdit);
@@ -469,7 +495,7 @@ function fillTaskForm(task) {
   } else {
     $('#taskOwner').val(null).trigger('change');
   }
-  $('#taskOwner').prop('disabled', !canEdit && !isAdmin && !isSupervisor);
+  $('#taskOwner').prop('disabled', isNPI || (!canEdit && !isAdmin && !isSupervisor));
   if (task.collaborators && task.collaborators.length > 0) {
     var collabIds = task.collaborators.map(function (sid) { return resolveSelect2Id(sid); }).filter(Boolean);
     if (collabIds.length > 0) $('#taskCollaborators').val(collabIds).trigger('change');
@@ -477,11 +503,12 @@ function fillTaskForm(task) {
   } else {
     $('#taskCollaborators').val(null).trigger('change');
   }
-  $('#taskCollaborators').prop('disabled', !canEdit && !isAdmin && !isSupervisor);
+  $('#taskCollaborators').prop('disabled', isNPI || (!canEdit && !isAdmin && !isSupervisor));
 
   $('#btnSaveTask').toggle(canEdit && !isCompleted);
-  $('#btnCompleteTask').toggle((isAdmin || isSupervisor || isOwner) && !isCompleted);
-  $('#btnCancelTask').toggle((isAdmin || isSupervisor) && !isCompleted);
+  $('#btnCompleteTask').toggle(!isNPI && (isAdmin || isSupervisor || isOwner) && !isCompleted);
+  $('#btnCancelTask').toggle(!isNPI && (isAdmin || isSupervisor) && !isCompleted);
+  $('#btnOpenNPIDashboard').toggle(isNPI);
 
   // Load task logs
   google.script.run

@@ -3,7 +3,8 @@
 //  新建/编辑测试任务弹窗共享组件（工艺参数页 + 测试计划页共用）
 //  依赖页面级全局：swalTitle/swalHtml（各页面各自定义）
 // ============================================================
-let editingTaskID = null;   // 编辑模式：当前编辑的任务ID
+let editingTaskID = null;       // 编辑模式：当前编辑的任务ID
+var importInitialStatus = '';   // 导入模式：初始状态（五态双语值，空=非导入模式）
 
 $(document).ready(function () {
   // Init Select2 for machine select in modal
@@ -40,6 +41,16 @@ $(document).ready(function () {
     multiple: true,
     closeOnSelect: false,
     tags: true,
+    selectOnClose: true, // 关闭下拉时提交输入文本，避免「看似已填实则丢弃」
+    dropdownParent: $('#newTaskModal')
+  });
+  // 协作人 Select2（多选，人员数据源与任务安排一致：getUseID）
+  $('#newCollaborators').select2({
+    placeholder: '选择协作人 / Select Collaborators',
+    allowClear: true,
+    width: '100%',
+    multiple: true,
+    closeOnSelect: false,
     dropdownParent: $('#newTaskModal')
   });
 
@@ -48,7 +59,7 @@ $(document).ready(function () {
     $('#newTaskModal').modal('show');
   });
   // 必填字段输入/变更时清除红框
-  $(document).on('input change', '#newProductName, #newMoldNo, #newMachineNo, #newMaterial, #newPlanDate', function () {
+  $(document).on('input change', '#newProductName, #newMoldNo, #newMachineNo, #newMaterial, #newPlanDate, #newDueDate', function () {
     $(this).removeClass('is-invalid');
     $(this).next('.select2').find('.select2-selection').removeClass('is-invalid');
   });
@@ -81,7 +92,26 @@ $(document).ready(function () {
   loadWorkcenterList();
   loadBOMBundleList();
   loadMaterialOptions();
+  loadCollaborators();
 });
+
+// 协作人选项：getUseID（与任务安排选人一致），值存储为 姓名|工号
+function loadCollaborators() {
+  google.script.run
+    .withSuccessHandler(function (users) {
+      if (!users) return;
+      var sel = $('#newCollaborators');
+      users.forEach(function (u) {
+        var code = String(u[0] || '').trim();
+        var name = String(u[1] || '').trim();
+        if (!code) return;
+        var v = name ? name + '|' + code : code;
+        sel.append('<option value="' + v + '">' + v + '</option>');
+      });
+      sel.trigger('change');
+    })
+    .getUseID();
+}
 
 function loadWorkcenterList(processType, callback) {
   var pt = processType || $('#newProcessType').val() || 'IM';
@@ -95,7 +125,8 @@ function loadWorkcenterList(processType, callback) {
       var data = r.success ? r.data : [];
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
       data.forEach(function (wc) {
-        sel.append('<option value="' + wc.id + '" data-model="' + (wc.model || '') + '">' + wc.text + '</option>');
+        // data-model = 中间层（存入任务 machineModel）；data-raw = Workcenter D列原始值
+        sel.append('<option value="' + wc.id + '" data-model="' + (wc.displayModel || wc.model || '') + '" data-raw="' + (wc.model || '') + '">' + wc.text + '</option>');
       });
       sel.val(null).trigger('change');
       if (!data.length) {
@@ -114,17 +145,21 @@ function loadWorkcenterList(processType, callback) {
 // 打开弹窗时自动清空全部字段
 function resetTaskModal() {
   editingTaskID = null;
+  importInitialStatus = '';
   $('#newTaskModal .modal-title').text('新建测试任务 / New Test Task');
   $('#btnCreateTask').html('创建 / Create');
+  $('#importStatusHint').addClass('d-none').html('');
   $('#newProductName').val(null).trigger('change');
   showSkuHint();
   $('#newMoldNo, #newRemark, #newMachineModel').val('').removeClass('is-invalid');
   $('#newMachineNo, #newMaterial').val(null).removeClass('is-invalid');
   $('#newMachineNo').next('.select2').find('.select2-selection').removeClass('is-invalid');
   $('#newMaterial').next('.select2').find('.select2-selection').removeClass('is-invalid');
+  $('#newCollaborators').val(null).trigger('change');
   $('#newProcessType').val('IM');
   $('#newSource').val('weekly');
   $('#newPlanDate').val(new Date().toISOString().split('T')[0]);
+  $('#newDueDate').val('');
   $('#machineHint').addClass('d-none');
   // 工序重置回IM，若机台选项为空（此前加载过TF/PK）则重新加载IM清单
   if ($('#newMachineNo option').length <= 1) loadWorkcenterList('IM');
@@ -284,9 +319,12 @@ function createTask() {
     moldNo: $('#newMoldNo').val().trim(), machineNo: $('#newMachineNo').val().trim(),
     material: ($('#newMaterial').val() || []).join('; ').trim(), machineModel: $('#newMachineModel').val().trim(),
     planDate: $('#newPlanDate').val(),
+    dueDate: $('#newDueDate').val().trim(),
     processType: $('#newProcessType').val() || 'IM',
     sku: getSelectedSku(),
-    remark: $('#newRemark').val().trim()
+    collaborators: ($('#newCollaborators').val() || []).join('; ').trim(),
+    remark: $('#newRemark').val().trim(),
+    initialStatus: importInitialStatus
   };
   // 必填验证（除备注外）：缺失字段红框高亮
   var missing = [];
@@ -295,8 +333,9 @@ function createTask() {
   if (!taskData.machineNo) missing.push('机台编号 / Machine No.');
   if (!taskData.material) missing.push('物料 / Material');
   if (!taskData.planDate) missing.push('计划日期 / Plan Date');
+  if (!taskData.dueDate) missing.push('预计完成日期 / Due Date');
   if (missing.length > 0) {
-    ['newProductName', 'newMoldNo', 'newMachineNo', 'newMaterial', 'newPlanDate'].forEach(function (id) {
+    ['newProductName', 'newMoldNo', 'newMachineNo', 'newMaterial', 'newPlanDate', 'newDueDate'].forEach(function (id) {
       var el = $('#' + id);
       if (!String(el.val() || '').trim()) {
         el.addClass('is-invalid');

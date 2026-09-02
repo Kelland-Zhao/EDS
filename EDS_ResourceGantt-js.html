@@ -180,12 +180,13 @@ function renderGantt() {
     // 收集有任务覆盖的天（列索引）
     const coveredDays = {};
     (person.tasks || []).forEach(function (task) {
+      // 完全在窗口之外（结束日早于窗口起点 / 开始日晚于窗口末尾）→ 不渲染，避免钳位拉满整页
+      if ((task.end && task.end < days[0]) || (task.start && task.start > days[days.length - 1])) return;
       const rawSIdx = days.indexOf(task.start);
       const rawEIdx = days.indexOf(task.end);
       // Clamp: start before range → 0; end after range → last day
       const sIdx = rawSIdx < 0 ? 0 : rawSIdx;
       const eIdx = rawEIdx < 0 ? days.length - 1 : rawEIdx;
-      // Skip only if task is entirely outside range (start after range or end before range)
       if (sIdx >= days.length || eIdx < 0) return;
       for (let d = sIdx; d <= eIdx; d++) coveredDays[d] = true;
     });
@@ -206,6 +207,8 @@ function renderGantt() {
     });
 
     (person.tasks || []).forEach(function (task, index) {
+      // 完全在窗口之外的任务不渲染（结束日早于窗口起点 / 开始日晚于窗口末尾）
+      if ((task.end && task.end < days[0]) || (task.start && task.start > days[days.length - 1])) return;
       const rawStart = days.indexOf(task.start);
       const rawEnd = days.indexOf(task.end);
       const startIdx = rawStart < 0 ? 0 : rawStart;

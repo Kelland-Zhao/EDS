@@ -6,6 +6,7 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          <div id="importStatusHint" class="alert alert-info py-1 px-2 mb-2 d-none" style="font-size:12px;"></div>
           <div class="row g-2">
             <div class="col-12">
               <label class="form-label-sm">产品名称<span class="text-danger">*</span><br><small>Product Name</small></label>
@@ -40,6 +41,10 @@
               <input type="text" class="form-control form-control-sm" id="newMachineModel">
             </div>
             <div class="col-6">
+              <label class="form-label-sm">协作人<br><small>Collaborators</small></label>
+              <select class="form-select form-select-sm" id="newCollaborators" style="width:100%;"></select>
+            </div>
+            <div class="col-6">
               <label class="form-label-sm">工序<br><small>Process Type</small></label>
               <select class="form-select form-select-sm" id="newProcessType">
                 <option value="IM">注塑<br><small>Injection Molding</small></option>
@@ -57,6 +62,10 @@
             <div class="col-6">
               <label class="form-label-sm">计划日期<span class="text-danger">*</span><br><small>Plan Date</small></label>
               <input type="date" class="form-control form-control-sm" id="newPlanDate">
+            </div>
+            <div class="col-6">
+              <label class="form-label-sm">预计完成日期<span class="text-danger">*</span><br><small>Due Date</small></label>
+              <input type="date" class="form-control form-control-sm" id="newDueDate">
             </div>
             <div class="col-12">
               <label class="form-label-sm">备注<br><small>Remark</small></label>

@@ -44,12 +44,17 @@ $(document).ready(function () {
       { data: null, orderable: false, width: '120px', render: function (d, type, row) {
         let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
         html += '<button class="btn btn-sm btn-outline-primary view-task-btn" data-tid="' + row.taskID + '" style="font-size:10px;padding:2px 6px;"><i class="bi bi-eye"></i></button>';
-        html += '<select class="form-select form-select-sm quick-status" data-tid="' + row.taskID + '" style="font-size:10px;width:80px;padding:2px;">';
-        html += '<option value="">改状态</option>';
-        if (row.status !== '进行中') html += '<option value="进行中">进行中</option>';
-        if (row.status !== '等待中') html += '<option value="等待中">等待中</option>';
-        if (row.status !== '已完成') html += '<option value="已完成">已完成</option>';
-        html += '</select></div>';
+        if (String(row.taskID).indexOf('NPI-') === 0) {
+          html += '<span class="badge bg-secondary" style="font-size:10px;padding:2px 6px;">NPI 只读</span>';
+        } else {
+          html += '<select class="form-select form-select-sm quick-status" data-tid="' + row.taskID + '" style="font-size:10px;width:80px;padding:2px;">';
+          html += '<option value="">改状态</option>';
+          if (row.status !== '进行中') html += '<option value="进行中">进行中</option>';
+          if (row.status !== '等待中') html += '<option value="等待中">等待中</option>';
+          if (row.status !== '已完成') html += '<option value="已完成">已完成</option>';
+          html += '</select>';
+        }
+        html += '</div>';
         return html;
       }}
     ],
@@ -72,11 +77,16 @@ $(document).ready(function () {
       { data: null, orderable: false, width: '120px', render: function (d, type, row) {
         let html = '<div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:center;">';
         html += '<button class="btn btn-sm btn-outline-primary view-task-btn" data-tid="' + row.taskID + '" style="font-size:10px;padding:2px 6px;"><i class="bi bi-eye"></i></button>';
-        html += '<select class="form-select form-select-sm quick-status" data-tid="' + row.taskID + '" style="font-size:10px;width:80px;padding:2px;">';
-        html += '<option value="">改状态</option>';
-        if (row.status !== '进行中') html += '<option value="进行中">进行中</option>';
-        if (row.status !== '等待中') html += '<option value="等待中">等待中</option>';
-        html += '</select></div>';
+        if (String(row.taskID).indexOf('NPI-') === 0) {
+          html += '<span class="badge bg-secondary" style="font-size:10px;padding:2px 6px;">NPI 只读</span>';
+        } else {
+          html += '<select class="form-select form-select-sm quick-status" data-tid="' + row.taskID + '" style="font-size:10px;width:80px;padding:2px;">';
+          html += '<option value="">改状态</option>';
+          if (row.status !== '进行中') html += '<option value="进行中">进行中</option>';
+          if (row.status !== '等待中') html += '<option value="等待中">等待中</option>';
+          html += '</select>';
+        }
+        html += '</div>';
         return html;
       }}
     ],

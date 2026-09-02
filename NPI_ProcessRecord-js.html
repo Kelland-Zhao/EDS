@@ -26,124 +26,81 @@ const swalLoading = (cn, en) => {
   };
 };
 
-// Template structure extracted from 注塑/注胶产品工艺卡通用模板
-// Each section maps to rows in column A of the template
-const TEMPLATE_SECTIONS = [
-  { id: 'productInfo', title: '产品信息<br><small>Product Info</small>', rows: [
-    {row:9, label:'产品名称<br><small>Product Name</small>'},
-    {row:10, label:'工艺卡编号<br><small>Process Card No.</small>', readonly:true},
-    {row:11, label:'适用SKU<br><small>Applicable SKU</small>'},
-    {row:12, label:'机型<br><small>Machine Model</small>'},
-    {row:13, label:'成型周期标准<br><small>Cycle Time Std</small>', type:'number'},
-    {row:14, label:'总周期标准<br><small>Total Cycle Std</small>', type:'number'},
-    {row:15, label:'模具编号<br><small>Mold No.</small>'},
-    {row:16, label:'模穴数<br><small>Cavity Count</small>', type:'number'}
-  ]},
-  { id: 'barrel', title: '炮筒模块<br><small>Barrel Module</small>', subSections: [
-    { id:'barrelA', title:'A炮筒<br><small>Barrel A</small>', rows:[
-      {row:35, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:26, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:29, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:32, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:36, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:37, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:38, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
-      {row:39, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
-      {row:40, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
-      {row:41, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'},
-      {row:42, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:43, label:'储料 V<br><small>Charge V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:44, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'ms-col-1'},
-      {row:45, label:'储料量<br><small>Charge Stroke (mm)</small>', type:'number'},
-      {row:46, label:'松退行程<br><small>Suck-Back Stroke (mm)</small>', type:'number'},
-      {row:47, label:'背压<br><small>Back Pressure (bar)</small>', type:'number'}
-    ]},
-    { id:'barrelB', title:'B炮筒<br><small>Barrel B</small>', rows:[
-      {row:50, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:41, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:44, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:47, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:51, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:52, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:53, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
-      {row:54, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
-      {row:55, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
-      {row:56, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'},
-      {row:57, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:58, label:'储料 V<br><small>Charge V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:59, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'ms-col-1'},
-      {row:60, label:'储料量<br><small>Charge Stroke (mm)</small>', type:'number'},
-      {row:61, label:'松退行程<br><small>Suck-Back Stroke (mm)</small>', type:'number'},
-      {row:62, label:'背压<br><small>Back Pressure (bar)</small>', type:'number'}
-    ]},
-    { id:'barrelC', title:'C炮筒<br><small>Barrel C</small>', rows:[
-      {row:65, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:56, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:59, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:62, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:66, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:67, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:68, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
-      {row:69, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
-      {row:70, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
-      {row:71, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'},
-      {row:72, label:'储料 P<br><small>Charge P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:73, label:'储料 V<br><small>Charge V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:74, label:'储料 S<br><small>Charge S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'ms-col-1'},
-      {row:75, label:'储料量<br><small>Charge Stroke (mm)</small>', type:'number'},
-      {row:76, label:'松退行程<br><small>Suck-Back Stroke (mm)</small>', type:'number'},
-      {row:77, label:'背压<br><small>Back Pressure (bar)</small>', type:'number'}
-    ]},
-    { id:'barrelD', title:'D炮筒<br><small>Barrel D</small>', rows:[
-      {row:80, label:'炮筒温度<br><small>Barrel Temp (°C)</small>', type:'number', segPrefix:'段', minSeg:1, maxSeg:10, subCols:['1段','2段','3段','4段','5段','6段']},
-      {row:71, label:'注射 P<br><small>Injection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:74, label:'注射 V<br><small>Injection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3','4']},
-      {row:77, label:'注射 S<br><small>Injection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:81, label:'保压 P<br><small>Holding P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:82, label:'保压 V<br><small>Holding V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['1','2','3']},
-      {row:83, label:'保压 T<br><small>Holding T (s)</small>', type:'number', segPrefix:'T', minSeg:1, maxSeg:4, subCols:['T1','T2'], offsetClass:'ms-col-1'},
-      {row:84, label:'转保压位置<br><small>Switch-Over Pos (mm)</small>', type:'number'},
-      {row:85, label:'转保压时间<br><small>Switch-Over Time (s)</small>', type:'number'},
-      {row:86, label:'冷却时间<br><small>Cooling Time (s)</small>', type:'number'}
-    ]}
-  ]},
-  { id: 'hotRunner', title: '热流道温度模块<br><small>Hot Runner Temp Module</small>', hotRunner:true, hotRunnerCount:12, hotRunnerMin:1},
-  { id: 'clamping', title: '开合模及顶出模块<br><small>Clamping & Ejection</small>', subSections: [
-    { id:'clampingClose', title:'合模<br><small>Clamping</small>', rows:[
-      {row:96, label:'合模模保时间<br><small>Mold Protect Time (s)</small>', type:'number'},
-      {row:97, label:'合模 P<br><small>Clamping P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','三段','低压','高压']},
-      {row:98, label:'合模 V<br><small>Clamping V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','三段','低压','高压']},
-      {row:99, label:'合模 S<br><small>Clamping S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3','S4'], offsetClass:'ms-col-1'}
-    ]},
-    { id:'clampingOpen', title:'开模<br><small>Mold Opening</small>', rows:[
-      {row:100, label:'开模行程<br><small>Opening Stroke (s)</small>', type:'number'},
-      {row:101, label:'开模 P<br><small>Opening P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['五段','四段','三段','二段','一段']},
-      {row:102, label:'开模 V<br><small>Opening V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['五段','四段','三段','二段','一段']},
-      {row:103, label:'开模 S<br><small>Opening S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:8, subCols:['S1','S2','S3','S4','S5'], offsetClass:'me-col-1'}
-    ]},
-    { id:'clampingEject', title:'顶出<br><small>Ejection</small>', rows:[
-      {row:104, label:'顶出模式<br><small>Ejection Mode</small>'},
-      {row:105, label:'顶出次数<br><small>Ejection Count</small>', type:'number'},
-      {row:106, label:'顶出 P<br><small>Ejection P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','结束']},
-      {row:107, label:'顶出 V<br><small>Ejection V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['一段','二段','结束']},
-      {row:108, label:'顶出 S<br><small>Ejection S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2','S3'], offsetClass:'ms-col-1'},
-      {row:109, label:'顶针回退 P<br><small>Ejector Retract P (bar)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['结束','一段']},
-      {row:110, label:'顶针回退 V<br><small>Ejector Retract V (%)</small>', type:'number', segPrefix:'', minSeg:1, maxSeg:8, subCols:['结束','一段']},
-      {row:111, label:'顶针回退 S<br><small>Ejector Retract S (mm)</small>', type:'number', segPrefix:'S', minSeg:1, maxSeg:6, subCols:['S1','S2'], offsetClass:'me-col-1'}
-    ]}
-  ]},
-  { id: 'auxEquip', title: '配套设备信息<br><small>Auxiliary Equipment</small>', auxEquip:true },
-  { id: 'remarks', title: '特殊要求及备注<br><small>Special Requirements</small>', rows: [
-    {row:122, label:'备注<br><small>Remarks</small>', isTextarea:true}
-  ]}
-];
+// ===== 表驱动模板（数据源：NPI_Templates + NPI_MachineMap，后端接口 loadNPITemplateData） =====
+let templateData = null;    // {cards: {卡名: [行...]}, machineMap: {byRaw, byDisplay}}
+let currentCompose = null;  // 当前任务卡组合 [{card, count, instance, idx, prefix}]
+let enabledSections = {};   // 区块开关状态 {sectionUid: bool}
+// 默认禁用区块（保持旧 UX：FC 炮筒 B/C/D 默认关）
+const DEFAULT_DISABLED_SECTIONS = { 'FCS/ENG': ['炮筒B', '炮筒C', '炮筒D'] };
+const HOT_RUNNER_DEFAULT_COUNT = 12;
+
+// 卡组合：中间层 → 展开卡实例列表；组合总卡数>1 时所有字段带序号前缀（存储 key）
+function composeCardList(byDisplay, display) {
+  var specs = (byDisplay && byDisplay[display]) || [];
+  if (!specs.length) return null;
+  var sorted = specs.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  var total = 0;
+  sorted.forEach(function (s) { total += Math.max(1, parseInt(s.count || 1, 10)); });
+  var multi = total > 1;
+  var out = [], idx = 0;
+  sorted.forEach(function (s) {
+    var n = Math.max(1, parseInt(s.count || 1, 10));
+    for (var i = 0; i < n; i++) {
+      idx++;
+      out.push({ card: s.card, count: n, instance: i + 1, idx: idx, prefix: multi ? idx + '_' : '' });
+    }
+  });
+  return out;
+}
+
+// 字段存储 key：{实例前缀}{行key}[_{分段}]
+function fieldKeyFor(inst, rowKey, seg) {
+  return (inst.prefix || '') + rowKey + (seg ? '_' + seg : '');
+}
+
+// 位置表：卡行序 + 分段展开 → key→pos（旧 196 数组兼容）
+function buildPositionMap(cardRows) {
+  var map = {}, pos = 0;
+  cardRows.forEach(function (r) {
+    if (r.segs && r.segs.length) {
+      r.segs.forEach(function (seg) { map[r.key + '_' + seg] = pos++; });
+    } else {
+      map[r.key] = pos++;
+    }
+  });
+  return map;
+}
+
+// 旧记录数组 → 键值对象：稳定区段按位置表转换（排除配套设备/备注——设备按启用顺序动态定位、备注受设备数量影响）；
+// 尾部最后一位=备注，其余=遗留设备值（aux_legacy_N）
+function convertOldFieldsToObject(fields, cardRows) {
+  if (!Array.isArray(fields)) return fields;
+  var remarksRow = null;
+  (cardRows || []).forEach(function (r) { if (r.sec === '备注' && !remarksRow) remarksRow = r; });
+  var remarksKey = remarksRow ? remarksRow.key : 'remarks';
+  var stableRows = (cardRows || []).filter(function (r) { return r.sec !== '配套设备' && r.sec !== '备注'; });
+  var map = buildPositionMap(stableRows);
+  var lastPos = -1;
+  Object.keys(map).forEach(function (k) { if (map[k] > lastPos) lastPos = map[k]; });
+  var out = {};
+  Object.keys(map).forEach(function (k) {
+    var v = fields[map[k]];
+    if (v !== undefined && v !== '') out[k] = v;
+  });
+  var tail = fields.slice(lastPos + 1);
+  if (tail.length) {
+    var remarkVal = tail[tail.length - 1];
+    if (remarkVal !== undefined && remarkVal !== '') out[remarksKey] = remarkVal;
+    for (var i = 0; i < tail.length - 1; i++) {
+      if (tail[i] !== undefined && tail[i] !== '') out['aux_legacy_' + (i + 1)] = tail[i];
+    }
+  }
+  return out;
+}
 
 let currentTask = null;
 let currentRecord = null;
 let allTasks = [];
-let fieldKeyMap = {}; // Maps section-row-column → index in 196-array
-let barrelEnabled = { barrelA: false, barrelB: false, barrelC: false, barrelD: false };
-let hotRunnerEnabled = false;
 let viewingHistory = false; // 正在查看历史版本
 let latestRecord = null;   // 最新版本记录（返回最新用）
 
@@ -156,9 +113,7 @@ $(document).ready(function () {
   // Loading toast per UI规范 §4.11.2
   Swal.fire(swalLoading('加载数据中...', { title: 'Loading Data...', html: '正在获取任务列表，请稍候。' }));
 
-  buildFieldIndex();
-  renderAccordion();
-  loadTaskList(applyUrlParams_);
+  loadTemplateData(function () { loadTaskList(applyUrlParams_); });
 
   $('#taskSelect').on('change', function () { var tid = $(this).val(); if (tid) selectTask(tid); else clearForm(); });
   $('#btnSaveDraft').on('click', saveRecord);
@@ -171,47 +126,16 @@ $(document).ready(function () {
   $('#btnBackToLatest').on('click', backToLatest);
 });
 
-// Build a flat index: key = "section_row_subcol" → position in 196-element array
-function buildFieldIndex() {
-  var pos = 0;
-  TEMPLATE_SECTIONS.forEach(function (sec) {
-    if (sec.subSections) {
-      sec.subSections.forEach(function (sub) {
-        (sub.rows || []).forEach(function (r) {
-          if (r.subCols) {
-            r.subCols.forEach(function (sc) {
-              fieldKeyMap[sec.id + '_' + sub.id + '_' + r.row + '_' + sc] = pos++;
-            });
-          } else if (r.subRows) {
-            r.subRows.forEach(function (sr) {
-              fieldKeyMap[sec.id + '_' + sub.id + '_' + r.row + '_' + sr.row] = pos++;
-            });
-          } else {
-            fieldKeyMap[sec.id + '_' + sub.id + '_' + r.row] = pos++;
-          }
-        });
-      });
-    } else if (sec.rows) {
-      sec.rows.forEach(function (r) {
-        if (r.subCols) {
-          r.subCols.forEach(function (sc) {
-            fieldKeyMap[sec.id + '_' + r.row + '_' + sc] = pos++;
-          });
-        } else if (r.subRows) {
-          r.subRows.forEach(function (sr) {
-            fieldKeyMap[sec.id + '_' + r.row + '_' + sr.row] = pos++;
-          });
-        } else {
-          fieldKeyMap[sec.id + '_' + r.row] = pos++;
-        }
-      });
-    }
-  });
-  // Add remaining free-text slots up to 196
-  while (pos < 196) {
-    fieldKeyMap['_free_' + (pos)] = pos;
-    pos++;
-  }
+// 拉取表驱动模板数据（页面级缓存一次）
+function loadTemplateData(callback) {
+  google.script.run
+    .withSuccessHandler(function (raw) {
+      var r = parseResponse(raw);
+      templateData = r.success ? r.data : null;
+      if (callback) callback();
+    })
+    .withFailureHandler(function () { templateData = null; if (callback) callback(); })
+    .loadNPITemplateData();
 }
 
 var HOT_RUNNER_POSITIONS = [
@@ -225,119 +149,21 @@ var HOT_RUNNER_POSITIONS = [
   {v:'其他',t:'其他 / Other',c:'hr-pos-other'}
 ];
 
-var EQUIPMENT_TYPES = [
-  { id:'moldTemp', cn:'模温机', en:'Mold Temp Controller', fields:[
-    {key:'setTemp', cn:'设定温度', en:'Set Temp (°C)', type:'number'},
-    {key:'actualTemp', cn:'实际温度', en:'Actual Temp (°C)', type:'number'}
-  ]},
-  { id:'chiller', cn:'冷水机', en:'Chiller', fields:[
-    {key:'setTemp', cn:'设定温度', en:'Set Temp (°C)', type:'number'},
-    {key:'actualTemp', cn:'实际温度', en:'Actual Temp (°C)', type:'number'}
-  ]},
-  { id:'crusher', cn:'粉碎机', en:'Crusher', fields:[
-    {key:'speed', cn:'速度', en:'Speed', type:'number'}
-  ]},
-  { id:'dryer', cn:'烘干机', en:'Dryer', fields:[
-    {key:'setTemp', cn:'设定温度', en:'Set Temp (°C)', type:'number'},
-    {key:'actualTemp', cn:'实际温度', en:'Actual Temp (°C)', type:'number'},
-    {key:'time', cn:'干燥时间', en:'Drying Time (h)', type:'number'}
-  ]},
-  { id:'robot3', cn:'三轴机械手', en:'3-Axis Robot', fields:[
-    {key:'program', cn:'程序名称', en:'Program Name'},
-    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'},
-    {key:'speed', cn:'速度', en:'Speed (%)', type:'number'}
-  ]},
-  { id:'robot6', cn:'六轴机械手', en:'6-Axis Robot', fields:[
-    {key:'program', cn:'程序名称', en:'Program Name'},
-    {key:'cycleTime', cn:'循环时间', en:'Cycle Time (s)', type:'number'},
-    {key:'speed', cn:'速度', en:'Speed (%)', type:'number'}
-  ]},
-  { id:'conveyor', cn:'传送带', en:'Conveyor', fields:[
-    {key:'speed', cn:'速度', en:'Speed', type:'number'}
-  ]}
-];
-var activeEquipment = []; // [{typeId, enabled, fields: {key: val}}]
 
-function renderAuxEquip() {
-  var html = '<div id="auxEquipContainer">';
-  // Add device dropdown + button
-  html += '<div class="d-flex align-items-center gap-2 mb-2"><select id="auxEquipSelect" class="form-select form-select-sm" style="width:auto;">';
-  html += '<option value="">-- 选择设备 / Select Device --</option>';
-  EQUIPMENT_TYPES.forEach(function (eq) {
-    html += '<option value="' + eq.id + '">' + eq.cn + ' / ' + eq.en + '</option>';
+function currentHotRunnerKeys() {
+  // 返回当前热流道点位数（按 temp 输入计数，兼容实例前缀 key）
+  var n = 0;
+  $('#hotRunnerContainer').find('input.npi-field').each(function () {
+    var k = String($(this).data('key') || '');
+    if (/_temp_\d+$/.test(k)) n++;
   });
-  html += '</select><button class="btn btn-sm btn-outline-secondary" onclick="addEquipment()"><i class="bi bi-plus"></i> 添加 / Add</button></div>';
-  // Active equipment cards
-  html += '<div id="auxEquipList"></div>';
-  html += '</div>';
-  return html;
+  return n;
 }
 
-function addEquipment() {
-  var sel = $('#auxEquipSelect').val();
-  if (!sel) return;
-  var eq = EQUIPMENT_TYPES.find(function (e) { return e.id === sel; });
-  if (!eq) return;
-  // Check if already added
-  if (activeEquipment.some(function (a) { return a.typeId === sel; })) {
-    Swal.fire({ icon:'warning', title:swalTitle('已添加','Already Added'), html:swalHtml(eq.cn + ' 已存在。', eq.en + ' already exists.'), timer:1500, showConfirmButton:false });
-    return;
-  }
-  var fields = {};
-  eq.fields.forEach(function (f) { fields[f.key] = ''; });
-  activeEquipment.push({ typeId: sel, enabled: true, fields: fields });
-  renderEquipCards();
-}
-
-function removeEquipment(idx) {
-  activeEquipment.splice(idx, 1);
-  renderEquipCards();
-  rebuildFieldIndex();
-}
-
-function toggleEquipment(idx) {
-  activeEquipment[idx].enabled = !activeEquipment[idx].enabled;
-  var card = $('#equipCard_' + idx);
-  if (activeEquipment[idx].enabled) {
-    card.removeClass('barrel-disabled');
-  } else {
-    card.addClass('barrel-disabled');
-    card.find('.npi-field').val('');
-  }
-}
-
-function renderEquipCards() {
-  var html = '';
-  activeEquipment.forEach(function (ae, idx) {
-    var eq = EQUIPMENT_TYPES.find(function (e) { return e.id === ae.typeId; });
-    if (!eq) return;
-    var disabledClass = ae.enabled ? '' : ' barrel-disabled';
-    html += '<div class="equip-card mb-2' + disabledClass + '" id="equipCard_' + idx + '">';
-    html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-    html += '<label class="barrel-toggle mb-0"><input type="checkbox" ' + (ae.enabled ? 'checked' : '') + ' onchange="toggleEquipment(' + idx + ')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + eq.cn + ' <small style="color:#888;">' + eq.en + '</small></strong></label>';
-    html += '<button class="btn btn-sm btn-outline-danger" onclick="removeEquipment(' + idx + ')" title="移除 / Remove" style="font-size:10px;padding:1px 6px;">× 移除<br><small>Remove</small></button>';
-    html += '</div>';
-    html += '<div class="row g-1">';
-    eq.fields.forEach(function (f) {
-      html += '<div class="col-6 col-md-4 col-lg-3"><label class="form-label-sm">' + f.cn + '<br><small>' + f.en + '</small></label>';
-      html += '<input type="' + (f.type || 'text') + '" class="form-control form-control-sm npi-field" data-key="auxEquip_' + idx + '_' + f.key + '"' + (f.type === 'number' ? ' step="any" min="0"' : '') + '>';
-      html += '</div>';
-    });
-    html += '</div></div>';
-  });
-  $('#auxEquipList').html(html);
-  rebuildFieldIndex();
-}
-
-function hotRunnerCount() {
-  return $('#hotRunnerContainer').find('[data-key^="hotRunner_temp_"]').length;
-}
-
-function renderHotRunner(sec) {
-  var n = sec.hotRunnerCount || 12;
+function renderHotRunner(n, inst) {
+  n = n || HOT_RUNNER_DEFAULT_COUNT;
   var maxColsPerRow = 12;
   var groups = Math.ceil(n / maxColsPerRow);
-
   var html = '<div id="hotRunnerContainer">';
   // Batch controls above all groups
   html += '<div class="d-flex align-items-center gap-2 flex-wrap mb-2">';
@@ -346,14 +172,11 @@ function renderHotRunner(sec) {
   html += '<button class="btn btn-sm btn-outline-secondary" onclick="addHotRunnerCol()"><i class="bi bi-plus"></i> 增加<br><small>Add</small></button>';
   html += '<button class="btn btn-sm btn-outline-secondary" onclick="removeHotRunnerCol()"><i class="bi bi-dash"></i> 减少<br><small>Remove</small></button>';
   html += '</div>';
-
   for (var g = 0; g < groups; g++) {
     var start = g * maxColsPerRow + 1;
     var end = Math.min(start + maxColsPerRow - 1, n);
-
     html += '<div class="hot-runner-group" style="overflow-x:auto;margin-bottom:12px;">';
     html += '<table class="table table-sm table-bordered" style="font-size:12px;margin-bottom:0;">';
-    // Header row: column numbers start..end
     html += '<thead><tr style="background:#f8f9fa;"><th style="width:80px;">序号<br><small>Seq</small></th>';
     for (var i = start; i <= end; i++) {
       html += '<th style="text-align:center;min-width:90px;">' + i + '</th>';
@@ -361,18 +184,18 @@ function renderHotRunner(sec) {
     html += '</tr></thead><tbody>';
     // Position row
     html += '<tr><td style="font-weight:600;background:#f8f9fa;">位置<br><small>Position</small></td>';
-    for (var i = start; i <= end; i++) {
-      html += '<td><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field hr-pos-select" data-key="hotRunner_pos_' + i + '" onchange="updateHRPosColor(this)"><option value="">-- / Select --</option>';
-      HOT_RUNNER_POSITIONS.forEach(function (p) {
-        html += '<option value="' + p.v + '">' + p.t + '</option>';
+    for (var i2 = start; i2 <= end; i2++) {
+      html += '<td><div class="input-group input-group-sm"><select class="form-select form-select-sm npi-field hr-pos-select" data-key="' + fieldKeyFor(inst, 'hotRunner_pos', i2) + '" onchange="updateHRPosColor(this)"><option value="">-- / Select --</option>';
+      HOT_RUNNER_POSITIONS.forEach(function (pp) {
+        html += '<option value="' + pp.v + '">' + pp.t + '</option>';
       });
-      html += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosRight(' + i + ',' + n + ')" title="复制到右侧所有列 / Copy to all columns to the right" type="button" style="font-size:10px;"><i class="bi bi-arrow-right"></i></button></div></td>';
+      html += '</select><button class="btn btn-outline-secondary btn-sm" onclick="copyHotRunnerPosRight(' + i2 + ',' + n + ')" title="复制到右侧所有列 / Copy to all columns to the right" type="button" style="font-size:10px;"><i class="bi bi-arrow-right"></i></button></div></td>';
     }
     html += '</tr>';
     // Temperature row
     html += '<tr><td style="font-weight:600;background:#f8f9fa;">温度<br><small>Temp (°C)</small></td>';
-    for (var i = start; i <= end; i++) {
-      html += '<td><input type="number" class="form-control form-control-sm npi-field" data-key="hotRunner_temp_' + i + '" step="any" placeholder="°C" style="width:70px;margin:0 auto;display:block;"></td>';
+    for (var i3 = start; i3 <= end; i3++) {
+      html += '<td><input type="number" class="form-control form-control-sm npi-field" data-key="' + fieldKeyFor(inst, 'hotRunner_temp', i3) + '" step="any" placeholder="°C" style="width:70px;margin:0 auto;display:block;"></td>';
     }
     html += '</tr></tbody></table>';
     html += '</div>';
@@ -388,145 +211,442 @@ function reRenderHotRunner(newN) {
     var key = $(this).data('key');
     if (key) saved[key] = $(this).val();
   });
-  // Re-render with new count
-  var sec = { hotRunner: true, hotRunnerCount: newN, hotRunnerMin: 1 };
-  $('#hotRunnerContainer').replaceWith(renderHotRunner(sec));
+  var inst = currentHotRunnerInst || { prefix: '', card: '', instance: 1, idx: 1 };
+  $('#hotRunnerContainer').replaceWith(renderHotRunner(newN, inst));
   // Restore values that still exist
   for (var key in saved) {
     $('[data-key="' + key + '"]').val(saved[key]);
   }
-  // Restore position colors
   $('.hr-pos-select').each(function () { updateHRPosColor(this); });
-  // Sync template definition
-  var hrSec = TEMPLATE_SECTIONS.find(function (s) { return s.id === 'hotRunner'; });
-  if (hrSec) hrSec.hotRunnerCount = newN;
-  rebuildFieldIndex();
 }
 
 function addHotRunnerCol() {
-  var n = hotRunnerCount();
+  var n = currentHotRunnerKeys() || HOT_RUNNER_DEFAULT_COUNT;
   var batch = parseInt($('#hotRunnerBatchCount').val()) || 1;
   if (batch <= 0) return;
   reRenderHotRunner(n + batch);
 }
 
-function updateHRPosColor(sel) {
-  var val = sel.value;
-  var colors = { '流道板':'hr-pos-manifold', '主灌嘴':'hr-pos-nozzle', '底板':'hr-pos-bottom', '手按位':'hr-pos-manual', '头胶':'hr-pos-front', '尾胶':'hr-pos-rear', '舌苔':'hr-pos-tongue', '其他':'hr-pos-other' };
-  sel.className = sel.className.replace(/hr-pos-\w+/g, '').replace(/\s+/g,' ').trim();
-  if (colors[val]) { sel.classList.add(colors[val]); }
-}
-
-function copyHotRunnerPosRight(fromIdx, totalN) {
-  var sel = $('[data-key="hotRunner_pos_' + fromIdx + '"]');
-  var val = sel.val();
-  if (!val) return;
-  for (var j = fromIdx + 1; j <= totalN; j++) {
-    $('[data-key="hotRunner_pos_' + j + '"]').val(val).each(function () { updateHRPosColor(this); });
-  }
-}
-
 function removeHotRunnerCol() {
-  var n = hotRunnerCount();
+  var n = currentHotRunnerKeys() || HOT_RUNNER_DEFAULT_COUNT;
   var batch = parseInt($('#hotRunnerBatchCount').val()) || 1;
   if (n - batch < 1) batch = n - 1;
   if (batch <= 0) return;
   reRenderHotRunner(n - batch);
 }
 
-function renderAccordion() {
+// ===== 表驱动渲染 =====
+var currentHotRunnerInst = null; // 热流道所属卡实例（增减点位时用）
+
+function renderTemplateForTask(task) {
+  var display = String(task.machineModel || '').trim();
+  var byDisplay = (templateData && templateData.machineMap) ? templateData.machineMap.byDisplay : {};
+  currentCompose = composeCardList(byDisplay, display);
+  if (!currentCompose) {
+    currentCompose = [{ card: 'FCS/ENG', count: 1, instance: 1, idx: 1, prefix: '' }];
+    if (display) {
+      Swal.fire({ icon: 'warning', title: swalTitle('未配置模板', 'No Template'), html: swalHtml('机型「' + display + '」暂无对应模板，已按 FCS/ENG 渲染。', 'No template for model "' + display + '", rendered with FCS/ENG.'), timer: 3000, showConfirmButton: false });
+    }
+  }
+  renderTemplate();
+}
+
+function renderTemplate() {
   var html = '';
-  TEMPLATE_SECTIONS.forEach(function (sec, idx) {
-    var isFirst = idx === 0;
+  enabledSections = {};
+  currentHotRunnerInst = null;
+  // 任务级产品信息：所有卡一致，只渲染一次，key 不带实例前缀
+  var piInst = { card: 'shared', count: 1, instance: 1, idx: 0, prefix: '' };
+  var piRows = getSharedProductInfoRows();
+  if (piRows.length) {
+    var collapseId = 'collapse_shared_productInfo';
     html += '<div class="accordion-item">';
     html += '<h2 class="accordion-header">';
-    html += '<button class="accordion-button' + (isFirst ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_' + sec.id + '">' + sec.title + '</button>';
+    html += '<button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">产品信息<br><small>Product Info</small></button>';
     html += '</h2>';
-    html += '<div id="collapse_' + sec.id + '" class="accordion-collapse collapse' + (isFirst ? ' show' : '') + '" data-bs-parent="#paramAccordion">';
-    html += '<div class="accordion-body">';
-    html += renderSectionBody(sec);
-    html += '</div></div></div>';
+    html += '<div id="' + collapseId + '" class="accordion-collapse collapse show" data-bs-parent="#paramAccordion">';
+    html += '<div class="accordion-body"><div class="row g-2">';
+    piRows.forEach(function (r) { html += renderTemplateRow(piInst, r); });
+    html += '</div></div></div></div>';
+  }
+  currentCompose.forEach(function (inst, i) {
+    var rows = (templateData && templateData.cards && templateData.cards[inst.card]) || [];
+    if (!rows.length) {
+      html += '<div class="text-muted p-2">卡「' + inst.card + '」无模板行 / No template rows</div>';
+      return;
+    }
+    var multi = currentCompose.length > 1;
+    if (multi) {
+      // 卡级开关 + 折叠
+      var uid = 'card_' + inst.idx;
+      var defOn = inst.instance === 1;
+      enabledSections[uid] = defOn;
+      html += '<div class="mb-3" id="section_' + uid + (defOn ? '' : ' barrel-disabled') + '">';
+      html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + uid + '" ' + (defOn ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span> <strong style="font-size:13px;">' + inst.card + (inst.count > 1 ? ' #' + inst.instance : '') + '</strong></label>';
+      html += '<div class="row g-2 mt-1">';
+      html += renderCardSections(inst, rows);
+      html += '</div></div>';
+    } else {
+      html += renderCardSections(inst, rows);
+    }
   });
+  html += '<div id="auxLegacyBox"></div>';
   $('#paramAccordion').html(html);
 }
 
-function renderSectionBody(sec) {
+// ===== 配套设备（旧交互：下拉选设备 + 添加 + 卡片开关；类型/字段来自模板行 key） =====
+var equipmentTypes = {};  // uid → [{id, cn, en, fields: [row...]}]
+var equipmentInst = {};   // uid → 卡实例
+var activeEquipment = []; // [{uid, typeId, enabled}]
+
+function renderEquipmentBlock(inst, rows) {
+  var uid = 'equip_' + inst.idx;
+  equipmentInst[uid] = inst;
+  // 从行 key 解析设备类型：auxEquip_{type}_{field}
+  var types = [];
+  rows.forEach(function (r) {
+    var m = String(r.key || '').match(/auxEquip_([^_]+)_/);
+    if (!m) return;
+    var t = null;
+    types.forEach(function (x) { if (x.id === m[1]) t = x; });
+    if (!t) {
+      var cn = String(r.cn || '').split(' ')[0];
+      var en = String(r.en || '').replace(/\s+\S+$/, '');
+      t = { id: m[1], cn: cn, en: en, fields: [] };
+      types.push(t);
+    }
+    t.fields.push(r);
+  });
+  equipmentTypes[uid] = types;
+  var html = '<div class="col-12 mb-2" id="' + uid + '"><strong style="font-size:12px;">配套设备信息<br><small>Auxiliary Equipment</small></strong>';
+  html += '<div class="d-flex align-items-center gap-2 mb-2"><select id="' + uid + '_select" class="form-select form-select-sm" style="width:auto;"><option value="">-- 选择设备 / Select Device --</option>';
+  types.forEach(function (t) {
+    html += '<option value="' + t.id + '">' + t.cn + (t.en ? ' / ' + t.en : '') + '</option>';
+  });
+  html += '</select><button class="btn btn-sm btn-outline-secondary" onclick="addEquipment(\'' + uid + '\')"><i class="bi bi-plus"></i> 添加 / Add</button></div>';
+  html += '<div id="' + uid + '_list"></div></div>';
+  return html;
+}
+
+function addEquipment(uid) {
+  var sel = $('#' + uid + '_select').val();
+  if (!sel) return;
+  if (activeEquipment.some(function (a) { return a.uid === uid && a.typeId === sel; })) {
+    Swal.fire({ icon: 'warning', title: swalTitle('已添加', 'Already Added'), html: swalHtml('该设备已存在。', 'Device already exists.'), timer: 1500, showConfirmButton: false });
+    return;
+  }
+  activeEquipment.push({ uid: uid, typeId: sel, enabled: true });
+  renderEquipCards(uid);
+}
+
+function removeEquipment(uid, idx) {
+  activeEquipment = activeEquipment.filter(function (a, i2) { return !(a.uid === uid && i2 === idx); });
+  renderEquipCards(uid);
+}
+
+function toggleEquipment(uid, idx) {
+  var ae = activeEquipment[idx];
+  if (!ae) return;
+  if (ae.enabled) {
+    // 已有数据的设备禁止关闭
+    var card = $('#equipCard_' + uid + '_' + idx);
+    var hasData = false;
+    card.find('.npi-field').each(function () {
+      if (String($(this).val() || '').trim()) hasData = true;
+    });
+    if (hasData) {
+      card.find('input[type="checkbox"]').prop('checked', true);
+      Swal.fire({ icon: 'warning', title: swalTitle('无法关闭', 'Cannot Disable'), html: swalHtml('该设备已有数据，如需关闭请先清空其内容。', 'This device has data. Clear its values before disabling.'), timer: 2500, showConfirmButton: false });
+      return;
+    }
+  }
+  ae.enabled = !ae.enabled;
+  var card = $('#equipCard_' + uid + '_' + idx);
+  if (ae.enabled) {
+    card.removeClass('barrel-disabled');
+  } else {
+    card.addClass('barrel-disabled');
+    card.find('.npi-field').val('');
+  }
+}
+
+function renderEquipCards(uid) {
+  var inst = equipmentInst[uid];
+  if (!inst) return;
   var html = '';
-  if (sec.subSections) {
-    var barrelClasses = { barrelA:'barrel-a', barrelB:'barrel-b', barrelC:'barrel-c', barrelD:'barrel-d' };
-    sec.subSections.forEach(function (sub) {
-      var bc = barrelClasses[sub.id] || '';
-      var isBarrel = !!bc;
-      html += '<div class="mb-3 ' + bc + (isBarrel ? ' barrel-disabled' : '') + '" id="section_' + sub.id + '">';
-      if (isBarrel) {
-        var subCollapseId = 'collapse_' + sec.id + '_' + sub.id;
-        html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + sub.id + '" onchange="toggleBarrel(\'' + sub.id + '\')"><span class="toggle-switch"></span></label>';
-        html += '<button class="accordion-button barrel-sub-header collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#' + subCollapseId + '" aria-expanded="false">' + sub.title + '</button>';
-        html += '<div id="' + subCollapseId + '" class="accordion-collapse collapse">';
-        html += '<div class="row g-2 mt-1">';
-        (sub.rows || []).forEach(function (r) {
-          html += renderFieldRow(sec.id + '_' + sub.id, r);
-        });
-        html += '</div></div>';
-      } else {
-        html += '<strong style="font-size:12px;">' + sub.title + '</strong>';
-        html += '<div class="row g-2 mt-1">';
-        (sub.rows || []).forEach(function (r) {
-          html += renderFieldRow(sec.id + '_' + sub.id, r);
-        });
-        html += '</div>';
-      }
+  activeEquipment.forEach(function (ae, idx) {
+    if (ae.uid !== uid) return;
+    var t = null;
+    (equipmentTypes[uid] || []).forEach(function (x) { if (x.id === ae.typeId) t = x; });
+    if (!t) return;
+    var disabledClass = ae.enabled ? '' : ' barrel-disabled';
+    html += '<div class="equip-card mb-2' + disabledClass + '" id="equipCard_' + uid + '_' + idx + '">';
+    html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+    html += '<label class="barrel-toggle mb-0"><input type="checkbox" ' + (ae.enabled ? 'checked' : '') + ' onchange="toggleEquipment(\'' + uid + '\', ' + idx + ')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + t.cn + ' <small style="color:#888;">' + t.en + '</small></strong></label>';
+    html += '<div class="d-flex gap-1 align-items-center"><button class="btn btn-sm btn-outline-secondary" onclick="clearContainerPrompt(\'equipCard_' + uid + '_' + idx + '\', \'' + t.cn + '\')" title="清空 / Clear" style="font-size:10px;padding:1px 6px;">🗑 清空<br><small>Clear</small></button>';
+    html += '<button class="btn btn-sm btn-outline-danger" onclick="removeEquipment(\'' + uid + '\', ' + idx + ')" title="移除 / Remove" style="font-size:10px;padding:1px 6px;">× 移除<br><small>Remove</small></button></div>';
+    html += '</div>';
+    html += '<div class="row g-1">';
+    t.fields.forEach(function (f) {
+      var key = fieldKeyFor(inst, f.key, '');
+      var fcn = String(f.cn || '').split(' ').slice(1).join(' ') || f.cn;
+      var fen = String(f.en || '').replace(/^\S+\s/, '');
+      var isNum = f.type === 'number';
+      html += '<div class="col-6 col-md-4 col-lg-3"><label class="form-label-sm">' + fcn + (fen ? '<br><small>' + fen + '</small>' : '') + '</label>';
+      html += '<input type="' + (isNum ? 'number' : 'text') + '" class="form-control form-control-sm npi-field" data-key="' + key + '" data-unit="' + (f.unit || '') + '"' + (isNum ? ' step="any" min="0"' : '') + '>';
       html += '</div>';
     });
-  } else if (sec.auxEquip) {
-    html += renderAuxEquip();
-  } else if (sec.hotRunner) {
-    html += '<div class="mb-3" id="section_hotRunner"><label class="barrel-toggle"><input type="checkbox" id="toggle_hotRunner" onchange="toggleHotRunner()"><span class="toggle-switch"></span> <strong style="font-size:12px;">启用热流道 / Enable Hot Runner</strong></label><div class="hot-runner-content barrel-disabled">';
-    html += renderHotRunner(sec);
     html += '</div></div>';
-  } else if (sec.rows) {
-    html += '<div class="row g-2">';
-    sec.rows.forEach(function (r) {
-      html += renderFieldRow(sec.id, r);
+  });
+  $('#' + uid + '_list').html(html);
+}
+
+// 回填：记录中含设备值（含实例前缀 key）时自动添加对应设备卡片
+function ensureEquipmentForKey(key) {
+  var m = String(key).match(/auxEquip_([^_]+)_/);
+  if (!m) return;
+  var typeId = m[1];
+  (currentCompose || []).forEach(function (inst) {
+    var rows = (templateData && templateData.cards && templateData.cards[inst.card]) || [];
+    var has = rows.some(function (r) { return String(r.key || '').indexOf('auxEquip_' + typeId + '_') >= 0; });
+    if (!has) return;
+    var uid = 'equip_' + inst.idx;
+    if (!$('#' + uid).length) return;
+    if (activeEquipment.some(function (a) { return a.uid === uid && a.typeId === typeId; })) return;
+    activeEquipment.push({ uid: uid, typeId: typeId, enabled: true });
+    renderEquipCards(uid);
+  });
+}
+
+// 任务级产品信息行：取组合首卡的产品信息行；无则回退 FCS/ENG 卡
+function getSharedProductInfoRows() {
+  var out = [];
+  var sources = (currentCompose || []).map(function (c) { return c.card; }).concat(['FCS/ENG']);
+  var seen = {};
+  sources.forEach(function (card) {
+    (templateData && templateData.cards && templateData.cards[card] || []).forEach(function (r) {
+      if (r.sec === '产品信息' && !seen[r.key]) { seen[r.key] = true; out.push(r); }
     });
+  });
+  return out;
+}
+
+// 单卡模式：区块 = accordion 项（首个展开）；多卡模式：区块 = 子标题块
+function renderCardSections(inst, rows) {
+  var multi = currentCompose.length > 1;
+  var secOrder = [];
+  rows.forEach(function (r) { if (r.sec !== '产品信息' && secOrder.indexOf(r.sec) < 0) secOrder.push(r.sec); });
+  var html = '';
+  var isFirst = true;
+  secOrder.forEach(function (sec) {
+    var secRows = rows.filter(function (r) { return r.sec === sec && r.sec !== '产品信息'; });
+    var secEn = secRows[0].secEn || '';
+    var isHR = secRows.some(function (r) { return String(r.key || '').indexOf('hotRunner_') === 0; });
+    var isBarrel = /^炮筒[ABCD]$/.test(sec);
+    var defaultDisabled = isHR || ((DEFAULT_DISABLED_SECTIONS[inst.card] || []).indexOf(sec) >= 0);
+    if (sec === '配套设备') {
+      html += renderEquipmentBlock(inst, secRows);
+      return;
+    }
+    if (isHR) {
+      // 热流道：开关 + 表格
+      var uid = 'hr_' + inst.idx;
+      enabledSections[uid] = !defaultDisabled;
+      currentHotRunnerInst = inst;
+      html += '<div class="col-12 mb-2" id="section_' + uid + '">';
+      html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + uid + '" ' + (!defaultDisabled ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + sec + '<br><small>' + secEn + '</small></strong></label>';
+      html += '<button class="btn btn-sm btn-link p-0 ms-1" style="font-size:11px;color:#6c757d;" onclick="clearContainerPrompt(\'section_' + uid + '\', \'' + sec + '\')" title="清空 / Clear"><i class="bi bi-trash"></i></button>';
+      html += '<div class="hot-runner-content' + (defaultDisabled ? ' barrel-disabled' : '') + '">';
+      var hrCount = HOT_RUNNER_DEFAULT_COUNT;
+      secRows.forEach(function (r) { if (r.key === 'hotRunner_temp' && r.segs && r.segs.length) hrCount = r.segs.length; });
+      html += renderHotRunner(hrCount, inst);
+      html += '</div></div>';
+    } else if (multi) {
+      var uidM = 'sec_' + inst.idx + '_' + (secOrder.indexOf(sec) + 1);
+      enabledSections[uidM] = true;
+      html += '<div class="col-12 mb-2" id="section_' + uidM + '"><strong style="font-size:12px;">' + sec + '<br><small>' + secEn + '</small></strong>';
+      html += '<button class="btn btn-sm btn-link p-0 ms-1" style="font-size:11px;color:#6c757d;" onclick="clearContainerPrompt(\'section_' + uidM + '\', \'' + sec + '\')" title="清空 / Clear"><i class="bi bi-trash"></i></button><div class="row g-2 mt-1">';
+      secRows.forEach(function (r) { html += renderTemplateRow(inst, r); });
+      html += '</div></div>';
+    } else {
+      var uid2 = 'sec_' + inst.idx + '_' + (secOrder.indexOf(sec) + 1);
+      enabledSections[uid2] = !defaultDisabled;
+      var collapseId = 'collapse_' + uid2;
+      var toggleable = isBarrel || defaultDisabled;
+      html += '<div class="accordion-item">';
+      html += '<h2 class="accordion-header d-flex align-items-center gap-2">';
+      if (toggleable) {
+        html += '<label class="barrel-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="toggle_' + uid2 + '" ' + (!defaultDisabled ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid2 + '\')"><span class="toggle-switch"></span></label>';
+      }
+      html += '<button class="accordion-button flex-grow-1' + (isFirst ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' + sec + '<br><small>' + secEn + '</small></button>';
+      html += '<button class="btn btn-sm btn-link p-0 ms-1 me-2" style="font-size:11px;color:#6c757d;" onclick="event.stopPropagation();clearContainerPrompt(\'section_' + uid2 + '\', \'' + sec + '\')" title="清空 / Clear"><i class="bi bi-trash"></i></button>';
+      html += '</h2>';
+      html += '<div id="' + collapseId + '" class="accordion-collapse collapse' + (isFirst ? ' show' : '') + '" data-bs-parent="#paramAccordion">';
+      html += '<div class="accordion-body' + (defaultDisabled ? ' barrel-disabled' : '') + '" id="section_' + uid2 + '">';
+      html += '<div class="row g-2">';
+      secRows.forEach(function (r) { html += renderTemplateRow(inst, r); });
+      html += '</div></div></div></div>';
+      isFirst = false;
+    }
+  });
+  return html;
+}
+
+function renderTemplateRow(inst, r) {
+  var segs = r.segs || [];
+  var label = r.cn + (r.en ? '<br><small>' + r.en + '</small>' : '');
+  var isNumber = r.type === 'number';
+  var isTextarea = r.cn === '备注' || /remarks/.test(r.key || '');
+  var readonly = r.cn === '工艺卡编号' || r.key === 'productInfo_10';
+  var html = '';
+  if (segs.length) {
+    var baseKey = fieldKeyFor(inst, r.key, '');
+    var rowId = 'row_' + baseKey.replace(/[^A-Za-z0-9_]/g, '_');
+    html += '<div class="col-12 mb-2" id="' + rowId + '"><label class="form-label-sm">' + label + '</label><div class="row g-1 align-items-end">';
+    segs.forEach(function (seg) {
+      var key = fieldKeyFor(inst, r.key, seg);
+      html += '<div class="col-4 col-md-2 seg-cell"><input type="' + (isNumber ? 'number' : 'text') + '" class="form-control form-control-sm npi-field" data-key="' + key + '" data-base="' + baseKey + '" data-unit="' + (r.unit || '') + '" placeholder="' + seg + '"' + (isNumber ? ' step="any" min="0"' : '') + '></div>';
+    });
+    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="addSegmentDynamic(\'' + rowId + '\', \'' + baseKey + '\', \'' + (isNumber ? 'number' : 'text') + '\', \'' + (r.unit || '') + '\')" title="增加一段 / Add"><i class="bi bi-plus"></i></button></div>';
+    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="removeSegmentDynamic(\'' + rowId + '\')" title="减少一段 / Remove"><i class="bi bi-dash"></i></button></div>';
+    html += '</div></div>';
+  } else if (isTextarea) {
+    var key = fieldKeyFor(inst, r.key, '');
+    html += '<div class="col-12 mb-2"><label class="form-label-sm">' + label + '</label>';
+    html += '<textarea class="form-control form-control-sm npi-field" data-key="' + key + '" data-unit="' + (r.unit || '') + '" rows="3"></textarea></div>';
+  } else {
+    var key2 = fieldKeyFor(inst, r.key, '');
+    html += '<div class="col-6 col-md-4 col-lg-3 mb-2">';
+    html += '<label class="form-label-sm">' + label + '</label>';
+    html += '<input type="' + (isNumber ? 'number' : 'text') + '" class="form-control form-control-sm npi-field" data-key="' + key2 + '" data-unit="' + (r.unit || '') + '"' + (isNumber ? ' step="any" min="0"' : '') + (readonly ? ' readonly' : '') + (r.preset ? ' placeholder="' + r.preset + '"' : '') + '>';
     html += '</div>';
   }
   return html;
 }
 
-function renderFieldRow(prefix, r) {
-  var html = '';
-  if (r.subCols) {
-    var colType = r.type || 'text';
-    var offset = r.offsetClass || '';
-    var minSeg = r.minSeg || 1;
-    var maxSeg = r.maxSeg || 12;
-    var segPrefix = r.segPrefix || '';
-    html += '<div class="col-12" id="row_' + prefix + '_' + r.row + '"><label class="form-label-sm">' + r.label + '</label><div class="row g-1 align-items-end' + (offset ? ' ' + offset : '') + '">';
-    r.subCols.forEach(function (sc) {
-      html += '<div class="col-4 col-md-2 seg-cell"><input type="' + colType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sc + '" placeholder="' + sc + '"' + (colType === 'number' ? ' step="any"' : '') + '></div>';
-    });
-    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="addSegment(\'' + prefix + '\',' + r.row + ',' + minSeg + ',' + maxSeg + ',\'' + colType + '\',\'' + segPrefix + '\')" title="增加一段 / Add"><i class="bi bi-plus"></i></button></div>';
-    html += '<div class="col-auto"><button class="btn btn-sm btn-outline-secondary seg-btn" onclick="removeSegment(\'' + prefix + '\',' + r.row + ',' + minSeg + ',\'' + colType + '\')" title="减少一段 / Remove"><i class="bi bi-dash"></i></button></div>';
-    html += '</div></div>';
-  } else if (r.subRows) {
-    html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label><div class="row g-1">';
-    r.subRows.forEach(function (sr) {
-      html += '<div class="col-3 col-md-2"><input type="text" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '_' + sr.row + '" placeholder="' + sr.label + '"></div>';
-    });
-    html += '</div></div>';
-  } else if (r.isTextarea) {
-    html += '<div class="col-12"><label class="form-label-sm">' + r.label + '</label>';
-    html += '<textarea class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '" rows="3"></textarea></div>';
-  } else {
-    var inputType = r.type || 'text';
-    html += '<div class="col-6 col-md-4 col-lg-3">';
-    html += '<label class="form-label-sm">' + r.label + '</label>';
-    html += '<input type="' + inputType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + r.row + '"' + (inputType === 'number' ? ' step="any" min="0"' : '') + (r.readonly ? ' readonly' : '') + '>';
-    html += '</div>';
-  }
-  return html;
+// 分段动态增删（存储为键值，多出的段保存/回填均按 key 处理）
+function addSegmentDynamic(rowId, baseKey, inputType, unit) {
+  var cells = $('#' + rowId).find('.seg-cell');
+  var n = cells.length + 1;
+  var first = cells.first().find('input').attr('placeholder') || '';
+  var label;
+  if (/^\d+段$/.test(first)) label = n + '段';
+  else if (/^\d+$/.test(first)) label = String(n);
+  else if (/^[一二三四五六七八九十]+段$/.test(first)) {
+    var cn = ['一','二','三','四','五','六','七','八','九','十'];
+    label = (n <= 10 ? cn[n - 1] : n) + '段';
+  } else label = String(n);
+  ensureSegmentInput(rowId, baseKey, label, inputType, unit);
 }
+
+function ensureSegmentInput(rowId, baseKey, label, inputType, unit) {
+  var key = baseKey + '_' + label;
+  if ($('[data-key="' + key + '"]').length) return; // 已存在
+  var cell = '<div class="col-4 col-md-2 seg-cell"><input type="' + inputType + '" class="form-control form-control-sm npi-field" data-key="' + key + '" data-base="' + baseKey + '" data-unit="' + unit + '" placeholder="' + label + '"' + (inputType === 'number' ? ' step="any" min="0"' : '') + '></div>';
+  $('#' + rowId).find('.col-auto').first().before(cell);
+}
+
+function removeSegmentDynamic(rowId) {
+  var cells = $('#' + rowId).find('.seg-cell');
+  if (cells.length <= 1) return;
+  cells.last().remove();
+}
+
+// 回填时：对象中多出的分段（此前动态加段保存的）自动补渲染
+function ensureSegmentsForObject(obj) {
+  if (!obj || typeof obj !== 'object') return;
+  Object.keys(obj).forEach(function (k) {
+    if ($('[data-key="' + k + '"]').length) return;
+    var m = k.match(/^(.+)_(.+)$/);
+    if (!m) return;
+    var baseEl = $('[data-base="' + m[1] + '"]').first();
+    if (!baseEl.length) return;
+    var rowEl = baseEl.closest('[id]');
+    var rowId = rowEl.attr('id');
+    ensureSegmentInput(rowId, m[1], m[2], baseEl.attr('type') || 'text', baseEl.data('unit') || '');
+  });
+}
+
+// 清空容器内全部字段（有数据时确认弹窗；清空不改变区块开关状态）
+function clearContainerPrompt(containerId, name) {
+  var fields = $('#' + containerId + ' .npi-field');
+  var hasData = false;
+  fields.each(function () { if (String($(this).val() || '').trim()) hasData = true; });
+  if (!hasData) {
+    Swal.fire({ icon: 'info', title: swalTitle('无需清空', 'Nothing to Clear'), html: swalHtml('「' + name + '」无内容。', 'No data in "' + name + '".'), timer: 1500, showConfirmButton: false });
+    return;
+  }
+  Swal.fire({
+    title: swalTitle('清空区块', 'Clear Section'),
+    html: swalHtml('确认清空「' + name + '」的全部内容？此操作不可撤销。', 'Clear all values in "' + name + '"? This cannot be undone.'),
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '清空 / Clear', cancelButtonText: '取消 / Cancel', confirmButtonColor: '#dc3545'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    fields.val('');
+    fields.filter('.hr-pos-select').each(function () { updateHRPosColor(this); });
+  });
+}
+
+// 整表单清空（保留区块开关状态与设备卡片结构）
+function clearAllPrompt() {
+  var fields = $('.npi-field');
+  var hasData = false;
+  fields.each(function () { if (String($(this).val() || '').trim()) hasData = true; });
+  if (!hasData) {
+    Swal.fire({ icon: 'info', title: swalTitle('无需清空', 'Nothing to Clear'), html: swalHtml('表单无内容。', 'The form is empty.'), timer: 1500, showConfirmButton: false });
+    return;
+  }
+  Swal.fire({
+    title: swalTitle('清空全部', 'Clear All'),
+    html: swalHtml('确认清空表单全部内容？此操作不可撤销。', 'Clear all form values? This cannot be undone.'),
+    icon: 'warning', showCancelButton: true,
+    confirmButtonText: '清空 / Clear', cancelButtonText: '取消 / Cancel', confirmButtonColor: '#dc3545'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    fields.val('');
+    fields.filter('.hr-pos-select').each(function () { updateHRPosColor(this); });
+  });
+}
+
+function toggleNpiSection(uid) {
+  // 以状态表为准取反（DOM class 状态在热流道等结构上不可靠）
+  var cur = !!enabledSections[uid];
+  if (cur) {
+    // 已有数据的区块禁止关闭，防止保存时数据被静默丢弃
+    var hasData = false;
+    $('#section_' + uid + ' .npi-field').each(function () {
+      if (String($(this).val() || '').trim()) hasData = true;
+    });
+    if (hasData) {
+      $('#toggle_' + uid).prop('checked', true);
+      Swal.fire({ icon: 'warning', title: swalTitle('无法关闭', 'Cannot Disable'), html: swalHtml('该区块已有数据，如需关闭请先清空区块内容。', 'This section has data. Clear its values before disabling.'), timer: 2500, showConfirmButton: false });
+      return;
+    }
+  }
+  setNpiSectionEnabled(uid, !cur);
+}
+
+function setNpiSectionEnabled(uid, on) {
+  enabledSections[uid] = on;
+  var section = $('#section_' + uid);
+  if (!section.length) return;
+  var targets = [section];
+  var content = section.find('.hot-runner-content').first();
+  if (content.length) targets.push(content); // 热流道禁用类在内容层
+  if (on) {
+    targets.forEach(function (t) { t.removeClass('barrel-disabled'); });
+    var collapse = section.closest('.accordion-item').find('.accordion-collapse').first();
+    if (collapse.length) collapse.collapse('show');
+  } else {
+    targets.forEach(function (t) { t.addClass('barrel-disabled'); });
+    // 不清空数据：禁用区块不会被收集保存，重新开启时数据还在
+    var collapse2 = section.closest('.accordion-item').find('.accordion-collapse').first();
+    if (collapse2.length) collapse2.collapse('hide');
+  }
+  $('#toggle_' + uid).prop('checked', on);
+}
+
 
 function loadTaskList(callback) {
   google.script.run
@@ -556,11 +676,12 @@ function selectTask(taskID) {
   if (currentTask.status) info.push('<span class="task-info-item">状态<br><small>Status</small>: ' + currentTask.status + '</span>');
   info.push('<span class="task-info-item" id="cardNumberDisplay" style="background:#e8f5e9;font-weight:600;">工艺卡<br><small>Card</small>: <span style="color:#999;">无工艺卡<br><small>No Card</small></span></span>');
   $('#taskInfo').html(info.join(' '));
-  $('#paramFormCard, #btnFillTest').show();
+  $('#paramFormCard, #btnFillTest, #btnClearAll').show();
   $('#btnEditTask, #btnDeleteTask').show();
   $('#historyCard').show();
   hideHistoryBanner();
   setFormReadonly(false);
+  renderTemplateForTask(currentTask); // 表驱动：按机型（中间层）渲染模板
   loadHistory(taskID);
 
   var pendingLoads = 1; // loadRecord (+1 if getSuggestedCardNumber needed)
@@ -614,97 +735,41 @@ function selectTask(taskID) {
 }
 
 function fillFormFields(fields) {
-  $('.npi-field').each(function () {
-    var key = $(this).data('key');
-    var pos = fieldKeyMap[key];
-    $(this).val(pos !== undefined && fields && fields[pos] ? fields[pos] : '');
+  var obj = fields;
+  if (Array.isArray(fields)) {
+    // 旧 196 数组记录 → 键值对象（按 FC 卡行序重建位置表）
+    var fcRows = (templateData && templateData.cards && templateData.cards['FCS/ENG']) || [];
+    obj = convertOldFieldsToObject(fields, fcRows);
+  }
+  if (!obj || typeof obj !== 'object') return;
+  Object.keys(obj).forEach(function (k) { if (String(k).indexOf('auxEquip_') >= 0) ensureEquipmentForKey(k); });
+  ensureSegmentsForObject(obj);
+  var legacy = [];
+  Object.keys(obj).forEach(function (k) {
+    var el = $('[data-key="' + k + '"]');
+    if (el.length) {
+      el.val(obj[k]);
+      if (el.hasClass('hr-pos-select')) updateHRPosColor(el[0]);
+    } else if (k.indexOf('aux_legacy_') === 0) {
+      legacy.push({ key: k, val: obj[k] });
+    }
   });
-  // Auto-enable and auto-expand barrels with saved data
-  ['barrelA','barrelB','barrelC','barrelD'].forEach(function (barrelId) {
+  // 遗留设备值：显示在表单尾部只读块（不丢失旧数据）
+  var legacyHtml = '';
+  legacy.forEach(function (lg) {
+    legacyHtml += '<div class="col-6 col-md-4 col-lg-3 mb-2"><label class="form-label-sm">旧设备参数 ' + lg.key.replace('aux_legacy_', '#') + '<br><small>Legacy Equipment</small></label>';
+    legacyHtml += '<input type="text" class="form-control form-control-sm npi-field" data-key="' + lg.key + '" value="' + lg.val.replace(/"/g, '&quot;') + '" readonly></div>';
+  });
+  $('#auxLegacyBox').html(legacyHtml ? '<div class="mt-3"><strong style="font-size:12px;">旧记录设备参数<br><small>Legacy Equipment Values</small></strong><div class="row g-2">' + legacyHtml + '</div></div>' : '');
+  // 自动启用有数据的区块（默认禁用的区块/卡实例/热流道）
+  Object.keys(enabledSections).forEach(function (uid) {
+    if (enabledSections[uid]) return;
     var hasData = false;
-    $('#section_' + barrelId + ' .npi-field').each(function () {
-      if ($(this).val().trim()) hasData = true;
+    $('#section_' + uid + ' .npi-field').each(function () {
+      if (String($(this).val() || '').trim()) hasData = true;
     });
-    if (hasData) {
-      barrelEnabled[barrelId] = true;
-      $('#section_' + barrelId).removeClass('barrel-disabled');
-      $('#toggle_' + barrelId).prop('checked', true);
-      // Expand the collapse section
-      $('#collapse_barrel_' + barrelId).collapse('show');
-    }
+    if (hasData) setNpiSectionEnabled(uid, true);
   });
-  // Auto-enable hot runner if has data
-  if (fields) {
-    var hrHasData = false;
-    $('#section_hotRunner .npi-field').each(function () {
-      if ($(this).val().trim()) hrHasData = true;
-    });
-    if (hrHasData) {
-      hotRunnerEnabled = true;
-      $('#section_hotRunner .hot-runner-content').removeClass('barrel-disabled');
-      $('#toggle_hotRunner').prop('checked', true);
-    }
-  }
-}
-
-function addSegment(prefix, row, minSeg, maxSeg, colType, segPrefix) {
-  var rowId = 'row_' + prefix + '_' + row;
-  var rowEl = $('#' + rowId + ' .row');
-  var segCount = rowEl.find('.seg-cell').length;
-  if (segCount >= maxSeg) return;
-  var segNum = segCount + 1;
-  var segLabel = segPrefix + segNum;
-  var btnCol = rowEl.find('.col-auto').first();
-  var newCell = $('<div class="col-4 col-md-2 seg-cell"><input type="' + colType + '" class="form-control form-control-sm npi-field" data-key="' + prefix + '_' + row + '_' + segLabel + '" placeholder="' + segLabel + '"' + (colType === 'number' ? ' step="any"' : '') + '></div>');
-  newCell.insertBefore(btnCol);
-  rebuildFieldIndex();
-}
-
-function removeSegment(prefix, row, minSeg, colType) {
-  var rowId = 'row_' + prefix + '_' + row;
-  var cells = $('#' + rowId + ' .seg-cell');
-  if (cells.length <= minSeg) return;
-  cells.last().remove();
-  rebuildFieldIndex();
-}
-
-function toggleBarrel(barrelId) {
-  barrelEnabled[barrelId] = !barrelEnabled[barrelId];
-  var section = $('#section_' + barrelId);
-  if (barrelEnabled[barrelId]) {
-    section.removeClass('barrel-disabled');
-    $('#collapse_barrel_' + barrelId).collapse('show');
-  } else {
-    section.addClass('barrel-disabled');
-    section.find('.npi-field').val('');
-    $('#collapse_barrel_' + barrelId).collapse('hide');
-  }
-}
-
-function toggleHotRunner() {
-  hotRunnerEnabled = !hotRunnerEnabled;
-  var content = $('#section_hotRunner .hot-runner-content');
-  if (hotRunnerEnabled) {
-    content.removeClass('barrel-disabled');
-  } else {
-    content.addClass('barrel-disabled');
-    content.find('.npi-field').val('');
-  }
-}
-
-function rebuildFieldIndex() {
-  fieldKeyMap = {};
-  var pos = 0;
-  // Walk all npi-fields in DOM order and assign positions
-  $('.npi-field').each(function () {
-    var key = $(this).data('key');
-    if (key) fieldKeyMap[key] = pos++;
-  });
-  // Pad to 196
-  while (pos < 196) {
-    fieldKeyMap['_free_' + pos] = pos;
-    pos++;
-  }
 }
 
 function clearFormFields() { $('.npi-field').val(''); }
@@ -765,36 +830,30 @@ function applyTaskPrefill() {
 }
 
 function collectFormFields() {
-  var fields = new Array(196).fill('');
+  var out = {};
   $('.npi-field').each(function () {
     var key = $(this).data('key');
-    var pos = fieldKeyMap[key];
-    if (pos !== undefined) fields[pos] = $(this).val() || '';
+    if (!key) return;
+    if ($(this).closest('.barrel-disabled').length) return; // 禁用区块/卡实例不收集
+    out[key] = $(this).val() || '';
   });
-  return fields;
+  return out;
 }
 
 function clearForm() {
   currentTask = null; currentRecord = null;
   latestRecord = null;
   viewingHistory = false;
-  $('#taskInfo').html(''); $('#paramFormCard, #btnFillTest').hide(); clearFormFields();
+  $('#taskInfo').html(''); $('#paramFormCard, #btnFillTest, #btnClearAll').hide();
+  $('#paramAccordion').html('');
   $('#btnEditTask, #btnDeleteTask, #btnNewVersion, #btnPromote').hide();
   $('#historyCard').hide(); $('#historyList').html('');
   hideHistoryBanner();
   setFormReadonly(false);
   $('#btnSaveDraft, #btnSubmit').prop('disabled', false);
   $('#saveStatus').text('');
-  // Reset barrel toggles
-  ['barrelA','barrelB','barrelC','barrelD'].forEach(function (id) {
-    barrelEnabled[id] = false;
-    $('#toggle_' + id).prop('checked', false);
-    $('#section_' + id).addClass('barrel-disabled');
-  });
-  // Reset hot runner toggle
-  hotRunnerEnabled = false;
-  $('#toggle_hotRunner').prop('checked', false);
-  $('#section_hotRunner .hot-runner-content').addClass('barrel-disabled');
+  currentCompose = null;
+  enabledSections = {};
 }
 
 // ===== 版本历史 =====
@@ -805,7 +864,7 @@ function hideHistoryBanner() {
 
 function setFormReadonly(on) {
   $('.npi-field').prop('disabled', on);
-  $('#btnSaveDraft, #btnSubmit, #btnFillTest').toggle(!on);
+  $('#btnSaveDraft, #btnSubmit, #btnFillTest, #btnClearAll').toggle(!on);
 }
 
 function loadHistory(taskID) {
@@ -903,10 +962,12 @@ function openEditModal() {
   $('#btnCreateTask').html('保存修改<br><small>Save Changes</small>');
   $('#newMoldNo').val(currentTask.moldNo || '');
   $('#newMaterial').val((currentTask.material || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean)).trigger('change');
+  $('#newCollaborators').val((currentTask.collaborators || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean)).trigger('change');
   $('#newMachineModel').val(currentTask.machineModel || '');
   $('#newProcessType').val(currentTask.processType || 'IM');
   $('#newSource').val((currentTask.source || '').indexOf('urgent') >= 0 ? 'urgent' : 'weekly');
   $('#newPlanDate').val(currentTask.planDate || '');
+  $('#newDueDate').val(currentTask.dueDate || '');
   $('#newRemark').val(currentTask.remark || '');
   $('#newProductName').val(currentTask.productName || null);
   var skuTokens = (currentTask.sku || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -957,31 +1018,17 @@ function fillTestData() {
   if (!currentTask) { Swal.fire({ icon:'warning', title:swalTitle('提示','Info'), html:swalHtml('请先选择测试任务','Please select a test task first') }); return; }
   $('.npi-field').each(function () {
     var $el = $(this);
-    if ($el.is('textarea')) return;
-    // Skip disabled barrel sections
-    var barrelId = $el.closest('[id]').attr('id') || '';
-    if (barrelId && barrelId.indexOf('barrel') === 0 && barrelId !== 'barrelA' && !barrelEnabled[barrelId]) return;
-    // Skip hot runner if disabled
-    var key = $el.data('key') || '';
-    if (key.indexOf('hotRunner_') === 0 && !hotRunnerEnabled) return;
-    // Skip readonly fields
+    if ($el.is('textarea') || $el.is('select')) return;
+    if ($el.closest('.barrel-disabled').length) return; // 禁用区块/卡实例跳过
     if ($el.prop('readonly')) return;
-    // Infer value from label text
-    var label = ($el.closest('.row, .col-12, .col-6').find('.form-label-sm').text() || '').trim();
-    var val = '';
-    if (label.indexOf('温度') >= 0 || label.indexOf('Temp') >= 0) val = '200';
-    else if (label.indexOf('P') >= 0 && label.indexOf('压力') < 0) val = '80';
-    else if (label.indexOf('V') >= 0 || label.indexOf('%') >= 0) val = '50';
-    else if (label.indexOf('S') >= 0 && label.indexOf('mm') >= 0) val = '30';
-    else if (label.indexOf('T') >= 0 && label.indexOf('s') >= 0) val = '5';
-    else if (label.indexOf('时间') >= 0 || label.indexOf('Time') >= 0) val = '5';
-    else if (label.indexOf('位置') >= 0 || label.indexOf('Pos') >= 0) val = '15';
-    else if (label.indexOf('行程') >= 0 || label.indexOf('Stroke') >= 0) val = '20';
-    else if (label.indexOf('压力') >= 0 || label.indexOf('Pressure') >= 0) val = '80';
-    else if (label.indexOf('周期') >= 0 || label.indexOf('Cycle') >= 0) val = '30';
-    else if (label.indexOf('量') >= 0 || label.indexOf('Charge') >= 0) val = '60';
-    else if (label.indexOf('背压') >= 0 || label.indexOf('Back') >= 0) val = '5';
-    else val = '100';
+    // 按单位推断测试值
+    var unit = String($el.data('unit') || '');
+    var val = '100';
+    if (unit.indexOf('℃') >= 0 || unit.indexOf('°C') >= 0) val = '200';
+    else if (unit === 'Bar' || unit === 'bar') val = '80';
+    else if (unit === '%') val = '50';
+    else if (unit === 'mm' || unit === 'mm/s') val = '30';
+    else if (unit === 's') val = '5';
     $el.val(val);
   });
   Swal.fire({ icon:'success', title:swalTitle('已填充','Filled'), html:swalHtml('测试数据已填入','Test data filled'), timer:1200, showConfirmButton:false });
@@ -993,6 +1040,11 @@ function saveRecord() {
     recordID: currentRecord ? currentRecord.recordID : null,
     testTaskID: currentTask.taskID,
     fields: collectFormFields(),
+    templateRef: {
+      display: currentTask.machineModel || '',
+      processType: currentTask.processType || 'IM',
+      cards: (currentCompose || []).map(function (c) { return { card: c.card, count: c.count }; })
+    },
     operatorSAPID: sessionStorage.getItem('ID') || ''
   };
   Swal.fire(swalLoading('保存中...', { title: 'Saving...', html: '正在保存工艺参数' }));
@@ -1013,10 +1065,9 @@ function submitRecord() {
   var emptyFields = [];
   $('.npi-field').each(function () {
     var el = $(this);
-    if (el.closest('.barrel-disabled').length) return;
+    if (el.closest('.barrel-disabled').length) return; // 禁用区块/卡实例/热流道不校验
     if (el.is('textarea')) return;
     var key = el.data('key') || '';
-    if (key.indexOf('hotRunner_') === 0 && !hotRunnerEnabled) return;
     var val = el.val().trim();
     if (!val) {
       var label = el.closest('.row, .col-12, .col-6').find('.form-label-sm').text().trim().replace(/<[^>]*>/g, '').substring(0, 30) || key;
@@ -1027,7 +1078,8 @@ function submitRecord() {
     Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项', 'Required fields missing'), html: swalHtml('以下 ' + emptyFields.length + ' 项不能为空：<br>' + emptyFields.slice(0, 10).join('<br>') + (emptyFields.length > 10 ? '<br>...等 ' + emptyFields.length + ' 项' : ''), emptyFields.length + ' fields required') });
     return;
   }
-  var recordData = { recordID: currentRecord ? currentRecord.recordID : null, testTaskID: currentTask.taskID, fields: collectFormFields(), operatorSAPID: sessionStorage.getItem('ID') || '', processType: currentTask.processType || 'IM' };
+  var recordData = { recordID: currentRecord ? currentRecord.recordID : null, testTaskID: currentTask.taskID, fields: collectFormFields(), operatorSAPID: sessionStorage.getItem('ID') || '', processType: currentTask.processType || 'IM',
+    templateRef: { display: currentTask.machineModel || '', processType: currentTask.processType || 'IM', cards: (currentCompose || []).map(function (c) { return { card: c.card, count: c.count }; }) } };
   Swal.fire({ title: swalTitle('确认提交','Confirm Submit'), html: swalHtml('提交后不可修改，确认提交？','Cannot modify after submit. Confirm?'), icon:'warning', showCancelButton:true, confirmButtonText:'确认 / Confirm', cancelButtonText:'取消 / Cancel' }).then(function (r) {
     if (!r.isConfirmed) return;
     Swal.fire(swalLoading('提交中...', { title: 'Submitting...', html: '正在保存并提交' }));

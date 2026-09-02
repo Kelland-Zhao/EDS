@@ -108,6 +108,7 @@
       <button class="pf-btn" data-tasktype="保养">保养<br><span style="font-size:10px;">PM</span></button>
       <button class="pf-btn active" data-tasktype="非常规保养">非常规保养<br><span style="font-size:10px;">Non-Routine</span></button>
       <button class="pf-btn" data-tasktype="转规格">转规格<br><span style="font-size:10px;">Spec Change</span></button>
+      <button class="pf-btn" data-tasktype="测试">测试<br><span style="font-size:10px;">Test</span></button>
       <label>搜索 / Search:</label>
       <input type="text" id="filterSearch" class="form-control form-control-sm" style="width:160px;" placeholder="标题/描述...">
       <button class="btn btn-sm btn-outline-secondary" id="btnFilter"><i class="bi bi-search"></i> 筛选 / Filter</button>
@@ -229,6 +230,7 @@
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭 / Close</button>
           <button type="button" class="btn btn-success btn-sm" id="btnCompleteTask" style="display:none;">完成任务 / Complete</button>
           <button type="button" class="btn btn-danger btn-sm" id="btnCancelTask" style="display:none;">取消任务 / Cancel</button>
+          <button type="button" class="btn btn-info btn-sm" id="btnOpenNPIDashboard" style="display:none;">NPI 测试计划 / NPI Dashboard</button>
           <button type="button" class="btn btn-primary btn-sm" id="btnSaveTask">保存 / Save</button>
         </div>
       </div>
