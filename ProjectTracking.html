@@ -69,6 +69,15 @@
     #modalMilestonesTable td { vertical-align: middle; padding: 4px 6px; background-color: inherit; }
     #modalMilestonesTable td:first-child { padding-left: 8px; }
     #modalMilestonesTable td:last-child { text-align: center; }
+    /* 事项行拖动手柄（临时调整查看顺序，不影响保存，保存仍按计划时间排序） */
+    .ms-drag-cell { width:28px; min-width:28px; max-width:28px; text-align:center; vertical-align:middle; padding:4px 0 !important; }
+    .ms-drag-handle { display:inline-block; cursor:grab; color:#adb5bd; font-size:15px; line-height:1; user-select:none; padding:4px 6px; }
+    .ms-drag-handle:hover { color:#E60012; }
+    .ms-drag-handle:active { cursor:grabbing; }
+    #modalMilestones tr[draggable="true"] { cursor:grabbing; }
+    #modalMilestones tr.upd-ms-dragging { opacity:0.35; }
+    #modalMilestones tr.upd-ms-drop-before td { border-top:2px solid #E60012 !important; }
+    #modalMilestones tr.upd-ms-drop-after td { border-bottom:2px solid #E60012 !important; }
     /* 事项/里程碑名称自动撑高文本框：换行可见、禁止手动拉伸 */
     textarea.autogrow-name {
       resize:none; overflow:hidden; white-space:pre-wrap; word-break:break-word;
@@ -269,6 +278,7 @@
             <div style="max-height:300px;overflow-y:auto;">
               <table class="table table-sm table-borderless mb-0" id="modalMilestonesTable" style="font-size:12px;">
                 <thead id="modalMilestonesHead"><tr style="background:#f8f9fa;border-bottom:2px solid #e9ecef;">
+                  <th style="width:28px;"></th>
                   <th style="min-width:140px;">名称<br><small>Name</small></th>
                   <th style="width:110px;">责任人<br><small>Owner</small></th>
                   <th style="width:115px;">计划日期<br><small>Planned</small></th>

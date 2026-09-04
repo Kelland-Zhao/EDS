@@ -24,6 +24,7 @@
   var showOnlyMine = false;
   var currentUpdateIsCI = false;
   var currentUpdateLeader = null; // CI 行 owner 为空时默认填项目 Leader
+  var dragSourceRow = null; // 拖动中的事项行（仅临时调整查看顺序，不影响保存）
   var currentUpdateProjectId = ''; // 当前更新弹窗对应项目编号（用于删除精确定位）
 
   var MS_TEMPLATES = {
@@ -187,6 +188,7 @@
           r.owner = om ? om[1].trim() : ownerVal;
           r.ownerEmail = om ? om[2].trim() : '';
         }
+        r.msIdx = $(this).data('msIdx');
         if (r.name || r.planned) rows.push(r);
       });
       if (!rows.length) rows.push({});
@@ -196,10 +198,68 @@
       });
       $('#modalMilestones').empty();
       rows.forEach(function(r) {
-        addUpdateMilestoneRow(r.name, r.plannedStart, r.planned, r.actual, r.owner, r.ownerEmail, r.status);
+        addUpdateMilestoneRow(r.name, r.plannedStart, r.planned, r.actual, r.owner, r.ownerEmail, r.status, r.msIdx);
       });
       autoGrowAll($('#modalMilestones'));
     });
+
+    // ===== 事项行拖动手柄：临时调整查看顺序（不影响保存，保存仍按计划时间排序） =====
+    $('#modalMilestones').on('mousedown', '.ms-drag-handle', function() {
+      $(this).closest('tr').attr('draggable', 'true');
+    });
+    // 未发起拖动时（含鼠标移出表格）清除 draggable，避免影响行内输入框选择文字
+    $(document).on('mouseup', function() {
+      $('#modalMilestones tr[draggable]').removeAttr('draggable');
+    });
+    $('#modalMilestones').on('dragstart', 'tr', function(e) {
+      dragSourceRow = this;
+      $(this).addClass('upd-ms-dragging');
+      if (e.originalEvent.dataTransfer) {
+        e.originalEvent.dataTransfer.effectAllowed = 'move';
+        try { e.originalEvent.dataTransfer.setData('text/plain', ''); } catch (err) {}
+      }
+    });
+    $('#modalMilestones').on('dragover', 'tr', function(e) {
+      e.preventDefault();
+      if (e.originalEvent.dataTransfer) e.originalEvent.dataTransfer.dropEffect = 'move';
+      $('#modalMilestones tr').removeClass('upd-ms-drop-before upd-ms-drop-after');
+      if (this === dragSourceRow) return;
+      var rect = this.getBoundingClientRect();
+      var before = (e.clientY < rect.top + rect.height / 2);
+      $(this).addClass(before ? 'upd-ms-drop-before' : 'upd-ms-drop-after');
+    });
+    $('#modalMilestones').on('dragover', function(e) {
+      // 表格空白处（如最后一行下方）也允许放置
+      e.preventDefault();
+      if (e.originalEvent.dataTransfer) e.originalEvent.dataTransfer.dropEffect = 'move';
+      if (e.target !== this) return; // 行上的 dragover 由行处理器处理
+      var $rows = $('#modalMilestones tr');
+      $rows.removeClass('upd-ms-drop-before upd-ms-drop-after');
+      var $last = $rows.last();
+      if ($last.length && dragSourceRow && $last.get(0) !== dragSourceRow) $last.addClass('upd-ms-drop-after');
+    });
+    $('#modalMilestones').on('drop', 'tr', function(e) {
+      e.preventDefault();
+      if (!dragSourceRow || dragSourceRow === this) { _upd_cleanupDrag(); return; }
+      var rect = this.getBoundingClientRect();
+      var before = (e.clientY < rect.top + rect.height / 2);
+      if (before) $(this).before(dragSourceRow); else $(this).after(dragSourceRow);
+      _upd_cleanupDrag();
+    });
+    $('#modalMilestones').on('drop', function(e) {
+      e.preventDefault();
+      if (e.target !== this) return; // 行上的 drop 由行处理器处理
+      if (dragSourceRow) $('#modalMilestones').append(dragSourceRow);
+      _upd_cleanupDrag();
+    });
+    $('#modalMilestones').on('dragend', 'tr', _upd_cleanupDrag);
+    function _upd_cleanupDrag() {
+      if (dragSourceRow) {
+        $(dragSourceRow).removeClass('upd-ms-dragging').removeAttr('draggable');
+        dragSourceRow = null;
+      }
+      $('#modalMilestones tr').removeClass('upd-ms-drop-before upd-ms-drop-after');
+    }
 
     // 状态改变时更新实际完成日期和行背景色
     $('#modalMilestones').on('change', '.upd-ms-status', function() {
@@ -1299,8 +1359,8 @@
       if (pb) return 1;
       return 0;
     });
-    sortedMs.forEach(function(ms) {
-      addUpdateMilestoneRow(ms.name, ms.plannedStart, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status);
+    sortedMs.forEach(function(ms, msIdx) {
+      addUpdateMilestoneRow(ms.name, ms.plannedStart, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status, msIdx);
     });
 
     // 已完成项目：里程碑只读，但状态可改（用于将项目重新激活）
@@ -1316,6 +1376,7 @@
       $('#modalMilestones tr').each(function() {
         $(this).find('input, select').prop('disabled', true);
         $(this).find('.upd-ms-del-btn').addClass('d-none');
+        $(this).find('.ms-drag-handle').addClass('d-none'); // 查看模式不可拖动
         if ($(this).find('.upd-ms-owner').hasClass('select2-hidden-accessible')) {
           $(this).find('.upd-ms-owner').select2('destroy');
           // replace with readonly text
@@ -1380,9 +1441,21 @@
       if (cache) { ownerName = cache.name; ownerEmail = cache.email || ''; }
       else if (disp) { ownerName = disp; }
       if (!ownerName) ciMissingOwner = true;
-      newMsArr.push({ name: name, plannedStart: plannedStartVal ? normalizeDateInput(plannedStartVal) : '', planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail, status: itemStatus });
+      newMsArr.push({ name: name, plannedStart: plannedStartVal ? normalizeDateInput(plannedStartVal) : '', planned: plannedVal ? normalizeDateInput(plannedVal) : 'NA', actual: actualVal || '', owner: ownerName, ownerEmail: ownerEmail, status: itemStatus, _msIdx: $(this).data('msIdx') });
     });
     if (ciMissingOwner) { Swal.fire('提示 / Notice', '每条事项都需选择责任人 / Each item needs an owner', 'warning'); return; }
+    // 保存仍按计划时间排序（拖动仅临时调整查看顺序，不改变写入顺序）
+    newMsArr.sort(function(a, b) {
+      var pa = parseDate(a.planned === 'NA' ? '' : a.planned);
+      var pb = parseDate(b.planned === 'NA' ? '' : b.planned);
+      if (pa && pb) return pa - pb;
+      if (pa) return -1;
+      if (pb) return 1;
+      var ia = (typeof a._msIdx === 'number') ? a._msIdx : Number.MAX_SAFE_INTEGER;
+      var ib = (typeof b._msIdx === 'number') ? b._msIdx : Number.MAX_SAFE_INTEGER;
+      return ia - ib;
+    });
+    newMsArr.forEach(function(r) { delete r._msIdx; });
     updates.milestonesReplace = newMsArr;
 
     var newType = $('#modalType').val();
@@ -1506,14 +1579,15 @@
     });
   }
 
-  function addUpdateMilestoneRow(name, plannedStart, planned, actual, owner, ownerEmail, status) {
+  function addUpdateMilestoneRow(name, plannedStart, planned, actual, owner, ownerEmail, status, msIdx) {
     var isCI = currentUpdateIsCI;
     var effStatus = status || '未开始';
     // 若历史数据有实际完成日期但无状态，自动推断
     if (!isCI && !status && actual && parseDate(actual)) effStatus = '已完成';
     var rowStyle = getMsRowStyle(effStatus, planned, actual);
     var isCompleted = (effStatus === '已完成');
-    var $row = $('<tr style="' + rowStyle + '">'
+    var $row = $('<tr style="' + rowStyle + '"' + (typeof msIdx === 'number' ? ' data-ms-idx="' + msIdx + '"' : '') + '>'
+      + '<td class="ms-drag-cell"><span class="ms-drag-handle" title="拖动调整顺序（临时） / Drag to reorder (temporary)"><i class="bi bi-grip-vertical"></i></span></td>'
       + '<td style="vertical-align:middle;"><textarea rows="1" class="form-control form-control-sm upd-ms-name autogrow-name" placeholder="名称 / Name">' + escapeTextarea(name || '') + '</textarea></td>'
       + '<td style="vertical-align:middle;"><select class="form-select form-select-sm upd-ms-owner" style="width:100%;"></select></td>'
       + '<td style="vertical-align:middle;"><input type="date" class="form-control form-control-sm upd-ms-start" value="' + (plannedStart ? (parseDate(plannedStart) ? formatDateYMD(parseDate(plannedStart)) : '') : '') + '" style="font-size:12px;"></td>'
@@ -1550,6 +1624,7 @@
     var nameLabel = isCI ? '事项<br><small>Item</small>' : '名称<br><small>Name</small>';
     var plannedLabel = isCI ? '计划完成<br><small>Due</small>' : '计划完成<br><small>Planned</small>';
     $('#modalMilestonesHead').html('<tr style="background:#f8f9fa;border-bottom:2px solid #e9ecef;">'
+      + '<th style="width:28px;"></th>'
       + '<th style="min-width:140px;">' + nameLabel + '</th>'
       + '<th style="width:110px;">责任人<br><small>Owner</small></th>'
       + '<th style="width:115px;">计划开始<br><small>Start</small></th>'
