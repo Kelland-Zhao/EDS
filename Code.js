@@ -35,6 +35,11 @@ const IM_SCHEDULING_SHEET = "MasterData";
 const CYCLE_SS_ID = "1cfJBxEKnNcwt1xH_tSRjKpD6Dv1JqOEzJxi2p7mZiZM";
 const CYCLE_ACTUAL_SHEET = "机台周期实际值";
 const CYCLE_STANDARD_SHEET = "机台周期标准";
+// 周期偏差分级阈值（单位：秒，相对标准值）
+const CYCLE_ALARM_LOW = -1;    // 低于标准超过 1s → 异常
+const CYCLE_ALARM_HIGH = 3;    // 高于标准超过 3s → 异常
+const CYCLE_NORMAL_LOW = -0.5; // 正常区下限
+const CYCLE_NORMAL_HIGH = 0.5; // 正常区上限
 
 // Inspection2.0 统一记录表开关（紧急回滚设 false）
 var USE_UNIFIED_INSPECTION_SHEET = true;
@@ -14957,10 +14962,7 @@ function getCycleMonitorData(machines, days) {
       var deviation = 0;
       if (std !== undefined) {
         deviation = Math.round((cycle - std) * 100) / 100;
-        if (deviation < -1)      status = 'red';
-        else if (deviation < 0)  status = 'green';
-        else if (deviation <= 3) status = 'orange';
-        else                     status = 'red';
+        status = classifyCycleDeviation(deviation);
       }
 
       machinesMap[machineNo].push({
@@ -14992,11 +14994,33 @@ function getCycleMonitorData(machines, days) {
       });
     });
 
-    return { machines: result };
+    return {
+      machines: result,
+      thresholds: {
+        greenLow: CYCLE_NORMAL_LOW,
+        greenHigh: CYCLE_NORMAL_HIGH,
+        alarmLow: CYCLE_ALARM_LOW,
+        alarmHigh: CYCLE_ALARM_HIGH
+      }
+    };
   } catch (e) {
     console.error("getCycleMonitorData error:", e.message);
     return { machines: [], error: e.message };
   }
+}
+
+/**
+ * 周期偏差分级
+ * 红(异常)：低于标准超过 1s 或高于标准超过 3s；绿(正常)：±0.5s 内；橙(预警)：其余
+ * @param {number} deviation — 周期与标准值的偏差（秒）
+ * @returns {'red'|'orange'|'green'}
+ */
+function classifyCycleDeviation(deviation) {
+  if (deviation < CYCLE_ALARM_LOW) return 'red';
+  if (deviation < CYCLE_NORMAL_LOW) return 'orange';
+  if (deviation <= CYCLE_NORMAL_HIGH) return 'green';
+  if (deviation <= CYCLE_ALARM_HIGH) return 'orange';
+  return 'red';
 }
 
 /**

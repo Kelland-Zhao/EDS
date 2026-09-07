@@ -5,6 +5,7 @@ const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;
 
 var allMachines = { TB1: [], TB2: [] };
 var allData = [];
+var allThresholds = null; // 后端下发的偏差分级阈值，参考线单一数据源
 var currentDays = 7;
 
 $(document).ready(function() {
@@ -69,6 +70,7 @@ function fetchData() {
       Swal.close();
       if (result && !result.error && result.machines) {
         allData = result.machines;
+        allThresholds = result.thresholds || null;
         renderGrid();
         updateBadges();
         updateDateRange();
@@ -195,6 +197,7 @@ function initMiniChart(dom, machine) {
   var redPts    = machine.points.filter(function(p) { return p.status === 'red'; });
   var noStdPts  = machine.points.filter(function(p) { return p.status === null; });
   var std = machine.standard;
+  var th = allThresholds || { greenLow: -0.5, greenHigh: 0.5, alarmLow: -1, alarmHigh: 3 };
 
   var yMin, yMax;
   if (std !== null && std !== undefined) {
@@ -208,10 +211,10 @@ function initMiniChart(dom, machine) {
 
   var series = [];
 
-  // Green: deviation within [-1, 0) — slightly below standard, acceptable
+  // Green: deviation within [greenLow, greenHigh] — normal
   if (greenPts.length) {
     series.push({
-      name: '偏低 / Low',
+      name: '正常 / Normal',
       type: 'scatter',
       data: greenPts.map(function(p) { return [p.date, p.cycle]; }),
       symbolSize: 8,
@@ -219,10 +222,10 @@ function initMiniChart(dom, machine) {
     });
   }
 
-  // Orange: deviation within [0, +3] — above standard, warning
+  // Orange: within alarm limits but outside normal zone — warning
   if (orangePts.length) {
     series.push({
-      name: '偏高 / High',
+      name: '预警 / Warning',
       type: 'scatter',
       data: orangePts.map(function(p) { return [p.date, p.cycle]; }),
       symbolSize: 8,
@@ -230,7 +233,7 @@ function initMiniChart(dom, machine) {
     });
   }
 
-  // Red: deviation > +3 or < -1 — anomaly
+  // Red: deviation beyond alarm limits — anomaly
   if (redPts.length) {
     series.push({
       name: '异常 / Anomaly',
@@ -263,22 +266,38 @@ function initMiniChart(dom, machine) {
       lineStyle: { color: '#3498DB', type: 'dashed', dashOffset: 0, width: 2 },
       silent: true
     });
-    // Upper limit
+    // Normal zone boundaries (green)
     series.push({
-      name: '上限线 / Upper Limit',
+      name: '正常上限 / Normal High',
       type: 'line',
-      data: [[dates[0], std + 3], [dates[dates.length - 1], std + 3]],
+      data: [[dates[0], std + th.greenHigh], [dates[dates.length - 1], std + th.greenHigh]],
+      symbol: 'none',
+      lineStyle: { color: '#27AE60', type: 'dashed', width: 1.5 },
+      silent: true
+    });
+    series.push({
+      name: '正常下限 / Normal Low',
+      type: 'line',
+      data: [[dates[0], std + th.greenLow], [dates[dates.length - 1], std + th.greenLow]],
+      symbol: 'none',
+      lineStyle: { color: '#27AE60', type: 'dashed', width: 1.5 },
+      silent: true
+    });
+    // Alarm limits (red)
+    series.push({
+      name: '报警上限 / Alarm High',
+      type: 'line',
+      data: [[dates[0], std + th.alarmHigh], [dates[dates.length - 1], std + th.alarmHigh]],
       symbol: 'none',
       lineStyle: { color: '#E74C3C', type: [5, 5], width: 1.5 },
       silent: true
     });
-    // Lower limit
     series.push({
-      name: '下限线 / Lower Limit',
+      name: '报警下限 / Alarm Low',
       type: 'line',
-      data: [[dates[0], std - 1], [dates[dates.length - 1], std - 1]],
+      data: [[dates[0], std + th.alarmLow], [dates[dates.length - 1], std + th.alarmLow]],
       symbol: 'none',
-      lineStyle: { color: '#F39C12', type: [5, 5], width: 1.5 },
+      lineStyle: { color: '#E74C3C', type: [5, 5], width: 1.5 },
       silent: true
     });
   }
@@ -338,6 +357,7 @@ function openDetail(machine) {
     var noStdPts  = machine.points.filter(function(p) { return p.status === null; });
     var dates = machine.points.map(function(p) { return p.date; });
     var std = machine.standard;
+    var th = allThresholds || { greenLow: -0.5, greenHigh: 0.5, alarmLow: -1, alarmHigh: 3 };
 
     // Adaptive Y-axis range (same logic as mini chart)
     var yMin, yMax;
@@ -354,7 +374,7 @@ function openDetail(machine) {
 
     if (greenPts.length) {
       series.push({
-        name: '偏低 / Low',
+        name: '正常 / Normal',
         type: 'scatter',
         data: greenPts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
         symbolSize: 10,
@@ -364,7 +384,7 @@ function openDetail(machine) {
 
     if (orangePts.length) {
       series.push({
-        name: '偏高 / High',
+        name: '预警 / Warning',
         type: 'scatter',
         data: orangePts.map(function(p) { return [p.date, p.cycle, p.shift]; }),
         symbolSize: 10,
@@ -403,19 +423,35 @@ function openDetail(machine) {
         markLine: {}
       });
       series.push({
-        name: '上限 / Upper Limit',
+        name: '正常上限 / Normal High',
         type: 'line',
-        data: [[dates[0], std + 3], [dates[dates.length - 1], std + 3]],
+        data: [[dates[0], std + th.greenHigh], [dates[dates.length - 1], std + th.greenHigh]],
+        symbol: 'none',
+        lineStyle: { color: '#27AE60', type: 'dashed', width: 1.5 },
+        silent: true
+      });
+      series.push({
+        name: '正常下限 / Normal Low',
+        type: 'line',
+        data: [[dates[0], std + th.greenLow], [dates[dates.length - 1], std + th.greenLow]],
+        symbol: 'none',
+        lineStyle: { color: '#27AE60', type: 'dashed', width: 1.5 },
+        silent: true
+      });
+      series.push({
+        name: '报警上限 / Alarm High',
+        type: 'line',
+        data: [[dates[0], std + th.alarmHigh], [dates[dates.length - 1], std + th.alarmHigh]],
         symbol: 'none',
         lineStyle: { color: '#E74C3C', type: [5, 5], width: 1.5 },
         silent: true
       });
       series.push({
-        name: '下限 / Lower Limit',
+        name: '报警下限 / Alarm Low',
         type: 'line',
-        data: [[dates[0], std - 1], [dates[dates.length - 1], std - 1]],
+        data: [[dates[0], std + th.alarmLow], [dates[dates.length - 1], std + th.alarmLow]],
         symbol: 'none',
-        lineStyle: { color: '#F39C12', type: [5, 5], width: 1.5 },
+        lineStyle: { color: '#E74C3C', type: [5, 5], width: 1.5 },
         silent: true
       });
     }
