@@ -157,6 +157,64 @@ function buildFilters() {
   else if (todayWeek && weeks[todayWeek.key]) wSel.val(todayWeek.key);
 }
 
+// 行底色 class（纯函数，供渲染与测试使用）：紧急或无工艺卡 → table-danger 浅红（复用紧急行样式）
+function taskRowClass_(t) {
+  return ((t.source || '').indexOf('urgent') >= 0 || !t.cardNumber) ? 'table-danger' : '';
+}
+
+// 工艺卡状态徽章（纯函数，供渲染与测试使用）：草稿灰 / 已提交蓝 / 已转正绿，中上英下
+function cardStatusBadge_(status) {
+  var cls = { '草稿': 'bg-secondary', '已提交': 'bg-primary', '已转正': 'bg-success' }[status];
+  if (!cls) return '';
+  var en = { '草稿': 'Draft', '已提交': 'Submitted', '已转正': 'Promoted' }[status];
+  return '<span class="badge ' + cls + '">' + status + '<br><small>' + en + '</small></span>';
+}
+
+// 表头常量（全部周单表格与分周表格共用）
+var TASK_TABLE_HEADER =
+  '<th>任务号<br><small>Task ID</small></th><th>产品<br><small>Product</small></th><th>模具<br><small>Mold</small></th>' +
+  '<th>机台(机型)<br><small>Machine(Model)</small></th><th>SKU<br><small>SKU</small></th><th>物料<br><small>Material</small></th>' +
+  '<th>工艺卡<br><small>Card</small></th>' +
+  '<th>状态<br><small>Status</small></th><th>计划日期<br><small>Plan Date</small></th><th>计划完成<br><small>Due Date</small></th><th>负责人<br><small>Requestor</small></th>' +
+  '<th>操作<br><small>Action</small></th>';
+
+// 任务行排序（纯函数，供渲染与测试使用）：紧急置顶，同组按计划日期升序；返回新数组不改入参
+function sortTasksForTable_(list) {
+  return list.slice().sort(function (a, b) {
+    var au = (a.source || '').indexOf('urgent') >= 0 ? 1 : 0;
+    var bu = (b.source || '').indexOf('urgent') >= 0 ? 1 : 0;
+    if (au !== bu) return bu - au; // 紧急置顶
+    return String(a.planDate || '').localeCompare(String(b.planDate || ''));
+  });
+}
+
+// 任务行渲染 → tbody HTML（全部周单表格与分周表格共用）
+function taskRowsHtml_(list, conflicts) {
+  var html = '';
+  sortTasksForTable_(list).forEach(function (t) {
+    var urgent = (t.source || '').indexOf('urgent') >= 0;
+    var badge = STATUS_BADGE_CLASS[t.status] || 'bg-secondary';
+    var conflict = conflicts[t.taskID];
+    var machineCell = escapeHtml(t.machineNo) + (t.machineModel ? ' (' + escapeHtml(t.machineModel) + ')' : '');
+    if (conflict) {
+      machineCell += ' <span class="badge bg-warning text-dark" title="冲突: ' + escapeHtml(conflict.join(', ')) + '">冲突<br><small>Conflict</small></span>';
+    }
+    var actions = '';
+    if (t.status === '待确认 Pending') actions += statusBtn(t.taskID, '已排期 Scheduled', '置已排期', 'Schedule') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
+    if (t.status === '已排期 Scheduled') actions += statusBtn(t.taskID, '执行中 In Progress', '开始执行', 'Start') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
+    if (t.status === '执行中 In Progress') actions += statusBtn(t.taskID, '已完成 Completed', '完成', 'Complete') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
+    html += '<tr class="' + taskRowClass_(t) + '" style="cursor:pointer;" onclick="openProcessPage(\'taskID=' + encodeURIComponent(t.taskID) + '\')">' +
+      '<td>' + escapeHtml(t.taskID) + (urgent ? ' <span class="badge bg-danger">紧急<br><small>Urgent</small></span>' : '') + '</td>' +
+      '<td>' + escapeHtml(t.productName) + '</td><td>' + escapeHtml(t.moldNo) + '</td><td>' + machineCell + '</td>' +
+      '<td>' + escapeHtml(t.sku) + '</td><td>' + escapeHtml(t.material) + '</td>' +
+      '<td style="white-space:nowrap;">' + (t.cardNumber ? escapeHtml(t.cardNumber) + ' ' + cardStatusBadge_(t.cardStatus) : '<span class="text-muted">—</span>') + '</td>' +
+      '<td><span class="badge ' + badge + '">' + escapeHtml(t.status) + '</span></td>' +
+      '<td>' + escapeHtml(t.planDate) + '</td><td>' + escapeHtml(t.dueDate || '') + '</td><td>' + escapeHtml(t.reqPerson) + '</td>' +
+      '<td class="text-center align-middle" onclick="event.stopPropagation();">' + actions + '</td></tr>';
+  });
+  return html;
+}
+
 function renderTable() {
   var weekKey = $('#weekFilter').val();
   var statusF = $('#statusFilter').val();
@@ -186,44 +244,21 @@ function renderTable() {
     (byWeek[k] = byWeek[k] || []).push(t);
   });
   var html = '';
-  Object.keys(byWeek).sort().reverse().forEach(function (k) {
-    var list = byWeek[k];
-    var label = list[0] && list[0].planDate ? computeWeekInfo_(list[0].planDate).label : k;
-    html += '<div class="week-group mb-3"><div class="week-group-title">' + escapeHtml(label) + '（' + list.length + '）</div>';
-    html += '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead><tr>' +
-      '<th>任务号<br><small>Task ID</small></th><th>产品<br><small>Product</small></th><th>模具<br><small>Mold</small></th>' +
-      '<th>机台(机型)<br><small>Machine(Model)</small></th><th>SKU<br><small>SKU</small></th><th>物料<br><small>Material</small></th>' +
-      '<th>工艺卡<br><small>Card</small></th>' +
-      '<th>状态<br><small>Status</small></th><th>计划日期<br><small>Plan Date</small></th><th>计划完成<br><small>Due Date</small></th><th>负责人<br><small>Requestor</small></th>' +
-      '<th>操作<br><small>Action</small></th></tr></thead><tbody>';
-    list.sort(function (a, b) {
-      var au = (a.source || '').indexOf('urgent') >= 0 ? 1 : 0;
-      var bu = (b.source || '').indexOf('urgent') >= 0 ? 1 : 0;
-      if (au !== bu) return bu - au; // 紧急置顶
-      return String(a.planDate || '').localeCompare(String(b.planDate || ''));
-    }).forEach(function (t) {
-      var urgent = (t.source || '').indexOf('urgent') >= 0;
-      var badge = STATUS_BADGE_CLASS[t.status] || 'bg-secondary';
-      var conflict = conflicts[t.taskID];
-      var machineCell = escapeHtml(t.machineNo) + (t.machineModel ? ' (' + escapeHtml(t.machineModel) + ')' : '');
-      if (conflict) {
-        machineCell += ' <span class="badge bg-warning text-dark" title="冲突: ' + escapeHtml(conflict.join(', ')) + '">冲突<br><small>Conflict</small></span>';
-      }
-      var actions = '';
-      if (t.status === '待确认 Pending') actions += statusBtn(t.taskID, '已排期 Scheduled', '置已排期', 'Schedule') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
-      if (t.status === '已排期 Scheduled') actions += statusBtn(t.taskID, '执行中 In Progress', '开始执行', 'Start') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
-      if (t.status === '执行中 In Progress') actions += statusBtn(t.taskID, '已完成 Completed', '完成', 'Complete') + statusBtn(t.taskID, '已取消 Cancelled', '取消', 'Cancel', 'outline-danger');
-      html += '<tr class="' + (urgent ? 'table-danger' : '') + '" style="cursor:pointer;" onclick="openProcessPage(\'taskID=' + encodeURIComponent(t.taskID) + '\')">' +
-        '<td>' + escapeHtml(t.taskID) + (urgent ? ' <span class="badge bg-danger">紧急<br><small>Urgent</small></span>' : '') + '</td>' +
-        '<td>' + escapeHtml(t.productName) + '</td><td>' + escapeHtml(t.moldNo) + '</td><td>' + machineCell + '</td>' +
-        '<td>' + escapeHtml(t.sku) + '</td><td>' + escapeHtml(t.material) + '</td>' +
-        '<td style="white-space:nowrap;">' + (t.cardNumber ? escapeHtml(t.cardNumber) : '<span class="text-muted">—</span>') + '</td>' +
-        '<td><span class="badge ' + badge + '">' + escapeHtml(t.status) + '</span></td>' +
-        '<td>' + escapeHtml(t.planDate) + '</td><td>' + escapeHtml(t.dueDate || '') + '</td><td>' + escapeHtml(t.reqPerson) + '</td>' +
-        '<td class="text-center align-middle" onclick="event.stopPropagation();">' + actions + '</td></tr>';
+  if (!weekKey) {
+    // 全部周：所有数据一个表格，不分周
+    html += '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead><tr>' + TASK_TABLE_HEADER + '</tr></thead><tbody>';
+    html += taskRowsHtml_(tasks, conflicts);
+    html += '</tbody></table>';
+  } else {
+    Object.keys(byWeek).sort().reverse().forEach(function (k) {
+      var list = byWeek[k];
+      var label = list[0] && list[0].planDate ? computeWeekInfo_(list[0].planDate).label : k;
+      html += '<div class="week-group mb-3"><div class="week-group-title">' + escapeHtml(label) + '（' + list.length + '）</div>';
+      html += '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead><tr>' + TASK_TABLE_HEADER + '</tr></thead><tbody>';
+      html += taskRowsHtml_(list, conflicts);
+      html += '</tbody></table></div>';
     });
-    html += '</tbody></table></div>';
-  });
+  }
   if (!Object.keys(byWeek).length) html = '<div class="text-muted py-3 text-center">暂无任务 / No tasks</div>';
   $('#taskTableWrap').html(html);
 }

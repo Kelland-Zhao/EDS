@@ -734,6 +734,25 @@ function selectTask(taskID) {
     .loadNPIProcessRecordData(taskID);
 }
 
+// 历史记录键去前缀（纯函数，供回填与测试使用）：
+// 修复前 MachineMap 同卡多行映射会组出多张同名卡（键带 1_..N_ 前缀）；
+// 修复后单卡渲染（composeLen===1），若记录保存时的卡组合全是同一张卡，则剥掉实例前缀回填
+function normalizeDuplicateCardKeys_(obj, templateRef, composeLen) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+  if (composeLen !== 1) return obj;
+  var cards = (templateRef && templateRef.cards) || [];
+  if (cards.length < 2) return obj;
+  var names = {};
+  cards.forEach(function (c) { names[c.card] = true; });
+  if (Object.keys(names).length !== 1) return obj; // 多张不同卡：真多卡记录，不动
+  var out = {};
+  Object.keys(obj).forEach(function (k) {
+    var m = /^\d+_(.+)$/.exec(k);
+    out[m ? m[1] : k] = obj[k];
+  });
+  return out;
+}
+
 function fillFormFields(fields) {
   var obj = fields;
   if (Array.isArray(fields)) {
@@ -742,6 +761,7 @@ function fillFormFields(fields) {
     obj = convertOldFieldsToObject(fields, fcRows);
   }
   if (!obj || typeof obj !== 'object') return;
+  obj = normalizeDuplicateCardKeys_(obj, currentRecord ? currentRecord.templateRef : null, (currentCompose || []).length);
   Object.keys(obj).forEach(function (k) { if (String(k).indexOf('auxEquip_') >= 0) ensureEquipmentForKey(k); });
   ensureSegmentsForObject(obj);
   var legacy = [];

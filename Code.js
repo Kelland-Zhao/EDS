@@ -15180,13 +15180,22 @@ function loadNPIWorkcenterList(processType) {
   }
 }
 
+// 同一 display 下同卡规格去重（保留先出现行）：多行原始机型映射同一中间层+同一卡时只保留一条，
+// 避免聚合出重复卡实例（如 HT160/HT250/HT250 W → HIM 曾渲染三块 HIM）
+function pushDisplaySpecUnique_(list, spec) {
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].card === spec.card) return;
+  }
+  list.push(spec);
+}
+
 // 表驱动模板：读 NPI_Templates（已确认行）+ NPI_MachineMap（已确认行），CacheService 6h
 // NPI_Templates 列：A卡 B工序 C区块 D区块EN E字段CN F字段EN G字段key H类型 I单位 J下限 K上限 L检查部门 M预设值 N分段 O状态 P备注
 // NPI_MachineMap 列：A原始机型 B中间层 C工序 D卡 E卡数 F排序 G状态 H备注
 function loadNPITemplateData() {
   try {
     var cache = CacheService.getScriptCache();
-    var CKEY = 'NPI_TEMPLATE_CACHE_v2';
+    var CKEY = 'NPI_TEMPLATE_CACHE_v3';
     var cached = cache.get(CKEY);
     if (cached) return cached;
     var ss = SpreadsheetApp.openById(NPI_SS_ID);
@@ -15221,7 +15230,7 @@ function loadNPITemplateData() {
       if (!raw || !disp || !card2) continue;
       byRaw[raw] = disp;
       if (!byDisplay[disp]) byDisplay[disp] = [];
-      byDisplay[disp].push({ card: card2, count: count, order: order });
+      pushDisplaySpecUnique_(byDisplay[disp], { card: card2, count: count, order: order });
     }
     var out = JSON.stringify({ success: true, data: { cards: cards, machineMap: { byRaw: byRaw, byDisplay: byDisplay } } });
     cache.put(CKEY, out, 21600);
@@ -15231,11 +15240,11 @@ function loadNPITemplateData() {
   }
 }
 
-// 每任务最新工艺卡映射（纯函数，供任务列表与测试使用）：
-// NPI_ProcessRecords 列序 [1]testTaskID [3]isLatest [8]cardNumber；
+// 每任务最新工艺卡信息映射（纯函数，供任务列表与测试使用）：
+// NPI_ProcessRecords 列序 [1]testTaskID [2]status [3]isLatest [8]cardNumber；
 // isLatest=TRUE 行优先（布尔/字符串均可），多条 TRUE 取最后一条；
-// 无 TRUE 行时防御性取该任务最后一行；TRUE 行卡号空白不回退
-function buildLatestCardMap_(recordsData) {
+// 无 TRUE 行时防御性取该任务最后一行；TRUE 行卡号空白不回退，状态仍取该行
+function buildLatestCardInfoMap_(recordsData) {
   var map = {};
   var lastIdx = {};
   for (var i = 1; i < recordsData.length; i++) {
@@ -15245,13 +15254,13 @@ function buildLatestCardMap_(recordsData) {
     if (!tid) continue;
     lastIdx[tid] = i;
     if (String(row[3] || '').trim().toUpperCase() === 'TRUE') {
-      map[tid] = String(row[8] || '').trim();
+      map[tid] = { cardNumber: String(row[8] || '').trim(), status: String(row[2] || '').trim() };
     }
   }
   Object.keys(lastIdx).forEach(function (tid) {
     if (!(tid in map)) {
       var r = recordsData[lastIdx[tid]];
-      map[tid] = String(r[8] || '').trim();
+      map[tid] = { cardNumber: String(r[8] || '').trim(), status: String(r[2] || '').trim() };
     }
   });
   return map;
@@ -15262,15 +15271,16 @@ function loadNPITestTaskList() {
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
     if (!ws) return JSON.stringify({ success: true, data: [] });
     var data = ws.getDataRange().getValues();
-    // 每任务最新工艺卡编号（记录表不可用时卡号留空）
+    // 每任务最新工艺卡编号与状态（记录表不可用时均留空）
     var cardMap = {};
     try {
       var prWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
-      if (prWs) cardMap = buildLatestCardMap_(prWs.getDataRange().getValues());
+      if (prWs) cardMap = buildLatestCardInfoMap_(prWs.getDataRange().getValues());
     } catch (e) { /* 忽略记录表读取失败 */ }
     var result = [];
     for (var i = 1; i < data.length; i++) {
       if (!String(data[i][0] || '').trim()) continue;
+      var cardInfo = cardMap[String(data[i][0] || '')] || null;
       result.push({
         taskID: String(data[i][0] || ''),
         source: String(data[i][1] || ''),
@@ -15293,7 +15303,8 @@ function loadNPITestTaskList() {
         dueDate: data[i][22] instanceof Date
           ? Utilities.formatDate(data[i][22], Session.getScriptTimeZone(), 'yyyy-MM-dd')
           : String(data[i][22] || ''),
-        cardNumber: cardMap[String(data[i][0] || '')] || ''
+        cardNumber: cardInfo ? cardInfo.cardNumber : '',
+        cardStatus: cardInfo ? cardInfo.status : ''
       });
     }
     return JSON.stringify({ success: true, data: result });
