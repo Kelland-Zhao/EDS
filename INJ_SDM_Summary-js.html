@@ -77,6 +77,16 @@
       return typeof raw === 'string' ? JSON.parse(raw) : raw;
     }
 
+    // textarea 自适应高度：多行内容完整显示
+    function autoResizeTextarea(el) {
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+    $(document).on('input', '.item-row.todo .description, .item-row.communication .description', function () {
+      autoResizeTextarea(this);
+    });
+
     function cardFor(type) {
       if (type === 'major') return $('#MajorCard');
       if (type === 'outstanding') return $('#OutstandingCard');
@@ -165,6 +175,7 @@
         row.find('.owner-choice input').prop('disabled', true);
       }
       $('#CommunicationCard .item-list').append(row);
+      autoResizeTextarea(row.find('.description')[0]);
       updateCounts();
     }
 
@@ -189,10 +200,12 @@
         <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
         <textarea class="form-control description" rows="1" placeholder="待办事项 / To-Do" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
+        <input type="date" class="expected-date" title="预计完成日期 / Expected Completion Date" value="${$('<div>').text(item.expectedCompletionDate || '').html()}"${status === 'CLOSED' ? ' disabled' : ''}>
         ${actionsCol}
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
       </div>`);
       $('#TodoCard .item-list').append(row);
+      autoResizeTextarea(row.find('.description')[0]);
       updateCounts();
     }
 
@@ -354,13 +367,24 @@
 
       $('#TodoCard .item-row').each(function (index) {
         const description = $(this).find('.description').val().trim();
+        const expectedDate = $(this).find('.expected-date').val().trim();
         const isClosed = $(this).hasClass('comm-closed');
         const rowItemId = $(this).data('item-id') || '';
         const isHistoryItem = historyTodoItemIds.has(rowItemId) && !editingReportItemIds.has(rowItemId);
         if (!description) return;
         if (isClosed) return;
-        if (isHistoryItem) return;
-        payload.todo.push({ description });
+        if (isHistoryItem) {
+          // Historical items: submit only when something changed (description / expected date)
+          const original = historyTodoItems.find(item => item.itemId === rowItemId);
+          if (!original) return;
+          const origDate = original.expectedCompletionDate || '';
+          const changed = description !== (original.description || '') || expectedDate !== origDate;
+          if (changed) {
+            payload.historyUpdates.push({ itemId: rowItemId, description: description, expectedCompletionDate: expectedDate });
+          }
+        } else {
+          payload.todo.push({ description: description, expectedCompletionDate: expectedDate });
+        }
       });
 
       if (!payload.major.length && !payload.outstanding.length && !payload.communication.length && !payload.todo.length) {
