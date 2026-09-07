@@ -15231,11 +15231,43 @@ function loadNPITemplateData() {
   }
 }
 
+// 每任务最新工艺卡映射（纯函数，供任务列表与测试使用）：
+// NPI_ProcessRecords 列序 [1]testTaskID [3]isLatest [8]cardNumber；
+// isLatest=TRUE 行优先（布尔/字符串均可），多条 TRUE 取最后一条；
+// 无 TRUE 行时防御性取该任务最后一行；TRUE 行卡号空白不回退
+function buildLatestCardMap_(recordsData) {
+  var map = {};
+  var lastIdx = {};
+  for (var i = 1; i < recordsData.length; i++) {
+    var row = recordsData[i];
+    if (!row) continue;
+    var tid = String(row[1] || '').trim();
+    if (!tid) continue;
+    lastIdx[tid] = i;
+    if (String(row[3] || '').trim().toUpperCase() === 'TRUE') {
+      map[tid] = String(row[8] || '').trim();
+    }
+  }
+  Object.keys(lastIdx).forEach(function (tid) {
+    if (!(tid in map)) {
+      var r = recordsData[lastIdx[tid]];
+      map[tid] = String(r[8] || '').trim();
+    }
+  });
+  return map;
+}
+
 function loadNPITestTaskList() {
   try {
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_TestTasks");
     if (!ws) return JSON.stringify({ success: true, data: [] });
     var data = ws.getDataRange().getValues();
+    // 每任务最新工艺卡编号（记录表不可用时卡号留空）
+    var cardMap = {};
+    try {
+      var prWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ProcessRecords");
+      if (prWs) cardMap = buildLatestCardMap_(prWs.getDataRange().getValues());
+    } catch (e) { /* 忽略记录表读取失败 */ }
     var result = [];
     for (var i = 1; i < data.length; i++) {
       if (!String(data[i][0] || '').trim()) continue;
@@ -15260,7 +15292,8 @@ function loadNPITestTaskList() {
         collaborators: String(data[i][21] || ''),
         dueDate: data[i][22] instanceof Date
           ? Utilities.formatDate(data[i][22], Session.getScriptTimeZone(), 'yyyy-MM-dd')
-          : String(data[i][22] || '')
+          : String(data[i][22] || ''),
+        cardNumber: cardMap[String(data[i][0] || '')] || ''
       });
     }
     return JSON.stringify({ success: true, data: result });

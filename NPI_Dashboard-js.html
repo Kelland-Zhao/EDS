@@ -89,6 +89,13 @@ $(document).ready(function () {
   $('#weekFilter, #statusFilter, #machineFilter, #sourceFilter, #reqFilter').on('change', renderTable);
   // 新建任务按钮由共享弹窗组件 NPI_TaskModal-js 绑定（就地弹窗）
   $('#btnImport').on('click', openImportModal);
+  // 导入弹窗日期范围筛选（datepicker 下拉渲染在 body 上，库按父级 modal z-index + zIndexOffset 自动置顶）
+  $('#importDateFrom, #importDateTo').datepicker({ format: 'yyyy-mm-dd', autoclose: true })
+    .on('change', renderImportTable);
+  $('#btnImportClearDate').on('click', function () {
+    $('#importDateFrom, #importDateTo').datepicker('clearDates');
+    renderImportTable();
+  });
 });
 
 function openProcessPage(extraParam) {
@@ -186,6 +193,7 @@ function renderTable() {
     html += '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead><tr>' +
       '<th>任务号<br><small>Task ID</small></th><th>产品<br><small>Product</small></th><th>模具<br><small>Mold</small></th>' +
       '<th>机台(机型)<br><small>Machine(Model)</small></th><th>SKU<br><small>SKU</small></th><th>物料<br><small>Material</small></th>' +
+      '<th>工艺卡<br><small>Card</small></th>' +
       '<th>状态<br><small>Status</small></th><th>计划日期<br><small>Plan Date</small></th><th>计划完成<br><small>Due Date</small></th><th>负责人<br><small>Requestor</small></th>' +
       '<th>操作<br><small>Action</small></th></tr></thead><tbody>';
     list.sort(function (a, b) {
@@ -209,6 +217,7 @@ function renderTable() {
         '<td>' + escapeHtml(t.taskID) + (urgent ? ' <span class="badge bg-danger">紧急<br><small>Urgent</small></span>' : '') + '</td>' +
         '<td>' + escapeHtml(t.productName) + '</td><td>' + escapeHtml(t.moldNo) + '</td><td>' + machineCell + '</td>' +
         '<td>' + escapeHtml(t.sku) + '</td><td>' + escapeHtml(t.material) + '</td>' +
+        '<td style="white-space:nowrap;">' + (t.cardNumber ? escapeHtml(t.cardNumber) : '<span class="text-muted">—</span>') + '</td>' +
         '<td><span class="badge ' + badge + '">' + escapeHtml(t.status) + '</span></td>' +
         '<td>' + escapeHtml(t.planDate) + '</td><td>' + escapeHtml(t.dueDate || '') + '</td><td>' + escapeHtml(t.reqPerson) + '</td>' +
         '<td class="text-center align-middle" onclick="event.stopPropagation();">' + actions + '</td></tr>';
@@ -267,6 +276,45 @@ function doStatusChange(taskID, newStatus) {
   }
 }
 
+// 导入候选日期范围筛选（纯函数，供渲染与测试使用）：
+// from/to 为 'yyyy-MM-dd' 字符串，可空；只填一端为单边过滤；起始大于结束时自动交换；
+// 筛选激活时（from/to 任一非空）空日期行不匹配；无筛选时返回全部（含空日期行）
+function filterImportCandidatesByDate(list, from, to) {
+  var f = String(from || '').trim();
+  var t = String(to || '').trim();
+  if (f && t && f > t) { var tmp = f; f = t; t = tmp; }
+  return list.filter(function (c) {
+    var d = String(c.date || '').trim();
+    if (!d) return !f && !t;
+    if (f && d < f) return false;
+    if (t && d > t) return false;
+    return true;
+  });
+}
+
+// 渲染导入候选表：按日期范围筛选后渲染；
+// 「导入」按钮的 idx 取全量数组下标（indexOf 按引用匹配，filter 返回原对象引用），避免筛选后点错行
+function renderImportTable() {
+  var filtered = filterImportCandidatesByDate(importCandidates, $('#importDateFrom').val(), $('#importDateTo').val());
+  var html = '';
+  filtered.forEach(function (c) {
+    var idx = importCandidates.indexOf(c);
+    var action = c.imported
+      ? '<span class="badge bg-secondary">已导入<br><small>Imported</small></span>'
+      : '<button class="btn btn-sm btn-outline-primary" style="font-size:11px;" onclick="openImportTaskModal(' + idx + ')">导入<br><small>Import</small></button>';
+    html += '<tr class="' + (c.imported ? 'text-muted' : '') + '">' +
+      '<td>' + action + '</td>' +
+      '<td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.productName) + '</td><td>' + escapeHtml(c.moldNo) + '</td>' +
+      '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
+  });
+  $('#importTable tbody').html(html);
+  var unimported = filtered.filter(function (c) { return !c.imported; }).length;
+  var hint = filtered.length === importCandidates.length
+    ? '共 ' + importCandidates.length + ' 行，未导入 ' + unimported + ' 行；点击行内「导入」逐条导入，弹窗预填信息确认后保存'
+    : '共 ' + filtered.length + ' 行（筛选自 ' + importCandidates.length + ' 行），未导入 ' + unimported + ' 行；点击行内「导入」逐条导入，弹窗预填信息确认后保存';
+  $('#importHint').text(hint);
+}
+
 function openImportModal() {
   Swal.fire({ title: swalTitle('加载候选行...', 'Loading candidates...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => { Swal.showLoading(); } });
   google.script.run
@@ -280,19 +328,7 @@ function openImportModal() {
       importCandidates = r.data || [];
       // 按日期降序（新→旧）
       importCandidates.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
-      var html = '';
-      importCandidates.forEach(function (c, idx) {
-        var action = c.imported
-          ? '<span class="badge bg-secondary">已导入<br><small>Imported</small></span>'
-          : '<button class="btn btn-sm btn-outline-primary" style="font-size:11px;" onclick="openImportTaskModal(' + idx + ')">导入<br><small>Import</small></button>';
-        html += '<tr class="' + (c.imported ? 'text-muted' : '') + '">' +
-          '<td>' + action + '</td>' +
-          '<td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.productName) + '</td><td>' + escapeHtml(c.moldNo) + '</td>' +
-          '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
-      });
-      $('#importTable tbody').html(html);
-      var unimported = importCandidates.filter(function (c) { return !c.imported; }).length;
-      $('#importHint').text('共 ' + importCandidates.length + ' 行，未导入 ' + unimported + ' 行；点击行内「导入」逐条导入，弹窗预填信息确认后保存');
+      renderImportTable();
       $('#importModal').modal('show');
     })
     .withFailureHandler(function () {
