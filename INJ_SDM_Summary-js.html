@@ -146,6 +146,21 @@
       });
     }
 
+    // 预计完成日期 vs 当前日期的状态：已逾期 / 今天到期 / 未到期 / 无日期
+    function dateStatusClass(dateStr, todayStr) {
+      if (!dateStr || !todayStr) return '';
+      if (dateStr < todayStr) return 'overdue';
+      if (dateStr === todayStr) return 'today';
+      return 'future';
+    }
+
+    function applyDateStatus(row) {
+      const input = row.find('.expected-date');
+      const status = row.hasClass('comm-closed') ? '' : dateStatusClass(String(input.val() || ''), formatLocalDate(new Date()));
+      input.removeClass('status-overdue status-today status-future');
+      if (status) input.addClass('status-' + status);
+    }
+
     // 待办事项：按预计完成日期升序，无日期的排最下面
     function sortTodoByDate(items) {
       return (items || []).slice().sort(function (a, b) {
@@ -189,6 +204,7 @@
       }
       $('#CommunicationCard .item-list').append(row);
       autoResizeTextarea(row.find('.description')[0]);
+      applyDateStatus(row);
       updateCounts();
     }
 
@@ -219,6 +235,7 @@
       </div>`);
       $('#TodoCard .item-list').append(row);
       autoResizeTextarea(row.find('.description')[0]);
+      applyDateStatus(row);
       updateCounts();
     }
 
@@ -630,6 +647,10 @@
     $(document).on('change', '#TodoShowClosed', function () {
       showTodoClosedFilter = this.checked;
       reloadTodayReport();
+    });
+    // 预计完成日期变更后实时更新背景色（逾期/今天/未到期）
+    $(document).on('change', '.item-row .expected-date', function () {
+      applyDateStatus($(this).closest('.item-row'));
     });
     $(document).on('change', '#TodoSelectAll', function () {
       var checked = this.checked;
