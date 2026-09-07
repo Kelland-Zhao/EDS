@@ -753,6 +753,20 @@ function normalizeDuplicateCardKeys_(obj, templateRef, composeLen) {
   return out;
 }
 
+// 机型中间层归一化（纯函数，供回填与测试使用）：
+// 2026-08-25 中间层引入前保存的历史记录机型存的是原始机型（如 HT250），
+// 页面统一按中间层（如 HIM）显示；byRaw 查不到或值相同则原样返回
+function normalizeMachineModelDisplay_(obj, machineMap) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+  var byRaw = (machineMap && machineMap.byRaw) || {};
+  var val = String(obj.productInfo_12 || '').trim();
+  if (!val || !byRaw[val] || byRaw[val] === val) return obj;
+  var out = {};
+  Object.keys(obj).forEach(function (k) { out[k] = obj[k]; });
+  out.productInfo_12 = byRaw[val];
+  return out;
+}
+
 function fillFormFields(fields) {
   var obj = fields;
   if (Array.isArray(fields)) {
@@ -762,6 +776,7 @@ function fillFormFields(fields) {
   }
   if (!obj || typeof obj !== 'object') return;
   obj = normalizeDuplicateCardKeys_(obj, currentRecord ? currentRecord.templateRef : null, (currentCompose || []).length);
+  obj = normalizeMachineModelDisplay_(obj, templateData ? templateData.machineMap : null);
   Object.keys(obj).forEach(function (k) { if (String(k).indexOf('auxEquip_') >= 0) ensureEquipmentForKey(k); });
   ensureSegmentsForObject(obj);
   var legacy = [];

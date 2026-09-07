@@ -1,6 +1,7 @@
-// NPI MachineMap 同卡去重修复 — pushDisplaySpecUnique_ / normalizeDuplicateCardKeys_ 测试（.mjs 扩展名，clasp 不会推送到 GAS）
+// NPI MachineMap 同卡去重修复 — pushDisplaySpecUnique_ / normalizeDuplicateCardKeys_ / normalizeMachineModelDisplay_ 测试
 // 背景：HT160/HT250/HT250 W 多行原始机型映射同一中间层 HIM + 同一卡 HIM，
-//       聚合后 3 条相同规格 → 前端渲染 3 块 HIM（NPI-20260905-0001 三块 HIM 根因）
+//       聚合后 3 条相同规格 → 前端渲染 3 块 HIM（NPI-20260905-0001 三块 HIM 根因）；
+//       2026-08-25 中间层引入前保存的历史记录机型存的是原始机型（如 HT250），回显需归一化为中间层（HIM）
 // 运行：node --test npi-machine-map-dedupe.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,6 +27,16 @@ const code = fs.readFileSync(new URL('./Code.js', import.meta.url), 'utf8');
 
 const jsHtml = fs.readFileSync(new URL('./NPI_ProcessRecord-js.html', import.meta.url), 'utf8');
 (0, eval)(extractFunction(jsHtml, 'normalizeDuplicateCardKeys_'));
+(0, eval)(extractFunction(jsHtml, 'normalizeMachineModelDisplay_'));
+
+// 真实 NPI_MachineMap 的 byRaw（中间层映射）
+const byRaw = {
+  ENG: 'FCS/ENG', FCS: 'FCS/ENG',
+  HT160: 'HIM', HT250: 'HIM', 'HT250 W': 'HIM',
+  'H Auto': 'H Auto', 'H Auto S': 'H Auto',
+  '6AX': '6AX', '3AX': '3AX', FT400: 'VIM', DB: 'OMNI-DB', DP: 'DP', HS: 'HS',
+};
+const machineMap = { byRaw };
 
 // ===== pushDisplaySpecUnique_（服务端 byDisplay 聚合去重） =====
 
@@ -97,4 +108,45 @@ test('非对象入参原样返回，不修改入参对象', () => {
 test('去前缀后与原键冲突时保留去前缀值（后覆盖）', () => {
   const obj = { him_x: 'old', '1_him_x': 'new' };
   assert.deepEqual(normalizeDuplicateCardKeys_(obj, dupRef, 1), { him_x: 'new' });
+});
+
+// ===== normalizeMachineModelDisplay_（前端历史记录机型归一化） =====
+
+test('HT250 → HIM（NPI-20260824-0001 真实场景）', () => {
+  const obj = { productInfo_9: 'Darlie Lovely Bunny', productInfo_12: 'HT250' };
+  assert.deepEqual(normalizeMachineModelDisplay_(obj, machineMap).productInfo_12, 'HIM');
+});
+
+test('ENG → FCS/ENG', () => {
+  assert.equal(normalizeMachineModelDisplay_({ productInfo_12: 'ENG' }, machineMap).productInfo_12, 'FCS/ENG');
+});
+
+test('值与中间层相同（6AX→6AX）原样返回原对象', () => {
+  const obj = { productInfo_12: '6AX', other: 1 };
+  assert.equal(normalizeMachineModelDisplay_(obj, machineMap), obj);
+});
+
+test('byRaw 查不到的值原样返回原对象', () => {
+  const obj = { productInfo_12: '100', other: 1 };
+  assert.equal(normalizeMachineModelDisplay_(obj, machineMap), obj);
+});
+
+test('productInfo_12 缺失或空原样返回', () => {
+  const obj1 = { other: 1 };
+  assert.equal(normalizeMachineModelDisplay_(obj1, machineMap), obj1);
+  const obj2 = { productInfo_12: '' };
+  assert.equal(normalizeMachineModelDisplay_(obj2, machineMap), obj2);
+});
+
+test('非对象入参原样返回', () => {
+  assert.equal(normalizeMachineModelDisplay_(null, machineMap), null);
+  assert.equal(normalizeMachineModelDisplay_([1, 2], machineMap).length, 2);
+});
+
+test('不修改入参对象，其他键保持不变', () => {
+  const obj = { productInfo_9: 'X', productInfo_12: 'HT250' };
+  const out = normalizeMachineModelDisplay_(obj, machineMap);
+  assert.notEqual(out, obj);
+  assert.equal(obj.productInfo_12, 'HT250');
+  assert.equal(out.productInfo_9, 'X');
 });
