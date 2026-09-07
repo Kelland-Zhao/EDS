@@ -83,7 +83,7 @@
       el.style.height = 'auto';
       el.style.height = el.scrollHeight + 'px';
     }
-    $(document).on('input', '.item-row.todo .description, .item-row.communication .description', function () {
+    $(document).on('input', '.item-row .description', function () {
       autoResizeTextarea(this);
     });
 
@@ -127,10 +127,11 @@
         <span class="item-num"></span>
         ${workshopChoice(name, workshop)}
         <input class="form-control machine-no" placeholder="机台号 / Machine No." value="${$('<div>').text(item.machineNo || '').html()}">
-        <textarea class="form-control description" rows="2" placeholder="问题描述 / Description">${$('<div>').text(item.description || '').html()}</textarea>
+        <textarea class="form-control description" rows="1" placeholder="问题描述 / Description">${$('<div>').text(item.description || '').html()}</textarea>
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
       </div>`);
       cardFor(type).find('.item-list').append(row);
+      autoResizeTextarea(row.find('.description')[0]);
       updateCounts();
     }
 
