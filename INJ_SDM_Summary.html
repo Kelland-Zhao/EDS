@@ -44,9 +44,10 @@
     .item-row.communication { grid-template-columns:18px 20px 28px minmax(220px,1.5fr) 130px minmax(140px,1fr) 60px 28px; }
     .item-row.todo { grid-template-columns:18px 20px 28px minmax(280px,2.5fr) 130px 60px 28px; }
     .item-row input[type=date] { height:24px; padding:0 4px; font-size:11px; min-width:0; }
-    .expected-date.status-overdue { background:#f8d7da; }
-    .expected-date.status-today { background:#fff3cd; }
-    .expected-date.status-future { background:#d1e7dd; }
+    .item-row.status-overdue { background:#f8d7da; }
+    .item-row.status-today { background:#fff3cd; }
+    .item-row.status-future { background:#d1e7dd; }
+    .item-row.status-overdue .form-control, .item-row.status-today .form-control, .item-row.status-future .form-control { background:transparent; }
     .comm-actions { display:flex; flex-direction:column; gap:1px; }
     .comm-actions .btn { font-size:9px; padding:1px 3px; line-height:1.2; min-height:20px; }
     .comm-status-label { display:block; font-size:9px; text-align:center; white-space:nowrap; margin-bottom:1px; padding:1px 3px; border-radius:2px; }

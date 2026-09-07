@@ -155,10 +155,9 @@
     }
 
     function applyDateStatus(row) {
-      const input = row.find('.expected-date');
-      const status = row.hasClass('comm-closed') ? '' : dateStatusClass(String(input.val() || ''), formatLocalDate(new Date()));
-      input.removeClass('status-overdue status-today status-future');
-      if (status) input.addClass('status-' + status);
+      const status = row.hasClass('comm-closed') ? '' : dateStatusClass(String(row.find('.expected-date').val() || ''), formatLocalDate(new Date()));
+      row.removeClass('status-overdue status-today status-future');
+      if (status) row.addClass('status-' + status);
     }
 
     // 待办事项：按预计完成日期升序，无日期的排最下面
@@ -229,7 +228,7 @@
         <span class="drag-handle" title="拖动排序 / Drag to reorder">⋮⋮</span>
         <span class="item-num"></span>
         <textarea class="form-control description" rows="1" placeholder="待办事项 / To-Do" ${status === 'CLOSED' ? 'disabled' : ''}>${$('<div>').text(item.description || '').html()}</textarea>
-        <input type="date" class="expected-date" title="预计完成日期 / Expected Completion Date" value="${$('<div>').text(item.expectedCompletionDate || '').html()}"${status === 'CLOSED' ? ' disabled' : ''}>
+        <input type="date" class="form-control expected-date" title="预计完成日期 / Expected Completion Date" value="${$('<div>').text(item.expectedCompletionDate || '').html()}"${status === 'CLOSED' ? ' disabled' : ''}>
         ${actionsCol}
         <button type="button" class="delete-item" title="删除 / Delete">×</button>
       </div>`);
