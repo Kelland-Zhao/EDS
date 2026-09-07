@@ -146,6 +146,18 @@
       });
     }
 
+    // 待办事项：按预计完成日期升序，无日期的排最下面
+    function sortTodoByDate(items) {
+      return (items || []).slice().sort(function (a, b) {
+        var x = (a && a.expectedCompletionDate) || '';
+        var y = (b && b.expectedCompletionDate) || '';
+        if (x && !y) return -1;
+        if (!x && y) return 1;
+        if (!x && !y) return 0;
+        return x.localeCompare(y);
+      });
+    }
+
     function addCommunicationRow(data) {
       const item = data || {};
       const name = `communication-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -245,7 +257,7 @@
             }
             if (historyTodoItems.length) {
               $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
-              historyTodoItems.forEach(item => addTodoRow(item));
+              sortTodoByDate(historyTodoItems).forEach(item => addTodoRow(item));
             }
             return;
           }
@@ -270,11 +282,8 @@
       const extraTodoItems = historyTodoItems.filter(item => !reportItemIds.has(item.itemId));
       const mergedCommItems = sortCommByDate(report.communication.concat(extraCommItems));
       (mergedCommItems.length ? mergedCommItems : [{}]).forEach(item => addCommunicationRow(item));
-      (report.todo.length ? report.todo : [{}]).forEach(item => addTodoRow(item));
-      if (extraTodoItems.length) {
-        $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
-        extraTodoItems.forEach(item => addTodoRow(item));
-      }
+      const mergedTodoItems = sortTodoByDate(report.todo.concat(extraTodoItems));
+      (mergedTodoItems.length ? mergedTodoItems : [{}]).forEach(item => addTodoRow(item));
       $('#CancelEdit').removeClass('d-none');
       $('#SaveReport').html('<i class="bi bi-save"></i> 更新 / Update');
       clearValidation();
@@ -776,7 +785,7 @@
           }
           if (historyTodoItems.length) {
             $('#TodoCard .item-list').append('<div class="history-divider"><span>历史待办 / Historical To-Do</span></div>');
-            historyTodoItems.forEach(item => addTodoRow(item));
+            sortTodoByDate(historyTodoItems).forEach(item => addTodoRow(item));
           }
         }
       })
