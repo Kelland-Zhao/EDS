@@ -272,7 +272,7 @@ function resetTaskModal() {
   $('#newProductName').val(null).trigger('change');
   showSkuHint();
   $('#newMoldNo, #newRemark, #newMachineModel').val('').removeClass('is-invalid');
-  $('#newMachineNo, #newMaterial').val(null).removeClass('is-invalid');
+  $('#newMachineNo, #newMaterial').val(null).trigger('change').removeClass('is-invalid');
   $('#newMachineNo').next('.select2').find('.select2-selection').removeClass('is-invalid');
   $('#newMaterial').next('.select2').find('.select2-selection').removeClass('is-invalid');
   $('#newCollaborators').val(null).trigger('change');
