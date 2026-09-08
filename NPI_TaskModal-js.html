@@ -155,6 +155,11 @@ function machineModelOptions_(mapModels, list) {
   return distinctMachineModels_(list);
 }
 
+// 机台下拉选项 HTML（纯函数，供渲染与测试使用）：value=机台号，data-model=中间层（存任务 machineModel），data-raw=原始机型
+function machineOptionHtml_(wc) {
+  return '<option value="' + wc.id + '" data-model="' + (wc.displayModel || wc.model || '') + '" data-raw="' + (wc.model || '') + '">' + wc.text + '</option>';
+}
+
 // 展开机台自增表单（默认收起，由「新增机台」按钮切换）
 function openMachineAddForm() {
   $('#machineAddForm').removeClass('d-none');
@@ -186,7 +191,7 @@ function refreshMachineAddModelOptions() {
   sel.val(null).trigger('change');
 }
 
-// 提交自增机台：写入 NPI_ExtraMachines 后重载清单并自动选中新机台
+// 提交自增机台：纯前端临时添加（不写后端）——追加到当前会话清单并自动选中，刷新/重进页面后消失
 function submitMachineAdd() {
   var no = String($('#newMachineNoInput').val() || '').trim();
   var model = String($('#newMachineModelInput').val() || '').trim();
@@ -204,37 +209,14 @@ function submitMachineAdd() {
     closeMachineAddForm();
     return;
   }
-  // 加载 toast（UI规范 §4.11）
-  Swal.fire({
-    title: swalTitle('新增机台中...', 'Adding machine...'),
-    allowOutsideClick: false,
-    showConfirmButton: false,
-    didOpen: function () { Swal.showLoading(); }
-  });
-  var op = sessionStorage.getItem('ID') || '';
-  google.script.run
-    .withSuccessHandler(function (raw) {
-      var r = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (!r.success) {
-        Swal.close();
-        Swal.fire({ icon: 'error', title: swalTitle('新增失败', 'Add failed'), html: swalHtml(r.message || '', '') });
-        return;
-      }
-      // 重载清单后自动选中新机台
-      loadWorkcenterList($('#newProcessType').val(), function () {
-        Swal.close();
-        var found = !machineMissingFromList_(no, workcenterListData);
-        if (found) $('#newMachineNo').val(no).trigger('change');
-        closeMachineAddForm();
-        $('#machineHint').removeClass('d-none').text('机台 ' + no + ' 已添加' + (found ? '并选中' : ''));
-        Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('机台 ' + no + ' 已加入清单', 'Machine ' + no + ' added to list'), timer: 1500, showConfirmButton: false });
-      });
-    })
-    .withFailureHandler(function (err) {
-      Swal.close();
-      Swal.fire({ icon: 'error', title: swalTitle('新增失败', 'Add failed'), html: swalHtml(err.message || String(err), '') });
-    })
-    .addNPIExtraMachine(no, model, op);
+  // 临时添加：仅追加到当前页面会话清单（写入任务的 machineNo/machineModel 仍走标准保存路径）
+  var item = { id: no, text: no, model: '', displayModel: model };
+  workcenterListData.push(item);
+  $('#newMachineNo').append(machineOptionHtml_(item));
+  $('#newMachineNo').val(no).trigger('change');
+  closeMachineAddForm();
+  $('#machineHint').removeClass('d-none').text('机台 ' + no + ' 已临时添加并选中（仅本次会话有效，刷新后消失）');
+  Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('机台 ' + no + ' 已加入本页清单（临时）', 'Machine ' + no + ' added to this session (temporary)'), timer: 1500, showConfirmButton: false });
 }
 
 function loadWorkcenterList(processType, callback) {
@@ -250,10 +232,8 @@ function loadWorkcenterList(processType, callback) {
       workcenterListData = data;
       workcenterMachineMapModels = (r.machineMapModels && r.machineMapModels.length) ? r.machineMapModels : null;
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
-      data.forEach(function (wc) {
-        // data-model = 中间层（存入任务 machineModel）；data-raw = Workcenter D列原始值
-        sel.append('<option value="' + wc.id + '" data-model="' + (wc.displayModel || wc.model || '') + '" data-raw="' + (wc.model || '') + '">' + wc.text + '</option>');
-      });
+      // data-model = 中间层（存入任务 machineModel）；data-raw = Workcenter D列原始值
+      data.forEach(function (wc) { sel.append(machineOptionHtml_(wc)); });
       sel.val(null).trigger('change');
       refreshMachineAddModelOptions();
       if (!data.length) {

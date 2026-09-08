@@ -15178,73 +15178,9 @@ function loadNPIWorkcenterList(processType) {
       if (!isValidWorkcenterModel_(model)) continue; // 闲置/报废机台排除
       result.push({ id: wc, text: wc, model: model, displayModel: mapRawModelToDisplay_(model, byRaw) });
     }
-    // 自增机台合并：NPI_ExtraMachines（A机台编号 B机型=工艺卡机型/中间层），与主表撞号时主表优先
-    var extraWs = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName("NPI_ExtraMachines");
-    if (extraWs) {
-      var extraData = extraWs.getDataRange().getValues();
-      for (var k = 1; k < extraData.length; k++) {
-        var exId = String(extraData[k][0] || '').trim();
-        var exModel = String(extraData[k][1] || '').trim();
-        if (!exId || !isValidWorkcenterModel_(exModel)) continue;
-        var dup = false;
-        for (var m = 0; m < result.length; m++) {
-          if (result[m].id === exId) { dup = true; break; }
-        }
-        if (dup) continue;
-        // 自增表无 Workcenter 原始机型列：model 留空，displayModel 取 B列（原始值经中间层归一化，已是中间层则原样）
-        result.push({ id: exId, text: exId, model: '', displayModel: mapRawModelToDisplay_(exModel, byRaw) });
-      }
-    }
     // 机型下拉数据源：当前工序的 MachineMap 已确认中间层机型（INJ 与清单一致回退 IM）
     var modelsPt = (pt === 'INJ') ? 'IM' : pt;
     return JSON.stringify({ success: true, data: result, machineMapModels: (modelsByProc[modelsPt] || []).slice() });
-  } catch (e) {
-    return JSON.stringify({ success: false, message: e.message });
-  }
-}
-
-// 新增自增机台：写入 NPI_ExtraMachines（A机台编号 B机型=工艺卡机型/中间层 C添加人 D添加时间），不动 Workcenter 主数据表；
-// 与主表/自增表撞号时失败。机台属主数据由主表维护，自增表仅承载新机台进场后的临时补充，任何人可添加
-function addNPIExtraMachine(machineNo, machineModel, operatorSAPID) {
-  try {
-    var no = String(machineNo || '').trim();
-    var model = String(machineModel || '').trim();
-    if (!no) return JSON.stringify({ success: false, message: '机台编号为必填 / Machine No. is required' });
-    if (!model) return JSON.stringify({ success: false, message: '机型为必填 / Machine Model is required' });
-    // 主表查重（与清单过滤规则一致：主表中标记闲置/报废的机台视为不存在，允许走自增表）
-    var ssId = NPI_WORKCENTER_SS_IDS['IM'];
-    var masterWs = ssId ? SpreadsheetApp.openById(ssId).getSheetByName("Workcenter") : null;
-    if (masterWs) {
-      var mData = masterWs.getDataRange().getValues();
-      for (var i = 1; i < mData.length; i++) {
-        if (String(mData[i][0] || '').trim() !== no) continue;
-        var mModel = String(mData[i][3] || '').trim(); // D列 Final Machine Type，与清单一致
-        if (isValidWorkcenterModel_(mModel)) {
-          return JSON.stringify({ success: false, message: '该机台已存在于主数据表，无需新增 / Machine already exists in master list' });
-        }
-      }
-    }
-    // 自增表查重（缺表则自动创建并写表头）
-    var npiSs = SpreadsheetApp.openById(NPI_SS_ID);
-    var extraWs = npiSs.getSheetByName("NPI_ExtraMachines");
-    if (extraWs) {
-      var eData = extraWs.getDataRange().getValues();
-      for (var j = 1; j < eData.length; j++) {
-        if (String(eData[j][0] || '').trim() === no) {
-          return JSON.stringify({ success: false, message: '该机台已在自增清单中 / Machine already exists in extra list' });
-        }
-      }
-    } else {
-      extraWs = npiSs.insertSheet("NPI_ExtraMachines");
-      extraWs.appendRow(['机台编号', '机型', '添加人', '添加时间']);
-    }
-    // 操作人姓名|工号（与任务创建一致，查不到则存原值）
-    var sapToName = getSapToNameMap_();
-    var opName = sapToName[operatorSAPID] || '';
-    var opId = opName ? opName + '|' + operatorSAPID : String(operatorSAPID || '');
-    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-    extraWs.appendRow([no, model, opId, now]);
-    return JSON.stringify({ success: true, message: '机台已添加 / Machine added' });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }

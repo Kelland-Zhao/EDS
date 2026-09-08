@@ -29,6 +29,8 @@ const html = fs.readFileSync(new URL('./NPI_TaskModal-js.html', import.meta.url)
 // 目标函数尚不存在时以占位函数抛出描述性错误，保证测试以「失败」而非「加载报错」变红
 (0, eval)(tryExtract(html, 'machineModelOptions_')
   || 'function machineModelOptions_(){ throw new Error("machineModelOptions_ not found in NPI_TaskModal-js.html"); }');
+(0, eval)(tryExtract(html, 'machineOptionHtml_')
+  || 'function machineOptionHtml_(){ throw new Error("machineOptionHtml_ not found in NPI_TaskModal-js.html"); }');
 
 // NPI_Dashboard-js.html 中的导入提示文案函数（同一页面，单独提取）
 const dashHtml = fs.readFileSync(new URL('./NPI_Dashboard-js.html', import.meta.url), 'utf8');
@@ -105,4 +107,18 @@ test('machineMissingHintText_: 提示文案含机台号并引导手动新增', (
 
 test('machineMissingHintText_: 空机台号 → 文案不含异常输出', () => {
   assert.equal(machineMissingHintText_('').includes('undefined'), false);
+});
+
+// ===== machineOptionHtml_（机台下拉选项 HTML） =====
+
+test('machineOptionHtml_: 生成选项（value=机台号、data-model=中间层、data-raw=原始机型）', () => {
+  const html = machineOptionHtml_({ id: 'S1HS0001', text: 'S1HS0001', model: 'HS', displayModel: 'HIM' });
+  assert.match(html, /value="S1HS0001"/);
+  assert.match(html, /data-model="HIM"/);
+  assert.match(html, /data-raw="HS"/);
+});
+
+test('machineOptionHtml_: displayModel 缺失时回退原始机型', () => {
+  const html = machineOptionHtml_({ id: 'E0EN0001', text: 'E0EN0001', model: 'ENG', displayModel: '' });
+  assert.match(html, /data-model="ENG"/);
 });
