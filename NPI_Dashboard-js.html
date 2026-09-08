@@ -107,18 +107,27 @@ function openProcessPage(extraParam) {
   window.open(url, '_blank');
 }
 
-function loadTasks() {
+// 加载请求序号：丢弃过期响应，避免慢的旧请求覆盖新数据（静默刷新与显式加载共用）
+var loadTasksSeq = 0;
+// quiet=true 为静默后台刷新：不弹错误提示、不重建筛选下拉（保留用户已选筛选），失败时保留当前列表
+function loadTasks(quiet) {
+  var seq = ++loadTasksSeq;
   google.script.run
     .withSuccessHandler(function (result) {
-      Swal.close();
+      if (seq !== loadTasksSeq) return; // 过期响应：期间已有更新的加载请求
+      if (!quiet) Swal.close();
       var r = parseResponse(result);
+      if (!r.success && quiet) return; // 静默刷新失败：保留当前列表，不打扰用户
       allTasks = r.success ? r.data : [];
-      buildFilters();
+      if (!quiet) buildFilters();
       renderTable();
     })
     .withFailureHandler(function (err) {
-      Swal.close();
-      Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('任务列表加载失败', 'Failed to load task list') });
+      if (seq !== loadTasksSeq) return;
+      if (!quiet) {
+        Swal.close();
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('任务列表加载失败', 'Failed to load task list') });
+      }
     })
     .loadNPITestTaskList();
 }
@@ -185,6 +194,13 @@ function sortTasksForTable_(list) {
     var bu = (b.source || '').indexOf('urgent') >= 0 ? 1 : 0;
     if (au !== bu) return bu - au; // 紧急置顶
     return String(a.planDate || '').localeCompare(String(b.planDate || ''));
+  });
+}
+
+// 状态轮转乐观更新：把指定任务的状态改为 newStatus，返回新数组不改入参（纯函数，供渲染与测试使用）
+function applyLocalStatus_(tasks, taskID, newStatus) {
+  return (tasks || []).map(function (t) {
+    return t.taskID === taskID ? Object.assign({}, t, { status: newStatus }) : t;
   });
 }
 
@@ -283,7 +299,10 @@ function doStatusChange(taskID, newStatus) {
         Swal.close();
         var r = parseResponse(raw);
         if (r.success) {
-          loadTasks();
+          // 乐观更新：先本地改状态立即渲染（秒级反馈），再后台静默全量刷新兜底，不再等待第二次服务器往返
+          allTasks = applyLocalStatus_(allTasks, taskID, newStatus);
+          renderTable();
+          loadTasks(true);
         } else {
           Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r.message || '更新失败', 'Failed') });
         }
