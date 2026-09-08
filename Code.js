@@ -15211,13 +15211,15 @@ function addNPIExtraMachine(machineNo, machineModel, operatorSAPID) {
     var model = String(machineModel || '').trim();
     if (!no) return JSON.stringify({ success: false, message: '机台编号为必填 / Machine No. is required' });
     if (!model) return JSON.stringify({ success: false, message: '机型为必填 / Machine Model is required' });
-    // 主表查重
+    // 主表查重（与清单过滤规则一致：主表中标记闲置/报废的机台视为不存在，允许走自增表）
     var ssId = NPI_WORKCENTER_SS_IDS['IM'];
     var masterWs = ssId ? SpreadsheetApp.openById(ssId).getSheetByName("Workcenter") : null;
     if (masterWs) {
       var mData = masterWs.getDataRange().getValues();
       for (var i = 1; i < mData.length; i++) {
-        if (String(mData[i][0] || '').trim() === no) {
+        if (String(mData[i][0] || '').trim() !== no) continue;
+        var mModel = String(mData[i][3] || '').trim(); // D列 Final Machine Type，与清单一致
+        if (isValidWorkcenterModel_(mModel)) {
           return JSON.stringify({ success: false, message: '该机台已存在于主数据表，无需新增 / Machine already exists in master list' });
         }
       }

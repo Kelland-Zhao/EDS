@@ -222,8 +222,27 @@ test('机台编号已在主表 → 失败', () => {
   seedMaster();
   const r = JSON.parse(globalThis.addNPIExtraMachine('S1HS0001', 'HS', '90001'));
   assert.equal(r.success, false);
-  assert.match(r.message, /主数据表|master/);
+  assert.match(r.message, /主数据表/);
   assert.equal(fakeSS[NPI_SS_ID]?.['NPI_ExtraMachines'], undefined, '不建表不写入');
+});
+
+test('主表存在但标记闲置/报废 → 不视为重复，走自增表新增（与清单过滤规则一致）', () => {
+  resetFakeSS();
+  fakeSS[NPI_WORKCENTER_SS_ID] = {
+    Workcenter: fakeSheet([
+      WC_HEADER,
+      wcRow('S1HS0001', 'HS'),
+      wcRow('H2FCS954', '报废'),
+      wcRow('H1FCS955', '闲置'),
+    ]),
+  };
+  const r1 = JSON.parse(globalThis.addNPIExtraMachine('H2FCS954', 'FCS/ENG', '90001'));
+  assert.equal(r1.success, true);
+  const r2 = JSON.parse(globalThis.addNPIExtraMachine('H1FCS955', 'FCS/ENG', '90001'));
+  assert.equal(r2.success, true);
+  // 随后 load 可见：清单过滤主表报废/闲置行，自增表合并出新机台
+  const list = loadMachines('IM');
+  assert.deepEqual(list.data.map(w => w.id), ['S1HS0001', 'H2FCS954', 'H1FCS955']);
 });
 
 test('机台编号已在自增表 → 失败', () => {
