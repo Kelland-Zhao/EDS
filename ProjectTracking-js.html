@@ -1275,6 +1275,22 @@
     }
   }
 
+  // 更新弹窗里程碑/事项排序：计划开始升序；无计划开始的行沉底，其间按计划完成升序；均无则保持原顺序
+  function sortMilestonesByPlannedStart(list) {
+    if (!list || !list.length) return [];
+    return list.slice().sort(function(a, b) {
+      var sa = parseDate(a.plannedStart), sb = parseDate(b.plannedStart);
+      if (sa && sb) return sa - sb;
+      if (sa) return -1;
+      if (sb) return 1;
+      var pa = parseDate(a.planned), pb = parseDate(b.planned);
+      if (pa && pb) return pa - pb;
+      if (pa) return -1;
+      if (pb) return 1;
+      return 0;
+    });
+  }
+
   function openUpdateModal(projectName) {
     if (!globalData) return;
     var proj = null;
@@ -1352,13 +1368,7 @@
     $('#modalMilestonesHint').text(currentUpdateIsCI
       ? '可增删/修改 follow-up 事项，状态选"已完成"自动记录完成日期 / Status→Done auto-records completion date'
       : '可增删/修改里程碑，状态选"已完成"自动记录完成日期，保存后管理员将收到邮件通知 / Status→Done auto-records date; admin notified on save');
-    var sortedMs = (proj.milestones || []).slice().sort(function(a, b) {
-      var pa = parseDate(a.planned), pb = parseDate(b.planned);
-      if (pa && pb) return pa - pb;
-      if (pa) return -1;
-      if (pb) return 1;
-      return 0;
-    });
+    var sortedMs = sortMilestonesByPlannedStart(proj.milestones);
     sortedMs.forEach(function(ms, msIdx) {
       addUpdateMilestoneRow(ms.name, ms.plannedStart, ms.planned, ms.actual, ms.owner, ms.ownerEmail, ms.status, msIdx);
     });
