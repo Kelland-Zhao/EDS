@@ -88,13 +88,11 @@ $(document).ready(function () {
     selectedSkuCodes = real;
   });
   $('#btnCreateTask').on('click', createTask);
-  // 机台自增表单：新增入口 + 机型下拉（单选，可自由输入新机型）
+  // 机台自增表单：新增入口 + 机型下拉（单选，仅 MachineMap 已确认中间层机型）
   $('#newMachineModelInput').select2({
-    placeholder: '选择或输入机型 / Select or type',
+    placeholder: '请选择机型 / Select Model',
     allowClear: true,
     width: '100%',
-    tags: true,
-    selectOnClose: true, // 关闭下拉时提交输入文本，避免「看似已填实则丢弃」
     dropdownParent: $('#newTaskModal')
   });
   $('#btnAddMachine').on('click', function () { openMachineAddForm(''); });
@@ -127,6 +125,8 @@ function loadCollaborators() {
 
 // 当前已加载的机台清单（loadNPIWorkcenterList 返回数据），供导入预填缺失检测与机型下拉使用
 var workcenterListData = [];
+// 当前工序的 MachineMap 已确认中间层机型（loadNPIWorkcenterList 返回），机型下拉优先使用
+var workcenterMachineMapModels = null;
 
 // 预填机台号是否缺失于当前清单（纯函数，供渲染与测试使用）：空机台号不算缺失
 function machineMissingFromList_(machineNo, list) {
@@ -143,6 +143,12 @@ function distinctMachineModels_(list) {
     if (m) models[m] = true;
   });
   return Object.keys(models).sort();
+}
+
+// 机型下拉数据源：优先 MachineMap 已确认中间层清单；缺失/为空时回退当前机台清单去重（纯函数，供渲染与测试使用）；返回新数组不改入参
+function machineModelOptions_(mapModels, list) {
+  if (mapModels && mapModels.length) return mapModels.slice();
+  return distinctMachineModels_(list);
 }
 
 // 展开机台自增表单；prefillNo 非空时预填机台号并提示「不在清单中」（导入场景）
@@ -169,7 +175,7 @@ function closeMachineAddForm() {
 function refreshMachineAddModelOptions() {
   var sel = $('#newMachineModelInput');
   sel.empty();
-  distinctMachineModels_(workcenterListData).forEach(function (m) {
+  machineModelOptions_(workcenterMachineMapModels, workcenterListData).forEach(function (m) {
     sel.append('<option value="' + m + '">' + m + '</option>');
   });
   sel.val(null).trigger('change');
@@ -237,6 +243,7 @@ function loadWorkcenterList(processType, callback) {
       var r = JSON.parse(result || '{}');
       var data = r.success ? r.data : [];
       workcenterListData = data;
+      workcenterMachineMapModels = (r.machineMapModels && r.machineMapModels.length) ? r.machineMapModels : null;
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
       data.forEach(function (wc) {
         // data-model = 中间层（存入任务 machineModel）；data-raw = Workcenter D列原始值
@@ -250,6 +257,8 @@ function loadWorkcenterList(processType, callback) {
       if (callback) callback();
     })
     .withFailureHandler(function () {
+      workcenterListData = [];
+      workcenterMachineMapModels = null;
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>').val(null).trigger('change');
       $('#machineHint').removeClass('d-none').text('机台清单加载失败 / Failed to load machines');
       if (callback) callback();

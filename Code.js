@@ -15160,10 +15160,14 @@ function loadNPIWorkcenterList(processType) {
     if (!ws) return JSON.stringify({ success: true, data: [] });
     // 机型中间层映射（复用模板数据缓存，失败则回退原始值）
     var byRaw = {};
+    var modelsByProc = {};
     try {
       var tplOut = loadNPITemplateData();
       var tpl = JSON.parse(tplOut);
-      if (tpl.success) byRaw = tpl.data.machineMap.byRaw || {};
+      if (tpl.success) {
+        byRaw = tpl.data.machineMap.byRaw || {};
+        modelsByProc = tpl.data.machineMap.modelsByProcess || {};
+      }
     } catch (e) {}
     var data = ws.getDataRange().getValues();
     var result = [];
@@ -15191,7 +15195,9 @@ function loadNPIWorkcenterList(processType) {
         result.push({ id: exId, text: exId, model: '', displayModel: mapRawModelToDisplay_(exModel, byRaw) });
       }
     }
-    return JSON.stringify({ success: true, data: result });
+    // 机型下拉数据源：当前工序的 MachineMap 已确认中间层机型（INJ 与清单一致回退 IM）
+    var modelsPt = (pt === 'INJ') ? 'IM' : pt;
+    return JSON.stringify({ success: true, data: result, machineMapModels: (modelsByProc[modelsPt] || []).slice() });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
@@ -15257,7 +15263,7 @@ function pushDisplaySpecUnique_(list, spec) {
 function loadNPITemplateData() {
   try {
     var cache = CacheService.getScriptCache();
-    var CKEY = 'NPI_TEMPLATE_CACHE_v3';
+    var CKEY = 'NPI_TEMPLATE_CACHE_v4';
     var cached = cache.get(CKEY);
     if (cached) return cached;
     var ss = SpreadsheetApp.openById(NPI_SS_ID);
@@ -15294,12 +15300,30 @@ function loadNPITemplateData() {
       if (!byDisplay[disp]) byDisplay[disp] = [];
       pushDisplaySpecUnique_(byDisplay[disp], { card: card2, count: count, order: order });
     }
-    var out = JSON.stringify({ success: true, data: { cards: cards, machineMap: { byRaw: byRaw, byDisplay: byDisplay } } });
+    var out = JSON.stringify({ success: true, data: { cards: cards, machineMap: { byRaw: byRaw, byDisplay: byDisplay, modelsByProcess: buildMachineMapModelsByProcess_(mapData) } } });
     cache.put(CKEY, out, 21600);
     return out;
   } catch (e) {
     return JSON.stringify({ success: false, message: e.message });
   }
+}
+
+// 已确认 MachineMap 行 → 按工序分组的中间层机型去重列表（纯函数，供测试）：
+// 仅 G列=已确认 计入；中间层/工序为空跳过；每组升序；返回新对象不改入参
+function buildMachineMapModelsByProcess_(mapData) {
+  var sets = {};
+  for (var m = 1; m < mapData.length; m++) {
+    var r = mapData[m];
+    var st = String(r[6] || '').trim();
+    if (st !== '已确认') continue;
+    var disp = String(r[1] || '').trim(), proc = String(r[2] || '').trim();
+    if (!disp || !proc) continue;
+    if (!sets[proc]) sets[proc] = {};
+    sets[proc][disp] = true;
+  }
+  var out = {};
+  Object.keys(sets).forEach(function (p) { out[p] = Object.keys(sets[p]).sort(); });
+  return out;
 }
 
 // 每任务最新工艺卡信息映射（纯函数，供任务列表与测试使用）：

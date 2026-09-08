@@ -19,9 +19,16 @@ function extractFunction(src, name) {
   throw new Error(`${name} braces not balanced`);
 }
 
+function tryExtract(src, name) {
+  try { return extractFunction(src, name); } catch (e) { return null; }
+}
+
 const html = fs.readFileSync(new URL('./NPI_TaskModal-js.html', import.meta.url), 'utf8');
 (0, eval)(extractFunction(html, 'machineMissingFromList_'));
 (0, eval)(extractFunction(html, 'distinctMachineModels_'));
+// 目标函数尚不存在时以占位函数抛出描述性错误，保证测试以「失败」而非「加载报错」变红
+(0, eval)(tryExtract(html, 'machineModelOptions_')
+  || 'function machineModelOptions_(){ throw new Error("machineModelOptions_ not found in NPI_TaskModal-js.html"); }');
 
 // 机台清单项结构（与 loadNPIWorkcenterList 返回一致）：{id, text, model=Workcenter D列原始机型, displayModel=工艺卡机型/中间层}
 const LIST = [
@@ -62,4 +69,23 @@ test('distinctMachineModels_: 不修改原清单', () => {
   const before = JSON.stringify(LIST);
   distinctMachineModels_(LIST);
   assert.equal(JSON.stringify(LIST), before);
+});
+
+// ===== machineModelOptions_（机型下拉数据源） =====
+
+test('machineModelOptions_: 有 MachineMap 中间层清单 → 原样使用，不再回退原始机型', () => {
+  assert.deepEqual(machineModelOptions_(['3AX', '6AX', 'HIM'], LIST), ['3AX', '6AX', 'HIM']);
+});
+
+test('machineModelOptions_: 中间层清单空/缺失 → 回退 distinctMachineModels_', () => {
+  assert.deepEqual(machineModelOptions_([], LIST), ['DP-MID', 'ENG', 'HIM']);
+  assert.deepEqual(machineModelOptions_(null, LIST), ['DP-MID', 'ENG', 'HIM']);
+  assert.deepEqual(machineModelOptions_(undefined, []), []);
+});
+
+test('machineModelOptions_: 不修改入参清单', () => {
+  const models = ['3AX', 'HIM'];
+  const before = JSON.stringify(models);
+  machineModelOptions_(models, LIST);
+  assert.equal(JSON.stringify(models), before);
 });

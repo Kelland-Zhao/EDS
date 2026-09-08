@@ -170,6 +170,41 @@ test('主表机型经 MachineMap 中间层映射 displayModel', () => {
   assert.equal(hs.displayModel, 'HS'); // 无映射时原值
 });
 
+// ===== 机型下拉数据源：MachineMap 已确认中间层按工序过滤 =====
+test('buildMachineMapModelsByProcess_: 已确认行按工序分组去重排序，非已确认/空值跳过', () => {
+  const rows = [
+    ['原始机型', '中间层', '工序', '卡', '卡数', '排序', '状态', '备注'],
+    ['ENG', 'FCS/ENG', 'IM', 'C1', 1, 1, '已确认', ''],
+    ['FCS', 'FCS/ENG', 'IM', 'C1', 1, 1, '已确认', ''],
+    ['HT160', 'HIM', 'IM', 'C2', 1, 1, '已确认', ''],
+    ['HT250', 'HIM', 'IM', 'C2', 1, 1, '已确认', ''],
+    ['DB', 'OMNI-DB', 'IM', 'C3', 1, 1, '已确认', ''],
+    ['X', 'TF-X', 'TF', 'C4', 1, 1, '已确认', ''],
+    ['Y', 'TF-Y', 'TF', 'C4', 1, 1, '草稿', ''],   // 非已确认 → 跳过
+    ['Z', '', 'TF', 'C4', 1, 1, '已确认', ''],      // 中间层空 → 跳过
+    ['W', 'PK-W', '', 'C5', 1, 1, '已确认', ''],    // 工序空 → 跳过
+  ];
+  const out = globalThis.buildMachineMapModelsByProcess_(rows);
+  assert.deepEqual(out, { IM: ['FCS/ENG', 'HIM', 'OMNI-DB'], TF: ['TF-X'] });
+});
+
+test('loadNPITemplateData 暴露 modelsByProcess（已确认中间层按工序）', () => {
+  resetFakeSS();
+  seedMachineMap();
+  const tpl = JSON.parse(globalThis.loadNPITemplateData());
+  assert.deepEqual(tpl.data.machineMap.modelsByProcess, { IM: ['DP-MID'] });
+});
+
+test('loadNPIWorkcenterList 响应 machineMapModels 为当前工序的已确认中间层机型（INJ 回退 IM）', () => {
+  resetFakeSS();
+  seedMaster();
+  seedMachineMap();
+  const rIM = loadMachines('IM');
+  assert.deepEqual(rIM.machineMapModels, ['DP-MID']);
+  const rINJ = loadMachines('INJ');
+  assert.deepEqual(rINJ.machineMapModels, ['DP-MID']);
+});
+
 // ===== addNPIExtraMachine =====
 test('机台编号或机型为空 → 失败', () => {
   resetFakeSS();
