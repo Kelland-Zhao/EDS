@@ -36,6 +36,8 @@ const html = fs.readFileSync(new URL('./NPI_TaskModal-js.html', import.meta.url)
 const dashHtml = fs.readFileSync(new URL('./NPI_Dashboard-js.html', import.meta.url), 'utf8');
 (0, eval)(tryExtract(dashHtml, 'machineMissingHintText_')
   || 'function machineMissingHintText_(){ throw new Error("machineMissingHintText_ not found in NPI_Dashboard-js.html"); }');
+(0, eval)(tryExtract(dashHtml, 'machinePrefillReady_')
+  || 'function machinePrefillReady_(){ throw new Error("machinePrefillReady_ not found in NPI_Dashboard-js.html"); }');
 
 // 机台清单项结构（与 loadNPIWorkcenterList 返回一致）：{id, text, model=Workcenter D列原始机型, displayModel=工艺卡机型/中间层}
 const LIST = [
@@ -121,4 +123,16 @@ test('machineOptionHtml_: 生成选项（value=机台号、data-model=中间层�
 test('machineOptionHtml_: displayModel 缺失时回退原始机型', () => {
   const html = machineOptionHtml_({ id: 'E0EN0001', text: 'E0EN0001', model: 'ENG', displayModel: '' });
   assert.match(html, /data-model="ENG"/);
+});
+
+// ===== machinePrefillReady_（导入时机台预填快速路径判断） =====
+
+test('machinePrefillReady_: 清单非空 → 可直接预填（跳过重新加载）', () => {
+  assert.equal(machinePrefillReady_([{ id: 'S1HS0001' }]), true);
+});
+
+test('machinePrefillReady_: 清单空/缺失 → 需加载后再预填', () => {
+  assert.equal(machinePrefillReady_([]), false);
+  assert.equal(machinePrefillReady_(null), false);
+  assert.equal(machinePrefillReady_(undefined), false);
 });

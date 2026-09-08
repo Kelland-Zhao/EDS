@@ -378,6 +378,11 @@ function machineMissingHintText_(machineNo) {
   return '机台 ' + String(machineNo || '').trim() + ' 不在清单中，请点击下方「新增机台」手动添加 / Not in list, add it manually';
 }
 
+// 导入时机台预填快速路径判断：清单非空即可直接预填，无需重复请求（导入恒用 IM，任何非空清单均可用）（纯函数，供渲染与测试使用）
+function machinePrefillReady_(list) {
+  return (list || []).length > 0;
+}
+
 // 单条导入：打开新建任务弹窗预填草稿行信息（走标准创建路径，保证数据一致性）
 function openImportTaskModal(idx) {
   var c = importCandidates[idx];
@@ -395,7 +400,7 @@ function openImportTaskModal(idx) {
   $('#newProcessType').val('IM');
   $('#newProductName').val(c.productName || null);
   onProductSelected(c.productName || '', function () {});
-  loadWorkcenterList('IM', function () {
+  var applyMachinePrefill = function () {
     // 候选机台号不在清单中（理论上不发生）：仅提示手动新增，不自动展开自增表单
     if (c.machineNo && machineMissingFromList_(c.machineNo, workcenterListData)) {
       $('#machineHint').removeClass('d-none').html(machineMissingHintText_(c.machineNo));
@@ -403,7 +408,13 @@ function openImportTaskModal(idx) {
       $('#machineHint').addClass('d-none');
       $('#newMachineNo').val(c.machineNo || null).trigger('change');
     }
-  });
+  };
   $('#newTaskModal').modal('show');
+  if (machinePrefillReady_(workcenterListData)) {
+    // 清单已加载：直接预填草稿机台号，避免重复请求
+    applyMachinePrefill();
+  } else {
+    loadWorkcenterList('IM', applyMachinePrefill);
+  }
 }
 </script>

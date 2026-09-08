@@ -219,12 +219,20 @@ function submitMachineAdd() {
   Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('机台 ' + no + ' 已加入本页清单（临时）', 'Machine ' + no + ' added to this session (temporary)'), timer: 1500, showConfirmButton: false });
 }
 
+// 机台下拉锁定/解锁（select2 需同步 enable/disable，否则容器仍可交互）
+function setMachineSelectEnabled_(on) {
+  var sel = $('#newMachineNo');
+  sel.prop('disabled', !on);
+  if (sel.hasClass('select2-hidden-accessible')) sel.select2('enable', on);
+}
+
 function loadWorkcenterList(processType, callback) {
   var pt = processType || $('#newProcessType').val() || 'IM';
   var sel = $('#newMachineNo');
-  // 加载占位
+  // 加载占位 + 锁定机台下拉并提示，防止加载期间用户操作
   sel.empty().append('<option value="">加载机台清单... / Loading machines...</option>').val(null).trigger('change');
-  $('#machineHint').addClass('d-none');
+  setMachineSelectEnabled_(false);
+  $('#machineHint').removeClass('d-none').text('机台清单加载中，请稍候... / Loading machines...');
   google.script.run
     .withSuccessHandler(function (result) {
       var r = JSON.parse(result || '{}');
@@ -236,6 +244,8 @@ function loadWorkcenterList(processType, callback) {
       data.forEach(function (wc) { sel.append(machineOptionHtml_(wc)); });
       sel.val(null).trigger('change');
       refreshMachineAddModelOptions();
+      setMachineSelectEnabled_(true);
+      $('#machineHint').addClass('d-none');
       if (!data.length) {
         $('#machineHint').removeClass('d-none').text(pt === 'IM' ? '未找到机台清单 / No machines found' : '该工序暂未配置机台清单 / No machine list configured');
       }
@@ -245,6 +255,7 @@ function loadWorkcenterList(processType, callback) {
       workcenterListData = [];
       workcenterMachineMapModels = null;
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>').val(null).trigger('change');
+      setMachineSelectEnabled_(true);
       $('#machineHint').removeClass('d-none').text('机台清单加载失败 / Failed to load machines');
       if (callback) callback();
     })
