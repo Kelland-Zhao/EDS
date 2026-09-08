@@ -373,6 +373,11 @@ function openImportModal() {
     .loadTestPlanImportCandidates();
 }
 
+// 导入候选机台不在清单中的提示文案（纯函数，供渲染与测试使用）
+function machineMissingHintText_(machineNo) {
+  return '机台 ' + String(machineNo || '').trim() + ' 不在清单中，请点击下方「新增机台」手动添加 / Not in list, add it manually';
+}
+
 // 单条导入：打开新建任务弹窗预填草稿行信息（走标准创建路径，保证数据一致性）
 function openImportTaskModal(idx) {
   var c = importCandidates[idx];
@@ -391,10 +396,11 @@ function openImportTaskModal(idx) {
   $('#newProductName').val(c.productName || null);
   onProductSelected(c.productName || '', function () {});
   loadWorkcenterList('IM', function () {
-    // 候选机台号不在清单中（新机台进场未录入）→ 自动展开自增表单并预填
+    // 候选机台号不在清单中（理论上不发生）：仅提示手动新增，不自动展开自增表单
     if (c.machineNo && machineMissingFromList_(c.machineNo, workcenterListData)) {
-      openMachineAddForm(c.machineNo);
+      $('#machineHint').removeClass('d-none').html(machineMissingHintText_(c.machineNo));
     } else {
+      $('#machineHint').addClass('d-none');
       $('#newMachineNo').val(c.machineNo || null).trigger('change');
     }
   });

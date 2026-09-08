@@ -30,6 +30,11 @@ const html = fs.readFileSync(new URL('./NPI_TaskModal-js.html', import.meta.url)
 (0, eval)(tryExtract(html, 'machineModelOptions_')
   || 'function machineModelOptions_(){ throw new Error("machineModelOptions_ not found in NPI_TaskModal-js.html"); }');
 
+// NPI_Dashboard-js.html 中的导入提示文案函数（同一页面，单独提取）
+const dashHtml = fs.readFileSync(new URL('./NPI_Dashboard-js.html', import.meta.url), 'utf8');
+(0, eval)(tryExtract(dashHtml, 'machineMissingHintText_')
+  || 'function machineMissingHintText_(){ throw new Error("machineMissingHintText_ not found in NPI_Dashboard-js.html"); }');
+
 // 机台清单项结构（与 loadNPIWorkcenterList 返回一致）：{id, text, model=Workcenter D列原始机型, displayModel=工艺卡机型/中间层}
 const LIST = [
   { id: 'S1HS0001', text: 'S1HS0001', model: 'HS', displayModel: 'HIM' },
@@ -88,4 +93,16 @@ test('machineModelOptions_: 不修改入参清单', () => {
   const before = JSON.stringify(models);
   machineModelOptions_(models, LIST);
   assert.equal(JSON.stringify(models), before);
+});
+
+// ===== machineMissingHintText_（导入候选机台不在清单中的提示） =====
+
+test('machineMissingHintText_: 提示文案含机台号并引导手动新增', () => {
+  const text = machineMissingHintText_('H2FCS954');
+  assert.match(text, /H2FCS954/);
+  assert.match(text, /新增机台/);
+});
+
+test('machineMissingHintText_: 空机台号 → 文案不含异常输出', () => {
+  assert.equal(machineMissingHintText_('').includes('undefined'), false);
 });

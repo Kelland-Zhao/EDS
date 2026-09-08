@@ -95,7 +95,11 @@ $(document).ready(function () {
     width: '100%',
     dropdownParent: $('#newTaskModal')
   });
-  $('#btnAddMachine').on('click', function () { openMachineAddForm(''); });
+  // 机台自增表单默认收起，按钮切换展开/收起
+  $('#btnAddMachine').on('click', function () {
+    if ($('#machineAddForm').hasClass('d-none')) openMachineAddForm();
+    else closeMachineAddForm();
+  });
   $('#btnMachineAddConfirm').on('click', submitMachineAdd);
   $('#btnMachineAddCancel').on('click', closeMachineAddForm);
 
@@ -151,15 +155,14 @@ function machineModelOptions_(mapModels, list) {
   return distinctMachineModels_(list);
 }
 
-// 展开机台自增表单；prefillNo 非空时预填机台号并提示「不在清单中」（导入场景）
-function openMachineAddForm(prefillNo) {
+// 展开机台自增表单（默认收起，由「新增机台」按钮切换）
+function openMachineAddForm() {
   $('#machineAddForm').removeClass('d-none');
-  $('#newMachineNoInput').val(prefillNo || '').removeClass('is-invalid');
+  $('#newMachineNoInput').val('').removeClass('is-invalid');
   $('#newMachineModelInput').val(null).trigger('change');
   $('#newMachineModelInput').next('.select2').find('.select2-selection').removeClass('is-invalid');
-  if (prefillNo) {
-    $('#machineHint').removeClass('d-none').text('机台 ' + prefillNo + ' 不在清单中，请补机型后新增');
-  }
+  $('#btnAddMachine .bi-plus-lg').addClass('d-none');
+  $('#btnAddMachine .bi-dash-lg').removeClass('d-none');
   $('#newMachineNoInput').trigger('focus');
 }
 
@@ -169,6 +172,8 @@ function closeMachineAddForm() {
   $('#newMachineNoInput').val('').removeClass('is-invalid');
   $('#newMachineModelInput').val(null).trigger('change');
   $('#newMachineModelInput').next('.select2').find('.select2-selection').removeClass('is-invalid');
+  $('#btnAddMachine .bi-plus-lg').removeClass('d-none');
+  $('#btnAddMachine .bi-dash-lg').addClass('d-none');
 }
 
 // 机型下拉选项随清单刷新（select2 需 trigger change 同步选项）
