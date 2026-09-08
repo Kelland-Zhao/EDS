@@ -391,7 +391,12 @@ function openImportTaskModal(idx) {
   $('#newProductName').val(c.productName || null);
   onProductSelected(c.productName || '', function () {});
   loadWorkcenterList('IM', function () {
-    $('#newMachineNo').val(c.machineNo || null).trigger('change');
+    // 候选机台号不在清单中（新机台进场未录入）→ 自动展开自增表单并预填
+    if (c.machineNo && machineMissingFromList_(c.machineNo, workcenterListData)) {
+      openMachineAddForm(c.machineNo);
+    } else {
+      $('#newMachineNo').val(c.machineNo || null).trigger('change');
+    }
   });
   $('#newTaskModal').modal('show');
 }

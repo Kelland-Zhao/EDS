@@ -88,6 +88,18 @@ $(document).ready(function () {
     selectedSkuCodes = real;
   });
   $('#btnCreateTask').on('click', createTask);
+  // 机台自增表单：新增入口 + 机型下拉（单选，可自由输入新机型）
+  $('#newMachineModelInput').select2({
+    placeholder: '选择或输入机型 / Select or type',
+    allowClear: true,
+    width: '100%',
+    tags: true,
+    selectOnClose: true, // 关闭下拉时提交输入文本，避免「看似已填实则丢弃」
+    dropdownParent: $('#newTaskModal')
+  });
+  $('#btnAddMachine').on('click', function () { openMachineAddForm(''); });
+  $('#btnMachineAddConfirm').on('click', submitMachineAdd);
+  $('#btnMachineAddCancel').on('click', closeMachineAddForm);
 
   loadWorkcenterList();
   loadBOMBundleList();
@@ -113,6 +125,107 @@ function loadCollaborators() {
     .getUseID();
 }
 
+// 当前已加载的机台清单（loadNPIWorkcenterList 返回数据），供导入预填缺失检测与机型下拉使用
+var workcenterListData = [];
+
+// 预填机台号是否缺失于当前清单（纯函数，供渲染与测试使用）：空机台号不算缺失
+function machineMissingFromList_(machineNo, list) {
+  var no = String(machineNo || '').trim();
+  if (!no) return false;
+  return !(list || []).some(function (w) { return w.id === no; });
+}
+
+// 机型下拉选项：清单中去重、排序、跳过空值的工艺卡机型（中间层 displayModel，无则回退原始机型）（纯函数，供渲染与测试使用）；返回新数组不改入参
+function distinctMachineModels_(list) {
+  var models = {};
+  (list || []).forEach(function (w) {
+    var m = String(w.displayModel || w.model || '').trim();
+    if (m) models[m] = true;
+  });
+  return Object.keys(models).sort();
+}
+
+// 展开机台自增表单；prefillNo 非空时预填机台号并提示「不在清单中」（导入场景）
+function openMachineAddForm(prefillNo) {
+  $('#machineAddForm').removeClass('d-none');
+  $('#newMachineNoInput').val(prefillNo || '').removeClass('is-invalid');
+  $('#newMachineModelInput').val(null).trigger('change');
+  $('#newMachineModelInput').next('.select2').find('.select2-selection').removeClass('is-invalid');
+  if (prefillNo) {
+    $('#machineHint').removeClass('d-none').text('机台 ' + prefillNo + ' 不在清单中，请补机型后新增');
+  }
+  $('#newMachineNoInput').trigger('focus');
+}
+
+// 收起机台自增表单并清空输入（machineHint 文案保留：加载失败/添加成功提示仍需展示）
+function closeMachineAddForm() {
+  $('#machineAddForm').addClass('d-none');
+  $('#newMachineNoInput').val('').removeClass('is-invalid');
+  $('#newMachineModelInput').val(null).trigger('change');
+  $('#newMachineModelInput').next('.select2').find('.select2-selection').removeClass('is-invalid');
+}
+
+// 机型下拉选项随清单刷新（select2 需 trigger change 同步选项）
+function refreshMachineAddModelOptions() {
+  var sel = $('#newMachineModelInput');
+  sel.empty();
+  distinctMachineModels_(workcenterListData).forEach(function (m) {
+    sel.append('<option value="' + m + '">' + m + '</option>');
+  });
+  sel.val(null).trigger('change');
+}
+
+// 提交自增机台：写入 NPI_ExtraMachines 后重载清单并自动选中新机台
+function submitMachineAdd() {
+  var no = String($('#newMachineNoInput').val() || '').trim();
+  var model = String($('#newMachineModelInput').val() || '').trim();
+  var ok = true;
+  if (!no) { $('#newMachineNoInput').addClass('is-invalid'); ok = false; }
+  if (!model) { $('#newMachineModelInput').next('.select2').find('.select2-selection').addClass('is-invalid'); ok = false; }
+  if (!ok) {
+    Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项', 'Required fields missing'), html: swalHtml('机台编号与机型均为必填', 'Machine No. and Model are required') });
+    return;
+  }
+  // 当前清单已有该机台 → 直接选中即可，无需新增
+  if (!machineMissingFromList_(no, workcenterListData)) {
+    Swal.fire({ icon: 'info', title: swalTitle('机台已存在', 'Machine exists'), html: swalHtml('该机台已在清单中，已为你选中', 'Machine already in list, selected for you'), timer: 1500, showConfirmButton: false });
+    $('#newMachineNo').val(no).trigger('change');
+    closeMachineAddForm();
+    return;
+  }
+  // 加载 toast（UI规范 §4.11）
+  Swal.fire({
+    title: swalTitle('新增机台中...', 'Adding machine...'),
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () { Swal.showLoading(); }
+  });
+  var op = sessionStorage.getItem('ID') || '';
+  google.script.run
+    .withSuccessHandler(function (raw) {
+      var r = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!r.success) {
+        Swal.close();
+        Swal.fire({ icon: 'error', title: swalTitle('新增失败', 'Add failed'), html: swalHtml(r.message || '', '') });
+        return;
+      }
+      // 重载清单后自动选中新机台
+      loadWorkcenterList($('#newProcessType').val(), function () {
+        Swal.close();
+        var found = !machineMissingFromList_(no, workcenterListData);
+        if (found) $('#newMachineNo').val(no).trigger('change');
+        closeMachineAddForm();
+        $('#machineHint').removeClass('d-none').text('机台 ' + no + ' 已添加' + (found ? '并选中' : ''));
+        Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('机台 ' + no + ' 已加入清单', 'Machine ' + no + ' added to list'), timer: 1500, showConfirmButton: false });
+      });
+    })
+    .withFailureHandler(function (err) {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('新增失败', 'Add failed'), html: swalHtml(err.message || String(err), '') });
+    })
+    .addNPIExtraMachine(no, model, op);
+}
+
 function loadWorkcenterList(processType, callback) {
   var pt = processType || $('#newProcessType').val() || 'IM';
   var sel = $('#newMachineNo');
@@ -123,12 +236,14 @@ function loadWorkcenterList(processType, callback) {
     .withSuccessHandler(function (result) {
       var r = JSON.parse(result || '{}');
       var data = r.success ? r.data : [];
+      workcenterListData = data;
       sel.empty().append('<option value="">-- 选择机台 / Select Machine --</option>');
       data.forEach(function (wc) {
         // data-model = 中间层（存入任务 machineModel）；data-raw = Workcenter D列原始值
         sel.append('<option value="' + wc.id + '" data-model="' + (wc.displayModel || wc.model || '') + '" data-raw="' + (wc.model || '') + '">' + wc.text + '</option>');
       });
       sel.val(null).trigger('change');
+      refreshMachineAddModelOptions();
       if (!data.length) {
         $('#machineHint').removeClass('d-none').text(pt === 'IM' ? '未找到机台清单 / No machines found' : '该工序暂未配置机台清单 / No machine list configured');
       }
@@ -160,6 +275,7 @@ function resetTaskModal() {
   $('#newSource').val('weekly');
   $('#newPlanDate').val(new Date().toISOString().split('T')[0]);
   $('#newDueDate').val('');
+  closeMachineAddForm();
   $('#machineHint').addClass('d-none');
   // 工序重置回IM，若机台选项为空（此前加载过TF/PK）则重新加载IM清单
   if ($('#newMachineNo option').length <= 1) loadWorkcenterList('IM');

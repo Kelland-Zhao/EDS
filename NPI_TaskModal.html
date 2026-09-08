@@ -30,6 +30,17 @@
               <select class="form-select form-select-sm" id="newMachineNo" style="width:100%;">
                 <option value="">-- 选择机台 / Select Machine --</option>
               </select>
+              <button type="button" class="btn btn-sm btn-outline-secondary w-100 mt-1" id="btnAddMachine">＋新增机台<br><small>Add Machine</small></button>
+              <div id="machineAddForm" class="d-none mt-2 p-2 border rounded" style="background:#f8f9fa;">
+                <label class="form-label-sm">新机台编号<span class="text-danger">*</span><br><small>New Machine No.</small></label>
+                <input type="text" class="form-control form-control-sm" id="newMachineNoInput" placeholder="如 S3HS0001 / e.g. S3HS0001">
+                <label class="form-label-sm mt-1">机型<span class="text-danger">*</span><br><small>Machine Model</small></label>
+                <select class="form-select form-select-sm" id="newMachineModelInput" style="width:100%;"></select>
+                <div class="d-grid gap-2 mt-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="btnMachineAddConfirm">确认<br><small>Confirm</small></button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="btnMachineAddCancel">取消<br><small>Cancel</small></button>
+                </div>
+              </div>
               <small id="machineHint" class="text-muted d-none"></small>
             </div>
             <div class="col-6">
