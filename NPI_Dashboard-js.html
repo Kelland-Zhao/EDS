@@ -417,8 +417,15 @@ function openImportTaskModal(idx) {
   $('#newRemark').val(c.remark || '');
   $('#newSource').val('weekly');
   $('#newProcessType').val('IM');
-  $('#newProductName').val(c.productName || null);
-  onProductSelected(c.productName || '', function () {});
+  // 新品预填：产品名不在现有清单时临时加入下拉并选中（仅本次会话有效），避免纯选择下拉显示为空
+  var pn = c.productName || '';
+  if (pn && ensureProductOption_(pn)) {
+    $('#productHint').removeClass('d-none').html(productTempAddedHintText_(pn));
+  } else {
+    $('#productHint').addClass('d-none');
+  }
+  $('#newProductName').val(pn || null);
+  onProductSelected(pn, function () {});
   var applyMachinePrefill = function () {
     // 候选机台号不在清单中（理论上不发生）：仅提示手动新增，不自动展开自增表单
     if (c.machineNo && machineMissingFromList_(c.machineNo, workcenterListData)) {

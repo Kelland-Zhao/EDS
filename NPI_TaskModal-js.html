@@ -15,13 +15,12 @@ $(document).ready(function () {
     dropdownParent: $('#newTaskModal')
   });
 
-  // 产品名称 Select2：BOM Bundle 选项 + 自由输入（全新产品）
+  // 产品名称 Select2：纯选择 BOM Bundle 选项；新品经「新增产品」自增表单临时加入
   $('#newProductName').select2({
-    placeholder: '选择或输入产品名称 / Select or type',
+    placeholder: '选择产品名称 / Select Product',
     allowClear: true,
     width: '100%',
-    dropdownParent: $('#newTaskModal'),
-    tags: true
+    dropdownParent: $('#newTaskModal')
   });
   // 适用SKU Select2（多选，选项随产品联动）
   $('#newSku').select2({
@@ -63,7 +62,10 @@ $(document).ready(function () {
     $(this).removeClass('is-invalid');
     $(this).next('.select2').find('.select2-selection').removeClass('is-invalid');
   });
-  $('#newProductName').on('change', function () { onProductSelected($(this).val()); });
+  $('#newProductName').on('change', function () {
+    $('#productHint').addClass('d-none');
+    onProductSelected($(this).val());
+  });
   // 选中机台后自动带出机型（Workcenter D列）
   $('#newMachineNo').on('change', function () {
     var opt = $(this).find('option:selected');
@@ -102,6 +104,13 @@ $(document).ready(function () {
   });
   $('#btnMachineAddConfirm').on('click', submitMachineAdd);
   $('#btnMachineAddCancel').on('click', closeMachineAddForm);
+  // 产品自增表单默认收起，按钮切换展开/收起
+  $('#btnAddProduct').on('click', function () {
+    if ($('#productAddForm').hasClass('d-none')) openProductAddForm();
+    else closeProductAddForm();
+  });
+  $('#btnProductAddConfirm').on('click', submitProductAdd);
+  $('#btnProductAddCancel').on('click', closeProductAddForm);
 
   loadWorkcenterList();
   loadBOMBundleList();
@@ -219,6 +228,97 @@ function submitMachineAdd() {
   Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('机台 ' + no + ' 已加入本页清单（临时）', 'Machine ' + no + ' added to this session (temporary)'), timer: 1500, showConfirmButton: false });
 }
 
+// ===== 产品名称自增（纯前端会话内临时添加，不写后端） =====
+
+// 预填产品名是否缺失于当前清单（纯函数，供渲染与测试使用）：空产品名不算缺失
+function productMissingFromList_(name, list) {
+  var n = String(name || '').trim();
+  if (!n) return false;
+  return !(list || []).some(function (p) { return p === n; });
+}
+
+// 产品下拉选项 HTML（纯函数，供渲染与测试使用）：value=产品名、文本=产品名，引号/尖括号转义防破坏属性
+function productOptionHtml_(name) {
+  var esc = function (s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+  return '<option value="' + esc(name) + '">' + esc(name) + '</option>';
+}
+
+// BOM清单追加去重（纯函数，供渲染与测试使用）：返回 bundles 中不在 existing 里的非空项，保持顺序；返回新数组不改入参
+function productOptionsToAppend_(bundles, existing) {
+  var seen = {};
+  (existing || []).forEach(function (p) {
+    var v = String(p || '').trim();
+    if (v) seen[v] = true;
+  });
+  return (bundles || []).filter(function (b) {
+    var v = String(b || '').trim();
+    if (!v || seen[v]) return false;
+    seen[v] = true;
+    return true;
+  });
+}
+
+// 产品临时加入提示文案（纯函数，供渲染与测试使用）：说明仅本次会话有效
+function productTempAddedHintText_(name) {
+  return '产品 ' + String(name || '').trim() + ' 为新品，已临时加入清单并选中（仅本次会话有效，刷新后消失） / New product added temporarily (this session only)';
+}
+
+// 当前产品下拉已加载的选项值（DOM 读取，含会话内临时追加项）
+function currentProductOptionValues_() {
+  return $('#newProductName option').toArray().map(function (o) { return o.value; }).filter(function (v) { return v; });
+}
+
+// 确保产品名存在于下拉选项：缺失则临时追加（不选中、不触发 change），返回是否追加
+function ensureProductOption_(name) {
+  var n = String(name || '').trim();
+  if (!n) return false;
+  if (!productMissingFromList_(n, currentProductOptionValues_())) return false;
+  $('#newProductName').append(productOptionHtml_(n));
+  return true;
+}
+
+// 展开产品自增表单（默认收起，由「新增产品」按钮切换）
+function openProductAddForm() {
+  $('#productAddForm').removeClass('d-none');
+  $('#newProductNameInput').val('').removeClass('is-invalid');
+  $('#btnAddProduct .bi-plus-lg').addClass('d-none');
+  $('#btnAddProduct .bi-dash-lg').removeClass('d-none');
+  $('#newProductNameInput').trigger('focus');
+}
+
+// 收起产品自增表单并清空输入（productHint 文案保留：添加成功提示仍需展示）
+function closeProductAddForm() {
+  $('#productAddForm').addClass('d-none');
+  $('#newProductNameInput').val('').removeClass('is-invalid');
+  $('#btnAddProduct .bi-plus-lg').removeClass('d-none');
+  $('#btnAddProduct .bi-dash-lg').addClass('d-none');
+}
+
+// 提交自增产品：纯前端临时添加（不写后端）——追加到当前会话下拉并自动选中，刷新/重进页面后消失
+function submitProductAdd() {
+  var name = String($('#newProductNameInput').val() || '').trim();
+  if (!name) {
+    $('#newProductNameInput').addClass('is-invalid');
+    Swal.fire({ icon: 'warning', title: swalTitle('请填写必填项', 'Required fields missing'), html: swalHtml('产品名称为必填', 'Product Name is required') });
+    return;
+  }
+  // 清单已有该产品 → 直接选中即可，无需新增
+  if (!productMissingFromList_(name, currentProductOptionValues_())) {
+    Swal.fire({ icon: 'info', title: swalTitle('产品已存在', 'Product exists'), html: swalHtml('该产品已在清单中，已为你选中', 'Product already in list, selected for you'), timer: 1500, showConfirmButton: false });
+    $('#newProductName').val(name).trigger('change');
+    closeProductAddForm();
+    return;
+  }
+  // 临时添加：仅追加到当前页面会话下拉（写入任务的产品名仍走标准保存路径）
+  $('#newProductName').append(productOptionHtml_(name));
+  $('#newProductName').val(name).trigger('change');
+  closeProductAddForm();
+  $('#productHint').removeClass('d-none').html(productTempAddedHintText_(name));
+  Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('产品 ' + name + ' 已加入本页清单（临时）', 'Product ' + name + ' added to this session (temporary)'), timer: 1500, showConfirmButton: false });
+}
+
 // 机台下拉锁定/解锁（select2 需同步 enable/disable，否则容器仍可交互）
 function setMachineSelectEnabled_(on) {
   var sel = $('#newMachineNo');
@@ -282,6 +382,8 @@ function resetTaskModal() {
   $('#newDueDate').val('');
   closeMachineAddForm();
   $('#machineHint').addClass('d-none');
+  closeProductAddForm();
+  $('#productHint').addClass('d-none');
   // 工序重置回IM，若机台选项为空（此前加载过TF/PK）则重新加载IM清单
   if ($('#newMachineNo option').length <= 1) loadWorkcenterList('IM');
 }
@@ -318,7 +420,8 @@ function loadBOMBundleList() {
       }
       var data = r.data || [];
       var sel = $('#newProductName');
-      data.forEach(function (b) { sel.append('<option value="' + b + '">' + b + '</option>'); });
+      // 追加去重：已有选项（含会话内临时添加项）跳过，避免重复 option
+      productOptionsToAppend_(data, currentProductOptionValues_()).forEach(function (b) { sel.append(productOptionHtml_(b)); });
       sel.trigger('change');
     })
     .withFailureHandler(function () {

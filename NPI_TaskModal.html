@@ -11,8 +11,28 @@
             <div class="col-12">
               <label class="form-label-sm">产品名称<span class="text-danger">*</span><br><small>Product Name</small></label>
               <select class="form-select form-select-sm" id="newProductName" style="width:100%;">
-                <option value="">-- 选择或输入产品名称 / Select or type --</option>
+                <option value="">-- 选择产品名称 / Select Product --</option>
               </select>
+              <button type="button" class="btn btn-sm btn-outline-danger w-100 mt-1" id="btnAddProduct"><i class="bi bi-plus-lg"></i><i class="bi bi-dash-lg d-none"></i> 新增产品<br><small>Add Product</small></button>
+              <div id="productAddForm" class="machine-add-card d-none mt-2">
+                <div class="machine-add-head">
+                  <i class="bi bi-node-plus"></i>
+                  <span>新增产品<br><small>Add Product</small></span>
+                </div>
+                <div class="machine-add-body">
+                  <div class="row g-2">
+                    <div class="col-12">
+                      <label class="form-label-sm">新产品名称<span class="text-danger">*</span><br><small>New Product Name</small></label>
+                      <input type="text" class="form-control form-control-sm" id="newProductNameInput" placeholder="如 A23 Brush / e.g. A23 Brush">
+                    </div>
+                  </div>
+                  <div class="machine-add-actions">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnProductAddCancel"><i class="bi bi-x-lg"></i> 取消<br><small>Cancel</small></button>
+                    <button type="button" class="btn btn-sm btn-danger" id="btnProductAddConfirm"><i class="bi bi-check-lg"></i> 确认<br><small>Confirm</small></button>
+                  </div>
+                </div>
+              </div>
+              <small id="productHint" class="text-muted d-none"></small>
             </div>
             <div class="col-12" id="skuGroup">
               <label class="form-label-sm">适用SKU<br><small>SKU</small></label>

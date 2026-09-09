@@ -1004,7 +1004,14 @@ function openEditModal() {
   $('#newPlanDate').val(currentTask.planDate || '');
   $('#newDueDate').val(currentTask.dueDate || '');
   $('#newRemark').val(currentTask.remark || '');
-  $('#newProductName').val(currentTask.productName || null);
+  // 历史任务产品名不在现有清单时临时加入下拉并选中（仅本次会话有效），避免纯选择下拉显示为空
+  var editPn = currentTask.productName || '';
+  if (editPn && ensureProductOption_(editPn)) {
+    $('#productHint').removeClass('d-none').html(productTempAddedHintText_(editPn));
+  } else {
+    $('#productHint').addClass('d-none');
+  }
+  $('#newProductName').val(editPn || null);
   var skuTokens = (currentTask.sku || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean);
   onProductSelected(currentTask.productName || '', function () {
     if (skuTokens.length) {
