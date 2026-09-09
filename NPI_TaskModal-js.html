@@ -610,11 +610,13 @@ function createTask() {
       if (r2.success) {
         $('#newTaskModal').modal('hide');
         var tid = editingTaskID || r2.taskID;
+        // resetTaskModal 会清空 importInitialStatus，先捕获本次保存是否为导入模式再传给页面钩子
+        var wasImport = !!importInitialStatus;
         editingTaskID = null;
         resetTaskModal();
         Swal.fire({ icon: 'success', title: swalTitle('保存成功', 'Saved'), html: swalHtml('任务 ' + tid + ' 已保存', 'Task ' + tid + ' saved'), timer: 2000, showConfirmButton: false });
-        // 页面级钩子：各页面定义保存成功后的刷新/选中行为
-        if (typeof onTaskSaved === 'function') onTaskSaved(tid);
+        // 页面级钩子：各页面定义保存成功后的刷新/选中行为（第二参数为本次保存是否为导入模式）
+        if (typeof onTaskSaved === 'function') onTaskSaved(tid, wasImport);
       } else {
         Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml(r2.message, '') });
       }

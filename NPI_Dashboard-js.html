@@ -15,6 +15,7 @@ function parseResponse(raw) { return typeof raw === 'string' ? JSON.parse(raw) :
 
 var allTasks = [];
 var importCandidates = null; // null=未加载（首次打开走完整 loading），已加载后为数组（含空清单）
+var pendingImportCandidate = null; // 导入弹窗打开的候选行：保存成功时才标记已导入
 
 var NPI_ACTIVE_STATUSES = ['待确认 Pending', '已排期 Scheduled', '执行中 In Progress'];
 var STATUS_BADGE_CLASS = {
@@ -132,8 +133,10 @@ function loadTasks(quiet) {
     .loadNPITestTaskList();
 }
 
-// 共享弹窗保存成功后的页面钩子：刷新任务列表
-function onTaskSaved() {
+// 共享弹窗保存成功后的页面钩子：刷新任务列表；导入模式保存成功时同步标记候选已导入
+function onTaskSaved(tid, wasImport) {
+  applyImportSavedMark_(pendingImportCandidate, wasImport);
+  pendingImportCandidate = null;
   loadTasks();
 }
 
@@ -374,6 +377,13 @@ function importCacheReady_(cache) {
   return cache !== null && cache !== undefined;
 }
 
+// 导入保存成功后的标记决策（纯函数，供渲染与测试使用）：仅导入模式的保存成功才标记候选已导入，返回被标记的候选（无则 null）
+function applyImportSavedMark_(pending, wasImport) {
+  if (!wasImport) return null;
+  if (pending) pending.imported = true;
+  return pending || null;
+}
+
 // 导入候选按日期降序（新→旧），空日期行排最后；返回新数组不改入参（纯函数，供渲染与测试使用）
 function sortImportCandidatesByDateDesc_(list) {
   return (list || []).slice().sort(function (a, b) {
@@ -436,8 +446,8 @@ function machinePrefillReady_(list) {
 function openImportTaskModal(idx) {
   var c = importCandidates[idx];
   if (!c || c.imported) return;
-  // 乐观标记已导入：再次秒开弹窗时该行直接显示「已导入」；保存取消/失败由静默刷新兜底纠正
-  c.imported = true;
+  // 记录待定候选：保存成功时才标记已导入（取消/失败不标记，避免再次打开出现「已导入→导入」闪变）
+  pendingImportCandidate = c;
   $('#importModal').modal('hide');
   resetTaskModal();
   importInitialStatus = c.status || '待确认 Pending';
