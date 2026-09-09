@@ -1023,7 +1023,14 @@ function openEditModal() {
     }
   });
   loadWorkcenterList(currentTask.processType || 'IM', function () {
-    $('#newMachineNo').val(currentTask.machineNo || null).trigger('change');
+    // 历史任务机台号不在当前清单时临时加入并选中（仅本次会话有效），避免下拉显示为空
+    var editMc = currentTask.machineNo || '';
+    if (editMc && ensureMachineOption_(editMc)) {
+      $('#machineHint').removeClass('d-none').html(machineTempAddedHintText_(editMc));
+    } else {
+      $('#machineHint').addClass('d-none');
+    }
+    $('#newMachineNo').val(editMc || null).trigger('change');
   });
   $('#newTaskModal').modal('show');
 }

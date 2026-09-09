@@ -34,8 +34,9 @@ const html = fs.readFileSync(new URL('./NPI_TaskModal-js.html', import.meta.url)
 
 // NPI_Dashboard-js.html 中的导入提示文案函数（同一页面，单独提取）
 const dashHtml = fs.readFileSync(new URL('./NPI_Dashboard-js.html', import.meta.url), 'utf8');
-(0, eval)(tryExtract(dashHtml, 'machineMissingHintText_')
-  || 'function machineMissingHintText_(){ throw new Error("machineMissingHintText_ not found in NPI_Dashboard-js.html"); }');
+// machineTempAddedHintText_ 在共用弹窗文件（测试计划页与工艺参数页共用）
+(0, eval)(tryExtract(html, 'machineTempAddedHintText_')
+  || 'function machineTempAddedHintText_(){ throw new Error("machineTempAddedHintText_ not found in NPI_TaskModal-js.html"); }');
 (0, eval)(tryExtract(dashHtml, 'machinePrefillReady_')
   || 'function machinePrefillReady_(){ throw new Error("machinePrefillReady_ not found in NPI_Dashboard-js.html"); }');
 
@@ -99,16 +100,17 @@ test('machineModelOptions_: 不修改入参清单', () => {
   assert.equal(JSON.stringify(models), before);
 });
 
-// ===== machineMissingHintText_（导入候选机台不在清单中的提示） =====
+// ===== machineTempAddedHintText_（导入候选机台不在清单中、已临时加入选中后的提示） =====
 
-test('machineMissingHintText_: 提示文案含机台号并引导手动新增', () => {
-  const text = machineMissingHintText_('H2FCS954');
+test('machineTempAddedHintText_: 提示文案含机台号并说明会话内临时有效', () => {
+  const text = machineTempAddedHintText_('H2FCS954');
   assert.match(text, /H2FCS954/);
-  assert.match(text, /新增机台/);
+  assert.match(text, /临时/);
+  assert.match(text, /会话/);
 });
 
-test('machineMissingHintText_: 空机台号 → 文案不含异常输出', () => {
-  assert.equal(machineMissingHintText_('').includes('undefined'), false);
+test('machineTempAddedHintText_: 空机台号 → 文案不含异常输出', () => {
+  assert.equal(machineTempAddedHintText_('').includes('undefined'), false);
 });
 
 // ===== machineOptionHtml_（机台下拉选项 HTML） =====

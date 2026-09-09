@@ -392,11 +392,6 @@ function openImportModal() {
     .loadTestPlanImportCandidates();
 }
 
-// 导入候选机台不在清单中的提示文案（纯函数，供渲染与测试使用）
-function machineMissingHintText_(machineNo) {
-  return '机台 ' + String(machineNo || '').trim() + ' 不在清单中，请点击下方「新增机台」手动添加 / Not in list, add it manually';
-}
-
 // 导入时机台预填快速路径判断：清单非空即可直接预填，无需重复请求（导入恒用 IM，任何非空清单均可用）（纯函数，供渲染与测试使用）
 function machinePrefillReady_(list) {
   return (list || []).length > 0;
@@ -427,13 +422,13 @@ function openImportTaskModal(idx) {
   $('#newProductName').val(pn || null);
   onProductSelected(pn, function () {});
   var applyMachinePrefill = function () {
-    // 候选机台号不在清单中（理论上不发生）：仅提示手动新增，不自动展开自增表单
-    if (c.machineNo && machineMissingFromList_(c.machineNo, workcenterListData)) {
-      $('#machineHint').removeClass('d-none').html(machineMissingHintText_(c.machineNo));
+    // 候选机台号不在清单中：临时加入会话清单并选中（仅本次会话有效），与产品名称新品预填行为一致
+    if (c.machineNo && ensureMachineOption_(c.machineNo)) {
+      $('#machineHint').removeClass('d-none').html(machineTempAddedHintText_(c.machineNo));
     } else {
       $('#machineHint').addClass('d-none');
-      $('#newMachineNo').val(c.machineNo || null).trigger('change');
     }
+    $('#newMachineNo').val(c.machineNo || null).trigger('change');
   };
   $('#newTaskModal').modal('show');
   if (machinePrefillReady_(workcenterListData)) {
