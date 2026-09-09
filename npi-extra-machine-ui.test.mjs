@@ -34,9 +34,9 @@ const html = fs.readFileSync(new URL('./NPI_TaskModal-js.html', import.meta.url)
 
 // NPI_Dashboard-js.html 中的导入提示文案函数（同一页面，单独提取）
 const dashHtml = fs.readFileSync(new URL('./NPI_Dashboard-js.html', import.meta.url), 'utf8');
-// machineTempAddedHintText_ 在共用弹窗文件（测试计划页与工艺参数页共用）
-(0, eval)(tryExtract(html, 'machineTempAddedHintText_')
-  || 'function machineTempAddedHintText_(){ throw new Error("machineTempAddedHintText_ not found in NPI_TaskModal-js.html"); }');
+// isSessionTempMachine_ 在共用弹窗文件（测试计划页与工艺参数页共用）
+(0, eval)(tryExtract(html, 'isSessionTempMachine_')
+  || 'function isSessionTempMachine_(){ throw new Error("isSessionTempMachine_ not found in NPI_TaskModal-js.html"); }');
 (0, eval)(tryExtract(dashHtml, 'machinePrefillReady_')
   || 'function machinePrefillReady_(){ throw new Error("machinePrefillReady_ not found in NPI_Dashboard-js.html"); }');
 
@@ -100,17 +100,20 @@ test('machineModelOptions_: 不修改入参清单', () => {
   assert.equal(JSON.stringify(models), before);
 });
 
-// ===== machineTempAddedHintText_（导入候选机台不在清单中、已临时加入选中后的提示） =====
+// ===== isSessionTempMachine_（选中机台是否为本次会话内临时加入项：徽章显示决策） =====
 
-test('machineTempAddedHintText_: 提示文案含机台号并说明会话内临时有效', () => {
-  const text = machineTempAddedHintText_('H2FCS954');
-  assert.match(text, /H2FCS954/);
-  assert.match(text, /临时/);
-  assert.match(text, /会话/);
+test('isSessionTempMachine_: 会话内临时加入的机台 → true', () => {
+  assert.equal(isSessionTempMachine_('H2FCS954', ['H2FCS954', 'S9ZZ0001']), true);
 });
 
-test('machineTempAddedHintText_: 空机台号 → 文案不含异常输出', () => {
-  assert.equal(machineTempAddedHintText_('').includes('undefined'), false);
+test('isSessionTempMachine_: 非临时机台/不在清单 → false', () => {
+  assert.equal(isSessionTempMachine_('S1HS0001', ['H2FCS954']), false);
+  assert.equal(isSessionTempMachine_('S1HS0001', []), false);
+});
+
+test('isSessionTempMachine_: 空机台号 → false', () => {
+  assert.equal(isSessionTempMachine_('', ['H2FCS954']), false);
+  assert.equal(isSessionTempMachine_(null, ['H2FCS954']), false);
 });
 
 // ===== machineOptionHtml_（机台下拉选项 HTML） =====

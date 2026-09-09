@@ -64,13 +64,14 @@ $(document).ready(function () {
   });
   // productChangeGuard：预填流程里由 trigger('change') 同步 Select2 显示时，抑制 handler 的 onProductSelected（避免与带回调的手动调用重复）
   $('#newProductName').on('change', function () {
-    $('#productHint').addClass('d-none');
+    updateProductTempBadge_($(this).val());
     if (!productChangeGuard) onProductSelected($(this).val());
   });
-  // 选中机台后自动带出机型（Workcenter D列）
+  // 选中机台后自动带出机型（Workcenter D列）；临时加入项同步显示徽章
   $('#newMachineNo').on('change', function () {
     var opt = $(this).find('option:selected');
     $('#newMachineModel').val(opt.data('model') || '');
+    updateMachineTempBadge_($(this).val());
   });
   $('#newSku').on('change', function () {
     var vals = $(this).val() || [];
@@ -178,14 +179,11 @@ function ensureMachineOption_(no) {
   // 导入草稿无机型数据：临时项机型留空，弹窗「机型」字段由用户按需补填
   var item = { id: n, text: n, model: '', displayModel: '' };
   workcenterListData.push(item);
+  machineSessionExtras.push(n);
   $('#newMachineNo').append(machineOptionHtml_(item));
   return true;
 }
 
-// 机台不在清单中、已临时加入并选中后的提示文案（纯函数，供渲染与测试使用）：说明仅本次会话有效
-function machineTempAddedHintText_(machineNo) {
-  return '机台 ' + String(machineNo || '').trim() + ' 不在清单中，已临时加入清单并选中（仅本次会话有效，刷新后消失） / Machine added temporarily (this session only)';
-}
 
 // 展开机台自增表单（默认收起，由「新增机台」按钮切换）
 function openMachineAddForm() {
@@ -237,12 +235,12 @@ function submitMachineAdd() {
     return;
   }
   // 临时添加：仅追加到当前页面会话清单（写入任务的 machineNo/machineModel 仍走标准保存路径）
+  machineSessionExtras.push(no);
   var item = { id: no, text: no, model: '', displayModel: model };
   workcenterListData.push(item);
   $('#newMachineNo').append(machineOptionHtml_(item));
-  $('#newMachineNo').val(no).trigger('change');
+  $('#newMachineNo').val(no).trigger('change'); // change handler 带出机型并更新「临时加入」徽章
   closeMachineAddForm();
-  $('#machineHint').removeClass('d-none').text('机台 ' + no + ' 已临时添加并选中（仅本次会话有效，刷新后消失）');
   Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('机台 ' + no + ' 已加入本页清单（临时）', 'Machine ' + no + ' added to this session (temporary)'), timer: 1500, showConfirmButton: false });
 }
 
@@ -278,17 +276,33 @@ function productOptionsToAppend_(bundles, existing) {
   });
 }
 
-// 产品临时加入提示文案（纯函数，供渲染与测试使用）：说明仅本次会话有效
-function productTempAddedHintText_(name) {
-  return '产品 ' + String(name || '').trim() + ' 为新品，已临时加入清单并选中（仅本次会话有效，刷新后消失） / New product added temporarily (this session only)';
+// ===== 会话内临时加入项追踪（徽章显示依据；仅前端会话，刷新后消失） =====
+
+// 本次会话内临时加入的产品名清单（ensureProductOption_ / submitProductAdd 登记）
+var productSessionExtras = [];
+// 本次会话内临时加入的机台号清单（ensureMachineOption_ / submitMachineAdd 登记）
+var machineSessionExtras = [];
+
+// 选中产品是否为本次会话内临时加入项（纯函数，供渲染与测试使用）：空产品名不算
+function isSessionTempProduct_(name, extras) {
+  var n = String(name || '').trim();
+  if (!n) return false;
+  return (extras || []).indexOf(n) >= 0;
 }
 
-// 预填产品时的提示决策（纯函数，供渲染与测试使用）：仅本次会话内新临时加入的产品才返回提示文案，否则空串（保持隐藏）
-function productPrefillHint_(addedNow, name) {
-  if (!addedNow) return '';
-  var n = String(name || '').trim();
-  if (!n) return '';
-  return productTempAddedHintText_(n);
+// 选中机台是否为本次会话内临时加入项（纯函数，供渲染与测试使用）：空机台号不算
+function isSessionTempMachine_(no, extras) {
+  var n = String(no || '').trim();
+  if (!n) return false;
+  return (extras || []).indexOf(n) >= 0;
+}
+
+// 徽章显示：状态驱动——选中值为会话内临时加入项时显示，每次导入预填/手动添加/重新选中都会更新
+function updateProductTempBadge_(name) {
+  $('#productTempBadge').toggleClass('d-none', !isSessionTempProduct_(name, productSessionExtras));
+}
+function updateMachineTempBadge_(no) {
+  $('#machineTempBadge').toggleClass('d-none', !isSessionTempMachine_(no, machineSessionExtras));
 }
 
 // 预填流程中抑制产品 change handler 的 onProductSelected（与 skuChangeGuard 同款：trigger 同步执行完立即复位）
@@ -304,6 +318,7 @@ function ensureProductOption_(name) {
   var n = String(name || '').trim();
   if (!n) return false;
   if (!productMissingFromList_(n, currentProductOptionValues_())) return false;
+  productSessionExtras.push(n);
   $('#newProductName').append(productOptionHtml_(n));
   return true;
 }
@@ -317,7 +332,7 @@ function openProductAddForm() {
   $('#newProductNameInput').trigger('focus');
 }
 
-// 收起产品自增表单并清空输入（productHint 文案保留：添加成功提示仍需展示）
+// 收起产品自增表单并清空输入
 function closeProductAddForm() {
   $('#productAddForm').addClass('d-none');
   $('#newProductNameInput').val('').removeClass('is-invalid');
@@ -341,10 +356,10 @@ function submitProductAdd() {
     return;
   }
   // 临时添加：仅追加到当前页面会话下拉（写入任务的产品名仍走标准保存路径）
+  productSessionExtras.push(name);
   $('#newProductName').append(productOptionHtml_(name));
-  $('#newProductName').val(name).trigger('change');
+  $('#newProductName').val(name).trigger('change'); // change handler 同步显示并更新「临时加入」徽章
   closeProductAddForm();
-  $('#productHint').removeClass('d-none').html(productTempAddedHintText_(name));
   Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('产品 ' + name + ' 已加入本页清单（临时）', 'Product ' + name + ' added to this session (temporary)'), timer: 1500, showConfirmButton: false });
 }
 
@@ -412,7 +427,6 @@ function resetTaskModal() {
   closeMachineAddForm();
   $('#machineHint').addClass('d-none');
   closeProductAddForm();
-  $('#productHint').addClass('d-none');
   // 工序重置回IM，若机台选项为空（此前加载过TF/PK）则重新加载IM清单
   if ($('#newMachineNo option').length <= 1) loadWorkcenterList('IM');
 }

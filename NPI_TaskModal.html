@@ -10,9 +10,12 @@
           <div class="row g-2">
             <div class="col-12">
               <label class="form-label-sm">产品名称<span class="text-danger">*</span><br><small>Product Name</small></label>
-              <select class="form-select form-select-sm" id="newProductName" style="width:100%;">
-                <option value="">-- 选择产品名称 / Select Product --</option>
-              </select>
+              <div class="d-flex align-items-center gap-1">
+                <select class="form-select form-select-sm flex-grow-1" id="newProductName" style="width:100%;">
+                  <option value="">-- 选择产品名称 / Select Product --</option>
+                </select>
+                <span id="productTempBadge" class="badge status-ongoing flex-shrink-0 d-none" title="本次会话内临时加入，刷新页面后消失 / Temporarily added this session, gone after refresh">临时加入<br><small>Temporary</small></span>
+              </div>
               <button type="button" class="btn btn-sm btn-outline-danger w-100 mt-1" id="btnAddProduct"><i class="bi bi-plus-lg"></i><i class="bi bi-dash-lg d-none"></i> 新增产品<br><small>Add Product</small></button>
               <div id="productAddForm" class="machine-add-card d-none mt-2">
                 <div class="machine-add-head">
@@ -32,7 +35,6 @@
                   </div>
                 </div>
               </div>
-              <small id="productHint" class="text-muted d-none"></small>
             </div>
             <div class="col-12" id="skuGroup">
               <label class="form-label-sm">适用SKU<br><small>SKU</small></label>
@@ -47,9 +49,12 @@
             </div>
             <div class="col-6">
               <label class="form-label-sm">机台编号<span class="text-danger">*</span><br><small>Machine No.</small></label>
-              <select class="form-select form-select-sm" id="newMachineNo" style="width:100%;">
-                <option value="">-- 选择机台 / Select Machine --</option>
-              </select>
+              <div class="d-flex align-items-center gap-1">
+                <select class="form-select form-select-sm flex-grow-1" id="newMachineNo" style="width:100%;">
+                  <option value="">-- 选择机台 / Select Machine --</option>
+                </select>
+                <span id="machineTempBadge" class="badge status-ongoing flex-shrink-0 d-none" title="本次会话内临时加入，刷新页面后消失 / Temporarily added this session, gone after refresh">临时加入<br><small>Temporary</small></span>
+              </div>
               <button type="button" class="btn btn-sm btn-outline-danger w-100 mt-1" id="btnAddMachine"><i class="bi bi-plus-lg"></i><i class="bi bi-dash-lg d-none"></i> 新增机台<br><small>Add Machine</small></button>
               <div id="machineAddForm" class="machine-add-card d-none mt-2">
                 <div class="machine-add-head">

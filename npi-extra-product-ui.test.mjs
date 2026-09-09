@@ -32,10 +32,8 @@ const html = fs.readFileSync(new URL('./NPI_TaskModal-js.html', import.meta.url)
   || 'function productOptionHtml_(){ throw new Error("productOptionHtml_ not found in NPI_TaskModal-js.html"); }');
 (0, eval)(tryExtract(html, 'productOptionsToAppend_')
   || 'function productOptionsToAppend_(){ throw new Error("productOptionsToAppend_ not found in NPI_TaskModal-js.html"); }');
-(0, eval)(tryExtract(html, 'productTempAddedHintText_')
-  || 'function productTempAddedHintText_(){ throw new Error("productTempAddedHintText_ not found in NPI_TaskModal-js.html"); }');
-(0, eval)(tryExtract(html, 'productPrefillHint_')
-  || 'function productPrefillHint_(){ throw new Error("productPrefillHint_ not found in NPI_TaskModal-js.html"); }');
+(0, eval)(tryExtract(html, 'isSessionTempProduct_')
+  || 'function isSessionTempProduct_(){ throw new Error("isSessionTempProduct_ not found in NPI_TaskModal-js.html"); }');
 
 // 现有产品清单（BOM Bundle 去重名，纯字符串数组）
 const PRODUCTS = ['A23 Brush', 'C45 Comb', 'E67 Mirror'];
@@ -98,29 +96,18 @@ test('productOptionsToAppend_: 不修改入参', () => {
   assert.equal(JSON.stringify(bundles), before);
 });
 
-// ===== productTempAddedHintText_（临时加入提示文案） =====
+// ===== isSessionTempProduct_（选中产品是否为本次会话内临时加入项：徽章显示决策） =====
 
-test('productTempAddedHintText_: 提示文案含产品名并说明会话内临时有效', () => {
-  const text = productTempAddedHintText_('X99 New');
-  assert.match(text, /X99 New/);
-  assert.match(text, /临时/);
-  assert.match(text, /会话/);
+test('isSessionTempProduct_: 会话内临时加入的产品 → true', () => {
+  assert.equal(isSessionTempProduct_('X99 New', ['X99 New', 'Y01 New']), true);
 });
 
-test('productTempAddedHintText_: 空产品名 → 文案不含异常输出', () => {
-  assert.equal(productTempAddedHintText_('').includes('undefined'), false);
+test('isSessionTempProduct_: 非临时产品/不在清单 → false', () => {
+  assert.equal(isSessionTempProduct_('A23 Brush', ['X99 New']), false);
+  assert.equal(isSessionTempProduct_('A23 Brush', []), false);
 });
 
-// ===== productPrefillHint_（预填产品时的提示决策：trigger('change') 会先隐藏提示，按结果决定再显） =====
-
-test('productPrefillHint_: 本次新临时加入 → 返回提示文案', () => {
-  const text = productPrefillHint_(true, 'X99 New');
-  assert.match(text, /X99 New/);
-  assert.match(text, /临时/);
-});
-
-test('productPrefillHint_: 未新增（已在清单/空产品名）→ 空串保持隐藏', () => {
-  assert.equal(productPrefillHint_(false, 'A23 Brush'), '');
-  assert.equal(productPrefillHint_(true, ''), '');
-  assert.equal(productPrefillHint_(true, null), '');
+test('isSessionTempProduct_: 空产品名 → false', () => {
+  assert.equal(isSessionTempProduct_('', ['X99 New']), false);
+  assert.equal(isSessionTempProduct_(null, ['X99 New']), false);
 });
