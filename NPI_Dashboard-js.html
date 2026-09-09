@@ -14,7 +14,7 @@ const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;
 function parseResponse(raw) { return typeof raw === 'string' ? JSON.parse(raw) : raw; }
 
 var allTasks = [];
-var importCandidates = [];
+var importCandidates = null; // null=未加载（首次打开走完整 loading），已加载后为数组（含空清单）
 
 var NPI_ACTIVE_STATUSES = ['待确认 Pending', '已排期 Scheduled', '执行中 In Progress'];
 var STATUS_BADGE_CLASS = {
@@ -369,7 +369,44 @@ function renderImportTable() {
   $('#importHint').text(hint);
 }
 
+// 导入候选缓存是否就绪（纯函数，供渲染与测试使用）：已加载过（含空清单）即就绪
+function importCacheReady_(cache) {
+  return cache !== null && cache !== undefined;
+}
+
+// 导入候选按日期降序（新→旧），空日期行排最后；返回新数组不改入参（纯函数，供渲染与测试使用）
+function sortImportCandidatesByDateDesc_(list) {
+  return (list || []).slice().sort(function (a, b) {
+    return String(b.date || '').trim().localeCompare(String(a.date || '').trim());
+  });
+}
+
+// 静默刷新导入候选：后台重取，成功后更新缓存并（弹窗开着时）原地刷新表格；失败静默保留缓存
+var importRefreshing = false;
+function refreshImportCandidatesSilent_() {
+  if (importRefreshing) return;
+  importRefreshing = true;
+  google.script.run
+    .withSuccessHandler(function (raw) {
+      importRefreshing = false;
+      var r = parseResponse(raw);
+      if (!r.success) return;
+      importCandidates = sortImportCandidatesByDateDesc_(r.data || []);
+      if ($('#importModal').is(':visible')) renderImportTable();
+    })
+    .withFailureHandler(function () { importRefreshing = false; })
+    .loadTestPlanImportCandidates();
+}
+
 function openImportModal() {
+  if (importCacheReady_(importCandidates)) {
+    // 缓存秒开：直接渲染并显示，后台静默刷新兜底（不阻塞、不显示 loading）
+    renderImportTable();
+    $('#importModal').modal('show');
+    refreshImportCandidatesSilent_();
+    return;
+  }
+  // 首次打开：完整 loading 流程
   Swal.fire({ title: swalTitle('加载候选行...', 'Loading candidates...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => { Swal.showLoading(); } });
   google.script.run
     .withSuccessHandler(function (raw) {
@@ -379,9 +416,7 @@ function openImportModal() {
         Swal.fire({ icon: 'error', title: swalTitle('导入不可用', 'Import unavailable'), html: swalHtml(r.message || '', '') });
         return;
       }
-      importCandidates = r.data || [];
-      // 按日期降序（新→旧）
-      importCandidates.sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
+      importCandidates = sortImportCandidatesByDateDesc_(r.data || []);
       renderImportTable();
       $('#importModal').modal('show');
     })
@@ -401,6 +436,8 @@ function machinePrefillReady_(list) {
 function openImportTaskModal(idx) {
   var c = importCandidates[idx];
   if (!c || c.imported) return;
+  // 乐观标记已导入：再次秒开弹窗时该行直接显示「已导入」；保存取消/失败由静默刷新兜底纠正
+  c.imported = true;
   $('#importModal').modal('hide');
   resetTaskModal();
   importInitialStatus = c.status || '待确认 Pending';
