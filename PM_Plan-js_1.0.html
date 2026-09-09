@@ -475,15 +475,21 @@
     let url = siWebPage + '?v=PM_Task_1.0';
     window.open(url);
    // 2. 检查是否为其他可跟进的状态（支持中英文）
-   } else if (status.includes("进行中") || status.includes("Ongoing") || 
+   } else if (status.includes("进行中") || status.includes("Ongoing") ||
               status.includes("人员已分配") || status.includes("已添加临时任务")) {
     console.log("✅ 状态判断：进行中/Ongoing/人员已分配/已添加临时任务 - 允许跟进");
     sessionStorage.setItem('PM_Stauts', "Ongoing");
     let url = siWebPage + '?v=PM_Task_1.0';
     window.open(url);
+   // 3. 已完成状态：开放跟进（只读查看 + 操作员任务验证）
+   } else if (status.includes("已完成") || status.includes("Finished") || status.includes("Done")) {
+    console.log("✅ 状态判断：已完成 - 允许跟进（只读查看 + PM任务验证）");
+    sessionStorage.setItem('PM_Stauts', "Done");
+    let url = siWebPage + '?v=PM_Task_1.0';
+    window.open(url);
    } else {
-    // 对于"已完成"等其他状态，不执行任何操作
-    console.log("❌ 状态判断：已完成或其他状态 - 不允许跟进，当前状态:", status);
+    // 对于其他未知状态，不执行任何操作
+    console.log("❌ 状态判断：其他未知状态 - 不允许跟进，当前状态:", status);
     return false
    }
   })

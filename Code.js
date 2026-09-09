@@ -68,6 +68,82 @@ function findRowByPMNo(ws, pmNo) {
   return -1;
 }
 
+// ===== PM任务验证 - 配置常量（数据存 PM_DB_ID 表格中的独立 sheet）=====
+var PM_TASK_VERIFY_SHEET_NAME = "PM_Task_Verify";
+var PM_TASK_VERIFY_HEADER = ["PM No.", "Workcenter", "Task No", "Task Description", "Resource",
+  "Verify Result", "Fail Reason", "Verifier ID", "Verifier Name", "Verify Time"];
+
+// PM任务验证 - 获取或创建验证记录 sheet（表头品牌红底白字加粗）
+function getPMVerifySheet_() {
+  const ss = SpreadsheetApp.openById(PM_DB_ID);
+  let ws = ss.getSheetByName(PM_TASK_VERIFY_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(PM_TASK_VERIFY_SHEET_NAME);
+    const headerRange = ws.getRange(1, 1, 1, PM_TASK_VERIFY_HEADER.length);
+    headerRange.setValues([PM_TASK_VERIFY_HEADER]);
+    headerRange.setFontWeight("bold");
+    headerRange.setBackground("#E60012");
+    headerRange.setFontColor("#ffffff");
+  }
+  return ws;
+}
+
+// PM任务验证 - 读取某保养号的全部验证记录（按追加顺序，最新在后）
+function getPMTaskVerifications(pmNo) {
+  try {
+    const ws = getPMVerifySheet_();
+    const lastRow = ws.getLastRow();
+    if (lastRow < 2) return "[]";
+    const values = ws.getRange(2, 1, lastRow - 1, PM_TASK_VERIFY_HEADER.length).getValues();
+    const target = String(pmNo || "").trim();
+    const records = [];
+    values.forEach(function (r) {
+      if (String(r[0] || "").trim() !== target) return;
+      const obj = {};
+      PM_TASK_VERIFY_HEADER.forEach(function (h, i) { obj[h] = r[i]; });
+      records.push(obj);
+    });
+    return JSON.stringify(records);
+  } catch (e) {
+    return JSON.stringify({ success: false, message: "读取验证记录失败：" + e.toString() });
+  }
+}
+
+// PM任务验证 - 追加一条验证记录（验证时间取服务器时间），返回该保养号更新后的全部记录
+function savePMTaskVerification(payload) {
+  try {
+    const pmNo = String(payload && payload["PM No."] || "").trim();
+    const taskNo = String(payload && payload["Task No"] || "").trim();
+    const result = String(payload && payload["Verify Result"] || "").trim();
+    const failReason = String(payload && payload["Fail Reason"] || "").trim();
+    if (!pmNo) return JSON.stringify({ success: false, message: "缺少保养号" });
+    if (!taskNo) return JSON.stringify({ success: false, message: "缺少任务编号" });
+    if (result !== "合格" && result !== "不合格") {
+      return JSON.stringify({ success: false, message: "验证结果必须为合格或不合格" });
+    }
+    if (result === "不合格" && !failReason) {
+      return JSON.stringify({ success: false, message: "不合格必须填写原因" });
+    }
+    const ws = getPMVerifySheet_();
+    const verifyTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
+    ws.appendRow([
+      pmNo,
+      String(payload["Workcenter"] || ""),
+      taskNo,
+      String(payload["Task Description"] || ""),
+      String(payload["Resource"] || ""),
+      result,
+      failReason,
+      String(payload["Verifier ID"] || ""),
+      String(payload["Verifier Name"] || ""),
+      verifyTime
+    ]);
+    return getPMTaskVerifications(pmNo);
+  } catch (e) {
+    return JSON.stringify({ success: false, message: "保存验证记录失败：" + e.toString() });
+  }
+}
+
 // PM 分表合并 - 从合并表获取指定工序+车间的 PM No. 列表
 function getPMNoList(ws, process, workshop) {
   var lastRow = ws.getLastRow();

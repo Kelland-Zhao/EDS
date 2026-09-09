@@ -17,6 +17,7 @@
   let table_TempTask;
   let global_PM_Status = sessionStorage.getItem("PM_Stauts");
   let PM_Workorder_Database = []; // PM工单数据库（从后端异步获取）
+  let global_VerifyRecords = {};  // PM任务验证记录：{ TaskNo: [记录对象...] }（按追加顺序）
 
   // PM Planner确认逻辑函数（全局作用域）
   function triggerPmPlannerConfirmation() {
@@ -566,131 +567,25 @@
       };
 
       google.script.run.withSuccessHandler((r) => {
-        try {
-          let dataFilter = JSON.parse(r[1]);
-          if (!Array.isArray(dataFilter) || dataFilter.length === 0) {
-            console.error('getPMrecord: 未找到匹配的保养记录');
-            Swal.fire({
-              icon: 'warning',
-              title: swalTitle('未找到记录','No Record Found'),
-              html: swalHtml('未找到匹配的保养记录，请联系管理员检查数据。','No matching PM record found. Please contact admin to check data.')
-            });
-            return;
-          }
-
-          let head = ["PM No.",
-            "PmStatus",
-            "Notification",
-            "PM People",
-            "Plan PM Date",
-            "SatrtDate",
-            "StartTime",
-            "EndDate",
-            "EndTime",
-            "Workcenter",
-            "任务明细",
-            "总任务数量",
-            "任务未完成明细",
-            "任务未完成数量",
-            "任务备注明细",
-            "任务备注数量"]
-          let obj = {};
-          for (let i = 0; i < head.length; i++) { obj[head[i]] = dataFilter[0][i] };
-
-          // 字段名映射：中文 -> 英文（兼容不同数据源）
-          const fieldMapping = {
-            '任务编号': 'Task No',
-            '频率': 'Frecuency',
-            '单元': 'Section',
-            '模块': 'Function',
-            '失效模式': 'Failure Mode',
-            '任务类型': 'Task Type',
-            '任务描述': 'Task Description',
-            '状态': 'Line Status',
-            '任务属性': 'Strategy',
-            '工具': 'Tools & Equip',
-            '是否完成': 'Task Status',
-            '备注': 'Notes',
-            '图片': 'Image'
-          };
-
-          // 转换字段名（如果存在中文字段名）
-          let tasklist = JSON.parse(obj['任务明细']);
-          tasklist = tasklist.map(item => {
-            let newItem = {};
-            for (let key in item) {
-              let newKey = fieldMapping[key] || key; // 如果有映射就用映射，否则保持原样
-              newItem[newKey] = item[key];
-            }
-            return newItem;
-          });
-
-          const isEditable = obj["PmStatus"].includes('进行中');
-          const table_head = buildTableHead(isEditable);
-
-          $('#PmNo').val(obj["PM No."]);
-          $('#PmPeople').val(obj["PM People"]);
-          $('#PmStartDate').val(obj["SatrtDate"]);
-          $('#PmStartTime').val(obj["StartTime"]);
-          global_workingorder = obj["Notification"] || '';
-
-          if (obj["PmStatus"].includes('进行中')) {
-            $('#PmStart').prop('disabled', true);
-            $('#EditPmPeople').show();
-          } else {
-            $('#PmStart').prop('disabled', false);
-          }
-
-          // showTable(table_head, tasklist) 之前，统一处理"执行人员"字段为数组
-          tasklist.forEach(row => {
-            if (row['执行人员']) {
-              if (Array.isArray(row['执行人员'])) {
-                // 已经是数组，无需处理
-              } else if (typeof row['执行人员'] === 'string') {
-                try {
-                  // 尝试解析为数组
-                  let arr = JSON.parse(row['执行人员']);
-                  if (Array.isArray(arr)) {
-                    row['执行人员'] = arr;
-                  } else {
-                    // 逗号分隔字符串
-                    row['执行人员'] = row['执行人员'].split(',').map(s => s.trim());
-                  }
-                } catch {
-                  // 逗号分隔字符串
-                  row['执行人员'] = row['执行人员'].split(',').map(s => s.trim());
-                }
-              } else {
-                row['执行人员'] = [];
-              }
-            } else {
-              row['执行人员'] = [];
-            }
-          });
-          showTable(table_head, tasklist);
-          Swal.close();
-          Swal.fire({
-            title: swalTitle('加载成功','Loading Success'),
-            html: swalHtml('保养记录加载成功。','PM record loaded successfully.'),
-            icon: 'success',
-            timer: 1500
-          });
-        } catch (e) {
-          console.error('处理PM记录数据失败:', e);
-          Swal.fire({
-            icon: 'error',
-            title: swalTitle('数据处理失败','Data Processing Failed'),
-            html: swalHtml('保养记录数据解析异常，请联系管理员。','PM record data parsing error. Please contact admin.')
-          });
-        }
-      }).withFailureHandler(function (error) {
-        console.error('获取PM记录失败:', error);
-        Swal.fire({
-          icon: 'error',
-          title: swalTitle('数据加载失败','Data Load Failed'),
-          html: swalHtml('无法从服务器获取保养记录，请检查网络后重试。','Unable to fetch PM records from server. Please check network and retry.')
-        });
-      }).getPMrecord(PM_Info);
+        pmRenderRecordTasks_(r, true);
+      }).withFailureHandler(pmLoadRecordFailure_)
+        .getPMrecord(PM_Info);
+    } else if (global_PM_Status == "Done") {
+      // 已完成工单：只读查看 + 操作员任务验证（不阻断任何流程）
+      let PM_Info = {
+        process: global_data['工序'],
+        workshop: global_data['车间'],
+        Plan_SD: global_data['开始日期'],
+        workcenter: global_data['AEM#']
+      };
+      $('#PmStart').prop('disabled', true);
+      $('#PmEnd').prop('disabled', true);
+      $('#Submit_wo_End').prop('disabled', true);
+      $('#AddTemTask').prop('disabled', true);
+      google.script.run.withSuccessHandler((r) => {
+        pmRenderRecordTasks_(r, false);
+      }).withFailureHandler(pmLoadRecordFailure_)
+        .getPMrecord(PM_Info);
     } else {
       return false
     }
@@ -1212,6 +1107,379 @@
     }
   }
 
+  // ===== PM任务验证（纯函数，供单测 pm-verify-ui.test.mjs 提取）=====
+  // 资源是否为操作员（与 Resource 列徽章判断规则一致）
+  function pmIsOperatorResource_(resource) {
+    const val = String(resource || '').trim();
+    return val.includes('操作员') && !val.includes('技术员');
+  }
+
+  // 验证按钮是否可用：操作员行 + 已勾选完成 + 有保养号（不依赖表格可编辑状态，只读视图也可验证）
+  function pmVerifyButtonEnabled_(rowData, pmNo) {
+    if (!rowData || !pmNo || !String(pmNo).trim()) return false;
+    if (!pmIsOperatorResource_(rowData['Resource'])) return false;
+    return rowData.taskStatus === true || rowData['Task Status'] === true;
+  }
+
+  // 取最新一条验证记录（后端按追加顺序返回，最新在末尾）
+  function pmLatestVerifyRecord_(records) {
+    if (!Array.isArray(records) || records.length === 0) return null;
+    return records[records.length - 1];
+  }
+
+  // 是否有验证记录（有 → 勾选框锁定，不可取消勾选）
+  function pmHasVerify_(records) {
+    return Array.isArray(records) && records.length > 0;
+  }
+
+  // HTML 转义（徽章中的原因/验证人来自用户输入）
+  function pmEscapeHtml_(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // 验证徽章 HTML（最新一条记录）
+  function pmVerifyBadgeHtml_(latest) {
+    if (!latest) {
+      return '<span style="color:#6c757d;font-size:11px;">未验证</span>';
+    }
+    const title = `验证人:${pmEscapeHtml_(latest['Verifier Name'] || '')} ${pmEscapeHtml_(latest['Verify Time'] || '')}`;
+    if (latest['Verify Result'] === '合格') {
+      return `<span class="badge" title="${title}" style="background:#d4edda;color:#155724;">合格</span>`;
+    }
+    const reason = pmEscapeHtml_(latest['Fail Reason'] || '');
+    const reasonHtml = reason ? `<br><span style="color:#842029;font-size:11px;">${reason}</span>` : '';
+    return `<span class="badge" title="${title}" style="background:#f8d7da;color:#842029;">不合格</span>${reasonHtml}`;
+  }
+
+  // 验证状态列单元格 HTML（操作员行=验证交互；技术员行=NA/不适用；资源为空=空）
+  function pmVerifyCellHtml_(rowData, latest, pmNo) {
+    const resource = String((rowData && rowData['Resource']) || '').trim();
+    if (!pmIsOperatorResource_(resource)) {
+      // 技术员等非操作员资源 → 不适用；资源为空 → 不误标 NA
+      return resource ? '<span style="color:#6c757d;font-size:11px;">NA / 不适用</span>' : '';
+    }
+    if (!pmVerifyButtonEnabled_(rowData, pmNo)) {
+      return '<span style="color:#6c757d;font-size:11px;">未验证</span>';
+    }
+    const badge = latest ? pmVerifyBadgeHtml_(latest) : '';
+    const btnClass = latest ? 'btn-outline-secondary' : 'btn-success';
+    const btn = `<button type="button" class="btn btn-sm pm-verify-btn ${btnClass}" style="font-size:11px;line-height:1.2;">验证<br>Verify</button>`;
+    return badge + (badge ? '<br>' : '') + btn;
+  }
+
+  // 验证弹窗校验：不合格必填原因；未选结果报错
+  function pmVerifyValidate_(result, reason) {
+    if (result !== '合格' && result !== '不合格') {
+      return '请选择验证结果';
+    }
+    if (result === '不合格' && !String(reason || '').trim()) {
+      return '不合格必须填写原因';
+    }
+    return null;
+  }
+
+  // 验证人信息：直接取主页面会话登录信息（工号/姓名），无需再次输入密码
+  // 无工号 → null（无法记录验证人，阻止验证）
+  function pmVerifyUserInfo_(sessionId, sessionName) {
+    const code = String(sessionId || '').trim();
+    if (!code) return null;
+    return { code: code, name: String(sessionName || '').trim() };
+  }
+
+  // ===== PM任务验证 - 数据加载 =====
+  // 加载当前保养号的验证记录到 global_VerifyRecords（{TaskNo: [记录...]}），完成后回调
+  function pmLoadVerifyRecords_(pmNo, callback) {
+    global_VerifyRecords = {};
+    if (!pmNo || !String(pmNo).trim()) {
+      if (callback) callback();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (r) {
+        let parsed = null;
+        try { parsed = JSON.parse(r); } catch (e) { parsed = null; }
+        if (Array.isArray(parsed)) {
+          parsed.forEach(function (rec) {
+            const key = String(rec['Task No']);
+            if (!key) return;
+            (global_VerifyRecords[key] = global_VerifyRecords[key] || []).push(rec);
+          });
+        } else {
+          console.error('PM验证记录加载失败:', parsed && parsed.message);
+        }
+        if (callback) callback();
+      })
+      .withFailureHandler(function (e) {
+        console.error('PM验证记录加载失败:', e);
+        if (callback) callback();
+      })
+      .getPMTaskVerifications(pmNo);
+  }
+
+  // ===== PM任务验证 - 工单记录渲染（Ongoing/Done 共用）=====
+  // r: getPMrecord 返回数组 ["OK", json]；isEditable: 表格是否可编辑（进行中=true，已完成=false）
+  function pmRenderRecordTasks_(r, isEditable) {
+    try {
+      let dataFilter = JSON.parse(r[1]);
+      if (!Array.isArray(dataFilter) || dataFilter.length === 0) {
+        console.error('getPMrecord: 未找到匹配的保养记录');
+        Swal.fire({
+          icon: 'warning',
+          title: swalTitle('未找到记录','No Record Found'),
+          html: swalHtml('未找到匹配的保养记录，请联系管理员检查数据。','No matching PM record found. Please contact admin to check data.')
+        });
+        return;
+      }
+
+      let head = ["PM No.",
+        "PmStatus",
+        "Notification",
+        "PM People",
+        "Plan PM Date",
+        "SatrtDate",
+        "StartTime",
+        "EndDate",
+        "EndTime",
+        "Workcenter",
+        "任务明细",
+        "总任务数量",
+        "任务未完成明细",
+        "任务未完成数量",
+        "任务备注明细",
+        "任务备注数量"]
+      let obj = {};
+      for (let i = 0; i < head.length; i++) { obj[head[i]] = dataFilter[0][i] };
+
+      // 字段名映射：中文 -> 英文（兼容不同数据源）
+      const fieldMapping = {
+        '任务编号': 'Task No',
+        '频率': 'Frecuency',
+        '单元': 'Section',
+        '模块': 'Function',
+        '失效模式': 'Failure Mode',
+        '任务类型': 'Task Type',
+        '任务描述': 'Task Description',
+        '状态': 'Line Status',
+        '任务属性': 'Strategy',
+        '工具': 'Tools & Equip',
+        '是否完成': 'Task Status',
+        '备注': 'Notes',
+        '图片': 'Image'
+      };
+
+      // 转换字段名（如果存在中文字段名）
+      let tasklist = JSON.parse(obj['任务明细']);
+      tasklist = tasklist.map(item => {
+        let newItem = {};
+        for (let key in item) {
+          let newKey = fieldMapping[key] || key; // 如果有映射就用映射，否则保持原样
+          newItem[newKey] = item[key];
+        }
+        return newItem;
+      });
+
+      const table_head = buildTableHead(isEditable);
+
+      $('#PmNo').val(obj["PM No."]);
+      $('#PmPeople').val(obj["PM People"]);
+      $('#PmStartDate').val(obj["SatrtDate"]);
+      $('#PmStartTime').val(obj["StartTime"]);
+      global_workingorder = obj["Notification"] || '';
+
+      if (isEditable) {
+        $('#PmStart').prop('disabled', true);
+        $('#EditPmPeople').show();
+      } else {
+        // 已完成只读：不允许重新开始
+        $('#PmStart').prop('disabled', true);
+      }
+
+      // showTable(table_head, tasklist) 之前，统一处理"执行人员"字段为数组
+      tasklist.forEach(row => {
+        if (row['执行人员']) {
+          if (Array.isArray(row['执行人员'])) {
+            // 已经是数组，无需处理
+          } else if (typeof row['执行人员'] === 'string') {
+            try {
+              // 尝试解析为数组
+              let arr = JSON.parse(row['执行人员']);
+              if (Array.isArray(arr)) {
+                row['执行人员'] = arr;
+              } else {
+                // 逗号分隔字符串
+                row['执行人员'] = row['执行人员'].split(',').map(s => s.trim());
+              }
+            } catch {
+              // 逗号分隔字符串
+              row['执行人员'] = row['执行人员'].split(',').map(s => s.trim());
+            }
+          } else {
+            row['执行人员'] = [];
+          }
+        } else {
+          row['执行人员'] = [];
+        }
+      });
+
+      // 先加载验证记录再渲染表格，保证徽章与勾选框锁定首次渲染即正确
+      pmLoadVerifyRecords_($("#PmNo").val(), function () {
+        showTable(table_head, tasklist);
+        Swal.close();
+        Swal.fire({
+          title: swalTitle('加载成功','Loading Success'),
+          html: swalHtml('保养记录加载成功。','PM record loaded successfully.'),
+          icon: 'success',
+          timer: 1500
+        });
+      });
+    } catch (e) {
+      console.error('处理PM记录数据失败:', e);
+      Swal.fire({
+        icon: 'error',
+        title: swalTitle('数据处理失败','Data Processing Failed'),
+        html: swalHtml('保养记录数据解析异常，请联系管理员。','PM record data parsing error. Please contact admin.')
+      });
+    }
+  }
+
+  // PM任务验证 - getPMrecord 失败提示（Ongoing/Done 共用）
+  function pmLoadRecordFailure_(error) {
+    console.error('获取PM记录失败:', error);
+    Swal.fire({
+      icon: 'error',
+      title: swalTitle('数据加载失败','Data Load Failed'),
+      html: swalHtml('无法从服务器获取保养记录，请检查网络后重试。','Unable to fetch PM records from server. Please check network and retry.')
+    });
+  }
+
+  // ===== PM任务验证 - 验证弹窗与保存 =====
+  // 打开验证弹窗（行数据 + 该任务验证历史），验证人直接取主页面会话登录信息
+  function pmOpenVerifyModal_(rowIdx, rowData) {
+    const taskNo = rowData['Task No'];
+    const records = global_VerifyRecords[taskNo] || [];
+    const verifier = pmVerifyUserInfo_(global_ID, global_Name);
+    $('#pmVerifyTaskInfo').html(
+      `<div style="font-weight:600;font-size:13px;">任务编号：${pmEscapeHtml_(taskNo)}</div>` +
+      `<div style="color:#6c757d;font-size:12px;">${pmEscapeHtml_(rowData['Task Description'] || '')}</div>` +
+      `<div style="color:#6c757d;font-size:11px;margin-top:4px;">验证人 / Verifier：${pmEscapeHtml_(verifier ? verifier.name + '（' + verifier.code + '）' : '未知')}</div>`
+    );
+    const historyHtml = records.length === 0
+      ? '<div style="color:#6c757d;">暂无验证记录 / No verification history</div>'
+      : records.map(function (rec) {
+          const badge = rec['Verify Result'] === '合格'
+            ? '<span class="badge" style="background:#d4edda;color:#155724;">合格</span>'
+            : '<span class="badge" style="background:#f8d7da;color:#842029;">不合格</span>';
+          const reasonHtml = rec['Fail Reason'] ? ` · ${pmEscapeHtml_(rec['Fail Reason'])}` : '';
+          return `<div style="margin-bottom:4px;border-bottom:1px dashed #e9ecef;padding-bottom:4px;">${badge} ${pmEscapeHtml_(rec['Verifier Name'] || '')} · ${pmEscapeHtml_(rec['Verify Time'] || '')}${reasonHtml}</div>`;
+        }).reverse().join(''); // 最新在前
+    $('#pmVerifyHistory').html(
+      `<div style="font-weight:600;font-size:13px;margin-top:10px;">验证历史<br><span style="font-size:11px;color:#6c757d;font-weight:400;">Verification History</span></div>` +
+      historyHtml
+    );
+    // 重置表单（确认按钮恢复可用，上次保存期间的禁用状态在此解除）
+    $('input[name="pmVerifyResult"]').prop('checked', false);
+    $('#pmVerifyReason').val('');
+    $('#pmVerifyReasonWrap').hide();
+    $('#pmVerifyConfirm').prop('disabled', false).data('verifyTarget', { rowIdx: rowIdx, rowData: rowData });
+    $('#pmVerifyModal').modal('show');
+  }
+
+  // 验证保存成功后刷新该行 UI（徽章 + 勾选框锁定），不整表重绘以免丢失勾选状态
+  function pmUpdateVerifyRowUI_(rowIdx) {
+    const tr = table_tasklist.row(rowIdx).node();
+    const rowData = table_tasklist.row(rowIdx).data();
+    const records = global_VerifyRecords[rowData['Task No']] || [];
+    const latest = pmLatestVerifyRecord_(records);
+    // 验证状态列：优先用列名定位，回退到固定索引
+    let colIdx = 17;
+    try { colIdx = table_tasklist.column('验证状态:name').index(); } catch (e) { /* 用默认索引 */ }
+    $(tr).find('td').eq(colIdx).html(pmVerifyCellHtml_(rowData, latest, $("#PmNo").val()));
+    if (pmHasVerify_(records)) {
+      $(tr).find('.form-check-input').prop('disabled', true);
+    }
+  }
+
+  // 确认验证：校验 → 调后端保存 → 刷新行 UI（验证人取主页面会话登录信息，无需再次输入工号/姓名/密码）
+  function pmConfirmVerifyWithUser_(user) {
+    const $confirmBtn = $('#pmVerifyConfirm');
+    if ($confirmBtn.prop('disabled')) return; // 防重复提交：已禁用则忽略（后端往返期间多次点击只生效一次）
+    const target = $confirmBtn.data('verifyTarget');
+    if (!target) return;
+    const result = $('input[name="pmVerifyResult"]:checked').val();
+    const reason = $('#pmVerifyReason').val();
+    const err = pmVerifyValidate_(result, reason);
+    if (err) {
+      Swal.fire({ icon: 'warning', title: swalTitle('校验失败','Validation Failed'), html: swalHtml(err, err) });
+      return;
+    }
+    // 校验通过后立即禁用按钮，防止等待后端返回/成功 toast 期间重复点击导致后端多次写入
+    $confirmBtn.prop('disabled', true);
+    const rowData = target.rowData;
+    const payload = {
+      'PM No.': $("#PmNo").val(),
+      'Workcenter': $("#workcenter").val() || '',
+      'Task No': rowData['Task No'],
+      'Task Description': rowData['Task Description'] || '',
+      'Resource': rowData['Resource'] || '',
+      'Verify Result': result,
+      'Fail Reason': reason || '',
+      'Verifier ID': user ? user.code : '',
+      'Verifier Name': user ? user.name : ''
+    };
+    google.script.run
+      .withSuccessHandler(function (r) {
+        let parsed = null;
+        try { parsed = JSON.parse(r); } catch (e) { parsed = null; }
+        if (!Array.isArray(parsed)) {
+          // 后端校验/写入失败：恢复按钮允许重试
+          $confirmBtn.prop('disabled', false);
+          Swal.fire({ icon: 'error', title: swalTitle('保存失败','Save Failed'), html: swalHtml(parsed && parsed.message || '未知错误', parsed && parsed.message || 'Unknown error') });
+          return;
+        }
+        // 用后端返回的该保养号全部记录重建本地缓存
+        global_VerifyRecords = {};
+        parsed.forEach(function (rec) {
+          const key = String(rec['Task No']);
+          if (!key) return;
+          (global_VerifyRecords[key] = global_VerifyRecords[key] || []).push(rec);
+        });
+        pmUpdateVerifyRowUI_(target.rowIdx);
+        $('#pmVerifyModal').modal('hide');
+        Swal.fire({ icon: 'success', title: swalTitle('验证成功','Verified'), html: swalHtml('验证记录已保存。','Verification saved.'), timer: 1500, showConfirmButton: false });
+      })
+      .withFailureHandler(function (e) {
+        // 网络错误：恢复按钮允许重试
+        $confirmBtn.prop('disabled', false);
+        Swal.fire({ icon: 'error', title: swalTitle('保存失败','Save Failed'), html: swalHtml('网络错误：' + e.message, 'Network error: ' + e.message) });
+      })
+      .savePMTaskVerification(payload);
+  }
+
+  // 验证按钮点击（事件委托）：验证人直接使用主页面会话登录信息
+  $(document).on('click', '#table_tasklist .pm-verify-btn', function () {
+    const tr = $(this).closest('tr').get(0);
+    const row = table_tasklist.row(tr);
+    const rowData = row.data();
+    if (!pmVerifyButtonEnabled_(rowData, $("#PmNo").val())) return;
+    if (!pmVerifyUserInfo_(global_ID, global_Name)) {
+      Swal.fire({ icon: 'warning', title: swalTitle('无法验证','Verify Unavailable'), html: swalHtml('未获取到当前登录用户信息，请重新登录后重试。','Current login info not found. Please login again and retry.') });
+      return;
+    }
+    pmOpenVerifyModal_(row.index(), rowData);
+  });
+
+  // 验证结果单选：选"不合格"时显示原因输入框
+  $(document).on('change', 'input[name="pmVerifyResult"]', function () {
+    $('#pmVerifyReasonWrap').toggle($(this).val() === '不合格');
+  });
+
+  // 确认验证按钮
+  $(document).on('click', '#pmVerifyConfirm', function () {
+    pmConfirmVerifyWithUser_(pmVerifyUserInfo_(global_ID, global_Name));
+  });
+
   // --- 新增的辅助函数，用于统一生成表头 ---
   function buildTableHead(isEditable) {
     let table_head = [];
@@ -1219,7 +1487,7 @@
       "MachineType", "Task No", "Task Type", "Line Status", "Tools & Equip", "Resource",
       "Frecuency", "Section", "Function", "Failure Mode", "Strategy", "No Resources",
       "Skill Level", "Estimated Time", "Task Description", "执行人员", "Task Status",
-      "数值记录&备注", "操作"
+      "验证状态", "数值记录&备注", "操作"
     ];
     const titleMap = {
       "MachineType":      "机型<br>Machine Type",
@@ -1239,6 +1507,7 @@
       "Task Description": "任务描述<br>Task Description",
       "执行人员":          "执行人员<br>Operator",
       "Task Status":      "完成状态<br>Task Status",
+      "验证状态":          "验证状态<br>Verify Status",
       "数值记录&备注":     "数值&备注<br>Value & Notes",
       "操作":             "操作<br>Operation"
     };
@@ -1285,7 +1554,17 @@
         }
         colDef.render = function (data, type, row) {
           const checked = data === true || row.taskStatus === true;
-          return `<input class="form-check-input" type="checkbox" value="" style="border: 2px solid #696969; width: 24px; height: 24px; cursor: pointer;" ${checked ? 'checked' : ''} ${!isEditable ? 'disabled' : ''}>`;
+          // PM任务验证：已有验证记录 → 勾选框锁定（不可取消勾选）
+          const verifyRecords = (global_VerifyRecords && global_VerifyRecords[row['Task No']]) || [];
+          const locked = pmHasVerify_(verifyRecords);
+          return `<input class="form-check-input" type="checkbox" value="" style="border: 2px solid #696969; width: 24px; height: 24px; cursor: pointer;" ${checked ? 'checked' : ''} ${(!isEditable || locked) ? 'disabled' : ''}>`;
+        };
+      }
+      if (title === '验证状态') {
+        colDef.render = function (data, type, row) {
+          if (type === 'sort' || type === 'type') return '';
+          const verifyRecords = (global_VerifyRecords && global_VerifyRecords[row['Task No']]) || [];
+          return pmVerifyCellHtml_(row, pmLatestVerifyRecord_(verifyRecords), $("#PmNo").val());
         };
       }
       if (title === '数值记录&备注') {
@@ -1343,6 +1622,7 @@
           { "width": "5%", "targets": 6 },
           { "width": "20%", "targets": 14 },
           { "width": "15%", "targets": 16 },
+          { "width": "10%", "targets": 17 }, // 验证状态列
           { "width": "10%", "targets": -1 }
         ],
         order: [

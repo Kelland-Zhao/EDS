@@ -310,6 +310,41 @@
 
     </div>
 
+    <!-- PM任务验证弹窗 -->
+    <div class="modal fade" id="pmVerifyModal" tabindex="-1" aria-labelledby="pmVerifyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pmVerifyModalLabel">任务验证<br><span style="font-size:12px;color:#6c757d;font-weight:400;">PM Task Verification</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body modal-domain-daily">
+                    <div id="pmVerifyTaskInfo" style="margin-bottom:10px;padding:8px 10px;background:#f5f6f8;border-left:3px solid #E60012;border-radius:4px;"></div>
+                    <div style="font-weight:600;font-size:13px;margin-bottom:6px;">验证结果<br><span style="font-size:11px;color:#6c757d;font-weight:400;">Verification Result</span></div>
+                    <div class="mb-2">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="pmVerifyResult" id="pmVerifyPass" value="合格">
+                            <label class="form-check-label" for="pmVerifyPass">合格 / Pass</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="pmVerifyResult" id="pmVerifyFail" value="不合格">
+                            <label class="form-check-label" for="pmVerifyFail">不合格 / Fail</label>
+                        </div>
+                    </div>
+                    <div id="pmVerifyReasonWrap" style="display:none;" class="mb-2">
+                        <label class="form-label" for="pmVerifyReason" style="font-size:13px;">不合格原因<br><span style="font-size:11px;color:#6c757d;">Fail Reason（必填 / Required）</span></label>
+                        <textarea class="form-control" id="pmVerifyReason" rows="2" placeholder="请输入不合格原因 / Please input fail reason"></textarea>
+                    </div>
+                    <div id="pmVerifyHistory"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消 / Cancel</button>
+                    <button type="button" class="btn btn-primary" id="pmVerifyConfirm">确认验证 / Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 
 <?!=include("Kez_jquery@3.6.4_js") ?>
