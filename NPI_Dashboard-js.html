@@ -460,14 +460,16 @@ function openImportTaskModal(idx) {
   $('#newSource').val('weekly');
   $('#newProcessType').val('IM');
   // 新品预填：产品名不在现有清单时临时加入下拉并选中（仅本次会话有效），避免纯选择下拉显示为空
+  // trigger('change') 同步 Select2 显示：仅设 val 不触发 change 时显示不刷新（第二次打开会显示为空）
   var pn = c.productName || '';
-  if (pn && ensureProductOption_(pn)) {
-    $('#productHint').removeClass('d-none').html(productTempAddedHintText_(pn));
+  var pnAdded = pn && ensureProductOption_(pn);
+  $('#newProductName').val(pn || null).trigger('change');
+  var pnHint = productPrefillHint_(pnAdded, pn);
+  if (pnHint) {
+    $('#productHint').removeClass('d-none').html(pnHint);
   } else {
     $('#productHint').addClass('d-none');
   }
-  $('#newProductName').val(pn || null);
-  onProductSelected(pn, function () {});
   var applyMachinePrefill = function () {
     // 候选机台号不在清单中：临时加入会话清单并选中（仅本次会话有效），与产品名称新品预填行为一致
     if (c.machineNo && ensureMachineOption_(c.machineNo)) {

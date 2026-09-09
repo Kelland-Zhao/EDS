@@ -62,9 +62,10 @@ $(document).ready(function () {
     $(this).removeClass('is-invalid');
     $(this).next('.select2').find('.select2-selection').removeClass('is-invalid');
   });
+  // productChangeGuard：预填流程里由 trigger('change') 同步 Select2 显示时，抑制 handler 的 onProductSelected（避免与带回调的手动调用重复）
   $('#newProductName').on('change', function () {
     $('#productHint').addClass('d-none');
-    onProductSelected($(this).val());
+    if (!productChangeGuard) onProductSelected($(this).val());
   });
   // 选中机台后自动带出机型（Workcenter D列）
   $('#newMachineNo').on('change', function () {
@@ -281,6 +282,17 @@ function productOptionsToAppend_(bundles, existing) {
 function productTempAddedHintText_(name) {
   return '产品 ' + String(name || '').trim() + ' 为新品，已临时加入清单并选中（仅本次会话有效，刷新后消失） / New product added temporarily (this session only)';
 }
+
+// 预填产品时的提示决策（纯函数，供渲染与测试使用）：仅本次会话内新临时加入的产品才返回提示文案，否则空串（保持隐藏）
+function productPrefillHint_(addedNow, name) {
+  if (!addedNow) return '';
+  var n = String(name || '').trim();
+  if (!n) return '';
+  return productTempAddedHintText_(n);
+}
+
+// 预填流程中抑制产品 change handler 的 onProductSelected（与 skuChangeGuard 同款：trigger 同步执行完立即复位）
+var productChangeGuard = false;
 
 // 当前产品下拉已加载的选项值（DOM 读取，含会话内临时追加项）
 function currentProductOptionValues_() {

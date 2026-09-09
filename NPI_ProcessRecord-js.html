@@ -1005,13 +1005,18 @@ function openEditModal() {
   $('#newDueDate').val(currentTask.dueDate || '');
   $('#newRemark').val(currentTask.remark || '');
   // 历史任务产品名不在现有清单时临时加入下拉并选中（仅本次会话有效），避免纯选择下拉显示为空
+  // trigger('change') 同步 Select2 显示；guard 抑制 handler 的 onProductSelected，由下方带回调的手动调用恢复 SKU
   var editPn = currentTask.productName || '';
-  if (editPn && ensureProductOption_(editPn)) {
-    $('#productHint').removeClass('d-none').html(productTempAddedHintText_(editPn));
+  var editAdded = editPn && ensureProductOption_(editPn);
+  productChangeGuard = true;
+  $('#newProductName').val(editPn || null).trigger('change');
+  productChangeGuard = false;
+  var editHint = productPrefillHint_(editAdded, editPn);
+  if (editHint) {
+    $('#productHint').removeClass('d-none').html(editHint);
   } else {
     $('#productHint').addClass('d-none');
   }
-  $('#newProductName').val(editPn || null);
   var skuTokens = (currentTask.sku || '').split(';').map(function (s) { return s.trim(); }).filter(Boolean);
   onProductSelected(currentTask.productName || '', function () {
     if (skuTokens.length) {
