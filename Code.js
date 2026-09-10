@@ -6290,15 +6290,14 @@ function getConfirmationStatusText(status) {
 function getMasterPMData() {
   try {
     Logger.log("getMasterPMData已被调用");
-    const ss = SpreadsheetApp.openById(
-      "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4"
-    );
-    const ws = ss.getSheetByName("Master_PM_Data");
+    const ss = SpreadsheetApp.openById(PM_DB_ID);
+    const ws = getPMSheet(ss) || ss.getSheetByName("Master_PM_Data");
     if (!ws) return { Head: [], Content: [] };
-    const head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
-    const values = ws
-      .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-      .getValues();
+    const lastRow = ws.getLastRow();
+    const colCount = Math.min(ws.getLastColumn(), 21);
+    const head = ws.getRange(1, 1, 1, colCount).getValues()[0];
+    if (lastRow < 2) return { Head: head, Content: [] };
+    const values = ws.getRange(2, 1, lastRow - 1, colCount).getValues();
     const array = values.map((r) => {
       let obj = {};
       for (let i = 0; i < head.length; i++) {
@@ -6315,14 +6314,8 @@ function getMasterPMData() {
       }
       return obj;
     });
-    // 只保留"Plan PM Date"为当年记录
-    const currentYear = new Date().getFullYear();
-    const filteredArray = array.filter((obj) => {
-      const dateStr = obj["Plan PM Date"];
-      if (!dateStr) return false;
-      const year = parseInt(dateStr.toString().slice(0, 4), 10);
-      return year === currentYear;
-    });
+    // 支持跨年查询：不再限制当年，仅剔除无 "Plan PM Date" 的行
+    const filteredArray = array.filter((obj) => !!obj["Plan PM Date"]);
     return { Head: head, Content: filteredArray };
   } catch (e) {
     return { Head: [], Content: [], error: e.toString() };

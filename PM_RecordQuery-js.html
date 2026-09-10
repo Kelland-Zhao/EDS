@@ -8,14 +8,9 @@
     const pageLoadStartTime = performance.now();
     console.log('页面加载开始时间：', new Date().toLocaleString());
 
-    // 设置开始日期和结束日期为当天
-    var today = new Date();
-    var yyyy = today.getFullYear();
-    var mm = String(today.getMonth() + 1).padStart(2, '0');
-    var dd = String(today.getDate()).padStart(2, '0');
-    var todayStr = yyyy + '-' + mm + '-' + dd;
-    $('#startDate').val(todayStr);
-    $('#endDate').val(todayStr);
+    // 单台设备查询：日期默认留空（不限日期），由机台号决定查询范围
+    $('#startDate').val('');
+    $('#endDate').val('');
 
     // 数据加载提示（中英双语）
     Swal.fire({
@@ -239,7 +234,7 @@
             $('#recordTable').DataTable().destroy();
           }
           const table = $('#recordTable').DataTable({
-            data: filteredContent,
+            data: [],
             columns: columns,
             language: {
               url: 'https://cdn.datatables.net/plug-ins/2.0.8/i18n/zh-Hans.json'
@@ -284,8 +279,17 @@
                 'image': '图片'
               };
               
+              // 字段取所有行 key 的并集（各条任务字段可能不齐，仅看第一条会漏列并报 unknown parameter）
+              const fieldSet = [];
+              tableData.forEach(item => {
+                if (item && typeof item === 'object') {
+                  Object.keys(item).forEach(k => {
+                    if (fieldSet.indexOf(k) === -1) fieldSet.push(k);
+                  });
+                }
+              });
               // 过滤掉"Task Status"字段，无论是否为空都不显示
-              const validFields = Object.keys(tableData[0]).filter(k => {
+              const validFields = fieldSet.filter(k => {
                 // 如果字段名是"Task Status"，则过滤掉
                 if (k === 'Task Status') {
                   return false;
@@ -298,6 +302,7 @@
                   return {
                     title: k,
                     data: k,
+                    defaultContent: '',
                     render: function (data, type, row) {
                       return data ? '见链接' : '';
                     }
@@ -306,6 +311,7 @@
                   return {
                     title: fieldMapping[k] || k,
                     data: k,
+                    defaultContent: '',
                     render: function (data) {
                       return data === true || data === 'true' ? '√' : '×';
                     }
@@ -313,7 +319,8 @@
                 } else {
                   return { 
                     title: fieldMapping[k] || k, 
-                    data: k 
+                    data: k,
+                    defaultContent: ''
                   };
                 }
               });
@@ -344,17 +351,16 @@
               }
             });
           });
-          // 获取设备编号选项（第10列，filteredHead[8]）
-          // 获取Workcenter列名
+          // 机台号选项：取后端全量数据的 Workcenter 去重，避免机台在下拉中缺失
           const workcenterCol = filteredHead.find(h => h === 'Workcenter');
-          const deviceSet = new Set(filteredContent.map(row => row[workcenterCol]).filter(Boolean));
-          const deviceOptions = Array.from(deviceSet).map(val => ({ id: val, text: val }));
+          const deviceSet = new Set(data.Content.map(row => row[workcenterCol]).filter(Boolean));
+          const deviceOptions = Array.from(deviceSet).sort().map(val => ({ id: val, text: val }));
           // 1. 确保select有空option
           $('#deviceSelect').empty().append('<option value=""></option>');
           // 2. 初始化select2
           $('#deviceSelect').select2({
             data: deviceOptions,
-            placeholder: '请选择机台号',
+            placeholder: '请选择机台号/ Select Workcenter',
             allowClear: true,
             width: '100%',
             language: 'zh-CN'
@@ -363,6 +369,11 @@
           $('#deviceSelect').val(null).trigger('change');
           // 保存原始数据供筛选用
           let allTableData = filteredContent;
+
+          // 切换机台立即清表，避免下拉已改但屏幕仍显示上一台的数据
+          $('#deviceSelect').off('change.clearTable').on('change.clearTable', function () {
+            table.clear().draw();
+          });
 
           // 2024年新增：记录表格渲染完成时间
           const tableRenderEndTime = performance.now();
@@ -380,19 +391,25 @@
             // 获取列名
             const planDateCol = filteredHead.find(h => h.includes('Plan PM Date'));
             const workcenterCol = filteredHead.find(h => h.includes('Workcenter'));
-            // 过滤
+            // 机台号必选：未选择时清空表格并提示，避免一次性展示全部机台记录
+            if (!device) {
+              const emptyTable = $('#recordTable').DataTable();
+              emptyTable.clear().draw();
+              Swal.fire({
+                icon: 'warning',
+                title: swalTitle('请选择机台号', 'Please Select a Workcenter'),
+                html: swalHtml('本页面按单台设备查询，请先选择机台号。', 'This page queries one workcenter at a time. Please select a workcenter first.')
+              });
+              return;
+            }
+            // 过滤：仅保留所选机台，日期留空表示不限
             let filtered = allTableData.filter(row => {
-              let pass = true;
-              // 日期范围
-              if (startDate) {
-                pass = pass && row[planDateCol] && row[planDateCol] >= startDate;
+              let pass = row[workcenterCol] && row[workcenterCol] == device;
+              if (pass && startDate) {
+                pass = row[planDateCol] && row[planDateCol] >= startDate;
               }
-              if (endDate) {
-                pass = pass && row[planDateCol] && row[planDateCol] <= endDate;
-              }
-              // 机台号
-              if (device) {
-                pass = pass && row[workcenterCol] && row[workcenterCol] == device;
+              if (pass && endDate) {
+                pass = row[planDateCol] && row[planDateCol] <= endDate;
               }
               return pass;
             });
