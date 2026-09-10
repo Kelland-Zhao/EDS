@@ -3,12 +3,27 @@
   const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
   const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
 
+  // 多机台查询过滤：devices 为空时返回空数组（由调用方提示必选）
+  function pmRecordFilter_(rows, devices, workcenterCol, planDateCol, startDate, endDate) {
+    if (!devices || devices.length === 0) return [];
+    return rows.filter(row => {
+      let pass = row[workcenterCol] && devices.some(d => d == row[workcenterCol]);
+      if (pass && startDate) {
+        pass = row[planDateCol] && row[planDateCol] >= startDate;
+      }
+      if (pass && endDate) {
+        pass = row[planDateCol] && row[planDateCol] <= endDate;
+      }
+      return pass;
+    });
+  }
+
   $(document).ready(function () {
     // 2024年新增：记录页面加载开始时间
     const pageLoadStartTime = performance.now();
     console.log('页面加载开始时间：', new Date().toLocaleString());
 
-    // 单台设备查询：日期默认留空（不限日期），由机台号决定查询范围
+    // 多台设备查询：日期默认留空（不限日期），由机台号（可多选）决定查询范围
     $('#startDate').val('');
     $('#endDate').val('');
 
@@ -181,6 +196,7 @@
                 title: headMap[h] || h,
                 data: h,
                 className: 'text-center',
+                visible: false, // 2026-09-10：保养任务报告列隐藏，数据保留，恢复时移除本行
                 render: function (data, type, row) {
                   if (typeof data === 'string' && data.startsWith('http')) {
                     return `<a href="${data}" target="_blank" class="btn btn-success btn-sm">附件</a>`;
@@ -360,9 +376,11 @@
           // 2. 初始化select2
           $('#deviceSelect').select2({
             data: deviceOptions,
-            placeholder: '请选择机台号/ Select Workcenter',
+            placeholder: '请选择机台号（可多选）/ Select Workcenter(s)',
             allowClear: true,
             width: '100%',
+            multiple: true,
+            closeOnSelect: false,
             language: 'zh-CN'
           });
           // 3. 保证初始无选中项，显示placeholder
@@ -387,32 +405,23 @@
             
             const startDate = $('#startDate').val();
             const endDate = $('#endDate').val();
-            const device = $('#deviceSelect').val();
+            const devices = $('#deviceSelect').val() || [];
             // 获取列名
             const planDateCol = filteredHead.find(h => h.includes('Plan PM Date'));
             const workcenterCol = filteredHead.find(h => h.includes('Workcenter'));
             // 机台号必选：未选择时清空表格并提示，避免一次性展示全部机台记录
-            if (!device) {
+            if (!devices.length) {
               const emptyTable = $('#recordTable').DataTable();
               emptyTable.clear().draw();
               Swal.fire({
                 icon: 'warning',
                 title: swalTitle('请选择机台号', 'Please Select a Workcenter'),
-                html: swalHtml('本页面按单台设备查询，请先选择机台号。', 'This page queries one workcenter at a time. Please select a workcenter first.')
+                html: swalHtml('请先选择机台号（可多选）。', 'Please select at least one workcenter first.')
               });
               return;
             }
             // 过滤：仅保留所选机台，日期留空表示不限
-            let filtered = allTableData.filter(row => {
-              let pass = row[workcenterCol] && row[workcenterCol] == device;
-              if (pass && startDate) {
-                pass = row[planDateCol] && row[planDateCol] >= startDate;
-              }
-              if (pass && endDate) {
-                pass = row[planDateCol] && row[planDateCol] <= endDate;
-              }
-              return pass;
-            });
+            let filtered = pmRecordFilter_(allTableData, devices, workcenterCol, planDateCol, startDate, endDate);
             // 刷新表格
             const table = $('#recordTable').DataTable();
             table.clear();

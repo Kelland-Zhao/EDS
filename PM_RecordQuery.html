@@ -64,6 +64,11 @@
   #detailTable {
     border: 1px solid #dee2e6;
   }
+
+  /* 机台号多选：全局规则隐藏了 Select2 标签移除按钮，本页恢复以便单独取消已选机台 */
+  #deviceFilterCol .select2-selection__choice__remove {
+    display: inline-block !important;
+  }
 </style>
 
 <body>
@@ -90,7 +95,7 @@
         <label for="endDate" class="form-label">结束日期/ End Date <span class="text-muted">（留空不限/ Optional）</span></label>
         <input type="date" id="endDate" class="form-control" placeholder="结束日期">
       </div>
-      <div class="col-md-3">
+      <div class="col-md-3" id="deviceFilterCol">
         <label for="deviceSelect" class="form-label">机台号/ Workcenter <span style="color:#E60012;">*</span></label>
         <select id="deviceSelect" class="form-control"></select>
       </div>
