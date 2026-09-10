@@ -210,3 +210,12 @@ test('groupRowsBySection：按首次出现顺序分组，保留行序', () => {
 test('groupRowsBySection：空数组返回空分区列表', () => {
   assert.deepEqual(groupRowsBySection([]), []);
 });
+
+// ===== 卡 pills 事件绑定回归护栏 =====
+// 背景：renderCardPills 只自动选中排序第一张卡；若缺少 click 事件委托，
+//       其余卡标签（如 6AX 机型下的 VIM / 6AX自动化）点击无任何反应。
+
+test('卡 pills 必须绑定 click 事件委托（点击标签切换卡内容）', () => {
+  assert.ok(jsHtml.includes("$(document).on('click', '.tpl-card-pill'"),
+    'NPI_TemplateCards-js.html 缺少 .tpl-card-pill 的 click 事件委托，卡标签点击无响应');
+});
