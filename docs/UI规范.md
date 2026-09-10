@@ -886,6 +886,40 @@ Swal.fire({
 | `alert('加载失败：' + e)` | `Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('加载失败：'+e, 'Load failed: '+e) })` |
 | 无 `showConfirmButton` 的加载 toast | 必须加 `showConfirmButton: false` |
 
+### 4.12 区块折叠卡片（模版/表单分区）
+
+用于按业务区块（如工艺参数卡的"炮筒/合模/顶出"等分区）折叠展示字段，支持行内编辑。字段展示布局与「新品测试工艺参数」页一致（label 中上英下 + 表单控件 + 分段单元格）。参考实现：`NPI_TemplateCards.html`。
+
+```html
+<div class="accordion tpl-accordion" id="tplAccordion">
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#tplSec_0">
+        炮筒A<br><small>Barrel A</small><span class="sec-field-count">12</span>
+      </button>
+      <button class="btn btn-outline-primary tpl-add-btn" type="button" data-sec="炮筒A" data-secen="Barrel A">
+        <i class="bi bi-plus-circle"></i><small>Add</small>
+      </button>
+    </h2>
+    <div id="tplSec_0" class="accordion-collapse collapse show" data-bs-parent="#tplAccordion">
+      <div class="accordion-body">
+        <div class="row g-2 tpl-field-grid">
+          <!-- 字段单元格：col-6 col-md-4 col-lg-3；分段字段 col-12 段单元格行；备注 col-12 textarea -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+**规则**：
+- 卡片头：区块名中文在上、英文在下（`<br><small>` 格式），字段数用 `sec-field-count` 徽章
+- 头部右侧可放分区级操作按钮（如"新增字段"），中上英下两行，不参与折叠切换
+- 首区块默认展开（`show`），其余默认收起；折叠切换用 Bootstrap accordion，不引入新库
+- 字段单元格：普通字段 `col-6 col-md-4 col-lg-3`（label + 只读控件 + 单位后缀 + 元信息行）；分段字段 `col-12` 内 `col-4 col-md-2` 段单元格（与工艺参数记录页一致）；备注字段 `col-12` textarea
+- 编辑态：单元格切换为 `col-12` + `tpl-editing`（浅黄底 + 黄边框），表单网格 4 列（移动端 2 列），保存/取消右对齐
+- 空数据时保留分区结构并给 `.tpl-empty` 提示，保证"新增"入口始终可用
+
 ---
 
 ## 5. 响应式断点
@@ -946,6 +980,7 @@ Swal.fire({
 | 故障报告进度 Failure Report Progress | `bi-bar-chart-line` | 故障报告 |
 | 故障报告跟进验证 Follow-up Verification | `bi-check2-square` | 故障报告 |
 | 点检执行 Execute Inspection | `bi-clipboard-check` | 点检 |
+| 工艺参数卡模版 Parameter Card Templates | `bi-card-checklist` | 新品测试 |
 
 新增模块/子功能时先来这两张表查，没有再去 [icons.getbootstrap.com](https://icons.getbootstrap.com/) 选。
 

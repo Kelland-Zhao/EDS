@@ -472,5 +472,14 @@
         window.open(url);
         $('#npiModal').modal('hide');
     });
+    $('#NPI_TemplateCards_Btn').on('click', () => {
+        let url = siWebPage + '?v=NPI_TemplateCards'
+            + '&ID=' + encodeURIComponent(id)
+            + '&Name=' + encodeURIComponent(name)
+            + '&Process=' + encodeURIComponent(process)
+            + '&Workshop=' + encodeURIComponent(workshop);
+        window.open(url);
+        $('#npiModal').modal('hide');
+    });
   });
 </script>

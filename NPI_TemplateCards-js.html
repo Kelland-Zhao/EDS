@@ -1,0 +1,447 @@
+<script>
+// ============================================================
+//  工艺参数卡模版 JS / NPI Parameter Card Templates JS
+//  展示布局与「新品测试工艺参数」页一致：accordion 分区 + 表单网格字段
+// ============================================================
+const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+function parseResponse(raw) { return typeof raw === 'string' ? JSON.parse(raw) : raw; }
+const swalLoading = (cn, en) => {
+  var start = Date.now();
+  return {
+    title: swalTitle(cn, en.title || en),
+    html: swalHtml(cn, en.html || en) + '<div style="margin-top:8px;font-size:12px;color:#adb5bd;">⏱ <span class="swal-timer">0</span>s</div>',
+    allowOutsideClick: false,
+    showConfirmButton: false,
+    didOpen: function () {
+      Swal.showLoading();
+      var el = document.querySelector('.swal-timer');
+      if (el) {
+        el._interval = setInterval(function () { el.textContent = Math.floor((Date.now() - start) / 1000); }, 1000);
+      }
+    },
+    willClose: function () {
+      var els = document.querySelectorAll('.swal-timer');
+      els.forEach(function (el) { if (el._interval) clearInterval(el._interval); });
+    }
+  };
+};
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+// ===== 页面状态 =====
+let templateData = null;      // {cards, machineMap:{byRaw, byDisplay, modelsByProcess}}
+let currentProcess = 'IM';    // 当前工序
+let currentDisplay = '';      // 当前中间层机型
+let currentCard = '';         // 当前卡
+let currentCardRows = [];     // 当前卡全部行（含草稿/待审核，表内顺序）
+const TYPE_OPTIONS = ['number', 'text', 'select'];
+const STATUS_OPTIONS = ['草稿', '待审核', '已确认'];
+
+$(document).ready(function () {
+  var storedName = sessionStorage.getItem('Name');
+  if (storedName) $('#name').text(storedName);
+  $('#userLevelBadge').removeClass('bg-secondary').addClass('bg-success').text('可编辑 / Editable');
+  initProcessSelect();
+  initDisplaySelect();
+  loadTemplateMeta();
+});
+
+// ===== 数据加载 =====
+function loadTemplateMeta() {
+  Swal.fire(swalLoading('加载模版数据中...', { title: 'Loading Templates...', html: '正在获取模版数据' }));
+  google.script.run
+    .withSuccessHandler(function (r) {
+      var res = parseResponse(r);
+      Swal.close();
+      if (!res.success) {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('加载失败：' + (res.message || ''), 'Load failed: ' + (res.message || '')) });
+        return;
+      }
+      templateData = res.data;
+      buildProcessOptions();
+    })
+    .withFailureHandler(function (e) {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('加载失败：' + e, 'Load failed: ' + e) });
+    })
+    .loadNPITemplateData();
+}
+
+function buildProcessOptions() {
+  var modelsByProcess = (templateData && templateData.machineMap) ? (templateData.machineMap.modelsByProcess || {}) : {};
+  var keys = Object.keys(modelsByProcess).sort(function (a, b) {
+    if (a === 'IM') return -1; if (b === 'IM') return 1;
+    return a < b ? -1 : 1;
+  });
+  $('#processTypeSelect').empty();
+  keys.forEach(function (k) {
+    $('#processTypeSelect').append(new Option(k, k));
+  });
+  if (keys.indexOf(currentProcess) === -1) currentProcess = keys[0] || '';
+  $('#processTypeSelect').val(currentProcess).trigger('change');
+}
+
+function initProcessSelect() {
+  $('#processTypeSelect').select2({ placeholder: '选择工序 / Select Process', width: '100%' });
+  $('#processTypeSelect').on('change', function () {
+    currentProcess = $(this).val() || '';
+    currentDisplay = ''; currentCard = ''; currentCardRows = [];
+    $('#cardList').empty();
+    $('#cardContentCard').hide();
+    rebuildDisplayOptions();
+  });
+}
+
+function initDisplaySelect() {
+  $('#displaySelect').select2({ placeholder: '选择机型 / Select Model', width: '100%' });
+  $('#displaySelect').on('change', function () {
+    currentDisplay = $(this).val() || '';
+    currentCard = ''; currentCardRows = [];
+    $('#cardContentCard').hide();
+    renderCardPills();
+  });
+}
+
+function rebuildDisplayOptions() {
+  var modelsByProcess = (templateData && templateData.machineMap) ? (templateData.machineMap.modelsByProcess || {}) : {};
+  var models = modelsByProcess[currentProcess] || [];
+  $('#displaySelect').empty();
+  $('#displaySelect').append(new Option('-- 选择机型 / Select Model --', ''));
+  models.forEach(function (m) { $('#displaySelect').append(new Option(m, m)); });
+  $('#displaySelect').val('').trigger('change');
+}
+
+// ===== 卡 pills =====
+function renderCardPills() {
+  var byDisplay = (templateData && templateData.machineMap) ? (templateData.machineMap.byDisplay || {}) : {};
+  var specs = (byDisplay[currentDisplay] || []).slice().sort(function (a, b) { return (a.order || 1) - (b.order || 1); });
+  var html = '';
+  specs.forEach(function (sp) {
+    html += '<button type="button" class="tpl-card-pill" data-card="' + esc(sp.card) + '">'
+      + esc(sp.card)
+      + (sp.count > 1 ? '<span class="count-badge">×' + sp.count + '</span>' : '')
+      + '</button>';
+  });
+  if (!specs.length) html = '<span class="tpl-empty">该机型暂无已确认的卡映射 / No confirmed card mapping</span>';
+  $('#cardList').html(html);
+  if (specs.length) selectCard(specs[0].card);
+}
+
+// ===== 卡内容渲染 =====
+function selectCard(card) {
+  currentCard = card;
+  $('.tpl-card-pill').removeClass('active');
+  $('.tpl-card-pill[data-card="' + esc(card) + '"]').addClass('active');
+  $('#cardContentCard').show();
+  Swal.fire(swalLoading('加载卡字段...', { title: 'Loading Card Fields...', html: '正在获取「' + card + '」模版字段' }));
+  google.script.run
+    .withSuccessHandler(function (r) {
+      var res = parseResponse(r);
+      Swal.close();
+      if (!res.success) {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('加载失败：' + (res.message || ''), 'Load failed: ' + (res.message || '')) });
+        return;
+      }
+      currentCardRows = res.rows || [];
+      renderCard();
+    })
+    .withFailureHandler(function (e) {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('加载失败：' + e, 'Load failed: ' + e) });
+    })
+    .loadNPITemplateRowsAll(card, currentProcess);
+}
+
+function groupRowsBySection(rows) {
+  var sections = [], idxMap = {};
+  rows.forEach(function (r) {
+    var sec = r.sec || '（未分区）';
+    if (!(sec in idxMap)) { idxMap[sec] = sections.length; sections.push({ sec: sec, secEn: r.secEn || '', rows: [] }); }
+    sections[idxMap[sec]].rows.push(r);
+  });
+  return sections;
+}
+
+// 展示布局与「新品测试工艺参数」页一致：accordion 分区 + .row g-2 表单网格
+function renderCard() {
+  $('#cardContentTitle').html(esc(currentCard) + ' 卡字段模版<br><small style="font-weight:400;color:#888;">Card Fields</small>');
+  var confirmed = currentCardRows.filter(function (r) { return r.status === '已确认'; }).length;
+  $('#cardSummary').text('字段 ' + currentCardRows.length + ' / 已确认 ' + confirmed + ' | Fields ' + currentCardRows.length + ' / Confirmed ' + confirmed);
+  var sections = groupRowsBySection(currentCardRows);
+  if (!sections.length) sections = [{ sec: '（未分区）', secEn: '', rows: [] }];
+  var html = '';
+  sections.forEach(function (secInfo, si) {
+    var cid = 'tplSec_' + si;
+    html += '<div class="accordion-item">';
+    html += '<h2 class="accordion-header">';
+    html += '<button class="accordion-button' + (si === 0 ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + cid + '">'
+      + esc(secInfo.sec) + '<br><small>' + esc(secInfo.secEn) + '</small>'
+      + '<span class="sec-field-count">' + secInfo.rows.length + '</span></button>';
+    html += '<button class="btn btn-outline-primary tpl-add-btn" type="button" data-sec="' + esc(secInfo.sec) + '" data-secen="' + esc(secInfo.secEn) + '" title="新增字段 / Add Field"><i class="bi bi-plus-circle"></i><small>Add</small></button>';
+    html += '</h2>';
+    html += '<div id="' + cid + '" class="accordion-collapse collapse' + (si === 0 ? ' show' : '') + '" data-bs-parent="#tplAccordion">';
+    html += '<div class="accordion-body">';
+    html += '<div class="row g-2 tpl-field-grid" data-sec="' + esc(secInfo.sec) + '" data-secen="' + esc(secInfo.secEn) + '">';
+    if (!secInfo.rows.length) {
+      html += '<div class="col-12"><span class="tpl-empty">该区块暂无模版字段 / No fields in this section</span></div>';
+    }
+    secInfo.rows.forEach(function (r, ri) { html += fieldCellHtml(r, ri); });
+    html += '</div></div></div></div>';
+  });
+  $('#tplAccordion').html(html);
+}
+
+// 字段单元格：视图（label + 输入框样式 + 元信息 + 操作）与编辑表单成对
+function fieldCellHtml(r, idx) {
+  var cellId = 'fc_' + idx;
+  var isNumber = r.type === 'number';
+  var isTextarea = r.cn === '备注' || /remarks/.test(r.key || '');
+  var segs = r.segs || [];
+  var viewHtml = '';
+  if (segs.length) {
+    // 分段字段：与工艺参数页一致的段单元格布局（只读展示）
+    viewHtml = '<div class="col-12 tpl-field-view-col"><label class="form-label-sm">' + esc(r.cn || '') + (r.en ? '<br><small>' + esc(r.en) + '</small>' : '') + '</label>';
+    viewHtml += '<div class="row g-1 align-items-end">';
+    segs.forEach(function (seg) {
+      viewHtml += '<div class="col-4 col-md-2"><input type="' + (isNumber ? 'number' : 'text') + '" class="form-control form-control-sm" readonly placeholder="' + esc(seg) + '"></div>';
+    });
+    viewHtml += '</div></div>';
+  } else if (isTextarea) {
+    viewHtml = '<div class="col-12 tpl-field-view-col"><label class="form-label-sm">' + esc(r.cn || '') + (r.en ? '<br><small>' + esc(r.en) + '</small>' : '') + '</label>';
+    viewHtml += '<textarea class="form-control form-control-sm" readonly rows="3"' + (r.preset ? ' placeholder="' + esc(r.preset) + '"' : '') + '></textarea></div>';
+  } else {
+    var unitSuffix = r.unit ? '<span class="input-group-text tpl-unit">' + esc(r.unit) + '</span>' : '';
+    viewHtml = '<div class="col-12 tpl-field-view-col"><label class="form-label-sm">' + esc(r.cn || '') + (r.en ? '<br><small>' + esc(r.en) + '</small>' : '') + '</label>';
+    viewHtml += '<div class="input-group input-group-sm">';
+    viewHtml += '<input type="' + (isNumber ? 'number' : 'text') + '" class="form-control form-control-sm" readonly' + (r.preset ? ' placeholder="' + esc(r.preset) + '"' : '') + '>';
+    viewHtml += unitSuffix;
+    viewHtml += '</div></div>';
+  }
+  var statusCls = 'tpl-status-' + esc(r.status || '草稿');
+  var meta = '<div class="tpl-field-meta"><code>' + esc(r.key || '') + '</code>'
+    + (r.lo || r.hi ? '<span class="tpl-range">' + esc(r.lo || '') + '~' + esc(r.hi || '') + '</span>' : '')
+    + (r.dept ? '<span class="tpl-dept">' + esc(r.dept) + '</span>' : '')
+    + '<span class="tpl-status-badge ' + statusCls + '">' + esc(r.status || '草稿') + '</span></div>';
+  var actions = '<div class="tpl-field-actions">'
+    + '<button type="button" class="btn btn-sm btn-outline-primary tpl-edit-btn" data-idx="' + idx + '" title="编辑 / Edit"><i class="bi bi-pencil"></i></button>'
+    + '<button type="button" class="btn btn-sm btn-outline-danger tpl-del-btn" data-idx="' + idx + '" title="删除 / Delete"><i class="bi bi-trash"></i></button>'
+    + '</div>';
+  return '<div class="col-6 col-md-4 col-lg-3 tpl-field-cell" id="' + cellId + '" data-idx="' + idx + '">'
+    + '<div class="tpl-field-view">' + viewHtml + meta + actions + '</div>'
+    + '<div class="tpl-field-edit" style="display:none;">' + editFormHtml(r, idx) + '</div>'
+    + '</div>';
+}
+
+// 行内编辑表单（16 字段）；idx 为空表示新增行（按钮由调用方补 data-cell）
+function editFormHtml(r, idx) {
+  var bindAttr = idx != null ? 'data-idx="' + idx + '"' : '';
+  var opts = TYPE_OPTIONS.map(function (t) {
+    return '<option value="' + esc(t) + '"' + (r.type === t ? ' selected' : '') + '>' + esc(t) + '</option>';
+  }).join('');
+  var stOpts = STATUS_OPTIONS.map(function (s) {
+    return '<option value="' + esc(s) + '"' + ((r.status || '草稿') === s ? ' selected' : '') + '>' + esc(s) + '</option>';
+  }).join('');
+  return '<div class="tpl-edit-grid">'
+    + '<div><label class="form-label-sm">区块<br><small>Section CN</small></label><input class="form-control form-control-sm tpl-in" data-f="sec" value="' + esc(r.sec || '') + '"></div>'
+    + '<div><label class="form-label-sm">区块EN<br><small>Section EN</small></label><input class="form-control form-control-sm tpl-in" data-f="secEn" value="' + esc(r.secEn || '') + '"></div>'
+    + '<div><label class="form-label-sm">字段名<br><small>Field CN</small></label><input class="form-control form-control-sm tpl-in" data-f="cn" value="' + esc(r.cn || '') + '"></div>'
+    + '<div><label class="form-label-sm">字段名EN<br><small>Field EN</small></label><input class="form-control form-control-sm tpl-in" data-f="en" value="' + esc(r.en || '') + '"></div>'
+    + '<div class="tpl-span2"><label class="form-label-sm">字段key<br><small>Field Key</small></label><input class="form-control form-control-sm tpl-in" data-f="key" value="' + esc(r.key || '') + '"></div>'
+    + '<div><label class="form-label-sm">类型<br><small>Type</small></label><select class="form-select form-select-sm tpl-in" data-f="type">' + opts + '</select></div>'
+    + '<div><label class="form-label-sm">单位<br><small>Unit</small></label><input class="form-control form-control-sm tpl-in" data-f="unit" value="' + esc(r.unit || '') + '"></div>'
+    + '<div><label class="form-label-sm">下限<br><small>Lower</small></label><input class="form-control form-control-sm tpl-in" data-f="lo" value="' + esc(r.lo || '') + '"></div>'
+    + '<div><label class="form-label-sm">上限<br><small>Upper</small></label><input class="form-control form-control-sm tpl-in" data-f="hi" value="' + esc(r.hi || '') + '"></div>'
+    + '<div><label class="form-label-sm">检查部门<br><small>Check Dept</small></label><input class="form-control form-control-sm tpl-in" data-f="dept" value="' + esc(r.dept || '') + '"></div>'
+    + '<div><label class="form-label-sm">预设值<br><small>Preset</small></label><input class="form-control form-control-sm tpl-in" data-f="preset" value="' + esc(r.preset || '') + '"></div>'
+    + '<div class="tpl-span2"><label class="form-label-sm">分段<br><small>Segments</small> <span style="font-weight:400;color:#888;">（逗号分隔 / comma-separated）</span></label><input class="form-control form-control-sm tpl-in" data-f="segs" value="' + esc((r.segs || []).join(',')) + '"></div>'
+    + '<div><label class="form-label-sm">状态<br><small>Status</small></label><select class="form-select form-select-sm tpl-in" data-f="status">' + stOpts + '</select></div>'
+    + '<div class="tpl-span2"><label class="form-label-sm">备注<br><small>Note</small></label><input class="form-control form-control-sm tpl-in" data-f="note" value="' + esc(r.note || '') + '"></div>'
+    + '</div>'
+    + '<div class="tpl-edit-actions">'
+    + '<button type="button" class="btn btn-primary tpl-save-btn" ' + bindAttr + '><i class="bi bi-save"></i> 保存 / Save</button>'
+    + '<button type="button" class="btn btn-outline-secondary tpl-cancel-btn" ' + bindAttr + '><i class="bi bi-x"></i> 取消 / Cancel</button>'
+    + '</div>';
+}
+
+// ===== key 建议（与后端 buildTemplateKeyCandidate_ 同规则） =====
+function slugKey(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+function suggestKey(secEn) {
+  var base = slugKey(currentCard) + '_' + slugKey(secEn);
+  if (!base) return '';
+  var used = {};
+  currentCardRows.forEach(function (r) { used[String(r.key || '').trim()] = true; });
+  // 页面内已填写的未保存 key 也计入
+  $('.tpl-in[data-f="key"]').each(function () { var v = String($(this).val() || '').trim(); if (v) used[v] = true; });
+  var n = 1;
+  while (used[base + '_' + n]) n++;
+  return base + '_' + n;
+}
+
+// ===== 行操作 =====
+function addFieldToSection(sec, secEn) {
+  if (!currentCard) return;
+  var grid = $('.tpl-field-grid[data-sec="' + sec + '"]');
+  if (!grid.length) return;
+  var row = { sec: sec, secEn: secEn, cn: '', en: '', key: suggestKey(secEn), type: 'number', unit: '', lo: '', hi: '', dept: '', preset: '', segs: [], status: '草稿', note: '' };
+  var uid = 'n' + Date.now() + Math.floor(Math.random() * 1000);
+  var cell = '<div class="col-12 tpl-field-cell tpl-editing" id="' + uid + '">'
+    + '<div class="tpl-field-view" style="display:none;"></div>'
+    + '<div class="tpl-field-edit">' + editFormHtml(row) + '</div></div>';
+  grid.find('.tpl-empty').closest('.col-12').remove();
+  grid.append(cell);
+  var $cell = $('#' + uid);
+  // 新增行的保存/取消按钮绑定到该单元格 id
+  $cell.find('.tpl-save-btn').attr('data-cell', uid);
+  $cell.find('.tpl-cancel-btn').attr('data-cell', uid);
+  $cell.find('.tpl-in[data-f="key"]').trigger('focus');
+  scrollIntoViewIfNeeded($cell);
+}
+
+function enterEdit(idx) {
+  var $cell = $('#fc_' + idx);
+  if (!$cell.length) return;
+  $cell.find('.tpl-field-view').hide();
+  $cell.find('.tpl-field-edit').show();
+  $cell.addClass('tpl-editing');
+  $cell.removeClass('col-6 col-md-4 col-lg-3').addClass('col-12');
+  scrollIntoViewIfNeeded($cell);
+}
+
+function cancelEdit(idx) {
+  var $cell = $('#fc_' + idx);
+  if (!$cell.length) return;
+  $cell.find('.tpl-field-view').show();
+  $cell.find('.tpl-field-edit').hide();
+  $cell.removeClass('tpl-editing');
+  $cell.removeClass('col-12').addClass('col-6 col-md-4 col-lg-3');
+}
+
+function cancelNew($cell) {
+  $cell.remove();
+  var grid = $cell.closest('.tpl-field-grid');
+  if (grid && !grid.find('.tpl-field-cell').length && !grid.find('.tpl-empty').length) {
+    grid.append('<div class="col-12"><span class="tpl-empty">该区块暂无模版字段 / No fields in this section</span></div>');
+  }
+}
+
+function scrollIntoViewIfNeeded($el) {
+  try { $el[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { }
+}
+
+function collectRow($cell) {
+  var row = {};
+  $cell.find('.tpl-in').each(function () { row[$(this).data('f')] = $(this).val(); });
+  row.segs = String(row.segs || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  row.key = String(row.key || '').trim();
+  return row;
+}
+
+function validateRow(row) {
+  if (!row.key) return '字段key不能为空 / Field key is required';
+  if (row.key.indexOf(',') !== -1) return '字段key不能包含逗号 / Field key cannot contain commas';
+  return '';
+}
+
+function saveRow(idx, isNew, $cell) {
+  var row = collectRow($cell);
+  var vmsg = validateRow(row);
+  if (vmsg) {
+    Swal.fire({ icon: 'warning', title: swalTitle('校验失败', 'Validation Failed'), html: swalHtml(vmsg, vmsg) });
+    return;
+  }
+  var doSave = function () {
+    Swal.fire(swalLoading('保存中...', { title: 'Saving...', html: '正在保存模版字段' }));
+    var payload = row;
+    if (!isNew) payload.origKey = (currentCardRows[idx] || {}).key || '';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        var res = parseResponse(r);
+        Swal.close();
+        if (!res.success) {
+          Swal.fire({ icon: 'error', title: swalTitle('保存失败', 'Save Failed'), html: swalHtml(res.message || '', res.message || '') });
+          return;
+        }
+        Swal.fire({ icon: 'success', title: swalTitle('已保存', 'Saved'), html: swalHtml('模版字段已保存，工艺参数表单将同步更新。', 'Template field saved. The process record form will reflect the change.'), timer: 1500 });
+        selectCard(currentCard);
+      })
+      .withFailureHandler(function (e) {
+        Swal.close();
+        Swal.fire({ icon: 'error', title: swalTitle('保存失败', 'Save Failed'), html: swalHtml('保存失败：' + e, 'Save failed: ' + e) });
+      })
+      .saveNPITemplateRow(isNew ? 'create' : 'update', currentCard, currentProcess, JSON.stringify(payload));
+  };
+  if (isNew) { doSave(); return; }
+  Swal.fire({
+    icon: 'warning',
+    title: swalTitle('确认保存修改？', 'Confirm Changes?'),
+    html: swalHtml('修改模版字段将影响新品测试工艺参数记录页的表单结构，确认保存？', 'Editing template fields changes the process record form structure. Continue?'),
+    showCancelButton: true,
+    confirmButtonText: '确认 / Confirm',
+    cancelButtonText: '取消 / Cancel'
+  }).then(function (result) { if (result.isConfirmed) doSave(); });
+}
+
+function deleteRow(idx) {
+  var r = currentCardRows[idx];
+  if (!r) return;
+  Swal.fire({
+    icon: 'warning',
+    title: swalTitle('确认删除？', 'Confirm Delete?'),
+    html: swalHtml('将删除字段「' + (r.cn || r.key) + '」，且不可恢复。', 'Field "' + (r.cn || r.key) + '" will be deleted permanently.'),
+    showCancelButton: true,
+    confirmButtonText: '删除 / Delete',
+    cancelButtonText: '取消 / Cancel',
+    confirmButtonColor: '#dc3545'
+  }).then(function (result) {
+    if (!result.isConfirmed) return;
+    Swal.fire(swalLoading('删除中...', { title: 'Deleting...', html: '正在删除模版字段' }));
+    google.script.run
+      .withSuccessHandler(function (res) {
+        res = parseResponse(res);
+        Swal.close();
+        if (!res.success) {
+          Swal.fire({ icon: 'error', title: swalTitle('删除失败', 'Delete Failed'), html: swalHtml(res.message || '', res.message || '') });
+          return;
+        }
+        Swal.fire({ icon: 'success', title: swalTitle('已删除', 'Deleted'), html: swalHtml('模版字段已删除。', 'Template field deleted.'), timer: 1500 });
+        selectCard(currentCard);
+      })
+      .withFailureHandler(function (e) {
+        Swal.close();
+        Swal.fire({ icon: 'error', title: swalTitle('删除失败', 'Delete Failed'), html: swalHtml('删除失败：' + e, 'Delete failed: ' + e) });
+      })
+      .saveNPITemplateRow('delete', currentCard, currentProcess, JSON.stringify({ key: r.key }));
+  });
+}
+
+// ===== 事件委托 =====
+$(document).on('click', '.tpl-add-btn', function () {
+  addFieldToSection($(this).data('sec') || '', $(this).data('secen') || '');
+});
+$(document).on('click', '.tpl-edit-btn', function () {
+  enterEdit(parseInt($(this).data('idx'), 10));
+});
+$(document).on('click', '.tpl-del-btn', function () {
+  deleteRow(parseInt($(this).data('idx'), 10));
+});
+$(document).on('click', '.tpl-save-btn', function () {
+  var cellId = $(this).data('cell');
+  if (cellId) {
+    saveRow(-1, true, $('#' + cellId));
+  } else {
+    var idx = parseInt($(this).data('idx'), 10);
+    saveRow(idx, false, $('#fc_' + idx));
+  }
+});
+$(document).on('click', '.tpl-cancel-btn', function () {
+  var cellId = $(this).data('cell');
+  if (cellId) {
+    cancelNew($('#' + cellId));
+  } else {
+    var idx = parseInt($(this).data('idx'), 10);
+    cancelEdit(idx);
+  }
+});
+</script>

@@ -252,6 +252,7 @@ function doGet(e) {
   Route.path("CycleMonitor", loadCycleMonitor);
   Route.path("NPI_ProcessRecord", loadNPIProcessRecord);
   Route.path("NPI_Dashboard", loadNPIDashboard);
+  Route.path("NPI_TemplateCards", loadNPITemplateCards);
   Route.path("promoteNPItoTBX", promoteNPItoTBX);
   Route.path("getSuggestedCardNumber", getSuggestedCardNumber);
   Route.path("loadBOMBundleList", loadBOMBundleList);
@@ -1527,6 +1528,19 @@ function loadNPIDashboard(webPage, id, name, process) {
     intoWebType: process || ""
   })
     .setTitle("测试计划 | Test Scheduling")
+    .setFaviconUrl(webIconUrl);
+}
+
+// 工艺参数卡模版页：按中间层机型查看/编辑各卡的工艺参数模版字段
+function loadNPITemplateCards(webPage, id, name, process) {
+  var pageUrl = webPage || getReleaseWebPage();
+  return render("NPI_TemplateCards", {
+    webPage: pageUrl,
+    intoWebID: id || "",
+    intoWebName: name || "",
+    intoWebType: process || ""
+  })
+    .setTitle("工艺参数卡模版 | NPI Parameter Card Templates")
     .setFaviconUrl(webIconUrl);
 }
 
@@ -15331,6 +15345,150 @@ function buildMachineMapModelsByProcess_(mapData) {
   var out = {};
   Object.keys(sets).forEach(function (p) { out[p] = Object.keys(sets[p]).sort(); });
   return out;
+}
+
+// ===== 工艺参数卡模版编辑（NPI_TemplateCards 页）纯函数 =====
+// 行定位 = (卡+工序+字段key) 唯一；新增字段自动生成候选 key，可手改
+
+// 卡名 → 小写 key 前缀：仅保留小写字母数字，其余字符（含中文）折叠为单个下划线，首尾去除
+function buildTemplateKeyPrefix_(card) {
+  return String(card || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+// 候选 key = 前缀_区块_最小未占用序号（从 1 起）；卡或区块为空返回 null
+function buildTemplateKeyCandidate_(card, sectionEn, existingKeys) {
+  var prefix = buildTemplateKeyPrefix_(card);
+  var sec = buildTemplateKeyPrefix_(sectionEn);
+  if (!prefix || !sec) return null;
+  var used = {};
+  (existingKeys || []).forEach(function (k) { used[String(k).trim()] = true; });
+  var n = 1;
+  while (used[prefix + '_' + sec + '_' + n]) n++;
+  return prefix + '_' + sec + '_' + n;
+}
+
+// key 校验：非空、不含逗号（分段列以逗号分隔）。调用前应先 trim
+function validateTemplateKey_(key) {
+  var k = String(key == null ? '' : key).trim();
+  if (!k) return { ok: false, message: '字段key不能为空 / Field key is required' };
+  if (k.indexOf(',') !== -1) return { ok: false, message: '字段key不能包含逗号 / Field key cannot contain commas' };
+  return { ok: true, message: '' };
+}
+
+// (卡+工序+key) 唯一校验；excludeIndex 为排除自身的数据数组下标，-1 不排除
+function isTemplateKeyUnique_(data, card, processType, key, excludeIndex) {
+  var c = String(card || '').trim(), p = String(processType || '').trim(), k = String(key || '').trim();
+  if (!data || !data.length) return true;
+  for (var i = 1; i < data.length; i++) {
+    if (i === excludeIndex) continue;
+    var r = data[i];
+    if (!r) continue;
+    if (String(r[0] || '').trim() === c && String(r[1] || '').trim() === p && String(r[6] || '').trim() === k) return false;
+  }
+  return true;
+}
+
+// 按 (卡+工序+key) 定位行，返回 data 数组下标（含表头），未找到 -1
+function findTemplateRowIndex_(data, card, processType, key) {
+  var c = String(card || '').trim(), p = String(processType || '').trim(), k = String(key || '').trim();
+  if (!data) return -1;
+  for (var i = 1; i < data.length; i++) {
+    var r = data[i];
+    if (!r) continue;
+    if (String(r[0] || '').trim() === c && String(r[1] || '').trim() === p && String(r[6] || '').trim() === k) return i;
+  }
+  return -1;
+}
+
+// 行对象 → NPI_Templates 16 列数组（列序与 loadNPITemplateData 注释一致）
+function buildTemplateRowArray_(card, processType, row) {
+  var segs = (row && Array.isArray(row.segs))
+    ? row.segs.filter(function (s) { return String(s).trim() !== ''; }).map(function (s) { return String(s).trim(); })
+    : [];
+  return [
+    card, processType,
+    row.sec || '', row.secEn || '', row.cn || '', row.en || '', row.key || '',
+    row.type || '', row.unit || '', row.lo || '', row.hi || '',
+    row.dept || '', row.preset || '', segs.join(','), row.status || '', row.note || ''
+  ];
+}
+
+// 读取指定卡的模版全部行（不过滤状态，编辑页需看到草稿/待审核行；保留表内顺序）
+function loadNPITemplateRowsAll(card, processType) {
+  try {
+    var c = String(card || '').trim(), p = String(processType || '').trim();
+    if (!c || !p) return JSON.stringify({ success: false, message: 'Card / process type required' });
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_Templates');
+    if (!ws) return JSON.stringify({ success: false, message: 'Template sheet missing' });
+    var data = ws.getDataRange().getValues();
+    var rows = [];
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      if (!r) continue;
+      if (String(r[0] || '').trim() !== c || String(r[1] || '').trim() !== p) continue;
+      rows.push({
+        sec: String(r[2] || '').trim(), secEn: String(r[3] || '').trim(),
+        cn: String(r[4] || '').trim(), en: String(r[5] || '').trim(),
+        key: String(r[6] || '').trim(), type: String(r[7] || '').trim(),
+        unit: String(r[8] || '').trim(), lo: String(r[9] || '').trim(), hi: String(r[10] || '').trim(),
+        dept: String(r[11] || '').trim(), preset: String(r[12] || '').trim(),
+        segs: String(r[13] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+        status: String(r[14] || '').trim(), note: String(r[15] || '').trim()
+      });
+    }
+    return JSON.stringify({ success: true, rows: rows });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  }
+}
+
+// 工艺参数卡模版编辑：create/update/delete 字段行（NPI_TemplateCards 页）
+// rowJSON: { origKey, sec, secEn, cn, en, key, type, unit, lo, hi, dept, preset, segs:[], status, note }
+// 行定位 = (卡+工序+key)；写后失效 NPI_TEMPLATE_CACHE_v4，让工艺参数记录页尽快反映模版变更
+function saveNPITemplateRow(action, card, processType, rowJSON) {
+  try {
+    var act = String(action || '').trim().toLowerCase();
+    if (['create', 'update', 'delete'].indexOf(act) === -1) return JSON.stringify({ success: false, message: 'Unknown action' });
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_Templates');
+    if (!ws) return JSON.stringify({ success: false, message: 'Template sheet missing' });
+    var c = String(card || '').trim(), p = String(processType || '').trim();
+    if (!c || !p) return JSON.stringify({ success: false, message: 'Card / process type required' });
+    var data = ws.getDataRange().getValues();
+
+    if (act === 'delete') {
+      var delKey = String((rowJSON && (rowJSON.origKey || rowJSON.key)) || '').trim();
+      var delIdx = findTemplateRowIndex_(data, c, p, delKey);
+      if (delIdx < 0) return JSON.stringify({ success: false, message: 'Row not found' });
+      ws.deleteRow(delIdx + 1);
+    } else {
+      var row = typeof rowJSON === 'string' ? JSON.parse(rowJSON) : (rowJSON || {});
+      var v = validateTemplateKey_(row.key);
+      if (!v.ok) return JSON.stringify({ success: false, message: v.message });
+      var idx = -1;
+      if (act === 'update') {
+        var locKey = String(row.origKey || row.key || '').trim();
+        idx = findTemplateRowIndex_(data, c, p, locKey);
+        if (idx < 0) return JSON.stringify({ success: false, message: 'Row not found' });
+        if (!isTemplateKeyUnique_(data, c, p, String(row.key).trim(), idx)) {
+          return JSON.stringify({ success: false, message: '字段key在卡内已存在 / Duplicate field key in this card' });
+        }
+      } else {
+        if (!isTemplateKeyUnique_(data, c, p, String(row.key).trim(), -1)) {
+          return JSON.stringify({ success: false, message: '字段key在卡内已存在 / Duplicate field key in this card' });
+        }
+      }
+      var arr = buildTemplateRowArray_(c, p, row);
+      if (act === 'update') {
+        ws.getRange(idx + 1, 1, 1, 16).setValues([arr]);
+      } else {
+        ws.appendRow(arr);
+      }
+    }
+    try { CacheService.getScriptCache().remove('NPI_TEMPLATE_CACHE_v4'); } catch (ce) {}
+    return JSON.stringify({ success: true, message: '已保存 / Saved' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  }
 }
 
 // 每任务最新工艺卡信息映射（纯函数，供任务列表与测试使用）：
