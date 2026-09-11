@@ -282,15 +282,21 @@ function renderTemplate() {
     }
     var multi = currentCompose.length > 1;
     if (multi) {
-      // 卡级开关 + 折叠
+      // 卡级开关 + 折叠：accordion 外框统一模块视觉，默认全折叠（instance 1 仍默认启用）
       var uid = 'card_' + inst.idx;
       var defOn = inst.instance === 1;
+      var collapseId = 'collapse_' + uid;
       enabledSections[uid] = defOn;
-      html += '<div class="mb-3" id="section_' + uid + (defOn ? '' : ' barrel-disabled') + '">';
-      html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + uid + '" ' + (defOn ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span> <strong style="font-size:13px;">' + inst.card + (inst.count > 1 ? '-' + inst.instance : '') + '</strong></label>';
-      html += '<div class="row g-2 mt-1">';
+      html += '<div class="accordion-item">';
+      html += '<h2 class="accordion-header d-flex align-items-center gap-2">';
+      html += '<label class="barrel-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="toggle_' + uid + '" ' + (defOn ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span></label>';
+      html += '<button class="accordion-button flex-grow-1 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' + inst.card + (inst.count > 1 ? '-' + inst.instance : '') + '</button>';
+      html += '</h2>';
+      html += '<div id="' + collapseId + '" class="accordion-collapse collapse">';
+      html += '<div class="accordion-body' + (defOn ? '' : ' barrel-disabled') + '" id="section_' + uid + '">';
+      html += '<div class="row g-2">';
       html += renderCardSections(inst, rows);
-      html += '</div></div>';
+      html += '</div></div></div></div>';
     } else {
       html += renderCardSections(inst, rows);
     }
@@ -323,13 +329,20 @@ function renderEquipmentBlock(inst, rows) {
     t.fields.push(r);
   });
   equipmentTypes[uid] = types;
-  var html = '<div class="col-12 mb-2" id="' + uid + '"><strong style="font-size:12px;">配套设备信息<br><small>Auxiliary Equipment</small></strong>';
+  // 外框与产品信息一致：accordion-item，默认展开；无 data-bs-parent（独立折叠，不与其他模块互斥）
+  var collapseId = 'collapse_' + uid;
+  var html = '<div class="accordion-item">';
+  html += '<h2 class="accordion-header">';
+  html += '<button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">配套设备信息<br><small>Auxiliary Equipment</small></button>';
+  html += '</h2>';
+  html += '<div id="' + collapseId + '" class="accordion-collapse collapse show">';
+  html += '<div class="accordion-body" id="' + uid + '">';
   html += '<div class="d-flex align-items-center gap-2 mb-2"><select id="' + uid + '_select" class="form-select form-select-sm" style="width:auto;"><option value="">-- 选择设备 / Select Device --</option>';
   types.forEach(function (t) {
     html += '<option value="' + t.id + '">' + t.cn + (t.en ? ' / ' + t.en : '') + '</option>';
   });
   html += '</select><button class="btn btn-sm btn-outline-secondary" onclick="addEquipment(\'' + uid + '\')"><i class="bi bi-plus"></i> 添加 / Add</button></div>';
-  html += '<div id="' + uid + '_list"></div></div>';
+  html += '<div id="' + uid + '_list"></div></div></div></div>';
   return html;
 }
 
