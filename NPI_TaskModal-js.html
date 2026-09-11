@@ -363,11 +363,10 @@ function submitProductAdd() {
   Swal.fire({ icon: 'success', title: swalTitle('添加成功', 'Added'), html: swalHtml('产品 ' + name + ' 已加入本页清单（临时）', 'Product ' + name + ' added to this session (temporary)'), timer: 1500, showConfirmButton: false });
 }
 
-// 机台下拉锁定/解锁（select2 需同步 enable/disable，否则容器仍可交互）
+// 机台下拉锁定/解锁（仅用 prop('disabled')：Select2 4.0.13 的 select2('enable', bool) 传布尔值经插件包装器后
+// 内部 !e[0] 恒为 true，true/false 都会禁用，曾导致解锁失效、下拉点击无反应；MutationObserver 会自动同步容器禁用样式与点击拦截）
 function setMachineSelectEnabled_(on) {
-  var sel = $('#newMachineNo');
-  sel.prop('disabled', !on);
-  if (sel.hasClass('select2-hidden-accessible')) sel.select2('enable', on);
+  $('#newMachineNo').prop('disabled', !on);
 }
 
 function loadWorkcenterList(processType, callback) {
