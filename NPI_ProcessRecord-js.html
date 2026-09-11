@@ -255,6 +255,7 @@ function renderTemplate() {
   var html = '';
   enabledSections = {};
   currentHotRunnerInst = null;
+  activeEquipment = []; // 重新渲染时清空已添加设备卡片，由回填按记录值重建
   // 任务级产品信息：所有卡一致，只渲染一次，key 不带实例前缀
   var piInst = { card: 'shared', count: 1, instance: 1, idx: 0, prefix: '' };
   var piRows = getSharedProductInfoRows();
@@ -269,6 +270,10 @@ function renderTemplate() {
     piRows.forEach(function (r) { html += renderTemplateRow(piInst, r); });
     html += '</div></div></div></div>';
   }
+  // 任务级配套设备：公用一份（FCS/ENG 版本），交互同设备卡片（下拉选设备 + 添加）
+  var eqInst = { card: '配套设备', count: 1, instance: 1, idx: 0, prefix: '' };
+  var eqRows = getSharedAuxEquipRows();
+  if (eqRows.length) html += renderEquipmentBlock(eqInst, eqRows);
   currentCompose.forEach(function (inst, i) {
     var rows = (templateData && templateData.cards && templateData.cards[inst.card]) || [];
     if (!rows.length) {
@@ -401,21 +406,19 @@ function renderEquipCards(uid) {
   $('#' + uid + '_list').html(html);
 }
 
-// 回填：记录中含设备值（含实例前缀 key）时自动添加对应设备卡片
+// 回填：记录中含设备值（含旧实例前缀 key，如 1_auxEquip_*）时自动添加对应设备卡片（共享设备块）
 function ensureEquipmentForKey(key) {
   var m = String(key).match(/auxEquip_([^_]+)_/);
   if (!m) return;
   var typeId = m[1];
-  (currentCompose || []).forEach(function (inst) {
-    var rows = (templateData && templateData.cards && templateData.cards[inst.card]) || [];
-    var has = rows.some(function (r) { return String(r.key || '').indexOf('auxEquip_' + typeId + '_') >= 0; });
-    if (!has) return;
-    var uid = 'equip_' + inst.idx;
-    if (!$('#' + uid).length) return;
-    if (activeEquipment.some(function (a) { return a.uid === uid && a.typeId === typeId; })) return;
-    activeEquipment.push({ uid: uid, typeId: typeId, enabled: true });
-    renderEquipCards(uid);
-  });
+  var rows = getSharedAuxEquipRows();
+  var has = rows.some(function (r) { return String(r.key || '').indexOf('auxEquip_' + typeId + '_') >= 0; });
+  if (!has) return;
+  var uid = 'equip_0';
+  if (!$('#' + uid).length) return;
+  if (activeEquipment.some(function (a) { return a.uid === uid && a.typeId === typeId; })) return;
+  activeEquipment.push({ uid: uid, typeId: typeId, enabled: true });
+  renderEquipCards(uid);
 }
 
 // 任务级产品信息行：优先取专用卡「产品信息」（公用，全机型共享）；
@@ -432,23 +435,34 @@ function getSharedProductInfoRows() {
   return out;
 }
 
+// 任务级配套设备行：优先取专用卡「配套设备」（公用，FCS/ENG 版本）；
+// 迁移前该卡可能不存在，回退 FCS/ENG 卡
+function getSharedAuxEquipRows() {
+  var out = [];
+  var sources = ['配套设备', 'FCS/ENG'];
+  var seen = {};
+  sources.forEach(function (card) {
+    (templateData && templateData.cards && templateData.cards[card] || []).forEach(function (r) {
+      if (r.sec === '配套设备' && !seen[r.key]) { seen[r.key] = true; out.push(r); }
+    });
+  });
+  return out;
+}
+
 // 单卡模式：区块 = accordion 项（首个展开）；多卡模式：区块 = 子标题块
+// 产品信息/配套设备已公用化：单元卡渲染时跳过，公用块在 renderTemplate 顶部渲染
 function renderCardSections(inst, rows) {
   var multi = currentCompose.length > 1;
   var secOrder = [];
-  rows.forEach(function (r) { if (r.sec !== '产品信息' && secOrder.indexOf(r.sec) < 0) secOrder.push(r.sec); });
+  rows.forEach(function (r) { if (r.sec !== '产品信息' && r.sec !== '配套设备' && secOrder.indexOf(r.sec) < 0) secOrder.push(r.sec); });
   var html = '';
   var isFirst = true;
   secOrder.forEach(function (sec) {
-    var secRows = rows.filter(function (r) { return r.sec === sec && r.sec !== '产品信息'; });
+    var secRows = rows.filter(function (r) { return r.sec === sec && r.sec !== '产品信息' && r.sec !== '配套设备'; });
     var secEn = secRows[0].secEn || '';
     var isHR = secRows.some(function (r) { return String(r.key || '').indexOf('hotRunner_') === 0; });
     var isBarrel = /^炮筒[ABCD]$/.test(sec);
     var defaultDisabled = isHR || ((DEFAULT_DISABLED_SECTIONS[inst.card] || []).indexOf(sec) >= 0);
-    if (sec === '配套设备') {
-      html += renderEquipmentBlock(inst, secRows);
-      return;
-    }
     if (isHR) {
       // 热流道：开关 + 表格
       var uid = 'hr_' + inst.idx;
@@ -783,6 +797,10 @@ function fillFormFields(fields) {
   var legacy = [];
   Object.keys(obj).forEach(function (k) {
     var el = $('[data-key="' + k + '"]');
+    if (!el.length && /^\d+_auxEquip_/.test(k)) {
+      // 旧实例前缀设备 key（如 1_auxEquip_*）回退到共享设备块的无前缀输入，保存后转为新 key
+      el = $('[data-key="' + k.replace(/^\d+_/, '') + '"]');
+    }
     if (el.length) {
       el.val(obj[k]);
       if (el.hasClass('hr-pos-select')) updateHRPosColor(el[0]);

@@ -38,6 +38,11 @@ let currentCompose = null;    // 当前组合 [{card, count, instance, idx, pref
 let cardRows = {};            // 卡名 → 全部行（含草稿/待审核，表内顺序）
 const TYPE_OPTIONS = ['number', 'text', 'select'];
 const STATUS_OPTIONS = ['草稿', '待审核', '已确认'];
+// 公用单元（全机型共享，渲染在组合顶部；与记录页共享取数规则一致）
+const SHARED_CARDS = [
+  { card: '产品信息', label: '产品信息（公用）', sub: '全机型共享<br>Product Info (Shared) · All Models' },
+  { card: '配套设备', label: '配套设备（公用）', sub: '全机型共享 · FCS/ENG 版本<br>Aux. Equipment (Shared) · FCS/ENG Version' },
+];
 
 $(document).ready(function () {
   var storedName = sessionStorage.getItem('Name');
@@ -46,19 +51,19 @@ $(document).ready(function () {
   initProcessSelect();
   initDisplaySelect();
   // 先弹 loading toast（后端迁移检查有一次读表往返，避免刷新后 1s 无提示），
-  // 再执行一次性数据迁移（幂等）：产品信息字段集中到专用卡「产品信息」，完成后加载模版数据
+  // 再执行一次性数据迁移（幂等）：产品信息/配套设备字段集中到各自专用卡，完成后加载模版数据
   Swal.fire(swalLoading('加载模版数据中...', { title: 'Loading Templates...', html: '正在获取模版数据' }));
   google.script.run
     .withSuccessHandler(function (r) {
       var res = parseResponse(r);
-      if (res.success && res.changed) console.log('产品信息迁移完成 / Product info migrated:', res);
+      if (res.success && res.changed) console.log('公用区块迁移完成 / Shared sections migrated:', res);
       loadTemplateMeta();
     })
     .withFailureHandler(function (e) {
-      console.warn('产品信息迁移跳过 / Migration skipped:', e);
+      console.warn('公用区块迁移跳过 / Migration skipped:', e);
       loadTemplateMeta();
     })
-    .ensureNPIProductInfoCard();
+    .ensureNPISharedCards();
 });
 
 // ===== 数据加载 =====
@@ -161,7 +166,8 @@ function loadComposed() {
       Swal.fire({ icon: 'warning', title: swalTitle('未配置模板', 'No Template'), html: swalHtml('机型「' + currentDisplay + '」暂无对应模板，已按 FCS/ENG 渲染。', 'No template for model "' + currentDisplay + '", rendered with FCS/ENG.'), timer: 3000, showConfirmButton: false });
     }
   }
-  var cards = ['产品信息'];
+  var cards = [];
+  SHARED_CARDS.forEach(function (sc) { cards.push(sc.card); });
   currentCompose.forEach(function (inst) { if (cards.indexOf(inst.card) === -1) cards.push(inst.card); });
   Swal.fire(swalLoading('加载组合卡字段...', { title: 'Loading Composed Cards...', html: '正在获取组合卡模版字段' }));
   loadRowsSeq(cards, function (rowsMap) {
@@ -188,17 +194,21 @@ function loadRowsSeq(cards, cb) {
 }
 
 function renderComposed() {
-  var piRows = cardRows['产品信息'] || [];
-  var uniqueCards = ['产品信息'];
+  var uniqueCards = [];
+  SHARED_CARDS.forEach(function (sc) { uniqueCards.push(sc.card); });
   currentCompose.forEach(function (inst) { if (uniqueCards.indexOf(inst.card) === -1) uniqueCards.push(inst.card); });
   var totalFields = 0;
   uniqueCards.forEach(function (card) { totalFields += (cardRows[card] || []).length; });
   $('#cardContentTitle').html('组合卡模版<br><small style="font-weight:400;color:#888;">Composed Card Template</small>');
   $('#cardSummary').text('单元 ' + currentCompose.length + ' / 模版字段 ' + totalFields + ' | Units ' + currentCompose.length + ' / Template Fields ' + totalFields);
   var html = '';
-  if (piRows.length) {
-    html += renderCardUnit('pi', { card: '产品信息', count: 1, instance: 1, idx: 0, prefix: '', shared: true }, piRows);
-  }
+  // 公用单元（产品信息/配套设备）渲染在组合顶部
+  SHARED_CARDS.forEach(function (sc, si) {
+    var rows = cardRows[sc.card] || [];
+    if (rows.length) {
+      html += renderCardUnit('s' + si, { card: sc.card, count: 1, instance: 1, idx: 0, prefix: '', shared: true, label: sc.label, sub: sc.sub }, rows);
+    }
+  });
   currentCompose.forEach(function (inst) {
     var rows = cardRows[inst.card] || [];
     if (!rows.length) {
@@ -224,10 +234,10 @@ function groupRowsBySection(rows) {
 // 组合单元：标题（含实例名）+ 该卡分区 accordion + 字段编辑网格
 function renderCardUnit(uid, inst, rows) {
   var shared = !!inst.shared;
-  var label = shared ? '产品信息（公用）' : instanceLabel(inst);
+  var label = shared ? (inst.label || inst.card) : instanceLabel(inst);
   var headSmall;
   if (shared) {
-    headSmall = '全机型共享<br>Product Info (Shared) · All Models';
+    headSmall = inst.sub || '全机型共享<br>Shared · All Models';
   } else if (inst.count > 1) {
     headSmall = '单元 ' + inst.instance + ' / ' + inst.count + ' · ' + esc(inst.card) + '-1~' + inst.count + ' 共用同一模版<br>Unit ' + inst.instance + ' of ' + inst.count + ' · Instances Share One Template';
   } else {
@@ -340,7 +350,9 @@ function slugKey(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 function suggestKey(card, secEn) {
-  var base = slugKey(card) + '_' + slugKey(secEn);
+  // 卡名纯中文（如「产品信息」「配套设备」）时 slug 为空，退化为区块前缀
+  var cardSlug = slugKey(card), secSlug = slugKey(secEn);
+  var base = cardSlug ? cardSlug + '_' + secSlug : secSlug;
   if (!base) return '';
   var used = {};
   (cardRows[card] || []).forEach(function (r) { used[String(r.key || '').trim()] = true; });

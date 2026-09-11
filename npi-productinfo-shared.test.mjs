@@ -1,9 +1,10 @@
-// NPI 产品信息公用化 + 模版页组合视图 — 回归测试
-// 覆盖：buildProductInfoMigrationPlan_（产品信息迁移纯函数）、
+// NPI 产品信息/配套设备公用化 + 模版页组合视图 — 回归测试
+// 覆盖：buildSharedSectionMigrationPlan_（通用迁移纯函数）及其特例、
+//       ensureNPISharedCards（双计划迁移 + 缓存标记短路）、
 //       composeCardList / instanceLabel（模版页组合展开）、
-//       getSharedProductInfoRows（记录页共享产品信息取数）
-// 背景：6AX 机型组合 = 产品信息(公用) + HIM + VIM-1/2/3 + 6AX自动化；
-//       产品信息字段集中到专用卡「产品信息」，其他卡的产品信息行迁移时删除
+//       getSharedProductInfoRows / getSharedAuxEquipRows（记录页共享取数）
+// 背景：6AX 机型组合 = 产品信息(公用) + 配套设备(公用) + HIM + VIM-1/2/3 + 6AX自动化；
+//       产品信息/配套设备字段集中到各自专用卡，其他卡的同区块行迁移时删除
 // 运行：node --test npi-productinfo-shared.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,7 +26,9 @@ function extractFunction(src, name) {
 }
 
 const code = fs.readFileSync(new URL('./Code.js', import.meta.url), 'utf8');
+(0, eval)(extractFunction(code, 'buildSharedSectionMigrationPlan_'));
 (0, eval)(extractFunction(code, 'buildProductInfoMigrationPlan_'));
+(0, eval)(extractFunction(code, 'buildAuxEquipMigrationPlan_'));
 
 const tplJs = fs.readFileSync(new URL('./NPI_TemplateCards-js.html', import.meta.url), 'utf8');
 (0, eval)(extractFunction(tplJs, 'composeCardList'));
@@ -33,6 +36,7 @@ const tplJs = fs.readFileSync(new URL('./NPI_TemplateCards-js.html', import.meta
 
 const recordJs = fs.readFileSync(new URL('./NPI_ProcessRecord-js.html', import.meta.url), 'utf8');
 (0, eval)(extractFunction(recordJs, 'getSharedProductInfoRows'));
+(0, eval)(extractFunction(recordJs, 'getSharedAuxEquipRows'));
 
 // ===== buildProductInfoMigrationPlan_（数据迁移纯函数） =====
 
@@ -99,6 +103,44 @@ test('迁移计划：无任何产品信息行时无操作', () => {
   assert.equal(plan.create.length, 0);
   assert.equal(plan.deleteIndexes.length, 0);
   assert.equal(plan.changed, false);
+});
+
+// ===== buildSharedSectionMigrationPlan_（通用区块迁移纯函数） =====
+
+function auxRow(card, key, cn) {
+  return [card, 'IM', '配套设备', 'Aux. Equipment', cn || ('设备_' + key), 'Aux EN', key, 'number', '', '', '', '', '', '', '已确认', ''];
+}
+
+test('通用迁移计划：配套设备从首卡（FCS/ENG）复制建卡，其他卡区块行标记删除', () => {
+  const data = [
+    [...TPL_HEADER],
+    auxRow('FCS/ENG', 'auxEquip_chiller_actualTemp', '冷水机实际温度'),
+    auxRow('FCS/ENG', 'auxEquip_chiller_setTemp', '冷水机设定温度'),
+    otherRow('FCS/ENG'),
+    auxRow('HIM', 'him_aux_drying_cycle', '烘干周期'),
+    auxRow('VIM', 'vim_aux_mold_temp', '模温机温度'),
+  ];
+  const plan = buildSharedSectionMigrationPlan_(data, '配套设备', '配套设备', '公用配套设备 / Shared Aux. Equipment');
+  assert.equal(plan.changed, true);
+  assert.equal(plan.srcCard, 'FCS/ENG');
+  assert.equal(plan.create.length, 2, '只复制首卡的配套设备行');
+  assert.equal(plan.create[0][0], '配套设备');
+  assert.equal(plan.create[0][6], 'auxEquip_chiller_actualTemp');
+  assert.equal(plan.create[0][14], '已确认');
+  assert.ok(String(plan.create[0][15]).indexOf('公用配套设备') >= 0, '备注应标注公用配套设备');
+  assert.deepEqual(plan.deleteIndexes, [1, 2, 4, 5]);
+});
+
+test('buildAuxEquipMigrationPlan_：与通用计划同规则（配套设备特例）', () => {
+  const data = [
+    [...TPL_HEADER],
+    auxRow('FCS/ENG', 'auxEquip_conveyor_speed'),
+    auxRow('VIM', 'vim_aux_crusher'),
+  ];
+  const plan = buildAuxEquipMigrationPlan_(data);
+  assert.equal(plan.create.length, 1);
+  assert.equal(plan.create[0][0], '配套设备');
+  assert.deepEqual(plan.deleteIndexes, [1, 2]);
 });
 
 // ===== composeCardList / instanceLabel（模版页组合展开） =====
@@ -169,6 +211,35 @@ test('getSharedProductInfoRows：无任何产品信息行返回空数组', () =>
   assert.deepEqual(getSharedProductInfoRows(), []);
 });
 
+// ===== getSharedAuxEquipRows（记录页共享配套设备取数） =====
+
+test('getSharedAuxEquipRows：优先读「配套设备」卡', () => {
+  setupRecordGlobals({
+    '配套设备': [
+      { sec: '配套设备', key: 'auxEquip_chiller_actualTemp' },
+      { sec: '配套设备', key: 'auxEquip_conveyor_speed' },
+    ],
+    'FCS/ENG': [{ sec: '配套设备', key: 'auxEquip_chiller_actualTemp' }],
+    'HIM': [{ sec: '配套设备', key: 'him_aux_drying_cycle' }],
+  }, [{ card: 'HIM' }, { card: 'VIM' }]);
+  const rows = getSharedAuxEquipRows();
+  assert.deepEqual(rows.map(r => r.key), ['auxEquip_chiller_actualTemp', 'auxEquip_conveyor_speed']);
+});
+
+test('getSharedAuxEquipRows：「配套设备」卡缺失时回退 FCS/ENG 卡', () => {
+  setupRecordGlobals({
+    'FCS/ENG': [{ sec: '配套设备', key: 'auxEquip_chiller_actualTemp' }],
+    'HIM': [{ sec: '配套设备', key: 'him_aux_drying_cycle' }],
+  }, [{ card: 'HIM' }]);
+  const rows = getSharedAuxEquipRows();
+  assert.deepEqual(rows.map(r => r.key), ['auxEquip_chiller_actualTemp']);
+});
+
+test('getSharedAuxEquipRows：无任何配套设备行返回空数组', () => {
+  setupRecordGlobals({ 'HIM': [{ sec: '炮筒通用', key: 'him_barrel_temp' }] }, [{ card: 'HIM' }]);
+  assert.deepEqual(getSharedAuxEquipRows(), []);
+});
+
 // ===== 记录页实例命名：VIM-1 样式（与用户描述一致） =====
 
 test('记录页实例标签必须使用 VIM-1 样式（连字符而非 #）', () => {
@@ -188,6 +259,20 @@ test('模版页编辑/删除事件委托必须携带卡名（组合视图多卡�
   assert.ok(/deleteRow\(\$b\.data\('card'\),\s*parseInt\(\$b\.data\('idx'\)/.test(tplJs), '删除事件未携带 data-card');
 });
 
+// ===== 记录页配套设备公用化护栏 =====
+
+test('记录页单元卡渲染必须跳过 配套设备 区块（已公用化）', () => {
+  assert.ok(recordJs.includes("r.sec !== '配套设备'"),
+    'NPI_ProcessRecord-js.html renderCardSections 未跳过配套设备区块');
+  assert.ok(recordJs.includes("renderEquipmentBlock(eqInst, eqRows)"),
+    'NPI_ProcessRecord-js.html 未渲染共享设备块');
+});
+
+test('记录页旧实例前缀设备 key 必须回退到共享块无前缀输入', () => {
+  assert.ok(recordJs.includes('/^\\d+_auxEquip_/'),
+    'NPI_ProcessRecord-js.html fillFormFields 缺少旧前缀设备 key 回退逻辑');
+});
+
 // ===== 页面加载提示护栏 =====
 // 背景：刷新后 loading toast 延迟约 1s 才出现 —— ready 里先发 ensureNPIProductInfoCard
 //       后端往返（读全表），返回后才进 loadTemplateMeta 弹 toast；必须先把 toast 弹出来
@@ -198,26 +283,31 @@ test('模版页 ready 必须先弹 loading toast 再发起迁移请求', () => {
   const readyEnd = tplJs.indexOf('});', readyStart);
   const readyBlock = tplJs.slice(readyStart, readyEnd);
   assert.ok(readyBlock.indexOf('Swal.fire(swalLoading') >= 0, 'ready 内缺少 loading toast');
-  assert.ok(readyBlock.indexOf('Swal.fire(swalLoading') < readyBlock.indexOf('ensureNPIProductInfoCard()'),
+  assert.ok(readyBlock.indexOf('Swal.fire(swalLoading') < readyBlock.indexOf('ensureNPISharedCards()'),
     'loading toast 必须在迁移请求之前弹出');
 });
 
-// ===== ensureNPIProductInfoCard 迁移标记短路（每次刷新不再读全表） =====
+test('模版页公用单元包含 配套设备（公用）', () => {
+  assert.ok(tplJs.includes('配套设备（公用）'),
+    'NPI_TemplateCards-js.html 缺少配套设备公用单元');
+});
 
-(0, eval)(extractFunction(code, 'ensureNPIProductInfoCard'));
+// ===== ensureNPISharedCards 双计划迁移 + 标记短路（每次刷新不再读全表） =====
 
-test('ensureNPIProductInfoCard：已有迁移完成标记时直接返回，不读表', () => {
+(0, eval)(extractFunction(code, 'ensureNPISharedCards'));
+
+test('ensureNPISharedCards：已有迁移完成标记时直接返回，不读表', () => {
   let sheetOpens = 0;
   globalThis.NPI_SS_ID = 'mock-npi';
   globalThis.CacheService = { getScriptCache() { return { get() { return '1'; }, put() {}, remove() {} }; } };
   globalThis.SpreadsheetApp = { openById() { sheetOpens++; return { getSheetByName() { sheetOpens++; return null; } }; } };
-  const res = JSON.parse(ensureNPIProductInfoCard());
+  const res = JSON.parse(ensureNPISharedCards());
   assert.equal(res.success, true);
   assert.equal(res.changed, false);
   assert.equal(sheetOpens, 0, '有迁移标记时不应再读表');
 });
 
-test('ensureNPIProductInfoCard：迁移检查完成后写入完成标记', () => {
+test('ensureNPISharedCards：迁移检查完成后写入完成标记', () => {
   const putKeys = [];
   globalThis.NPI_SS_ID = 'mock-npi';
   globalThis.CacheService = {
@@ -235,7 +325,35 @@ test('ensureNPIProductInfoCard：迁移检查完成后写入完成标记', () =>
     deleteRow() {},
   };
   globalThis.SpreadsheetApp = { openById() { return { getSheetByName() { return ws; } }; } };
-  const res = JSON.parse(ensureNPIProductInfoCard());
+  const res = JSON.parse(ensureNPISharedCards());
   assert.equal(res.success, true);
-  assert.ok(putKeys.indexOf('NPI_PI_MIGRATED_FLAG_v1') >= 0, '完成后应写入迁移完成标记');
+  assert.ok(putKeys.indexOf('NPI_SHARED_MIGRATED_FLAG_v1') >= 0, '完成后应写入迁移完成标记');
+});
+
+test('ensureNPISharedCards：产品信息已迁移时仅执行配套设备迁移', () => {
+  const rows = [
+    [...TPL_HEADER],
+    piRow('产品信息', 'productInfo_9', '产品名称'),
+    auxRow('FCS/ENG', 'auxEquip_chiller_actualTemp'),
+    auxRow('FCS/ENG', 'auxEquip_chiller_setTemp'),
+    otherRow('FCS/ENG'),
+    auxRow('VIM', 'vim_aux_mold_temp'),
+  ];
+  const appended = [], deleted = [];
+  globalThis.NPI_SS_ID = 'mock-npi';
+  globalThis.CacheService = { getScriptCache() { return { get() { return null; }, put() {}, remove() {} }; } };
+  const ws = {
+    getDataRange() { return { getValues() { return rows.map(r => [...r]); } }; },
+    appendRow(arr) { appended.push(arr); },
+    deleteRow(n) { deleted.push(n); },
+  };
+  globalThis.SpreadsheetApp = { openById() { return { getSheetByName() { return ws; } }; } };
+  const res = JSON.parse(ensureNPISharedCards());
+  assert.equal(res.success, true);
+  assert.equal(res.changed, true);
+  assert.equal(appended.length, 2, '仅追加配套设备卡行');
+  assert.equal(appended[0][0], '配套设备');
+  assert.equal(appended[0][6], 'auxEquip_chiller_actualTemp');
+  // data 下标 2/3/5 是配套设备行 → deleteRow(下标+1) 自底向上 = 6, 4, 3
+  assert.deepEqual(deleted, [6, 4, 3], '配套设备行自底向上删除');
 });

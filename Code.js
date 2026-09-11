@@ -265,7 +265,7 @@ function doGet(e) {
   Route.path("deleteNPITestTask", deleteNPITestTask);
   Route.path("updateNPITaskStatus", updateNPITaskStatus);
   Route.path("loadTestPlanImportCandidates", loadTestPlanImportCandidates);
-  Route.path("ensureNPIProductInfoCard", ensureNPIProductInfoCard);
+  Route.path("ensureNPISharedCards", ensureNPISharedCards);
 
   ensureDailyBriefTrigger_();
 
@@ -15493,56 +15493,71 @@ function saveNPITemplateRow(action, card, processType, rowJSON) {
   }
 }
 
-// ===== 产品信息公用化迁移（纯函数，供测试） =====
-// 输入 NPI_Templates 全量数据（含表头），输出：
-//   create: 待追加到专用卡「产品信息」的 16 列行数组（以首个含产品信息行的卡为源，按 key 去重）
-//   deleteIndexes: 其他卡产品信息行的 data 下标（升序，执行时自底向上删）
-//   changed: 是否有需要执行的动作（幂等：产品信息卡已存在则不重复建卡）
-function buildProductInfoMigrationPlan_(data) {
-  var PI_CARD = '产品信息', PI_SEC = '产品信息';
+// ===== 公用区块迁移（纯函数，供测试） =====
+// 通用：输入 NPI_Templates 全量数据（含表头）+ 目标区块/目标卡，输出：
+//   create: 待追加到专用卡 targetCard 的 16 列行数组（以首个含该区块行的卡为源，按 key 去重）
+//   deleteIndexes: 其他卡该区块行的 data 下标（升序，执行时自底向上删）
+//   changed: 是否有需要执行的动作（幂等：目标卡已存在该区块行则不重复建卡）
+function buildSharedSectionMigrationPlan_(data, section, targetCard, noteCn) {
+  var sec = String(section || '').trim(), tgt = String(targetCard || '').trim();
   var create = [], deleteIndexes = [], srcCard = '', seen = {};
-  var hasPiCard = false;
+  var hasTarget = false;
   for (var i = 1; i < data.length; i++) {
     var r = data[i];
     if (!r) continue;
-    var card = String(r[0] || '').trim(), sec = String(r[2] || '').trim();
-    if (sec !== PI_SEC) continue;
-    if (card === PI_CARD) { hasPiCard = true; continue; }
+    var card = String(r[0] || '').trim(), rowSec = String(r[2] || '').trim();
+    if (rowSec !== sec) continue;
+    if (card === tgt) { hasTarget = true; continue; }
     deleteIndexes.push(i);
     if (!srcCard) srcCard = card;
     if (card === srcCard) {
       var key = String(r[6] || '').trim();
       if (key && !seen[key]) {
         seen[key] = true;
-        create.push([PI_CARD, r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], '公用产品信息 / Shared Product Info（迁移自 ' + srcCard + '）']);
+        create.push([tgt, r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], noteCn + '（迁移自 ' + srcCard + '）']);
       }
     }
   }
-  if (hasPiCard && create.length) create = []; // 已迁移过：不重复建卡（幂等）
+  if (hasTarget && create.length) create = []; // 已迁移过：不重复建卡（幂等）
   return { create: create, deleteIndexes: deleteIndexes, changed: create.length > 0 || deleteIndexes.length > 0, srcCard: srcCard };
 }
 
-// 一次性幂等迁移：产品信息字段集中到专用卡「产品信息」，删除其他卡的产品信息行。
+// 产品信息公用化迁移计划（特例，保留原函数名供测试与调用方）
+function buildProductInfoMigrationPlan_(data) {
+  return buildSharedSectionMigrationPlan_(data, '产品信息', '产品信息', '公用产品信息 / Shared Product Info');
+}
+
+// 配套设备公用化迁移计划（以 FCS/ENG 版本为唯一公用模版）
+function buildAuxEquipMigrationPlan_(data) {
+  return buildSharedSectionMigrationPlan_(data, '配套设备', '配套设备', '公用配套设备 / Shared Aux. Equipment');
+}
+
+// 一次性幂等迁移：产品信息/配套设备字段集中到各自专用卡，删除其他卡的同区块行。
 // NPI_TemplateCards 页加载时自动调用；执行后清模板缓存。
-// 完成后写缓存标记 NPI_PI_MIGRATED_FLAG_v1（6h），后续页面加载直接短路返回，不再读全表
-function ensureNPIProductInfoCard() {
+// 完成后写缓存标记 NPI_SHARED_MIGRATED_FLAG_v1（6h），后续页面加载直接短路返回，不再读全表
+function ensureNPISharedCards() {
   try {
     var cache = CacheService.getScriptCache();
-    if (cache.get('NPI_PI_MIGRATED_FLAG_v1')) return JSON.stringify({ success: true, changed: false, message: 'Migration already done' });
+    if (cache.get('NPI_SHARED_MIGRATED_FLAG_v1')) return JSON.stringify({ success: true, changed: false, message: 'Migration already done' });
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_Templates');
     if (!ws) return JSON.stringify({ success: false, message: 'Template sheet missing' });
     var data = ws.getDataRange().getValues();
-    var plan = buildProductInfoMigrationPlan_(data);
-    if (plan.changed) {
-      plan.create.forEach(function (arr) { ws.appendRow(arr); });
-      for (var d = plan.deleteIndexes.length - 1; d >= 0; d--) ws.deleteRow(plan.deleteIndexes[d] + 1);
+    var piPlan = buildProductInfoMigrationPlan_(data);
+    var eqPlan = buildAuxEquipMigrationPlan_(data);
+    var create = piPlan.create.concat(eqPlan.create);
+    // 两个计划的删除下标基于同一份快照：全部追加后按 data 下标自底向上删
+    var del = piPlan.deleteIndexes.concat(eqPlan.deleteIndexes).sort(function (a, b) { return b - a; });
+    var changed = piPlan.changed || eqPlan.changed;
+    if (changed) {
+      create.forEach(function (arr) { ws.appendRow(arr); });
+      del.forEach(function (idx) { ws.deleteRow(idx + 1); });
       try {
         cache.remove('NPI_TEMPLATE_CACHE_v4');
         cache.remove('NPI_TEMPLATE_CACHE_v5');
       } catch (ce) { /* 忽略缓存清理失败 */ }
     }
-    cache.put('NPI_PI_MIGRATED_FLAG_v1', '1', 21600);
-    return JSON.stringify({ success: true, changed: plan.changed, created: plan.create.length, deleted: plan.deleteIndexes.length });
+    cache.put('NPI_SHARED_MIGRATED_FLAG_v1', '1', 21600);
+    return JSON.stringify({ success: true, changed: changed, created: create.length, deleted: del.length });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
   }
