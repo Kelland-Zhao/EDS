@@ -1218,6 +1218,21 @@
       .getPMTaskVerifications(pmNo);
   }
 
+  // ===== 开始保养按钮 & 任务表格可编辑状态（纯函数，供测试）=====
+  // pageEditable: 页面级状态（PM_Stauts=Ongoing 为 true，Done 为 false）
+  // recordPmStatus: 保养记录自身的 PmStatus（人员已分配/进行中/已完成等）
+  // 返回 { tableEditable, canStart }：
+  //   tableEditable - 仅保养已开始（进行中/Ongoing）后任务表格才可编辑
+  //   canStart      - 页面级 Ongoing 但记录尚未开始（人员已分配/已添加临时任务）时允许点击"开始保养"
+  function pmStartButtonState_(pageEditable, recordPmStatus) {
+    const status = (recordPmStatus || '').toString();
+    const pmStarted = status.includes('进行中') || status.includes('Ongoing');
+    return {
+      tableEditable: pageEditable && pmStarted,
+      canStart: pageEditable && !pmStarted
+    };
+  }
+
   // ===== PM任务验证 - 工单记录渲染（Ongoing/Done 共用）=====
   // r: getPMrecord 返回数组 ["OK", json]；isEditable: 表格是否可编辑（进行中=true，已完成=false）
   function pmRenderRecordTasks_(r, isEditable) {
@@ -1280,7 +1295,9 @@
         return newItem;
       });
 
-      const table_head = buildTableHead(isEditable);
+      // 按钮/表格状态按记录自身状态判断（人员已分配等未开始状态允许开始保养）
+      const btnState = pmStartButtonState_(isEditable, obj["PmStatus"] || '');
+      const table_head = buildTableHead(btnState.tableEditable);
 
       $('#PmNo').val(obj["PM No."]);
       $('#PmPeople').val(obj["PM People"]);
@@ -1288,9 +1305,13 @@
       $('#PmStartTime').val(obj["StartTime"]);
       global_workingorder = obj["Notification"] || '';
 
-      if (isEditable) {
+      if (btnState.tableEditable) {
+        // 保养已开始：不允许重复开始
         $('#PmStart').prop('disabled', true);
         $('#EditPmPeople').show();
+      } else if (btnState.canStart) {
+        // 人员已分配/已添加临时任务等未开始状态：允许开始保养
+        $('#PmStart').prop('disabled', false);
       } else {
         // 已完成只读：不允许重新开始
         $('#PmStart').prop('disabled', true);
