@@ -15456,7 +15456,8 @@ function saveNPITemplateRow(action, card, processType, rowJSON) {
     var data = ws.getDataRange().getValues();
 
     if (act === 'delete') {
-      var delKey = String((rowJSON && (rowJSON.origKey || rowJSON.key)) || '').trim();
+      var delRow = typeof rowJSON === 'string' ? JSON.parse(rowJSON) : (rowJSON || {});
+      var delKey = String((delRow && (delRow.origKey || delRow.key)) || '').trim();
       var delIdx = findTemplateRowIndex_(data, c, p, delKey);
       if (delIdx < 0) return JSON.stringify({ success: false, message: 'Row not found' });
       ws.deleteRow(delIdx + 1);

@@ -170,6 +170,9 @@ function renderCard() {
   var sections = groupRowsBySection(currentCardRows);
   if (!sections.length) sections = [{ sec: '（未分区）', secEn: '', rows: [] }];
   var html = '';
+  // data-idx / fc_<idx> 下标必须与 currentCardRows 全量行数组对齐，
+  // 否则多分区卡第二个分区起的编辑/删除会定位到错误行
+  var flatIdx = 0;
   sections.forEach(function (secInfo, si) {
     var cid = 'tplSec_' + si;
     html += '<div class="accordion-item">';
@@ -185,7 +188,7 @@ function renderCard() {
     if (!secInfo.rows.length) {
       html += '<div class="col-12"><span class="tpl-empty">该区块暂无模版字段 / No fields in this section</span></div>';
     }
-    secInfo.rows.forEach(function (r, ri) { html += fieldCellHtml(r, ri); });
+    secInfo.rows.forEach(function (r) { html += fieldCellHtml(r, flatIdx); flatIdx += 1; });
     html += '</div></div></div></div>';
   });
   $('#tplAccordion').html(html);

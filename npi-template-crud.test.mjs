@@ -219,3 +219,71 @@ test('卡 pills 必须绑定 click 事件委托（点击标签切换卡内容）
   assert.ok(jsHtml.includes("$(document).on('click', '.tpl-card-pill'"),
     'NPI_TemplateCards-js.html 缺少 .tpl-card-pill 的 click 事件委托，卡标签点击无响应');
 });
+
+// ===== saveNPITemplateRow 删除分支回归护栏 =====
+// 背景：google.script.run 传参时 rowJSON 是 JSON 字符串；删除分支若未先 parse
+//       再取 origKey/key，delKey 恒为空，最终 "Row not found" 弹删除失败，
+//       或误删卡内第一条空 key 行（如 6AX自动化 卡删除「机械手循环时间」报删除失败）。
+
+(0, eval)(extractFunction(code, 'saveNPITemplateRow'));
+
+const tplHeader = ['卡', '工序', '区块', '区块EN', '字段CN', '字段EN', '字段key', '类型', '单位', '下限', '上限', '检查部门', '预设', '分段', '状态', '备注'];
+
+function makeTplRows() {
+  return [
+    [...tplHeader],
+    ['6AX自动化', 'IM', '自动化参数', 'Automation Params', '机械手程序名称', 'Robot Program Name', 'ax6_auto_auto_robot_program_name', 'text', '', '', '', '', '', '', '已确认', ''],
+    ['6AX自动化', 'IM', '自动化参数', 'Automation Params', '机械手循环时间', 'Robot Cycle Time', 'ax6_auto_auto_robot_cycle_time', 'number', 's', '', '', '', '', '', '已确认', ''],
+    ['6AX自动化', 'IM', '自动化参数', 'Automation Params', '机械手速度', 'Robot Speed', 'ax6_auto_auto_robot_speed', 'number', '%', '', '', '', '', '', '已确认', ''],
+    ['6AX自动化', 'IM', '产品信息', 'Product Info', '产品名称', 'Product Name', 'productInfo_9', 'text', '', '', '', '', '', '', '已确认', ''],
+    ['6AX自动化', 'IM', '产品信息', 'Product Info', '工艺卡编号', 'Process Card No.', 'productInfo_10', 'text', '', '', '', '', '', '', '已确认', ''],
+  ];
+}
+
+function mockTplSheets(rows) {
+  const ws = {
+    getDataRange() { return { getValues() { return rows.map(r => [...r]); } }; },
+    deleteRow(n) { rows.splice(n - 1, 1); },
+    appendRow(arr) { rows.push(arr); },
+    getRange(r) { return { setValues(v) { for (let i = 0; i < v.length; i++) rows[r - 1 + i] = v[i]; } }; },
+  };
+  globalThis.NPI_SS_ID = 'mock-npi';
+  globalThis.SpreadsheetApp = { openById() { return { getSheetByName() { return ws; } }; } };
+  globalThis.CacheService = { getScriptCache() { return { remove() {} }; } };
+  return ws;
+}
+
+test('saveNPITemplateRow delete：rowJSON 为 JSON 字符串时按 key 删除正确行', () => {
+  const rows = makeTplRows();
+  mockTplSheets(rows);
+  const res = JSON.parse(saveNPITemplateRow('delete', '6AX自动化', 'IM', JSON.stringify({ key: 'ax6_auto_auto_robot_cycle_time' })));
+  assert.equal(res.success, true, res.message);
+  assert.equal(rows.filter(r => r[6] === 'ax6_auto_auto_robot_cycle_time').length, 0, '目标行应被删除');
+  assert.equal(rows.filter(r => r[6] === 'ax6_auto_auto_robot_program_name').length, 1, '其他行不应被误删');
+});
+
+test('saveNPITemplateRow delete：卡内存在空 key 行时不误删空 key 行', () => {
+  const rows = [
+    [...tplHeader],
+    ['HIM', 'IM', '', '', '无key字段', '', '', 'text', '', '', '', '', '', '', '已确认', ''],
+    ['HIM', 'IM', '冷却', 'Cooling', '冷却时间', 'Cooling Time', 'him_cool_cooling_time', 'number', 's', '', '', '', '', '', '已确认', ''],
+  ];
+  mockTplSheets(rows);
+  const res = JSON.parse(saveNPITemplateRow('delete', 'HIM', 'IM', JSON.stringify({ key: 'him_cool_cooling_time' })));
+  assert.equal(res.success, true, res.message);
+  assert.equal(rows.filter(r => r[6] === 'him_cool_cooling_time').length, 0, '指定 key 行应被删除');
+  assert.equal(rows.filter(r => r[4] === '无key字段').length, 1, '空 key 行不应被误删');
+});
+
+// ===== renderCard 行定位回归护栏 =====
+// 背景：data-idx / fc_<idx> 下标必须与 currentCardRows（全量行数组）对齐；
+//       若按分区内下标渲染，多分区卡（如 6AX自动化：自动化参数 + 产品信息）
+//       第二个分区起的编辑/删除会定位到错误行。
+
+test('renderCard 必须使用全量递增下标渲染字段单元格', () => {
+  assert.ok(/fieldCellHtml\(r,\s*flatIdx\)/.test(jsHtml),
+    'renderCard 未使用全量递增下标，多分区卡的编辑/删除会定位到错误行');
+  // 计数器必须声明在 sections.forEach 之外，否则每个分区都从 0 重新计数
+  assert.ok(jsHtml.indexOf('flatIdx = 0') < jsHtml.indexOf('sections.forEach'),
+    'flatIdx 计数器声明在分区循环内，每个分区下标会重置为 0');
+});
