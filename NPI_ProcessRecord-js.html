@@ -282,7 +282,7 @@ function renderTemplate() {
       var defOn = inst.instance === 1;
       enabledSections[uid] = defOn;
       html += '<div class="mb-3" id="section_' + uid + (defOn ? '' : ' barrel-disabled') + '">';
-      html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + uid + '" ' + (defOn ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span> <strong style="font-size:13px;">' + inst.card + (inst.count > 1 ? ' #' + inst.instance : '') + '</strong></label>';
+      html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + uid + '" ' + (defOn ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span> <strong style="font-size:13px;">' + inst.card + (inst.count > 1 ? '-' + inst.instance : '') + '</strong></label>';
       html += '<div class="row g-2 mt-1">';
       html += renderCardSections(inst, rows);
       html += '</div></div>';
@@ -418,10 +418,11 @@ function ensureEquipmentForKey(key) {
   });
 }
 
-// 任务级产品信息行：取组合首卡的产品信息行；无则回退 FCS/ENG 卡
+// 任务级产品信息行：优先取专用卡「产品信息」（公用，全机型共享）；
+// 迁移前该卡可能不存在，回退组合首卡的产品信息行，再回退 FCS/ENG 卡
 function getSharedProductInfoRows() {
   var out = [];
-  var sources = (currentCompose || []).map(function (c) { return c.card; }).concat(['FCS/ENG']);
+  var sources = ['产品信息'].concat((currentCompose || []).map(function (c) { return c.card; })).concat(['FCS/ENG']);
   var seen = {};
   sources.forEach(function (card) {
     (templateData && templateData.cards && templateData.cards[card] || []).forEach(function (r) {

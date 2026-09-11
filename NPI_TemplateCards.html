@@ -36,13 +36,12 @@
     .select2-container--default .select2-selection--single { height:28px !important; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height:28px !important; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height:26px !important; }
-    /* 卡选择 pills */
-    .tpl-card-pills { display:flex; flex-wrap:wrap; gap:8px; }
-    .tpl-card-pill { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; background:#fff; border:1px solid #e9ecef; border-radius:20px; cursor:pointer; font-size:13px; font-weight:600; color:#333; transition:all .15s; }
-    .tpl-card-pill:hover { border-color:#E60012; color:#E60012; }
-    .tpl-card-pill.active { background:#E60012; border-color:#E60012; color:#fff; }
-    .tpl-card-pill .count-badge { background:#f0f0f0; color:#6c757d; font-size:10px; padding:1px 7px; border-radius:9px; }
-    .tpl-card-pill.active .count-badge { background:rgba(255,255,255,.25); color:#fff; }
+    /* 组合单元（产品信息公用 + 各单元实例） */
+    .tpl-unit { background:#fff; border:1px solid #e9ecef; border-radius:8px; padding:12px 14px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+    .tpl-unit-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:10px; padding-left:10px; border-left:3px solid #E60012; }
+    .tpl-unit-label { font-size:14px; font-weight:600; color:#333; }
+    .tpl-unit-sub { font-size:11px; font-weight:400; color:#888; line-height:1.4; }
+    .tpl-unit-empty { color:#6c757d; font-size:12px; background:#fff; border:1px dashed #e9ecef; border-radius:8px; padding:10px 14px; margin-bottom:16px; }
     /* 区块折叠卡片 */
     .tpl-accordion .accordion-item { border:1px solid #e9ecef; border-radius:8px; margin-bottom:10px; overflow:hidden; }
     .tpl-accordion .accordion-header { display:flex; align-items:stretch; }
@@ -126,15 +125,15 @@
           </select>
         </div>
         <div class="col-12 col-md-6">
-          <label class="form-label-sm">卡模版<br><small>Card Templates</small></label>
-          <div class="tpl-card-pills" id="cardList"></div>
+          <label class="form-label-sm">组合说明<br><small>Composed View</small></label>
+          <div style="font-size:12px;color:#6c757d;padding:4px 0;">选择机型后按组合展示：产品信息（公用）+ 各单元卡（如 6AX：HIM、VIM-1/2/3、6AX自动化）<br>Composed view: shared Product Info + unit cards expanded per MachineMap</div>
         </div>
       </div>
     </div>
 
     <div class="section-card" id="cardContentCard" style="display:none;">
       <div class="section-title">
-        <span id="cardContentTitle">卡字段模版<br><small style="font-weight:400;color:#888;">Card Fields</small></span>
+        <span id="cardContentTitle">组合卡模版<br><small style="font-weight:400;color:#888;">Composed Card Template</small></span>
         <div class="toolbar">
           <span id="cardSummary" style="font-size:11px;color:#6c757d;"></span>
         </div>

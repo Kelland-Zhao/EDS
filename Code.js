@@ -265,6 +265,7 @@ function doGet(e) {
   Route.path("deleteNPITestTask", deleteNPITestTask);
   Route.path("updateNPITaskStatus", updateNPITaskStatus);
   Route.path("loadTestPlanImportCandidates", loadTestPlanImportCandidates);
+  Route.path("ensureNPIProductInfoCard", ensureNPIProductInfoCard);
 
   ensureDailyBriefTrigger_();
 
@@ -15284,7 +15285,7 @@ function pushDisplaySpecUnique_(list, spec) {
 function loadNPITemplateData() {
   try {
     var cache = CacheService.getScriptCache();
-    var CKEY = 'NPI_TEMPLATE_CACHE_v4';
+    var CKEY = 'NPI_TEMPLATE_CACHE_v5';
     var cached = cache.get(CKEY);
     if (cached) return cached;
     var ss = SpreadsheetApp.openById(NPI_SS_ID);
@@ -15444,7 +15445,7 @@ function loadNPITemplateRowsAll(card, processType) {
 
 // 工艺参数卡模版编辑：create/update/delete 字段行（NPI_TemplateCards 页）
 // rowJSON: { origKey, sec, secEn, cn, en, key, type, unit, lo, hi, dept, preset, segs:[], status, note }
-// 行定位 = (卡+工序+key)；写后失效 NPI_TEMPLATE_CACHE_v4，让工艺参数记录页尽快反映模版变更
+// 行定位 = (卡+工序+key)；写后失效 NPI_TEMPLATE_CACHE_v5，让工艺参数记录页尽快反映模版变更
 function saveNPITemplateRow(action, card, processType, rowJSON) {
   try {
     var act = String(action || '').trim().toLowerCase();
@@ -15485,8 +15486,59 @@ function saveNPITemplateRow(action, card, processType, rowJSON) {
         ws.appendRow(arr);
       }
     }
-    try { CacheService.getScriptCache().remove('NPI_TEMPLATE_CACHE_v4'); } catch (ce) {}
+    try { CacheService.getScriptCache().remove('NPI_TEMPLATE_CACHE_v5'); } catch (ce) {}
     return JSON.stringify({ success: true, message: '已保存 / Saved' });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.toString() });
+  }
+}
+
+// ===== 产品信息公用化迁移（纯函数，供测试） =====
+// 输入 NPI_Templates 全量数据（含表头），输出：
+//   create: 待追加到专用卡「产品信息」的 16 列行数组（以首个含产品信息行的卡为源，按 key 去重）
+//   deleteIndexes: 其他卡产品信息行的 data 下标（升序，执行时自底向上删）
+//   changed: 是否有需要执行的动作（幂等：产品信息卡已存在则不重复建卡）
+function buildProductInfoMigrationPlan_(data) {
+  var PI_CARD = '产品信息', PI_SEC = '产品信息';
+  var create = [], deleteIndexes = [], srcCard = '', seen = {};
+  var hasPiCard = false;
+  for (var i = 1; i < data.length; i++) {
+    var r = data[i];
+    if (!r) continue;
+    var card = String(r[0] || '').trim(), sec = String(r[2] || '').trim();
+    if (sec !== PI_SEC) continue;
+    if (card === PI_CARD) { hasPiCard = true; continue; }
+    deleteIndexes.push(i);
+    if (!srcCard) srcCard = card;
+    if (card === srcCard) {
+      var key = String(r[6] || '').trim();
+      if (key && !seen[key]) {
+        seen[key] = true;
+        create.push([PI_CARD, r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], '公用产品信息 / Shared Product Info（迁移自 ' + srcCard + '）']);
+      }
+    }
+  }
+  if (hasPiCard && create.length) create = []; // 已迁移过：不重复建卡（幂等）
+  return { create: create, deleteIndexes: deleteIndexes, changed: create.length > 0 || deleteIndexes.length > 0, srcCard: srcCard };
+}
+
+// 一次性幂等迁移：产品信息字段集中到专用卡「产品信息」，删除其他卡的产品信息行。
+// NPI_TemplateCards 页加载时自动调用；执行后清模板缓存
+function ensureNPIProductInfoCard() {
+  try {
+    var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_Templates');
+    if (!ws) return JSON.stringify({ success: false, message: 'Template sheet missing' });
+    var data = ws.getDataRange().getValues();
+    var plan = buildProductInfoMigrationPlan_(data);
+    if (!plan.changed) return JSON.stringify({ success: true, changed: false, message: 'No migration needed' });
+    plan.create.forEach(function (arr) { ws.appendRow(arr); });
+    for (var d = plan.deleteIndexes.length - 1; d >= 0; d--) ws.deleteRow(plan.deleteIndexes[d] + 1);
+    try {
+      var cache = CacheService.getScriptCache();
+      cache.remove('NPI_TEMPLATE_CACHE_v4');
+      cache.remove('NPI_TEMPLATE_CACHE_v5');
+    } catch (ce) { /* 忽略缓存清理失败 */ }
+    return JSON.stringify({ success: true, changed: true, created: plan.create.length, deleted: plan.deleteIndexes.length });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
   }

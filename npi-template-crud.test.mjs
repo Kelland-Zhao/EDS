@@ -211,13 +211,13 @@ test('groupRowsBySection：空数组返回空分区列表', () => {
   assert.deepEqual(groupRowsBySection([]), []);
 });
 
-// ===== 卡 pills 事件绑定回归护栏 =====
-// 背景：renderCardPills 只自动选中排序第一张卡；若缺少 click 事件委托，
-//       其余卡标签（如 6AX 机型下的 VIM / 6AX自动化）点击无任何反应。
+// ===== 组合视图回归护栏 =====
+// 背景：模版页已改为组合视图（产品信息公用 + 各单元实例按 MachineMap 展开），
+//       不再使用卡 pill 导航；误回退会破坏多实例共用模版的定位。
 
-test('卡 pills 必须绑定 click 事件委托（点击标签切换卡内容）', () => {
-  assert.ok(jsHtml.includes("$(document).on('click', '.tpl-card-pill'"),
-    'NPI_TemplateCards-js.html 缺少 .tpl-card-pill 的 click 事件委托，卡标签点击无响应');
+test('模版页组合视图：不再保留卡 pill 点击导航', () => {
+  assert.ok(!jsHtml.includes("'.tpl-card-pill'"),
+    'NPI_TemplateCards-js.html 不应再保留 .tpl-card-pill 点击导航（已改为组合视图）');
 });
 
 // ===== saveNPITemplateRow 删除分支回归护栏 =====
@@ -280,9 +280,9 @@ test('saveNPITemplateRow delete：卡内存在空 key 行时不误删空 key 行
 //       若按分区内下标渲染，多分区卡（如 6AX自动化：自动化参数 + 产品信息）
 //       第二个分区起的编辑/删除会定位到错误行。
 
-test('renderCard 必须使用全量递增下标渲染字段单元格', () => {
-  assert.ok(/fieldCellHtml\(r,\s*flatIdx\)/.test(jsHtml),
-    'renderCard 未使用全量递增下标，多分区卡的编辑/删除会定位到错误行');
+test('renderCardUnit 必须使用全量递增下标渲染字段单元格', () => {
+  assert.ok(/fieldCellHtml\(r,\s*flatIdx,\s*uid,\s*inst\.card\)/.test(jsHtml),
+    'renderCardUnit 未使用全量递增下标，多分区卡的编辑/删除会定位到错误行');
   // 计数器必须声明在 sections.forEach 之外，否则每个分区都从 0 重新计数
   assert.ok(jsHtml.indexOf('flatIdx = 0') < jsHtml.indexOf('sections.forEach'),
     'flatIdx 计数器声明在分区循环内，每个分区下标会重置为 0');
