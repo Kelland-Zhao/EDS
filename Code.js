@@ -15532,22 +15532,29 @@ function buildAuxEquipMigrationPlan_(data) {
   return buildSharedSectionMigrationPlan_(data, '配套设备', '配套设备', '公用配套设备 / Shared Aux. Equipment');
 }
 
-// 一次性幂等迁移：产品信息/配套设备字段集中到各自专用卡，删除其他卡的同区块行。
+// 热流道公用化迁移计划（以 FCS/ENG 版本为唯一公用模版）
+function buildHotRunnerMigrationPlan_(data) {
+  return buildSharedSectionMigrationPlan_(data, '热流道', '热流道', '公用热流道 / Shared Hot Runner');
+}
+
+// 一次性幂等迁移：产品信息/配套设备/热流道字段集中到各自专用卡，删除其他卡的同区块行。
 // NPI_TemplateCards 页加载时自动调用；执行后清模板缓存。
-// 完成后写缓存标记 NPI_SHARED_MIGRATED_FLAG_v1（6h），后续页面加载直接短路返回，不再读全表
+// 完成后写缓存标记 NPI_SHARED_MIGRATED_FLAG_v2（6h），后续页面加载直接短路返回，不再读全表。
+// 注意：迁移计划集合每次扩充都要 bump 标记版本，否则旧标记会让新计划永不执行
 function ensureNPISharedCards() {
   try {
     var cache = CacheService.getScriptCache();
-    if (cache.get('NPI_SHARED_MIGRATED_FLAG_v1')) return JSON.stringify({ success: true, changed: false, message: 'Migration already done' });
+    if (cache.get('NPI_SHARED_MIGRATED_FLAG_v2')) return JSON.stringify({ success: true, changed: false, message: 'Migration already done' });
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_Templates');
     if (!ws) return JSON.stringify({ success: false, message: 'Template sheet missing' });
     var data = ws.getDataRange().getValues();
     var piPlan = buildProductInfoMigrationPlan_(data);
     var eqPlan = buildAuxEquipMigrationPlan_(data);
-    var create = piPlan.create.concat(eqPlan.create);
-    // 两个计划的删除下标基于同一份快照：全部追加后按 data 下标自底向上删
-    var del = piPlan.deleteIndexes.concat(eqPlan.deleteIndexes).sort(function (a, b) { return b - a; });
-    var changed = piPlan.changed || eqPlan.changed;
+    var hrPlan = buildHotRunnerMigrationPlan_(data);
+    var create = piPlan.create.concat(eqPlan.create).concat(hrPlan.create);
+    // 各计划的删除下标基于同一份快照：全部追加后按 data 下标自底向上删
+    var del = piPlan.deleteIndexes.concat(eqPlan.deleteIndexes).concat(hrPlan.deleteIndexes).sort(function (a, b) { return b - a; });
+    var changed = piPlan.changed || eqPlan.changed || hrPlan.changed;
     if (changed) {
       create.forEach(function (arr) { ws.appendRow(arr); });
       del.forEach(function (idx) { ws.deleteRow(idx + 1); });
@@ -15556,7 +15563,7 @@ function ensureNPISharedCards() {
         cache.remove('NPI_TEMPLATE_CACHE_v5');
       } catch (ce) { /* 忽略缓存清理失败 */ }
     }
-    cache.put('NPI_SHARED_MIGRATED_FLAG_v1', '1', 21600);
+    cache.put('NPI_SHARED_MIGRATED_FLAG_v2', '1', 21600);
     return JSON.stringify({ success: true, changed: changed, created: create.length, deleted: del.length });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });

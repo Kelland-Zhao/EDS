@@ -274,6 +274,22 @@ function renderTemplate() {
   var eqInst = { card: '配套设备', count: 1, instance: 1, idx: 0, prefix: '' };
   var eqRows = getSharedAuxEquipRows();
   if (eqRows.length) html += renderEquipmentBlock(eqInst, eqRows);
+  // 任务级热流道：公用一份（FCS/ENG 版本），点位表格开关默认关闭、有数据自动启用
+  var hrInst = { card: '热流道', count: 1, instance: 1, idx: 0, prefix: '' };
+  var hrRows = getSharedHotRunnerRows();
+  if (hrRows.length) {
+    currentHotRunnerInst = hrInst;
+    var hrUid = 'hr_0';
+    enabledSections[hrUid] = false;
+    var hrCount = HOT_RUNNER_DEFAULT_COUNT;
+    hrRows.forEach(function (r) { if (r.key === 'hotRunner_temp' && r.segs && r.segs.length) hrCount = r.segs.length; });
+    html += '<div class="col-12 mb-2" id="section_' + hrUid + '">';
+    html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + hrUid + '" onchange="toggleNpiSection(\'' + hrUid + '\')"><span class="toggle-switch"></span> <strong style="font-size:12px;">热流道<br><small>Hot Runner</small></strong></label>';
+    html += '<button class="btn btn-sm btn-link p-0 ms-1" style="font-size:11px;color:#6c757d;" onclick="clearContainerPrompt(\'section_' + hrUid + '\', \'热流道\')" title="清空 / Clear"><i class="bi bi-trash"></i></button>';
+    html += '<div class="hot-runner-content barrel-disabled">';
+    html += renderHotRunner(hrCount, hrInst);
+    html += '</div></div>';
+  }
   currentCompose.forEach(function (inst, i) {
     var rows = (templateData && templateData.cards && templateData.cards[inst.card]) || [];
     if (!rows.length) {
@@ -449,34 +465,34 @@ function getSharedAuxEquipRows() {
   return out;
 }
 
+// 任务级热流道行：优先取专用卡「热流道」（公用，FCS/ENG 版本）；
+// 迁移前该卡可能不存在，回退 FCS/ENG 卡
+function getSharedHotRunnerRows() {
+  var out = [];
+  var sources = ['热流道', 'FCS/ENG'];
+  var seen = {};
+  sources.forEach(function (card) {
+    (templateData && templateData.cards && templateData.cards[card] || []).forEach(function (r) {
+      if (r.sec === '热流道' && !seen[r.key]) { seen[r.key] = true; out.push(r); }
+    });
+  });
+  return out;
+}
+
 // 单卡模式：区块 = accordion 项（首个展开）；多卡模式：区块 = 子标题块
-// 产品信息/配套设备已公用化：单元卡渲染时跳过，公用块在 renderTemplate 顶部渲染
+// 产品信息/配套设备/热流道已公用化：单元卡渲染时跳过，公用块在 renderTemplate 顶部渲染
 function renderCardSections(inst, rows) {
   var multi = currentCompose.length > 1;
   var secOrder = [];
-  rows.forEach(function (r) { if (r.sec !== '产品信息' && r.sec !== '配套设备' && secOrder.indexOf(r.sec) < 0) secOrder.push(r.sec); });
+  rows.forEach(function (r) { if (r.sec !== '产品信息' && r.sec !== '配套设备' && r.sec !== '热流道' && secOrder.indexOf(r.sec) < 0) secOrder.push(r.sec); });
   var html = '';
   var isFirst = true;
   secOrder.forEach(function (sec) {
-    var secRows = rows.filter(function (r) { return r.sec === sec && r.sec !== '产品信息' && r.sec !== '配套设备'; });
+    var secRows = rows.filter(function (r) { return r.sec === sec && r.sec !== '产品信息' && r.sec !== '配套设备' && r.sec !== '热流道'; });
     var secEn = secRows[0].secEn || '';
-    var isHR = secRows.some(function (r) { return String(r.key || '').indexOf('hotRunner_') === 0; });
     var isBarrel = /^炮筒[ABCD]$/.test(sec);
-    var defaultDisabled = isHR || ((DEFAULT_DISABLED_SECTIONS[inst.card] || []).indexOf(sec) >= 0);
-    if (isHR) {
-      // 热流道：开关 + 表格
-      var uid = 'hr_' + inst.idx;
-      enabledSections[uid] = !defaultDisabled;
-      currentHotRunnerInst = inst;
-      html += '<div class="col-12 mb-2" id="section_' + uid + '">';
-      html += '<label class="barrel-toggle"><input type="checkbox" id="toggle_' + uid + '" ' + (!defaultDisabled ? 'checked' : '') + ' onchange="toggleNpiSection(\'' + uid + '\')"><span class="toggle-switch"></span> <strong style="font-size:12px;">' + sec + '<br><small>' + secEn + '</small></strong></label>';
-      html += '<button class="btn btn-sm btn-link p-0 ms-1" style="font-size:11px;color:#6c757d;" onclick="clearContainerPrompt(\'section_' + uid + '\', \'' + sec + '\')" title="清空 / Clear"><i class="bi bi-trash"></i></button>';
-      html += '<div class="hot-runner-content' + (defaultDisabled ? ' barrel-disabled' : '') + '">';
-      var hrCount = HOT_RUNNER_DEFAULT_COUNT;
-      secRows.forEach(function (r) { if (r.key === 'hotRunner_temp' && r.segs && r.segs.length) hrCount = r.segs.length; });
-      html += renderHotRunner(hrCount, inst);
-      html += '</div></div>';
-    } else if (multi) {
+    var defaultDisabled = ((DEFAULT_DISABLED_SECTIONS[inst.card] || []).indexOf(sec) >= 0);
+    if (multi) {
       var uidM = 'sec_' + inst.idx + '_' + (secOrder.indexOf(sec) + 1);
       enabledSections[uidM] = true;
       html += '<div class="col-12 mb-2" id="section_' + uidM + '"><strong style="font-size:12px;">' + sec + '<br><small>' + secEn + '</small></strong>';
@@ -797,8 +813,8 @@ function fillFormFields(fields) {
   var legacy = [];
   Object.keys(obj).forEach(function (k) {
     var el = $('[data-key="' + k + '"]');
-    if (!el.length && /^\d+_auxEquip_/.test(k)) {
-      // 旧实例前缀设备 key（如 1_auxEquip_*）回退到共享设备块的无前缀输入，保存后转为新 key
+    if (!el.length && /^\d+_(auxEquip|hotRunner)_/.test(k)) {
+      // 旧实例前缀设备/热流道 key（如 1_auxEquip_*、2_hotRunner_pos_3）回退到共享块的无前缀输入，保存后转为新 key
       el = $('[data-key="' + k.replace(/^\d+_/, '') + '"]');
     }
     if (el.length) {
