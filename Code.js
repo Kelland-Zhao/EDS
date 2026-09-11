@@ -15523,22 +15523,26 @@ function buildProductInfoMigrationPlan_(data) {
 }
 
 // 一次性幂等迁移：产品信息字段集中到专用卡「产品信息」，删除其他卡的产品信息行。
-// NPI_TemplateCards 页加载时自动调用；执行后清模板缓存
+// NPI_TemplateCards 页加载时自动调用；执行后清模板缓存。
+// 完成后写缓存标记 NPI_PI_MIGRATED_FLAG_v1（6h），后续页面加载直接短路返回，不再读全表
 function ensureNPIProductInfoCard() {
   try {
+    var cache = CacheService.getScriptCache();
+    if (cache.get('NPI_PI_MIGRATED_FLAG_v1')) return JSON.stringify({ success: true, changed: false, message: 'Migration already done' });
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_Templates');
     if (!ws) return JSON.stringify({ success: false, message: 'Template sheet missing' });
     var data = ws.getDataRange().getValues();
     var plan = buildProductInfoMigrationPlan_(data);
-    if (!plan.changed) return JSON.stringify({ success: true, changed: false, message: 'No migration needed' });
-    plan.create.forEach(function (arr) { ws.appendRow(arr); });
-    for (var d = plan.deleteIndexes.length - 1; d >= 0; d--) ws.deleteRow(plan.deleteIndexes[d] + 1);
-    try {
-      var cache = CacheService.getScriptCache();
-      cache.remove('NPI_TEMPLATE_CACHE_v4');
-      cache.remove('NPI_TEMPLATE_CACHE_v5');
-    } catch (ce) { /* 忽略缓存清理失败 */ }
-    return JSON.stringify({ success: true, changed: true, created: plan.create.length, deleted: plan.deleteIndexes.length });
+    if (plan.changed) {
+      plan.create.forEach(function (arr) { ws.appendRow(arr); });
+      for (var d = plan.deleteIndexes.length - 1; d >= 0; d--) ws.deleteRow(plan.deleteIndexes[d] + 1);
+      try {
+        cache.remove('NPI_TEMPLATE_CACHE_v4');
+        cache.remove('NPI_TEMPLATE_CACHE_v5');
+      } catch (ce) { /* 忽略缓存清理失败 */ }
+    }
+    cache.put('NPI_PI_MIGRATED_FLAG_v1', '1', 21600);
+    return JSON.stringify({ success: true, changed: plan.changed, created: plan.create.length, deleted: plan.deleteIndexes.length });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
   }

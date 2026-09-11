@@ -187,3 +187,55 @@ test('模版页编辑/删除事件委托必须携带卡名（组合视图多卡�
   assert.ok(/\.tpl-edit-btn'[\s\S]{0,300}data\('card'\)/.test(tplJs), '编辑按钮事件未携带 data-card');
   assert.ok(/deleteRow\(\$b\.data\('card'\),\s*parseInt\(\$b\.data\('idx'\)/.test(tplJs), '删除事件未携带 data-card');
 });
+
+// ===== 页面加载提示护栏 =====
+// 背景：刷新后 loading toast 延迟约 1s 才出现 —— ready 里先发 ensureNPIProductInfoCard
+//       后端往返（读全表），返回后才进 loadTemplateMeta 弹 toast；必须先把 toast 弹出来
+
+test('模版页 ready 必须先弹 loading toast 再发起迁移请求', () => {
+  const readyStart = tplJs.indexOf('$(document).ready(function () {');
+  assert.ok(readyStart >= 0, '未找到 document.ready');
+  const readyEnd = tplJs.indexOf('});', readyStart);
+  const readyBlock = tplJs.slice(readyStart, readyEnd);
+  assert.ok(readyBlock.indexOf('Swal.fire(swalLoading') >= 0, 'ready 内缺少 loading toast');
+  assert.ok(readyBlock.indexOf('Swal.fire(swalLoading') < readyBlock.indexOf('ensureNPIProductInfoCard()'),
+    'loading toast 必须在迁移请求之前弹出');
+});
+
+// ===== ensureNPIProductInfoCard 迁移标记短路（每次刷新不再读全表） =====
+
+(0, eval)(extractFunction(code, 'ensureNPIProductInfoCard'));
+
+test('ensureNPIProductInfoCard：已有迁移完成标记时直接返回，不读表', () => {
+  let sheetOpens = 0;
+  globalThis.NPI_SS_ID = 'mock-npi';
+  globalThis.CacheService = { getScriptCache() { return { get() { return '1'; }, put() {}, remove() {} }; } };
+  globalThis.SpreadsheetApp = { openById() { sheetOpens++; return { getSheetByName() { sheetOpens++; return null; } }; } };
+  const res = JSON.parse(ensureNPIProductInfoCard());
+  assert.equal(res.success, true);
+  assert.equal(res.changed, false);
+  assert.equal(sheetOpens, 0, '有迁移标记时不应再读表');
+});
+
+test('ensureNPIProductInfoCard：迁移检查完成后写入完成标记', () => {
+  const putKeys = [];
+  globalThis.NPI_SS_ID = 'mock-npi';
+  globalThis.CacheService = {
+    getScriptCache() {
+      return {
+        get() { return null; },
+        put(k) { putKeys.push(k); },
+        remove() {},
+      };
+    },
+  };
+  const ws = {
+    getDataRange() { return { getValues() { return [[...TPL_HEADER], otherRow('FCS/ENG')]; } }; },
+    appendRow() {},
+    deleteRow() {},
+  };
+  globalThis.SpreadsheetApp = { openById() { return { getSheetByName() { return ws; } }; } };
+  const res = JSON.parse(ensureNPIProductInfoCard());
+  assert.equal(res.success, true);
+  assert.ok(putKeys.indexOf('NPI_PI_MIGRATED_FLAG_v1') >= 0, '完成后应写入迁移完成标记');
+});
