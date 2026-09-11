@@ -39,10 +39,10 @@ let cardRows = {};            // 卡名 → 全部行（含草稿/待审核，�
 const TYPE_OPTIONS = ['number', 'text', 'select'];
 const STATUS_OPTIONS = ['草稿', '待审核', '已确认'];
 // 公用单元（全机型共享，渲染在组合顶部；与记录页共享取数规则一致）
+// 热流道不在此列：每台注塑机独立配置，归属各注塑机单元卡
 const SHARED_CARDS = [
   { card: '产品信息', label: '产品信息（公用）', sub: '全机型共享<br>Product Info (Shared) · All Models' },
   { card: '配套设备', label: '配套设备（公用）', sub: '全机型共享 · FCS/ENG 版本<br>Aux. Equipment (Shared) · FCS/ENG Version' },
-  { card: '热流道', label: '热流道（公用）', sub: '全机型共享 · FCS/ENG 版本<br>Hot Runner (Shared) · FCS/ENG Version' },
 ];
 
 $(document).ready(function () {

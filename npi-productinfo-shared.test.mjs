@@ -29,7 +29,8 @@ const code = fs.readFileSync(new URL('./Code.js', import.meta.url), 'utf8');
 (0, eval)(extractFunction(code, 'buildSharedSectionMigrationPlan_'));
 (0, eval)(extractFunction(code, 'buildProductInfoMigrationPlan_'));
 (0, eval)(extractFunction(code, 'buildAuxEquipMigrationPlan_'));
-(0, eval)(extractFunction(code, 'buildHotRunnerMigrationPlan_'));
+(0, eval)(extractFunction(code, 'buildHotRunnerPerCardPlan_'));
+(0, eval)(extractFunction(code, 'buildHrRowForCard_'));
 
 const tplJs = fs.readFileSync(new URL('./NPI_TemplateCards-js.html', import.meta.url), 'utf8');
 (0, eval)(extractFunction(tplJs, 'composeCardList'));
@@ -38,7 +39,6 @@ const tplJs = fs.readFileSync(new URL('./NPI_TemplateCards-js.html', import.meta
 const recordJs = fs.readFileSync(new URL('./NPI_ProcessRecord-js.html', import.meta.url), 'utf8');
 (0, eval)(extractFunction(recordJs, 'getSharedProductInfoRows'));
 (0, eval)(extractFunction(recordJs, 'getSharedAuxEquipRows'));
-(0, eval)(extractFunction(recordJs, 'getSharedHotRunnerRows'));
 
 // ===== buildProductInfoMigrationPlan_（数据迁移纯函数） =====
 
@@ -148,37 +148,68 @@ test('buildAuxEquipMigrationPlan_：与通用计划同规则（配套设备特�
 function hrRow(card, key, cn) {
   return [card, 'IM', '热流道', 'Hot Runner', cn || ('热流道_' + key), 'Hot Runner EN', key, 'number', '℃', '', '', '班组/设备', '', '1,2', '已确认', ''];
 }
+function barrelRow(card) {
+  return [card, 'IM', '炮筒通用', 'Barrel', '炮筒温度', 'Barrel Temp', card + '_barrel_temp', 'number', '℃', '', '', '', '', '', '已确认', ''];
+}
 
-test('buildHotRunnerMigrationPlan_：热流道从首卡（FCS/ENG）复制建卡，其他卡区块行标记删除', () => {
-  const data = [
-    [...TPL_HEADER],
-    hrRow('FCS/ENG', 'hotRunner_pos'),
-    hrRow('FCS/ENG', 'hotRunner_temp'),
-    hrRow('HIM', 'him_hotrunner_main_runner_temp'),
-    otherRow('FCS/ENG'),
-    hrRow('VIM', 'vim_hotrunner_gate_temp'),
-  ];
-  const plan = buildHotRunnerMigrationPlan_(data);
-  assert.equal(plan.changed, true);
-  assert.equal(plan.srcCard, 'FCS/ENG');
-  assert.equal(plan.create.length, 2, '只复制首卡的热流道行');
-  assert.equal(plan.create[0][0], '热流道');
-  assert.equal(plan.create[0][6], 'hotRunner_pos');
-  assert.ok(String(plan.create[0][15]).indexOf('公用热流道') >= 0, '备注应标注公用热流道');
-  assert.deepEqual(plan.deleteIndexes, [1, 2, 3, 5]);
-});
-
-test('buildHotRunnerMigrationPlan_：热流道卡已存在时不重复建卡（幂等）', () => {
+test('buildHotRunnerPerCardPlan_：撤销共享卡，为每张注塑机卡（有炮筒区块）补热流道行', () => {
   const data = [
     [...TPL_HEADER],
     hrRow('热流道', 'hotRunner_pos'),
     hrRow('热流道', 'hotRunner_temp'),
-    hrRow('OMNI-DB', 'omni_db_hotrunner_gate_temp'),
+    barrelRow('FCS/ENG'),
+    hrRow('HIM', 'him_hotrunner_gate_temp'),
+    barrelRow('HIM'),
+    barrelRow('VIM'),
+    barrelRow('DP-UV'), // 无热流道行但也是注塑机卡（防御：有炮筒即补）
   ];
-  const plan = buildHotRunnerMigrationPlan_(data);
-  assert.equal(plan.create.length, 0);
-  assert.deepEqual(plan.deleteIndexes, [3]);
+  const plan = buildHotRunnerPerCardPlan_(data);
   assert.equal(plan.changed, true);
+  assert.deepEqual(plan.deleteIndexes, [1, 2, 4], '删除共享热流道卡行与旧风格行');
+  // 每张注塑机卡补 pos+temp：先全部 pos（FCS/ENG/HIM/VIM/DP-UV）再全部 temp，共 8 行
+  assert.equal(plan.create.length, 8);
+  const cards = plan.create.map(function (r) { return r[0]; });
+  assert.deepEqual(cards, ['FCS/ENG', 'HIM', 'VIM', 'DP-UV', 'FCS/ENG', 'HIM', 'VIM', 'DP-UV']);
+  assert.equal(plan.create[0][6], 'hotRunner_pos');
+  assert.equal(plan.create[4][6], 'hotRunner_temp');
+  assert.ok(String(plan.create[0][15]).indexOf('注塑机单元') >= 0, '备注应标注注塑机单元配置');
+});
+
+test('buildHotRunnerPerCardPlan_：全部就绪时 changed=false（幂等）', () => {
+  const data = [
+    [...TPL_HEADER],
+    barrelRow('FCS/ENG'),
+    hrRow('FCS/ENG', 'hotRunner_pos'),
+    hrRow('FCS/ENG', 'hotRunner_temp'),
+    barrelRow('HIM'),
+    hrRow('HIM', 'hotRunner_pos'),
+    hrRow('HIM', 'hotRunner_temp'),
+  ];
+  const plan = buildHotRunnerPerCardPlan_(data);
+  assert.equal(plan.create.length, 0);
+  assert.equal(plan.deleteIndexes.length, 0);
+  assert.equal(plan.changed, false);
+});
+
+test('buildHotRunnerPerCardPlan_：无注塑机卡（无炮筒区块）时不补行、只清共享/旧风格行', () => {
+  const data = [
+    [...TPL_HEADER],
+    hrRow('热流道', 'hotRunner_pos'),
+    hrRow('6AX自动化', 'ax6_auto_hr_x'),
+  ];
+  const plan = buildHotRunnerPerCardPlan_(data);
+  assert.equal(plan.create.length, 0);
+  assert.deepEqual(plan.deleteIndexes, [1, 2]);
+  assert.equal(plan.changed, true);
+});
+
+test('buildHrRowForCard_：源行复制到目标卡且字段一致', () => {
+  const src = hrRow('热流道', 'hotRunner_pos', '热流道位置');
+  const out = buildHrRowForCard_(src, 'VIM');
+  assert.equal(out[0], 'VIM');
+  assert.equal(out[6], 'hotRunner_pos');
+  assert.equal(out[4], '热流道位置');
+  assert.equal(out[14], '已确认');
 });
 
 // ===== composeCardList / instanceLabel（模版页组合展开） =====
@@ -278,35 +309,6 @@ test('getSharedAuxEquipRows：无任何配套设备行返回空数组', () => {
   assert.deepEqual(getSharedAuxEquipRows(), []);
 });
 
-// ===== getSharedHotRunnerRows（记录页共享热流道取数） =====
-
-test('getSharedHotRunnerRows：优先读「热流道」卡', () => {
-  setupRecordGlobals({
-    '热流道': [
-      { sec: '热流道', key: 'hotRunner_pos' },
-      { sec: '热流道', key: 'hotRunner_temp' },
-    ],
-    'FCS/ENG': [{ sec: '热流道', key: 'hotRunner_pos' }],
-    'HIM': [{ sec: '热流道', key: 'him_hotrunner_gate_temp' }],
-  }, [{ card: 'HIM' }, { card: 'VIM' }]);
-  const rows = getSharedHotRunnerRows();
-  assert.deepEqual(rows.map(r => r.key), ['hotRunner_pos', 'hotRunner_temp']);
-});
-
-test('getSharedHotRunnerRows：「热流道」卡缺失时回退 FCS/ENG 卡', () => {
-  setupRecordGlobals({
-    'FCS/ENG': [{ sec: '热流道', key: 'hotRunner_pos' }, { sec: '热流道', key: 'hotRunner_temp' }],
-    'HIM': [{ sec: '热流道', key: 'him_hotrunner_gate_temp' }],
-  }, [{ card: 'HIM' }]);
-  const rows = getSharedHotRunnerRows();
-  assert.deepEqual(rows.map(r => r.key), ['hotRunner_pos', 'hotRunner_temp']);
-});
-
-test('getSharedHotRunnerRows：无任何热流道行返回空数组', () => {
-  setupRecordGlobals({ 'HIM': [{ sec: '炮筒通用', key: 'him_barrel_temp' }] }, [{ card: 'HIM' }]);
-  assert.deepEqual(getSharedHotRunnerRows(), []);
-});
-
 // ===== 记录页实例命名：VIM-1 样式（与用户描述一致） =====
 
 test('记录页实例标签必须使用 VIM-1 样式（连字符而非 #）', () => {
@@ -326,22 +328,24 @@ test('模版页编辑/删除事件委托必须携带卡名（组合视图多卡�
   assert.ok(/deleteRow\(\$b\.data\('card'\),\s*parseInt\(\$b\.data\('idx'\)/.test(tplJs), '删除事件未携带 data-card');
 });
 
-// ===== 记录页配套设备/热流道公用化护栏 =====
+// ===== 记录页配套设备公用化 + 热流道归属注塑机单元护栏 =====
 
-test('记录页单元卡渲染必须跳过 配套设备/热流道 区块（已公用化）', () => {
+test('记录页单元卡渲染跳过 配套设备 区块（公用化），热流道保留每单元独立表格', () => {
   assert.ok(recordJs.includes("r.sec !== '配套设备'"),
     'NPI_ProcessRecord-js.html renderCardSections 未跳过配套设备区块');
-  assert.ok(recordJs.includes("r.sec !== '热流道'"),
-    'NPI_ProcessRecord-js.html renderCardSections 未跳过热流道区块');
   assert.ok(recordJs.includes("renderEquipmentBlock(eqInst, eqRows)"),
     'NPI_ProcessRecord-js.html 未渲染共享设备块');
-  assert.ok(recordJs.includes("renderHotRunner(hrCount, hrInst)"),
-    'NPI_ProcessRecord-js.html 未渲染共享热流道点位表格');
+  assert.ok(!recordJs.includes('getSharedHotRunnerRows'),
+    'NPI_ProcessRecord-js.html 不应再有共享热流道取数函数');
+  assert.ok(recordJs.includes('currentHotRunnerInst = inst'),
+    'NPI_ProcessRecord-js.html 未恢复 per-instance 热流道点位表格');
 });
 
-test('记录页旧实例前缀设备/热流道 key 必须回退到共享块无前缀输入', () => {
-  assert.ok(recordJs.includes('/^\\d+_(auxEquip|hotRunner)_/'),
-    'NPI_ProcessRecord-js.html fillFormFields 缺少旧前缀 key 回退逻辑');
+test('记录页旧实例前缀设备 key 必须回退到共享块无前缀输入（热流道不参与）', () => {
+  assert.ok(recordJs.includes('/^\\d+_auxEquip_/'),
+    'NPI_ProcessRecord-js.html fillFormFields 缺少旧前缀设备 key 回退逻辑');
+  assert.ok(!recordJs.includes('/^\\d+_(auxEquip|hotRunner)_/'),
+    'NPI_ProcessRecord-js.html 热流道不应参与共享回退（per-instance 存储）');
 });
 
 // ===== 页面加载提示护栏 =====
@@ -358,11 +362,11 @@ test('模版页 ready 必须先弹 loading toast 再发起迁移请求', () => {
     'loading toast 必须在迁移请求之前弹出');
 });
 
-test('模版页公用单元包含 配套设备（公用）与 热流道（公用）', () => {
+test('模版页公用单元包含 配套设备（公用），且不含 热流道（公用）（热流道归属注塑机单元）', () => {
   assert.ok(tplJs.includes('配套设备（公用）'),
     'NPI_TemplateCards-js.html 缺少配套设备公用单元');
-  assert.ok(tplJs.includes('热流道（公用）'),
-    'NPI_TemplateCards-js.html 缺少热流道公用单元');
+  assert.ok(!tplJs.includes('热流道（公用）'),
+    'NPI_TemplateCards-js.html 不应再有热流道公用单元（热流道归属注塑机单元）');
 });
 
 // ===== ensureNPISharedCards 双计划迁移 + 标记短路（每次刷新不再读全表） =====
@@ -400,7 +404,7 @@ test('ensureNPISharedCards：迁移检查完成后写入完成标记', () => {
   globalThis.SpreadsheetApp = { openById() { return { getSheetByName() { return ws; } }; } };
   const res = JSON.parse(ensureNPISharedCards());
   assert.equal(res.success, true);
-  assert.ok(putKeys.indexOf('NPI_SHARED_MIGRATED_FLAG_v2') >= 0, '完成后应写入迁移完成标记');
+  assert.ok(putKeys.indexOf('NPI_SHARED_MIGRATED_FLAG_v3') >= 0, '完成后应写入迁移完成标记');
 });
 
 test('ensureNPISharedCards：产品信息已迁移时仅执行配套设备迁移', () => {
@@ -436,9 +440,11 @@ test('ensureNPISharedCards：三计划同时执行（产品信息已迁移，配
     [...TPL_HEADER],
     piRow('产品信息', 'productInfo_9', '产品名称'),
     auxRow('FCS/ENG', 'auxEquip_chiller_actualTemp'),
-    hrRow('FCS/ENG', 'hotRunner_pos'),
-    hrRow('FCS/ENG', 'hotRunner_temp'),
+    hrRow('热流道', 'hotRunner_pos'),
+    hrRow('热流道', 'hotRunner_temp'),
+    barrelRow('FCS/ENG'),
     hrRow('VIM', 'vim_hotrunner_gate_temp'),
+    barrelRow('VIM'),
   ];
   const appended = [], deleted = [];
   globalThis.NPI_SS_ID = 'mock-npi';
@@ -452,11 +458,16 @@ test('ensureNPISharedCards：三计划同时执行（产品信息已迁移，配
   const res = JSON.parse(ensureNPISharedCards());
   assert.equal(res.success, true);
   assert.equal(res.changed, true);
-  // 追加：配套设备 1 行 + 热流道 2 行
-  assert.equal(appended.length, 3);
+  // 追加：配套设备 1 行 + 热流道每注塑机卡 2 行（FCS/ENG + VIM，先 pos 后 temp）= 5
+  assert.equal(appended.length, 5);
   assert.equal(appended[0][0], '配套设备');
-  assert.equal(appended[1][0], '热流道');
+  assert.equal(appended[0][6], 'auxEquip_chiller_actualTemp');
+  assert.equal(appended[1][0], 'FCS/ENG');
   assert.equal(appended[1][6], 'hotRunner_pos');
-  // 删除：data 下标 2（aux FCS/ENG）3/4（hr FCS/ENG）5（hr VIM）→ 自底向上 = 6,5,4,3
-  assert.deepEqual(deleted, [6, 5, 4, 3], '配套设备+热流道行自底向上删除');
+  assert.equal(appended[2][0], 'VIM');
+  assert.equal(appended[2][6], 'hotRunner_pos');
+  assert.equal(appended[3][0], 'FCS/ENG');
+  assert.equal(appended[3][6], 'hotRunner_temp');
+  // 删除：data 下标 2（aux FCS/ENG）3/4（共享热流道卡）6（VIM 旧风格）→ 自底向上 = 7,5,4,3
+  assert.deepEqual(deleted, [7, 5, 4, 3], '配套设备+热流道行自底向上删除');
 });

@@ -15532,25 +15532,71 @@ function buildAuxEquipMigrationPlan_(data) {
   return buildSharedSectionMigrationPlan_(data, '配套设备', '配套设备', '公用配套设备 / Shared Aux. Equipment');
 }
 
-// 热流道公用化迁移计划（以 FCS/ENG 版本为唯一公用模版）
-function buildHotRunnerMigrationPlan_(data) {
-  return buildSharedSectionMigrationPlan_(data, '热流道', '热流道', '公用热流道 / Shared Hot Runner');
+// 热流道归属注塑机单元（每台注塑机独立配置，不公用）：
+// 1) 删除共享「热流道」卡行（若存在，撤销共享）
+// 2) 注塑机卡（有炮筒区块）补 hotRunner_pos/hotRunner_temp（复用 FCS/ENG 定义，12 点位）
+// 3) 注塑机卡中非 hotRunner_ 前缀的热流道行（旧 him_/vim_/omni_db_ 风格）清理
+function buildHotRunnerPerCardPlan_(data) {
+  var create = [], deleteIndexes = [];
+  var injectCards = {}, cardsWithPos = {}, cardsWithTemp = {};
+  var srcPos = null, srcTemp = null;
+  var i, r, card, sec, key;
+  // 注塑机卡 = 有炮筒区块的卡
+  for (i = 1; i < data.length; i++) {
+    r = data[i]; if (!r) continue;
+    if (/^炮筒/.test(String(r[2] || '').trim())) injectCards[String(r[0] || '').trim()] = true;
+  }
+  // 热流道源行（优先共享「热流道」卡或 FCS/ENG 卡上的 hotRunner_* 行）
+  for (i = 1; i < data.length; i++) {
+    r = data[i]; if (!r) continue;
+    sec = String(r[2] || '').trim(); key = String(r[6] || '').trim();
+    if (sec !== '热流道') continue;
+    if (key === 'hotRunner_pos' && !srcPos) srcPos = r;
+    if (key === 'hotRunner_temp' && !srcTemp) srcTemp = r;
+  }
+  // 删除计划 + 已有 hotRunner 行覆盖统计
+  for (i = 1; i < data.length; i++) {
+    r = data[i]; if (!r) continue;
+    card = String(r[0] || '').trim(); sec = String(r[2] || '').trim(); key = String(r[6] || '').trim();
+    if (sec !== '热流道') continue;
+    if (card === '热流道') { deleteIndexes.push(i); continue; }
+    if (!injectCards[card]) { deleteIndexes.push(i); continue; }
+    if (key.indexOf('hotRunner_') !== 0) { deleteIndexes.push(i); continue; }
+    if (key === 'hotRunner_pos') cardsWithPos[card] = true;
+    if (key === 'hotRunner_temp') cardsWithTemp[card] = true;
+  }
+  if (srcPos) {
+    Object.keys(injectCards).forEach(function (c) {
+      if (!cardsWithPos[c]) create.push(buildHrRowForCard_(srcPos, c));
+    });
+  }
+  if (srcTemp) {
+    Object.keys(injectCards).forEach(function (c) {
+      if (!cardsWithTemp[c]) create.push(buildHrRowForCard_(srcTemp, c));
+    });
+  }
+  return { create: create, deleteIndexes: deleteIndexes, changed: create.length > 0 || deleteIndexes.length > 0 };
 }
 
-// 一次性幂等迁移：产品信息/配套设备/热流道字段集中到各自专用卡，删除其他卡的同区块行。
+// 热流道源行 → 指定注塑机卡的 16 列行
+function buildHrRowForCard_(src, card) {
+  return [card, src[1], src[2], src[3], src[4], src[5], src[6], src[7], src[8], src[9], src[10], src[11], src[12], src[13], src[14], '热流道 · 注塑机单元配置 / Hot Runner · Per Machine Unit（复用 FCS/ENG 定义）'];
+}
+
+// 一次性幂等迁移：产品信息/配套设备字段集中到各自专用卡、热流道归属注塑机单元。
 // NPI_TemplateCards 页加载时自动调用；执行后清模板缓存。
-// 完成后写缓存标记 NPI_SHARED_MIGRATED_FLAG_v2（6h），后续页面加载直接短路返回，不再读全表。
-// 注意：迁移计划集合每次扩充都要 bump 标记版本，否则旧标记会让新计划永不执行
+// 完成后写缓存标记 NPI_SHARED_MIGRATED_FLAG_v3（6h），后续页面加载直接短路返回，不再读全表。
+// 注意：迁移计划集合每次调整都要 bump 标记版本，否则旧标记会让新计划永不执行
 function ensureNPISharedCards() {
   try {
     var cache = CacheService.getScriptCache();
-    if (cache.get('NPI_SHARED_MIGRATED_FLAG_v2')) return JSON.stringify({ success: true, changed: false, message: 'Migration already done' });
+    if (cache.get('NPI_SHARED_MIGRATED_FLAG_v3')) return JSON.stringify({ success: true, changed: false, message: 'Migration already done' });
     var ws = SpreadsheetApp.openById(NPI_SS_ID).getSheetByName('NPI_Templates');
     if (!ws) return JSON.stringify({ success: false, message: 'Template sheet missing' });
     var data = ws.getDataRange().getValues();
     var piPlan = buildProductInfoMigrationPlan_(data);
     var eqPlan = buildAuxEquipMigrationPlan_(data);
-    var hrPlan = buildHotRunnerMigrationPlan_(data);
+    var hrPlan = buildHotRunnerPerCardPlan_(data);
     var create = piPlan.create.concat(eqPlan.create).concat(hrPlan.create);
     // 各计划的删除下标基于同一份快照：全部追加后按 data 下标自底向上删
     var del = piPlan.deleteIndexes.concat(eqPlan.deleteIndexes).concat(hrPlan.deleteIndexes).sort(function (a, b) { return b - a; });
@@ -15563,7 +15609,7 @@ function ensureNPISharedCards() {
         cache.remove('NPI_TEMPLATE_CACHE_v5');
       } catch (ce) { /* 忽略缓存清理失败 */ }
     }
-    cache.put('NPI_SHARED_MIGRATED_FLAG_v2', '1', 21600);
+    cache.put('NPI_SHARED_MIGRATED_FLAG_v3', '1', 21600);
     return JSON.stringify({ success: true, changed: changed, created: create.length, deleted: del.length });
   } catch (e) {
     return JSON.stringify({ success: false, message: e.toString() });
