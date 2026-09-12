@@ -1532,7 +1532,7 @@ function loadNPIDashboard(webPage, id, name, process) {
     .setFaviconUrl(webIconUrl);
 }
 
-// 工艺参数卡模版页：按中间层机型查看/编辑各卡的工艺参数模版字段
+// 工艺参数卡模版编辑页：按中间层机型查看/编辑各卡的工艺参数模版字段
 function loadNPITemplateCards(webPage, id, name, process) {
   var pageUrl = webPage || getReleaseWebPage();
   return render("NPI_TemplateCards", {
@@ -1541,7 +1541,7 @@ function loadNPITemplateCards(webPage, id, name, process) {
     intoWebName: name || "",
     intoWebType: process || ""
   })
-    .setTitle("工艺参数卡模版 | NPI Parameter Card Templates")
+    .setTitle("工艺参数卡模版编辑 | NPI Parameter Card Template Editing")
     .setFaviconUrl(webIconUrl);
 }
 

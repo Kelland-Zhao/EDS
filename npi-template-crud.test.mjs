@@ -1,7 +1,7 @@
-// NPI 工艺参数卡模版页面 — 后端纯函数测试
+// NPI 工艺参数卡模版编辑页面 — 后端纯函数测试
 // 覆盖：buildTemplateKeyPrefix_ / buildTemplateKeyCandidate_ / validateTemplateKey_ /
 //       isTemplateKeyUnique_ / findTemplateRowIndex_ / buildTemplateRowArray_
-// 背景：新品测试模块新增工艺参数卡模版页（只读展示 + 字段级增删改），
+// 背景：新品测试模块新增工艺参数卡模版编辑页（只读展示 + 字段级增删改），
 //       行定位 = (卡+工序+字段key) 唯一，新增字段自动生成候选 key 可手改
 // 运行：node --test npi-template-crud.test.mjs
 import { test } from 'node:test';
