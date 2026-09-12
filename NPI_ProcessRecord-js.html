@@ -677,16 +677,39 @@ function setNpiSectionEnabled(uid, on) {
 }
 
 
+// 任务列表按计划日期倒序（最新计划优先，无日期沉底且保持原相对顺序）
+function sortTasksByPlanDateDesc_(tasks) {
+  return tasks.slice().sort(function (a, b) {
+    var da = String(a.planDate || '').trim();
+    var db = String(b.planDate || '').trim();
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da < db ? 1 : (da > db ? -1 : 0);
+  });
+}
+
+// 任务下拉选项文案：编号 | 产品/模具 | 计划日期（无日期时不带尾巴）
+function taskOptionText_(t) {
+  return t.taskID + ' | ' + (t.productName || t.moldNo || '--') + (t.planDate ? ' | ' + t.planDate : '');
+}
+
 function loadTaskList(callback) {
   google.script.run
     .withSuccessHandler(function (result) {
       var r = JSON.parse(result || '{}');
-      allTasks = r.success ? r.data : [];
+      allTasks = r.success ? sortTasksByPlanDateDesc_(r.data) : [];
       var html = '<option value="">-- 选择或新建 / Select or Create --</option>';
       allTasks.forEach(function (t) {
-        html += '<option value="' + t.taskID + '">' + t.taskID + ' | ' + (t.productName || t.moldNo || '--') + '</option>';
+        html += '<option value="' + t.taskID + '">' + taskOptionText_(t) + '</option>';
       });
-      $('#taskSelect').html(html);
+      var $sel = $('#taskSelect');
+      if ($sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
+      $sel.html(html).select2({
+        width: '100%',
+        placeholder: '-- 选择或新建 / Select or Create --',
+        allowClear: true
+      });
       Swal.close();
       if (callback) callback();
     })
@@ -858,8 +881,7 @@ function applyUrlParams_() {
   var apply = function (params) {
     if (params.taskID) {
       if ($('#taskSelect option[value="' + params.taskID + '"]').length) {
-        $('#taskSelect').val(params.taskID);
-        selectTask(params.taskID);
+        $('#taskSelect').val(params.taskID).trigger('change'); // change 处理器统一 selectTask + Select2 文案同步
       }
     } else if (params.new === '1') {
       $('#btnNewTask').trigger('click');
@@ -881,7 +903,7 @@ function applyUrlParams_() {
 
 // 共享弹窗保存成功后的页面钩子：刷新任务列表并自动选中该任务
 function onTaskSaved(tid) {
-  loadTaskList(function () { $('#taskSelect').val(tid); selectTask(tid); });
+  loadTaskList(function () { $('#taskSelect').val(tid).trigger('change'); });
 }
 
 // 选中任务后预填产品信息：产品名称/模具编号/适用SKU/机型（仅填空字段，不覆盖已保存值）
