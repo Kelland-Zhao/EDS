@@ -103,6 +103,8 @@ Sheet 列头行示例：
 
 ## Phase 1: 工艺参数记录 (NPI_ProcessRecord)
 
+> 本节为 2026-07 原始设计（历史记录）。实际实现见下方「实现现状与扩展」「机型模板固化改造」章节：表单现为表驱动渲染，字段标签来自 NPI_Templates E 列字段名（原「模板 Row 列 B→F」说法已过时）；折叠形态 2026-09-11 改为模块外框 + 默认折叠 accordion。
+
 ### 页面: `NPI_ProcessRecord.html` + `NPI_ProcessRecord-js.html`
 
 **路由:** `?v=NPI_ProcessRecord`
@@ -154,7 +156,7 @@ function loadTestTaskList_()                   // 加载任务列表
 // 工艺参数
 function saveNPIProcessRecord(recordJSON)      // 保存/更新草稿
 function submitNPIProcessRecord(recordID)      // 提交
-function loadNPIProcessRecord(testTaskID)      // 读取最新
+function loadNPIProcessRecord(testTaskID)      // 读取最新（实装名为 loadNPIProcessRecordData）
 function loadNPIProcessRecordHistory(testTaskID) // 版本历史
 ```
 
@@ -267,19 +269,43 @@ Phase 1 已完整上线；Phase 2A（测试排期第一迭代）已上线生产�
 
 ---
 
-## 工艺参数卡模版编辑页（2026-09-10 新增，设计外扩展）
+## 工艺参数卡模版编辑页（2026-09-10 交付，原设计外功能）
 
-> 原设计无此页面。使用中「模板字段调整必须改代码」成为真实痛点，故新增业务自助的模版编辑能力。
+> 原设计无此页面。使用中「模板字段调整必须改代码」成为真实痛点，故新增业务自助的模版编辑能力；2026-09-12 定名「工艺参数卡模版编辑」。
 
-**路由:** `?v=NPI_TemplateCards`；导航与页头「工艺参数卡模版编辑 / NPI Parameter Card Template Editing」（2026-09-12 定名）
+**路由:** `?v=NPI_TemplateCards`；入口无权限分级（系统登录门槛内全员可编辑，页头徽章显示「可编辑 / Editable」）
 
-**能力:**
-- 字段级增删改：行定位 = (卡 + 工序 + 字段key) 唯一；新增字段自动生成候选 key（`前缀_区块_最小未占用序号`，可手改，带唯一性/合法性校验）
-- 展示与工艺参数页一致（复用同一模板数据源 `loadNPITemplateData`），改完渲染所见即所得
-- 状态=已确认 的行参与运行时渲染；被删字段的历史值保留在已保存记录的 JSON 快照中
-- 共享区块「产品信息」「配套设备」由 `ensureNPISharedCards` 保证存在
+**页面结构:**
 
-**后端:** `loadNPITemplateRowsAll(card, processType)` / `saveNPITemplateRow(action, card, processType, rowJSON)`
+```
+┌─ NavBar：工艺参数卡模版编辑 / NPI Parameter Card Template Editing ──┐
+┌─ 工具栏：工序 [IM ▾] 机型 [FCS/ENG ▾]（MachineMap 已确认中间层，按工序过滤）─┐
+┌─ 组合卡模版（Accordion）────────────────────────────────┐
+│ 产品信息（公用，全机型共享）                                 │
+│ 配套设备（公用，FCS/ENG 版本）                               │
+│ 单元卡 ×N（按机型卡组合展开，卡数>1 分实例）                   │
+│   └ 区块 ─ 字段行：CN/EN key 类型 单位 上下限 检查部门 预设值 分段 状态 │
+│   └ 区块内 [新增字段]；行内 [编辑] [删除]                    │
+└──────────────────────────────────────────────────────────┘
+```
+
+**加载链路:** `ensureNPISharedCards`（一次性幂等迁移：产品信息/配套设备字段集中到专用卡、热流道归属各注塑机卡）→ `loadNPITemplateData`（共享 meta，与工艺参数页同一 6h 缓存）→ `loadNPITemplateRowsAll`（按卡拉全部行，**含草稿/待审核**）
+
+**字段行模型**（NPI_Templates 16 列，行定位 = 卡+工序+字段key 唯一）：卡 | 工序 | 区块(中英) | 字段名(中英) | 字段key | 类型(number/text/select) | 单位 | 下限 | 上限 | 检查部门 | 预设值 | 分段(逗号分隔一行多输入) | 状态(草稿/待审核/已确认) | 备注
+
+**操作与校验:**
+- 新增：区块内生成候选 key（客户端建议 → 服务端 `validateTemplateKey_` 合法性 + `isTemplateKeyUnique_` 卡内唯一性）
+- 编辑：update 以 origKey 定位；key 变更同样过唯一性校验
+- 删除：按 key 定位删行（2026-09-11 修复 delete 分支 JSON 解析缺陷）
+- 状态：草稿/待审核/已确认 三态可选；仅「已确认」行参与工艺参数页运行时渲染
+- **即时生效**：每次保存后服务端失效 `NPI_TEMPLATE_CACHE_v5`，工艺参数页下次加载即反映变更（区别于 MachineMap 行直改需等缓存 6h 过期）
+
+**边界:**
+- 被删字段的历史值保留在已保存记录的 JSON 快照中，旧记录回显不受影响
+- 公用区块：产品信息全机型共享；配套设备以 FCS/ENG 版本为唯一公用模版；热流道不公用（每台注塑机独立配置，hotRunner_pos/temp 12 点位）
+- 模版编辑页与工艺参数页共享取数规则，所见即所得
+
+**后端:** `loadNPITemplateRowsAll(card, processType)` / `saveNPITemplateRow(action, card, processType, rowJSON)` / `ensureNPISharedCards()`；key 生成/校验/定位、公用区块迁移计划、热流道迁移计划均为纯函数并有单测覆盖
 
 ## 会话临时数据（2026-09-08/09 新增，设计外扩展）
 
