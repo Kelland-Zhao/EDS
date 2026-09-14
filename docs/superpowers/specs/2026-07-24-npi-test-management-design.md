@@ -22,6 +22,8 @@
 
 ## 数据模型
 
+> 2026-09-14 修订：本节各表已按实际落库结构更新（键值 JSON 存储、中间层机型、协作人/预计完成日期等），原设计见各节标注。
+
 ```
 TestTask (测试任务)
   ├── 1:1 → ProcessRecord (工艺参数记录)
@@ -36,7 +38,7 @@ Sheet 列头行示例：
 |------|------|------|------|
 | taskID | 任务编号<br>Task ID | string | `NPI-YYYYMMDD-XXXX` |
 | source | 来源<br>Source | enum | `周计划 weekly` / `紧急 urgent` |
-| status | 状态<br>Status | enum | `待确认 → 已排期 → 执行中 → 已完成 → 已评审` |
+| status | 状态<br>Status | enum | `待确认 → 已排期 → 执行中 → 已完成`；任意未完成态可 → 已取消（`已评审` 归 Phase 4） |
 | productName | 产品名称<br>Product Name | string | |
 | moldNo | 模具编号<br>Mold No. | string | |
 | machineNo | 机台编号<br>Machine No. | string | |
@@ -54,9 +56,11 @@ Sheet 列头行示例：
 | updatedAt | 更新时间<br>Updated At | datetime | |
 | processType | 工序<br>Process Type | enum | `IM 注塑` / `TF 植磨毛` / `PK 包装`（扩展列） |
 | sku | 适用SKU<br>SKU | string | 分号分隔多值，来自 BOM 主数据（扩展列） |
-| machineModel | 机型<br>Machine Model | string | 选机台时从 Workcenter D列自动带出（扩展列） |
+| machineModel | 机型<br>Machine Model | string | Workcenter D列原始机型经 NPI_MachineMap 归一化的**中间层**（U列，2026-08-25 起存中间层，替代原「D列直接带出」设计） |
+| collaborators | 协作人<br>Collaborators | string | `姓名\|工号` 分号分隔多值，来自 getUseID（V列，2026-08-21 新增） |
+| dueDate | 预计完成日期<br>Due Date | date | 必填；桥接任务安排截止日期，空回退计划日期（W列，2026-08-21 新增） |
 
-> reqDept（发起部门）、confirmStatus（计划部确认）、tester、actualStart/actualEnd 归 Phase 2 测试排期联动。
+> reqDept、confirmStatus、confirmBy、tester、actualStart、actualEnd 六列已建但暂无录入入口且无数据（归 Phase 2B 计划部确认流程，2026-08-21 用户决策暂缓）。
 
 ### ProcessRecord — 工艺参数记录 / Process Record
 
@@ -64,15 +68,18 @@ Sheet 列头行示例：
 
 | 字段 key (en) | Sheet 列头 (双语) | 类型 | 说明 |
 |------|------|------|------|
-| recordID | 记录编号<br>Record ID | string | `NPI-PR-YYYYMMDD-XXXX` |
-| testTaskID | 任务编号<br>Task ID | string | **FK → TestTask** |
-| status | 状态<br>Status | enum | `草稿 Draft` / `已提交 Submitted` / `已转正 Promoted` |
-| cardNumber | 工艺卡编号<br>Card No. | string | `TEST-Parameter-{工序}-NNNN-NN`，提交时版本号递增（扩展列） |
-| isLatest | 最新版本<br>Is Latest | bool | 是否为最新版本（支持修订） |
-| …196 fields | 来自工艺卡模板，列头均双语 | — | 注塑/注胶产品工艺卡通用模板全部字段 |
-| createdAt | 创建时间<br>Created At | datetime | |
-| updatedAt | 更新时间<br>Updated At | datetime | |
-| createdBy | 创建人<br>Created By | string | SAP ID |
+| recordID | 记录编号<br>Record ID | string | `NPI-PR-YYYYMMDD-XXXX`（A列） |
+| testTaskID | 任务编号<br>Task ID | string | **FK → TestTask**（B列） |
+| status | 状态<br>Status | enum | `草稿 Draft` / `已提交 Submitted` / `已转正 Promoted`（C列） |
+| isLatest | 最新版本<br>Is Latest | bool | 是否为最新版本（支持修订）（D列） |
+| parameters | 工艺参数<br>Parameters JSON | string (JSON) | fields 键值 JSON 快照，key = 字段key + 多卡实例前缀（E列，2026-08-25 表驱动改造，**替代原「196 列平铺」设计**） |
+| cardNumber | 工艺卡编号<br>Card No. | string | `TEST-Parameter-{工序}-NNNN-NN`，提交时版本号递增（I列） |
+| templateRef | 模板引用<br>Template Ref | string (JSON) | 保存时的卡组合快照（J列，2026-08-25 新增） |
+| createdAt | 创建时间<br>Created At | datetime | F列 |
+| updatedAt | 更新时间<br>Updated At | datetime | G列 |
+| createdBy | 创建人<br>Created By | string | SAP ID（H列） |
+
+> 原「196 字段平铺（来自工艺卡模板，列头均双语）」设计已被键值 JSON 替代，字段定义现由 NPI_Templates 表驱动，详见下方「机型模板固化改造（2026-08-25）」章节。
 
 ### SampleRecord — 样品记录 / Sample Record
 
@@ -89,6 +96,8 @@ Sheet 列头行示例：
 | disposition | 去向<br>Disposition | string | |
 | createdAt | 创建时间<br>Created At | datetime | |
 | updatedAt | 更新时间<br>Updated At | datetime | |
+
+> ⚠️ 实际建表偏差：EDS_NPI_Data 的 `NPI_Samples` 已按此结构建表，但 A 列 sampleID 缺失（B 列为任务编号），Phase 3 启动前需补列。
 
 ---
 
@@ -151,7 +160,7 @@ function loadNPIProcessRecordHistory(testTaskID) // 版本历史
 
 ### 存储: Google Sheets
 - Spreadsheet: 复用 TASK_SS_ID（或新建 NPI_SS_ID）
-- Sheet: `NPI_TestTasks`, `NPI_ProcessRecords`, `NPI_Samples`（按需创建）
+- Sheet（实际落库）：`NPI_TestTasks`, `NPI_ProcessRecords`, `NPI_Samples`；表驱动改造新增 `NPI_Templates`, `NPI_MachineMap`；另有 `NPI_ExtraMachines` 空表未使用（临时机台走纯前端会话方案，不落库）
 
 ---
 
@@ -216,7 +225,7 @@ Phase 1 已完整上线；Phase 2A（测试排期第一迭代）已上线生产�
 
 | 中间层 | 原始机型 | 卡组合 |
 |---|---|---|
-| FCS/ENG | ENG, FCS | FCS/ENG×1 |
+| FCS/ENG | ENG, FCS, F350 | FCS/ENG×1 |
 | HIM | HT160, HT250, HT250 W | HIM×1 |
 | H Auto | H Auto, H Auto S | HIM×1 + H Auto机械手×1 |
 | 6AX | 6AX | HIM×1 + VIM×3（前端卡开关）+ 6AX自动化×1 |
@@ -247,6 +256,45 @@ Phase 1 已完整上线；Phase 2A（测试排期第一迭代）已上线生产�
 - 转正 PPMS：fields 键值 JSON 原样透传（PPMS 侧解析适配由用户维护）
 - 模板表后续修改即时生效（缓存刷新后），旧记录快照不受影响；被删字段的历史值保留在快照中
 
+### 业务映射 Review（2026-09-14）
+
+对照 Workcenter 实际机台与草稿表排期复核 NPI_MachineMap：
+
+- **F350 新增映射**：机台 H1FCS014（FCS 系列新机，草稿表已排期 6 次）→ 中间层 FCS/ENG，FCS/ENG×1（用户决策）
+- **历史数据修复**：NPI-20260825-0002、NPI-20260826-0001 两条任务机型存了原始值 ENG（08-25 迁移窗口创建），已修复为 FCS/ENG
+- 报废机台 H2FCS954 的 3 条任务（20260914 导入）保留，由业务在测试计划页自行处理
+- 映射其余 13 个原始机型与 Workcenter 现状一致，无冗余行
+
+---
+
+## 工艺参数卡模版编辑页（2026-09-10 新增，设计外扩展）
+
+> 原设计无此页面。使用中「模板字段调整必须改代码」成为真实痛点，故新增业务自助的模版编辑能力。
+
+**路由:** `?v=NPI_TemplateCards`；导航与页头「工艺参数卡模版编辑 / NPI Parameter Card Template Editing」（2026-09-12 定名）
+
+**能力:**
+- 字段级增删改：行定位 = (卡 + 工序 + 字段key) 唯一；新增字段自动生成候选 key（`前缀_区块_最小未占用序号`，可手改，带唯一性/合法性校验）
+- 展示与工艺参数页一致（复用同一模板数据源 `loadNPITemplateData`），改完渲染所见即所得
+- 状态=已确认 的行参与运行时渲染；被删字段的历史值保留在已保存记录的 JSON 快照中
+- 共享区块「产品信息」「配套设备」由 `ensureNPISharedCards` 保证存在
+
+**后端:** `loadNPITemplateRowsAll(card, processType)` / `saveNPITemplateRow(action, card, processType, rowJSON)`
+
+## 会话临时数据（2026-09-08/09 新增，设计外扩展）
+
+> 机台/产品缺失时允许用户**纯前端会话内临时添加**，不写任何后端表（`NPI_ExtraMachines` 空表无代码引用，为早期方案残留）。
+
+- 机台：下拉缺失的机台自动临时加入并展开表单预填；机型下拉允许自由输入（2026-09-08）
+- 产品：产品名称下拉「新增产品」按钮，会话内临时添加；草稿表导入遇到新品自动预填（2026-09-09）
+- 边界：临时数据不跨会话共享、不参与后端校验——机台数据权威性仍以 Workcenter 为准；导入路径不过滤报废/闲置机台（见上方 2026-09-14 业务映射 Review）
+
+## 数据质量迭代（2026-09-07~09-12，设计外扩展）
+
+- 测试计划页：任务表新增「工艺卡」列、无工艺卡行标红、工艺卡状态徽章、导入弹窗日期范围筛选、全部周单表格
+- 工艺参数页：测试任务下拉改 Select2 可搜索（按计划日期倒序）、模块外框与默认折叠、单元卡与配套设备 accordion、卡开关联动
+- 修复：历史工艺卡机型按 MachineMap 中间层归一化回显（2026-09-07）
+
 ---
 
 ## 后续 Phase 规划
@@ -267,6 +315,8 @@ Phase 1 已完整上线；Phase 2A（测试排期第一迭代）已上线生产�
 | 1 | `NPI_ProcessRecord-js.html` | 新建 |
 | 1 | `Code.js` | 追加函数 |
 | 2+ | `NPI_Dashboard.html` + js | 新建（测试排期主页） |
+| 2A | `NPI_TaskModal.html` + js | 新建（两页共享任务弹窗，2026-08-21） |
+| 2+ | `NPI_TemplateCards.html` + js | 新建（工艺参数卡模版编辑，2026-09-10） |
 | 2+ | `NPI_SampleManage.html` + js | 新建 |
 | 2+ | `NPI_Report.html` + js | 新建 |
 | 全 | `Navigation.html` + js | 追加 NPI 导航按钮 |
