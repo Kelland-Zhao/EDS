@@ -349,6 +349,25 @@ function filterImportCandidatesByDate(list, from, to) {
   });
 }
 
+// 草稿表状态是否禁止导入（纯函数，供渲染与测试使用）：
+// 「满产」「模具不在线」导入后初始状态会被 mapTestPlanStatus_ 归成「待确认 Pending」，
+// 与正常新建任务无法区分，故在源头拦截；其余状态（含空值行）不受限
+function isImportBlocked_(draftStatus) {
+  return ['满产', '模具不在线'].indexOf(String(draftStatus || '').trim()) >= 0;
+}
+
+// 导入候选计数（纯函数，供渲染与测试使用）：actionable=可点击导入的行，blocked=因草稿状态不可导入的行；
+// 已导入行两个口径都不计（已导入优先于被拦）
+function importCounts_(list) {
+  var actionable = 0, blocked = 0;
+  (list || []).forEach(function (c) {
+    if (!c || c.imported) return;
+    if (isImportBlocked_(c.draftStatus)) blocked++;
+    else actionable++;
+  });
+  return { actionable: actionable, blocked: blocked };
+}
+
 // 渲染导入候选表：按日期范围筛选后渲染；
 // 「导入」按钮的 idx 取全量数组下标（indexOf 按引用匹配，filter 返回原对象引用），避免筛选后点错行
 function renderImportTable() {
@@ -356,20 +375,38 @@ function renderImportTable() {
   var html = '';
   filtered.forEach(function (c) {
     var idx = importCandidates.indexOf(c);
+    // 被拦行按钮刻意不加 disabled 属性：disabled 的按钮不触发 click，toast 就弹不出来
     var action = c.imported
       ? '<span class="badge bg-secondary">已导入<br><small>Imported</small></span>'
-      : '<button class="btn btn-sm btn-outline-primary" style="font-size:11px;" onclick="openImportTaskModal(' + idx + ')">导入<br><small>Import</small></button>';
-    html += '<tr class="' + (c.imported ? 'text-muted' : '') + '">' +
+      : isImportBlocked_(c.draftStatus)
+        ? '<button class="btn btn-sm btn-outline-secondary" style="font-size:11px;opacity:.65;" onclick="showImportBlocked_(' + idx + ')">不可导入<br><small>Blocked</small></button>'
+        : '<button class="btn btn-sm btn-outline-primary" style="font-size:11px;" onclick="openImportTaskModal(' + idx + ')">导入<br><small>Import</small></button>';
+    html += '<tr class="' + ((c.imported || isImportBlocked_(c.draftStatus)) ? 'text-muted' : '') + '">' +
       '<td>' + action + '</td>' +
       '<td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.productName) + '</td><td>' + escapeHtml(c.moldNo) + '</td>' +
       '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
   });
   $('#importTable tbody').html(html);
-  var unimported = filtered.filter(function (c) { return !c.imported; }).length;
+  var counts = importCounts_(filtered);
+  var blockedNote = counts.blocked > 0 ? '（其中 ' + counts.blocked + ' 行因草稿状态不可导入）' : '';
   var hint = filtered.length === importCandidates.length
-    ? '共 ' + importCandidates.length + ' 行，未导入 ' + unimported + ' 行；点击行内「导入」逐条导入，弹窗预填信息确认后保存'
-    : '共 ' + filtered.length + ' 行（筛选自 ' + importCandidates.length + ' 行），未导入 ' + unimported + ' 行；点击行内「导入」逐条导入，弹窗预填信息确认后保存';
+    ? '共 ' + importCandidates.length + ' 行，未导入 ' + counts.actionable + ' 行' + blockedNote + '；点击行内「导入」逐条导入，弹窗预填信息确认后保存'
+    : '共 ' + filtered.length + ' 行（筛选自 ' + importCandidates.length + ' 行），未导入 ' + counts.actionable + ' 行' + blockedNote + '；点击行内「导入」逐条导入，弹窗预填信息确认后保存';
   $('#importHint').text(hint);
+}
+
+// 被拦行点击提示：说明草稿状态与恢复方式（UI规范 §4.11.2 警告形态，不自动关闭，原因需读完）
+function showImportBlocked_(idx) {
+  var c = importCandidates[idx];
+  if (!c) return;
+  var status = String(c.draftStatus || '').trim();
+  Swal.fire({
+    icon: 'warning',
+    title: swalTitle('无法导入', 'Cannot Import'),
+    html: swalHtml(
+      '该行草稿状态为「' + escapeHtml(status) + '」，不可导入。<br>请先在测试计划表中更新该行状态，刷新后即可导入。',
+      'Draft status "' + escapeHtml(status) + '" is not importable. Update the status in the test plan sheet and refresh.')
+  });
 }
 
 // 导入候选缓存是否就绪（纯函数，供渲染与测试使用）：已加载过（含空清单）即就绪

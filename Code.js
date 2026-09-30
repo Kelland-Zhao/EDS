@@ -16335,6 +16335,7 @@ function loadTestPlanImportCandidates() {
         machineNo: machine,
         remark: String(data[j][6] || '').trim(),
         status: mapTestPlanStatus_(String(data[j][15] || '').trim()),
+        draftStatus: String(data[j][15] || '').trim(),
         imported: !!existingKeys[taskImportKey_(product, mold, machine, dateStr)]
       });
     }
