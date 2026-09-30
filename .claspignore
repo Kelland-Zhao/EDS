@@ -10,7 +10,7 @@ tests/**
 check4.test.mjs
 
 # 文档（不需要部署到 GAS）
-docs/**
+Docs/**
 *.md
 README.md
 需求文档.md
