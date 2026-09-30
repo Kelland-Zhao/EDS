@@ -130,6 +130,19 @@ test('点检 RBM 映射：表头缺少 New Formed Cell → 返回空并报缺失
   assert.deepEqual(res.missing, ['New Formed Cell']);
 });
 
+// ===== ④ 故障报告机台号下拉 =====
+test('故障报告机台号下拉：读 11 表 Workcenter，排除 NA 退役机台', () => {
+  setup([
+    wcRow({ 'Workcenter': 'M1', 'Final Machine Type': 'HIM' }),
+    wcRow({ 'Workcenter': 'M2', 'Final Machine Type': 'NA' }),
+    wcRow({ 'Workcenter': 'M3', 'Final Machine Type': '6AX' }),
+  ]);
+
+  const res = JSON.parse(globalThis.getMachineNumbers());
+
+  assert.deepEqual(res, ['M1', 'M3'], 'M2 是退役机台，不该出现在下拉里');
+});
+
 // ===== ③ 设备编号 =====
 test('设备编号：取自 L 列，不再读 F 列', () => {
   setup([

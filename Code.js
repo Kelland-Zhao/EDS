@@ -431,14 +431,29 @@ function getFailureReportTemplate() {
   }
 }
 
+// 故障报告机台号下拉：读 11 表 Workcenter 的机台号，排除退役机台（Final Machine Type = NA）
+// 2026-09-30：原读 03 表 Database（该表随链路退役，仅剩此处引用），一并改为按表头名定位
 function getMachineNumbers() {
   try {
-    const ws = SpreadsheetApp.openById('1BeoCokGiWAdkfFTSVOkxNr4Gr9O6FlnwTvnOmLYNY_U').getSheetByName('Database');
+    const ws = SpreadsheetApp.openById('12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM').getSheetByName('Workcenter');
     if (!ws) return JSON.stringify([]);
-    const lastRow = ws.getLastRow();
-    if (lastRow < 2) return JSON.stringify([]);
-    const vals = ws.getRange(2, 1, lastRow - 1, 1).getValues();
-    return JSON.stringify(vals.map(r => String(r[0] || '').trim()).filter(Boolean));
+
+    const data = ws.getDataRange().getValues();
+    const cols = workcenterHeaderIndex_(data[0] || []);
+    const missing = ['Workcenter', 'Final Machine Type'].filter(function (n) { return cols[n] === undefined; });
+    if (missing.length > 0) {
+      console.warn('Workcenter 表头缺少字段: ' + missing.join(', ') + '，返回空机台清单');
+      return JSON.stringify([]);
+    }
+
+    const result = [];
+    for (let i = 1; i < data.length; i++) {
+      const wc = String(data[i][cols['Workcenter']] || '').trim();
+      if (!wc) continue;
+      if (/^NA$/i.test(String(data[i][cols['Final Machine Type']] || '').trim())) continue; // 退役机台
+      result.push(wc);
+    }
+    return JSON.stringify(result);
   } catch(e) { return JSON.stringify([]); }
 }
 
