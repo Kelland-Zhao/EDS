@@ -15202,7 +15202,9 @@ function createNPITestTask(taskDataJSON, operatorSAPID) {
 // Workcenter行过滤：D列机型含「闲置」「报废」等状态词的机台不参与选择
 function isValidWorkcenterModel_(model) {
   var m = String(model || '').trim();
-  return !(/闲置|报废/.test(m));
+  // NA = 退役状态（Workcenter 表 Final Machine Type 对报废/闲置机台写 NA）
+  // 保留「闲置/报废」判断作为过渡期兜底，避免旧数据里的状态文本漏过滤
+  return !(/闲置|报废/.test(m) || /^NA$/i.test(m));
 }
 
 // 原始机型 → 中间层（byRaw 查不到即原值；已是中间层值则原样，幂等）

@@ -80,6 +80,17 @@ test('NPI 机台下拉：model 取自 J 列 Final Machine Type', () => {
   assert.equal(res.data[0].model, 'HIM', '按旧结构读 D 列的话这里会是 DP');
 });
 
+test('NPI 机台下拉：Final Machine Type=NA 的退役机台被排除', () => {
+  setup([
+    wcRow({ 'Workcenter': 'M1', 'Final Machine Type': 'NA' }),
+    wcRow({ 'Workcenter': 'M2', 'Final Machine Type': 'HIM' }),
+  ]);
+
+  const res = JSON.parse(globalThis.loadNPIWorkcenterList('INJ'));
+
+  assert.deepEqual(res.data.map(d => d.id), ['M2'], 'NA 不该出现在下拉里');
+});
+
 test('NPI 机台下拉：机型为闲置/报废的机台被排除', () => {
   setup([
     wcRow({ 'Workcenter': 'M1', 'Final Machine Type': '报废' }),
