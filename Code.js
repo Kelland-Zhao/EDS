@@ -4860,25 +4860,6 @@ function PdMData_submit(PM_data, data_written_in) {
   }
 }
 
-function getWorkcenterinfo_Plan() {
-  try {
-    let ID = "12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM";
-
-    let sheetName = "Workcenter";
-
-    let ss = SpreadsheetApp.openById(ID);
-
-    var ws = ss.getSheetByName(sheetName);
-    let workcenter = ws
-      .getRange(1, 1, ws.getLastRow() - 2, ws.getLastColumn())
-      .getValues();
-
-    return workcenter;
-  } catch (e) {
-    return ["Error", e.toString()];
-  }
-}
-
 function uploadFile_General(dataUrl, fileName, folderId) {
   try {
     const contentType = dataUrl.match(/data:([^;]+);/)[1];
