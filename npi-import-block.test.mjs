@@ -26,10 +26,14 @@ function tryExtract(src, name) {
 }
 
 const html = fs.readFileSync(new URL('./NPI_Dashboard-js.html', import.meta.url), 'utf8');
+(0, eval)(tryExtract(html, 'importBlockReasons_')
+  || 'function importBlockReasons_(){ throw new Error("importBlockReasons_ not found in NPI_Dashboard-js.html"); }');
 (0, eval)(tryExtract(html, 'isImportBlocked_')
   || 'function isImportBlocked_(){ throw new Error("isImportBlocked_ not found in NPI_Dashboard-js.html"); }');
 (0, eval)(tryExtract(html, 'importCounts_')
   || 'function importCounts_(){ throw new Error("importCounts_ not found in NPI_Dashboard-js.html"); }');
+(0, eval)(tryExtract(html, 'importHintText_')
+  || 'function importHintText_(){ throw new Error("importHintText_ not found in NPI_Dashboard-js.html"); }');
 
 test('isImportBlocked_: 满产 → 阻止导入', () => {
   assert.equal(isImportBlocked_('满产'), true);
@@ -74,4 +78,85 @@ test('importCounts_: 已导入行两个口径都不计（已导入优先于被�
 test('importCounts_: 空清单 → 全为 0', () => {
   assert.deepEqual(importCounts_([]), { actionable: 0, blocked: 0 });
   assert.deepEqual(importCounts_(null), { actionable: 0, blocked: 0 });
+});
+
+// ---- 机台列「满产」「已排满」拦截 ----
+// 背景：计划部把「满产」写在测试机台列（而非完成状态列）表示机台排满无空；
+// 这类行完成状态往往是「取消」，只查状态列会漏掉一半
+
+test('isImportBlocked_: 机台列写「满产」→ 阻止导入（状态列是「取消」时同样拦）', () => {
+  assert.equal(isImportBlocked_('取消', '满产'), true);
+  assert.equal(isImportBlocked_('', '满产'), true);
+});
+
+test('isImportBlocked_: 机台列写「已排满」→ 阻止导入（语义等同于满产）', () => {
+  assert.equal(isImportBlocked_('取消', '已排满'), true);
+});
+
+test('isImportBlocked_: 机台列含「满产」的变体写法 → 仍能识别', () => {
+  assert.equal(isImportBlocked_('', ' 满产 '), true);
+  assert.equal(isImportBlocked_('', '满产（停机）'), true);
+});
+
+test('isImportBlocked_: 正常机台号 → 不阻止', () => {
+  ['H2FCS954', 'H1HTA660', 'H2HTA651 H2HTA652', 'M1IM0117 M1IM0122', '机台号待定', 'NA', ''].forEach((m) => {
+    assert.equal(isImportBlocked_('延期', m), false, `${m} 不应被阻止`);
+  });
+});
+
+test('isImportBlocked_: 机台列缺失（老载荷无该字段）→ 只按状态判定', () => {
+  assert.equal(isImportBlocked_('满产', undefined), true);
+  assert.equal(isImportBlocked_('延期', undefined), false);
+});
+
+test('importCounts_: 机台列满产的行计入 blocked', () => {
+  const list = [
+    { draftStatus: '延期', machineNo: 'H2FCS954' },
+    { draftStatus: '取消', machineNo: '满产' },
+    { draftStatus: '取消', machineNo: '已排满' }
+  ];
+  assert.deepEqual(importCounts_(list), { actionable: 1, blocked: 2 });
+});
+
+// ---- 原因明细（toast 用，单一规则来源）----
+
+test('importBlockReasons_: 可导入 → 空数组', () => {
+  assert.deepEqual(importBlockReasons_('延期', 'H2FCS954'), []);
+  assert.deepEqual(importBlockReasons_('', ''), []);
+});
+
+test('importBlockReasons_: 状态列命中 → ["status"]', () => {
+  assert.deepEqual(importBlockReasons_('满产', 'H2FCS954'), ['status']);
+  assert.deepEqual(importBlockReasons_('模具不在线', ''), ['status']);
+});
+
+test('importBlockReasons_: 机台列命中 → ["machine"]', () => {
+  assert.deepEqual(importBlockReasons_('取消', '满产'), ['machine']);
+  assert.deepEqual(importBlockReasons_('取消', '已排满'), ['machine']);
+});
+
+test('importBlockReasons_: 两列同时命中 → 两项都报（toast 需说全）', () => {
+  assert.deepEqual(importBlockReasons_('满产', '满产'), ['status', 'machine']);
+});
+
+// ---- 提示行文案 ----
+// 回归背景：曾把「未导入」写成 actionable（已排除被拦行），
+// 却又用「其中 N 行…」表述被拦行，导致 603 = 6 + 575 + 22 里凑不出 575 这个数
+
+test('importHintText_: 未导入数 = 可导入 + 被拦（被拦行也在未导入里）', () => {
+  const txt = importHintText_({ actionable: 575, blocked: 22 }, 603, 603);
+  assert.match(txt, /共 603 行，未导入 597 行/);
+  assert.match(txt, /其中 22 行/);
+});
+
+test('importHintText_: 无被拦行 → 不出现「其中」', () => {
+  const txt = importHintText_({ actionable: 5, blocked: 0 }, 5, 5);
+  assert.match(txt, /共 5 行，未导入 5 行/);
+  assert.ok(txt.indexOf('其中') < 0, '不应出现「其中」');
+});
+
+test('importHintText_: 筛选后展示行数与原总数不同 → 带「筛选自」', () => {
+  const txt = importHintText_({ actionable: 8, blocked: 2 }, 10, 603);
+  assert.match(txt, /共 10 行（筛选自 603 行）/);
+  assert.match(txt, /未导入 10 行/);
 });

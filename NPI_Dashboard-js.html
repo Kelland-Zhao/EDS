@@ -349,23 +349,48 @@ function filterImportCandidatesByDate(list, from, to) {
   });
 }
 
-// 草稿表状态是否禁止导入（纯函数，供渲染与测试使用）：
-// 「满产」「模具不在线」导入后初始状态会被 mapTestPlanStatus_ 归成「待确认 Pending」，
-// 与正常新建任务无法区分，故在源头拦截；其余状态（含空值行）不受限
-function isImportBlocked_(draftStatus) {
-  return ['满产', '模具不在线'].indexOf(String(draftStatus || '').trim()) >= 0;
+// 不可导入的命中原因（纯函数，供渲染与测试使用）：空数组=可导入；status=完成状态列，machine=测试机台列。
+// 规则只在这里定义一次，isImportBlocked_（按钮与计数）和 toast（原因说明）都由它派生，避免两处判断漂移。
+// 两个来源：
+// 1) 完成状态列：「满产」「模具不在线」导入后会被 mapTestPlanStatus_ 归成「待确认 Pending」，
+//    与正常新建任务无法区分，故在源头拦截（受控词表，精确匹配；含空值行不受限）
+// 2) 测试机台列：计划部把「满产」「已排满」写在机台列表示机台排满无空，
+//    这类行完成状态常是「取消」，只查状态列会漏掉一半；机台号不含中文，故用包含匹配兜住变体写法
+function importBlockReasons_(draftStatus, machineNo) {
+  var hits = [];
+  if (['满产', '模具不在线'].indexOf(String(draftStatus || '').trim()) >= 0) hits.push('status');
+  var m = String(machineNo || '');
+  if (m.indexOf('满产') >= 0 || m.indexOf('已排满') >= 0) hits.push('machine');
+  return hits;
 }
 
-// 导入候选计数（纯函数，供渲染与测试使用）：actionable=可点击导入的行，blocked=因草稿状态不可导入的行；
+// 草稿表行是否禁止导入（纯函数，供渲染与测试使用）
+function isImportBlocked_(draftStatus, machineNo) {
+  return importBlockReasons_(draftStatus, machineNo).length > 0;
+}
+
+// 导入候选计数（纯函数，供渲染与测试使用）：actionable=可点击导入的行，blocked=被拦的行；
 // 已导入行两个口径都不计（已导入优先于被拦）
 function importCounts_(list) {
   var actionable = 0, blocked = 0;
   (list || []).forEach(function (c) {
     if (!c || c.imported) return;
-    if (isImportBlocked_(c.draftStatus)) blocked++;
+    if (isImportBlocked_(c.draftStatus, c.machineNo)) blocked++;
     else actionable++;
   });
   return { actionable: actionable, blocked: blocked };
+}
+
+// 导入弹窗提示文案（纯函数，供渲染与测试使用）：
+// 未导入 = actionable + blocked——被拦行同样没导入，必须计进「未导入」总数，
+// 再用「其中」补充说明（只写 actionable 会让数字对不上账：603 ≠ 已导入 + 575 + 22）
+function importHintText_(counts, shownCount, totalCount) {
+  var unimported = counts.actionable + counts.blocked;
+  var blockedNote = counts.blocked > 0 ? '（其中 ' + counts.blocked + ' 行因状态或机台不可导入）' : '';
+  var scope = shownCount === totalCount
+    ? '共 ' + totalCount + ' 行'
+    : '共 ' + shownCount + ' 行（筛选自 ' + totalCount + ' 行）';
+  return scope + '，未导入 ' + unimported + ' 行' + blockedNote + '；点击行内「导入」逐条导入，弹窗预填信息确认后保存';
 }
 
 // 渲染导入候选表：按日期范围筛选后渲染；
@@ -375,37 +400,46 @@ function renderImportTable() {
   var html = '';
   filtered.forEach(function (c) {
     var idx = importCandidates.indexOf(c);
+    var blocked = isImportBlocked_(c.draftStatus, c.machineNo);
     // 被拦行按钮刻意不加 disabled 属性：disabled 的按钮不触发 click，toast 就弹不出来
     var action = c.imported
       ? '<span class="badge bg-secondary">已导入<br><small>Imported</small></span>'
-      : isImportBlocked_(c.draftStatus)
+      : blocked
         ? '<button class="btn btn-sm btn-outline-secondary" style="font-size:11px;opacity:.65;" onclick="showImportBlocked_(' + idx + ')">不可导入<br><small>Blocked</small></button>'
         : '<button class="btn btn-sm btn-outline-primary" style="font-size:11px;" onclick="openImportTaskModal(' + idx + ')">导入<br><small>Import</small></button>';
-    html += '<tr class="' + ((c.imported || isImportBlocked_(c.draftStatus)) ? 'text-muted' : '') + '">' +
+    // 状态列显示草稿表原始值：映射后「满产」「模具不在线」「未完成」等都会塌缩成「待确认 Pending」，
+    // 看不出差别，被拦行就无从辨认；原始值为空时回退映射值，避免空单元格
+    html += '<tr class="' + ((c.imported || blocked) ? 'text-muted' : '') + '">' +
       '<td>' + action + '</td>' +
       '<td>' + escapeHtml(c.date) + '</td><td>' + escapeHtml(c.productName) + '</td><td>' + escapeHtml(c.moldNo) + '</td>' +
-      '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
+      '<td>' + escapeHtml(c.machineNo) + '</td><td>' + escapeHtml(c.draftStatus || c.status) + '</td><td>' + escapeHtml(c.remark) + '</td></tr>';
   });
   $('#importTable tbody').html(html);
-  var counts = importCounts_(filtered);
-  var blockedNote = counts.blocked > 0 ? '（其中 ' + counts.blocked + ' 行因草稿状态不可导入）' : '';
-  var hint = filtered.length === importCandidates.length
-    ? '共 ' + importCandidates.length + ' 行，未导入 ' + counts.actionable + ' 行' + blockedNote + '；点击行内「导入」逐条导入，弹窗预填信息确认后保存'
-    : '共 ' + filtered.length + ' 行（筛选自 ' + importCandidates.length + ' 行），未导入 ' + counts.actionable + ' 行' + blockedNote + '；点击行内「导入」逐条导入，弹窗预填信息确认后保存';
-  $('#importHint').text(hint);
+  $('#importHint').text(importHintText_(importCounts_(filtered), filtered.length, importCandidates.length));
 }
 
-// 被拦行点击提示：说明草稿状态与恢复方式（UI规范 §4.11.2 警告形态，不自动关闭，原因需读完）
+// 被拦行点击提示：按实际命中的列说明原因与恢复方式（UI规范 §4.11.2 警告形态，不自动关闭，原因需读完）
 function showImportBlocked_(idx) {
   var c = importCandidates[idx];
   if (!c) return;
   var status = String(c.draftStatus || '').trim();
+  var machine = String(c.machineNo || '').trim();
+  var cn = [], en = [];
+  importBlockReasons_(c.draftStatus, c.machineNo).forEach(function (field) {
+    if (field === 'status') {
+      cn.push('完成状态为「' + escapeHtml(status) + '」');
+      en.push('status is "' + escapeHtml(status) + '"');
+    } else {
+      cn.push('机台列为「' + escapeHtml(machine) + '」');
+      en.push('machine is "' + escapeHtml(machine) + '"');
+    }
+  });
   Swal.fire({
     icon: 'warning',
     title: swalTitle('无法导入', 'Cannot Import'),
     html: swalHtml(
-      '该行草稿状态为「' + escapeHtml(status) + '」，不可导入。<br>请先在测试计划表中更新该行状态，刷新后即可导入。',
-      'Draft status "' + escapeHtml(status) + '" is not importable. Update the status in the test plan sheet and refresh.')
+      '该行不可导入：' + cn.join('、') + '。<br>请先在测试计划表中处理，刷新后即可导入。',
+      'Cannot import — ' + en.join(', ') + '. Update the test plan sheet and refresh.')
   });
 }
 
