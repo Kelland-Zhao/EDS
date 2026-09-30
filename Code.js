@@ -3081,15 +3081,11 @@ function getData_PointCheck_Inspection2(process) {
       var ss_WorkcenterPlan = SpreadsheetApp.openById("12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM");
       var ws_Workcenter = ss_WorkcenterPlan.getSheetByName("Workcenter");
       if (ws_Workcenter && ws_Workcenter.getLastRow() > 1) {
-        var data_Workcenter = ws_Workcenter.getRange(2, 1, ws_Workcenter.getLastRow() - 1, 11).getDisplayValues();
-        data_Workcenter.forEach(function(row) {
-          var wc = row[0] ? row[0].toString().trim() : "";
-          var nfc = row[10] ? row[10].toString().trim() : "";
-          if (wc && nfc) {
-            if (!workcenterKtoA[nfc]) workcenterKtoA[nfc] = [];
-            workcenterKtoA[nfc].push(wc);
-          }
-        });
+        // 连表头一起读，按表头名定位列（19 列新结构下 New Formed Cell 在 D 列）
+        var data_Workcenter = ws_Workcenter
+          .getRange(1, 1, ws_Workcenter.getLastRow(), ws_Workcenter.getLastColumn())
+          .getDisplayValues();
+        workcenterKtoA = buildWorkcenterNfcMap_(data_Workcenter).map;
       }
     }
 
@@ -9518,21 +9514,28 @@ function get_Equipment_No_in_EAM() {
 
     let ws = ss.getSheetByName("Workcenter");
 
-    // 获取数据范围：从第2行开始（第1行是表头），到最后一行的所有列
+    // 获取数据范围：第1行是表头，到最后一行的所有列
     let lastRow = ws.getLastRow();
     if (lastRow < 2) {
-      // 如果没有数据行，返回空数组
-      return [];
+      // 没有数据行：与其他分支一致返回 JSON 字符串，前端才能 JSON.parse
+      return JSON.stringify([]);
     }
 
-    // 获取所有数据（从第2行开始）
-    let data = ws.getRange(2, 1, lastRow - 1, ws.getLastColumn()).getValues();
+    // 连表头一起读，按表头名定位列（19 列新结构下设备编号在 L 列）
+    let data = ws.getRange(1, 1, lastRow, ws.getLastColumn()).getValues();
+    let cols = workcenterHeaderIndex_(data[0] || []);
+    let missing = ["Workcenter", "设备编号"].filter(function (n) { return cols[n] === undefined; });
+    if (missing.length > 0) {
+      console.warn("Workcenter 表头缺少字段: " + missing.join(", ") + "，返回空");
+      return JSON.stringify([]);
+    }
 
     // 构建结果数组
     let result = [];
-    data.forEach(function (row) {
-      let workcenter = row[0] || ""; // A列：Workcenter
-      let equipment = row[5] || ""; // J列：设备编号
+    for (let i = 1; i < data.length; i++) {
+      let row = data[i];
+      let workcenter = row[cols["Workcenter"]] || ""; // Workcenter 列：机台号
+      let equipment = row[cols["设备编号"]] || "";     // 设备编号列
 
       // 只有当两个值都不为空时才添加到结果中
       if (workcenter && equipment) {
@@ -9541,7 +9544,7 @@ function get_Equipment_No_in_EAM() {
           Equipment: equipment,
         });
       }
-    });
+    }
 
     console.log(JSON.stringify(result));
     return JSON.stringify(result);
@@ -15229,6 +15232,44 @@ function mapRawModelToDisplay_(rawModel, byRaw) {
   return raw;
 }
 
+// ===== Workcenter 表读取（按表头名定位列，不硬编码列号） =====
+// 2026-09-30：Workcenter 表由 11 列重构为 19 列（Final Machine Type 由 D→J、
+// 是否主设备由 E→K、设备编号由 F→L、New Formed Cell 由 K→D），故改为按表头名取列。
+function workcenterHeaderIndex_(headerRow) {
+  var idx = {};
+  for (var i = 0; i < headerRow.length; i++) {
+    var name = String(headerRow[i] || '').trim();
+    if (name && idx[name] === undefined) idx[name] = i; // 重名取第一列
+  }
+  return idx;
+}
+
+/**
+ * 行数组（含表头行）→ { New Formed Cell 值: [机台号, ...] }
+ * @returns {{map: Object<string, Array<string>>, missing: Array<string>}}
+ */
+function buildWorkcenterNfcMap_(data) {
+  var required = ['Workcenter', 'New Formed Cell'];
+  var cols = workcenterHeaderIndex_(data[0] || []);
+  var missing = required.filter(function (n) { return cols[n] === undefined; });
+  if (missing.length > 0) {
+    console.warn('Workcenter 表头缺少字段: ' + missing.join(', ') + '，RBM 机台分组跳过');
+    return { map: {}, missing: missing };
+  }
+
+  var map = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var wc = String(row[cols['Workcenter']] || '').trim();
+    var nfc = String(row[cols['New Formed Cell']] || '').trim();
+    if (wc && nfc) {
+      if (!map[nfc]) map[nfc] = [];
+      map[nfc].push(wc);
+    }
+  }
+  return { map: map, missing: [] };
+}
+
 function loadNPIWorkcenterList(processType) {
   try {
     var pt = (processType || 'IM').toString().trim();
@@ -15254,11 +15295,17 @@ function loadNPIWorkcenterList(processType) {
       }
     } catch (e) {}
     var data = ws.getDataRange().getValues();
+    var wcCols = workcenterHeaderIndex_(data[0] || []);
+    var wcMissing = ['Workcenter', 'Final Machine Type'].filter(function (n) { return wcCols[n] === undefined; });
+    if (wcMissing.length > 0) {
+      console.warn('Workcenter 表头缺少字段: ' + wcMissing.join(', ') + '，返回空机台清单');
+      return JSON.stringify({ success: true, data: [] });
+    }
     var result = [];
     for (var i = 1; i < data.length; i++) {
-      var wc = String(data[i][0] || '').trim();
+      var wc = String(data[i][wcCols['Workcenter']] || '').trim();
       if (!wc) continue;
-      var model = String(data[i][3] || '').trim(); // D列 Final Machine Type
+      var model = String(data[i][wcCols['Final Machine Type']] || '').trim(); // J列 Final Machine Type
       if (!isValidWorkcenterModel_(model)) continue; // 闲置/报废机台排除
       result.push({ id: wc, text: wc, model: model, displayModel: mapRawModelToDisplay_(model, byRaw) });
     }
