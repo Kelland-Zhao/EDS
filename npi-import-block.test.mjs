@@ -34,6 +34,8 @@ const html = fs.readFileSync(new URL('./NPI_Dashboard-js.html', import.meta.url)
   || 'function importCounts_(){ throw new Error("importCounts_ not found in NPI_Dashboard-js.html"); }');
 (0, eval)(tryExtract(html, 'importHintText_')
   || 'function importHintText_(){ throw new Error("importHintText_ not found in NPI_Dashboard-js.html"); }');
+(0, eval)(tryExtract(html, 'filterImportCandidatesByBlocked_')
+  || 'function filterImportCandidatesByBlocked_(){ throw new Error("filterImportCandidatesByBlocked_ not found in NPI_Dashboard-js.html"); }');
 
 test('isImportBlocked_: 满产 → 阻止导入', () => {
   assert.equal(isImportBlocked_('满产'), true);
@@ -159,4 +161,37 @@ test('importHintText_: 筛选后展示行数与原总数不同 → 带「筛选�
   const txt = importHintText_({ actionable: 8, blocked: 2 }, 10, 603);
   assert.match(txt, /共 10 行（筛选自 603 行）/);
   assert.match(txt, /未导入 10 行/);
+});
+
+// ---- 「只看不可导入」开关 ----
+
+test('filterImportCandidatesByBlocked_: 未开启 → 原样返回，不筛', () => {
+  const list = [{ draftStatus: '延期', machineNo: 'H2FCS954' }, { draftStatus: '满产', machineNo: '' }];
+  assert.deepEqual(filterImportCandidatesByBlocked_(list, false), list);
+  assert.equal(filterImportCandidatesByBlocked_(list, false).length, 2);
+});
+
+test('filterImportCandidatesByBlocked_: 开启 → 只留被拦行', () => {
+  const list = [
+    { draftStatus: '延期', machineNo: 'H2FCS954' },
+    { draftStatus: '满产', machineNo: '' },
+    { draftStatus: '取消', machineNo: '满产' }
+  ];
+  const out = filterImportCandidatesByBlocked_(list, true);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out.map((c) => c.draftStatus), ['满产', '取消']);
+});
+
+test('filterImportCandidatesByBlocked_: 已导入的被拦行不出现（没有待办）', () => {
+  const list = [
+    { draftStatus: '满产', machineNo: '', imported: true },
+    { draftStatus: '满产', machineNo: '' }
+  ];
+  assert.equal(filterImportCandidatesByBlocked_(list, true).length, 1);
+});
+
+test('filterImportCandidatesByBlocked_: 无被拦行 / 空清单 → 空数组不报错', () => {
+  assert.deepEqual(filterImportCandidatesByBlocked_([{ draftStatus: '延期', machineNo: 'H2FCS954' }], true), []);
+  assert.deepEqual(filterImportCandidatesByBlocked_([], true), []);
+  assert.deepEqual(filterImportCandidatesByBlocked_(null, true), []);
 });

@@ -93,8 +93,12 @@ $(document).ready(function () {
   // 导入弹窗日期范围筛选（datepicker 下拉渲染在 body 上，库按父级 modal z-index + zIndexOffset 自动置顶）
   $('#importDateFrom, #importDateTo').datepicker({ format: 'yyyy-mm-dd', autoclose: true })
     .on('change', renderImportTable);
+  // 「只看不可导入」开关：与日期范围一起构成导入弹窗的两道筛选
+  $('#importOnlyBlocked').on('change', renderImportTable);
   $('#btnImportClearDate').on('click', function () {
     $('#importDateFrom, #importDateTo').datepicker('clearDates');
+    // 按钮文案是「清除筛选」而非「清除日期」，两道筛选一并清空最不意外
+    $('#importOnlyBlocked').prop('checked', false);
     renderImportTable();
   });
 });
@@ -349,6 +353,15 @@ function filterImportCandidatesByDate(list, from, to) {
   });
 }
 
+// 「只看不可导入」开关筛选（纯函数，供渲染与测试使用）：
+// 关闭时原样返回；开启时只留被拦行，且排除已导入的——它们没有待办，列出来只是噪音
+function filterImportCandidatesByBlocked_(list, onlyBlocked) {
+  if (!onlyBlocked) return list || [];
+  return (list || []).filter(function (c) {
+    return !c.imported && isImportBlocked_(c.draftStatus, c.machineNo);
+  });
+}
+
 // 不可导入的命中原因（纯函数，供渲染与测试使用）：空数组=可导入；status=完成状态列，machine=测试机台列。
 // 规则只在这里定义一次，isImportBlocked_（按钮与计数）和 toast（原因说明）都由它派生，避免两处判断漂移。
 // 两个来源：
@@ -396,7 +409,8 @@ function importHintText_(counts, shownCount, totalCount) {
 // 渲染导入候选表：按日期范围筛选后渲染；
 // 「导入」按钮的 idx 取全量数组下标（indexOf 按引用匹配，filter 返回原对象引用），避免筛选后点错行
 function renderImportTable() {
-  var filtered = filterImportCandidatesByDate(importCandidates, $('#importDateFrom').val(), $('#importDateTo').val());
+  var byDate = filterImportCandidatesByDate(importCandidates, $('#importDateFrom').val(), $('#importDateTo').val());
+  var filtered = filterImportCandidatesByBlocked_(byDate, $('#importOnlyBlocked').is(':checked'));
   var html = '';
   filtered.forEach(function (c) {
     var idx = importCandidates.indexOf(c);
