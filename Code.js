@@ -16663,6 +16663,16 @@ function get_MachineMasterData() {
   }
 }
 
+// 变更日志读值归一：Sheets 会把写入的 "yyyy-MM-dd HH:mm:ss" 串当日期值存，
+// getValues() 读回来就是 Date 对象，直接 String() 会得到
+// "Thu Oct 01 2026 21:37:03 GMT+0800 (Hong Kong Standard Time)" 这种又长又占宽度的形式
+function formatMM_AuditTime_(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
+  }
+  return v === undefined || v === null ? "" : String(v);
+}
+
 // 批量写变更日志（一次 setValues，附在最后一行之后）
 // 容量不足时先扩行：日志表写满后 setValues 会整批抛错，等于把审计本身弄丢
 function appendMM_AuditLog_(ss, userCode, userName, applied) {
@@ -16772,8 +16782,7 @@ function get_MachineMasterAuditLog(limit) {
     var rows = vals.map(function (r) {
       var o = {};
       for (var j = 0; j < MM_AUDIT_HEADERS.length; j++) {
-        var v = r[j];
-        o[MM_AUDIT_HEADERS[j]] = v === undefined || v === null ? "" : String(v);
+        o[MM_AUDIT_HEADERS[j]] = formatMM_AuditTime_(r[j]);
       }
       return o;
     });

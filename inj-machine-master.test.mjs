@@ -70,7 +70,15 @@ globalThis.SpreadsheetApp = {
     };
   },
 };
-globalThis.Utilities = { formatDate: () => '2026-10-01 12:00:00' };
+// 忠实模拟 GAS 的 Utilities.formatDate（按 yyyy-MM-dd HH:mm:ss 输出），
+// 之前写死成固定串，导致"时间列是 Date 对象"这类问题测不出来
+globalThis.Utilities = {
+  formatDate: (d, tz, fmt) => {
+    if (!(d instanceof Date)) return String(d);
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  },
+};
 globalThis.Session = { getActiveUser: () => ({ getEmail: () => 'test@colpal.com' }) };
 globalThis.console = console;
 
@@ -280,7 +288,8 @@ test('保存：只写 M–T 区间，A–L 保持不变，日志批量落库', (
 
   const audit = fakeSS[MM_WC_SS_ID]['变更日志']._rows;
   assert.deepEqual(audit[0], ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值']);
-  assert.deepEqual(audit[1], ['2026-10-01 12:00:00', '33012', '李华', 'V1FTA463', '机型', '3AX', '6AX']);
+  assert.ok(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(audit[1][0]), '时间应为 yyyy-MM-dd HH:mm:ss，实际: ' + audit[1][0]);
+  assert.deepEqual(audit[1].slice(1), ['33012', '李华', 'V1FTA463', '机型', '3AX', '6AX']);
 });
 
 test('保存：冲突字段跳过不写，返回冲突明细', () => {
@@ -502,4 +511,22 @@ test('分组列开关：用 CSS class 切换，不得改用 DataTables 列可见
 
 test('分组列开关：状态存 sessionStorage，重绘后不回弹', () => {
   assert.ok(/sessionStorage\.(getItem|setItem)\('mmShowGroupCols'/.test(pageJs), '开关状态未持久化到会话');
+});
+
+// ===== 变更日志时间列：Sheets 会把写入的时间串当日期存，读回来是 Date 对象 =====
+test('读取变更日志：时间列是 Date 对象时格式化为 yyyy-MM-dd HH:mm:ss', () => {
+  fakeSS = {};
+  fakeSS[MM_WC_SS_ID] = {
+    '变更日志': fakeSheet([
+      ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值'],
+      // 表格把 "2026-10-01 21:37:03" 存成日期值，getValues() 读回来就是 Date
+      [new Date(2026, 9, 1, 21, 37, 3), '69063', '赵阳', 'H1HTA953', '机型', '', '6AX'],
+      // 少数行可能是纯文本（例如手工补录），保持原样
+      ['2026-10-01 10:00:00', '33012', '李华', 'M1', '机型', 'A', 'B'],
+    ]),
+  };
+  const r = globalThis.get_MachineMasterAuditLog(200);
+  assert.equal(r.rows[1]['时间'], '2026-10-01 21:37:03', 'Date 对象未格式化');
+  assert.equal(r.rows[0]['时间'], '2026-10-01 10:00:00', '文本时间应原样保留');
+  assert.ok(!/GMT/.test(r.rows[1]['时间']), '不能出现 GMT 这种 Date.toString() 形式');
 });
