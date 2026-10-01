@@ -196,6 +196,125 @@
     return loadMachineMaster().then(() => { renderTable(); initFilters(); });
   }
 
+  const CHUNK_SIZE = 300; // google.script.run 入参 5 万字符上限保护
+
+  function submitChanges(changes) {
+    const batches = [];
+    for (let i = 0; i < changes.length; i += CHUNK_SIZE) batches.push(changes.slice(i, i + CHUNK_SIZE));
+    const applied = [];
+    const conflicts = [];
+    return batches.reduce((p, batch) => p.then(() => new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(r => {
+        if (r && r.ok) {
+          applied.push(...(r.applied || []));
+          conflicts.push(...(r.conflicts || []));
+          resolve();
+        } else {
+          reject(new Error((r && r.message) || '保存失败'));
+        }
+      }).withFailureHandler(reject).save_MachineMasterData(batch, global_ID, global_Name);
+    })), Promise.resolve()).then(() => ({ applied: applied, conflicts: conflicts }));
+  }
+
+  function showConflicts(conflicts) {
+    const shown = conflicts.slice(0, 10).map(c =>
+      `<div style="font-size:12px;text-align:left;">${escapeAttr(c['机台号'])} · ${escapeAttr(c['字段'])}：表中现值「${escapeAttr(c['现值'])}」≠ 提交旧值「${escapeAttr(c['旧值'])}」（${escapeAttr(c['原因'])}）</div>`
+    ).join('');
+    const more = conflicts.length > 10 ? `<div style="font-size:12px;color:#888;">…另有 ${conflicts.length - 10} 条</div>` : '';
+    Swal.fire({
+      icon: 'warning',
+      title: swalTitle('部分字段未保存', 'Some fields not saved'),
+      html: `<div>以下字段已被他人修改或机台不存在，已跳过：</div>${shown}${more}`,
+      confirmButtonText: '知道了 / OK'
+    });
+  }
+
+  $('#btnSave').on('click', function () {
+    const changes = collectChanges();
+    if (changes.length === 0) {
+      Swal.fire({ icon: 'info', title: swalTitle('没有需要保存的改动', 'No changes'), timer: 1200, showConfirmButton: false });
+      return;
+    }
+    Swal.fire({
+      title: swalTitle('保存 ' + changes.length + ' 项改动？', 'Save changes?'),
+      html: swalHtml('将只写入 M–T 列（机型/设备类型/自动化类型/责任人/备份责任人/免检标记），A–L 列不受影响。', 'Only columns M–T will be written.'),
+      icon: 'question', showCancelButton: true, confirmButtonText: '保存 / Save', cancelButtonText: '取消 / Cancel'
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      Swal.fire({ title: swalTitle('保存中...', 'Saving...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+      submitChanges(changes).then(res => {
+        const conflicts = res.conflicts || [];
+        return reloadAll().then(() => {
+          if (conflicts.length > 0) { showConflicts(conflicts); return; }
+          Swal.fire({ icon: 'success', title: swalTitle('已保存 ' + res.applied.length + ' 项', 'Saved'), timer: 1500, showConfirmButton: false });
+        });
+      }).catch(e => {
+        Swal.close();
+        Swal.fire({ icon: 'error', title: swalTitle('保存失败', 'Save Failed'), html: swalHtml('改动仍保留在页面上，可重试。' + String(e.message || e), 'Your changes are kept; please retry.') });
+      });
+    });
+  });
+
+  $('#btnRevert').on('click', function () {
+    if (collectChanges().length === 0) {
+      Swal.fire({ icon: 'info', title: swalTitle('没有需要撤销的改动', 'Nothing to revert'), timer: 1200, showConfirmButton: false });
+      return;
+    }
+    Swal.fire({
+      title: swalTitle('撤销所有未保存的改动？', 'Revert unsaved changes?'),
+      icon: 'warning', showCancelButton: true, confirmButtonText: '撤销 / Revert', cancelButtonText: '取消 / Cancel'
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      renderTable(); // 用 masterRows（加载时的数据）重绘，回到原值
+      Swal.fire({ icon: 'success', title: swalTitle('已撤销', 'Reverted'), timer: 1000, showConfirmButton: false });
+    });
+  });
+
+  $('#btnRefresh').on('click', function () {
+    if (collectChanges().length > 0) {
+      Swal.fire({
+        title: swalTitle('有未保存的改动', 'Unsaved changes'),
+        html: swalHtml('刷新会丢弃这些改动，确定继续？', 'Refresh will discard them. Continue?'),
+        icon: 'warning', showCancelButton: true, confirmButtonText: '刷新 / Refresh', cancelButtonText: '取消 / Cancel'
+      }).then(result => { if (result.isConfirmed) doRefresh(); });
+      return;
+    }
+    doRefresh();
+  });
+
+  function doRefresh() {
+    Swal.fire({ title: swalTitle('刷新中...', 'Refreshing...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+    reloadAll().then(() => Swal.close()).catch(e => {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('刷新失败', 'Refresh Failed'), html: swalHtml(String(e.message || e), '') });
+    });
+  }
+
+  let tableAuditLog = null;
+  $('#btnAuditLog').on('click', function () {
+    $('#auditLogModal').modal('show');
+    google.script.run.withSuccessHandler(r => {
+      const rows = (r && r.rows) || [];
+      if (tableAuditLog) tableAuditLog.destroy();
+      tableAuditLog = $('#tableAuditLog').DataTable({
+        data: rows,
+        columns: ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值'].map(h => ({ title: h, data: h, render: DataTable.render.text() })),
+        order: [[0, 'desc']],
+        pageLength: 15
+      });
+      $('#auditFilterWorkcenter').off('keyup change').on('keyup change', function () {
+        tableAuditLog.column(3).search(this.value).draw();
+      });
+    }).withFailureHandler(e => {
+      Swal.fire({ icon: 'error', title: swalTitle('日志加载失败', 'Audit Log Failed'), html: swalHtml(String(e.message || e), '') });
+    }).get_MachineMasterAuditLog(200);
+  });
+
+  // 关页/刷新拦截：有未保存改动时提示
+  window.addEventListener('beforeunload', function (e) {
+    if (dirtyCount > 0) { e.preventDefault(); e.returnValue = ''; }
+  });
+
   $(document).ready(function () {
     Swal.fire({ title: swalTitle('加载中...', 'Loading...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
     reloadAll().then(() => Swal.close()).catch(e => {
