@@ -16645,3 +16645,96 @@ function get_MachineMasterData() {
     return { headers: [], rows: [], error: e.toString() };
   }
 }
+
+// 批量写变更日志（一次 setValues，附在最后一行之后）
+function appendMM_AuditLog_(ss, userCode, userName, applied) {
+  if (!applied || applied.length === 0) return;
+  var ws = getMM_AuditSheet_(ss);
+  var now = Utilities.formatDate(new Date(), "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
+  var rows = applied.map(function (a) {
+    return [now, userCode || "", userName || "", a["机台号"] || "", a["字段"] || "", a["旧值"] || "", a["新值"] || ""];
+  });
+  ws.getRange(ws.getLastRow() + 1, 1, rows.length, MM_AUDIT_HEADERS.length).setValues(rows);
+}
+
+function save_MachineMasterData(changes, userCode, userName) {
+  try {
+    if (!changes || changes.length === 0) return { ok: true, applied: [], conflicts: [] };
+
+    var ss = SpreadsheetApp.openById(MM_WC_SS_ID);
+    var ws = ss.getSheetByName(MM_WC_SHEET_NAME);
+    if (!ws) return { ok: false, message: "Workcenter sheet 未找到" };
+
+    var lastRow = ws.getLastRow();
+    var lastCol = ws.getLastColumn();
+    if (lastRow < 2) return { ok: false, message: "Workcenter 无数据行" };
+    var data = ws.getRange(1, 1, lastRow, lastCol).getValues();
+    var cols = workcenterHeaderIndex_(data[0] || []);
+    var required = ["Workcenter"].concat(MM_EDIT_HEADERS);
+    var missing = required.filter(function (n) { return cols[n] === undefined; });
+    if (missing.length > 0) {
+      return { ok: false, message: "Workcenter 表头缺少字段: " + missing.join("、") };
+    }
+
+    // 可编辑列必须是连续区间，否则中止（防止误写到 A–L）
+    var editStart0 = cols[MM_EDIT_HEADERS[0]];
+    for (var k = 0; k < MM_EDIT_HEADERS.length; k++) {
+      if (cols[MM_EDIT_HEADERS[k]] !== editStart0 + k) {
+        return { ok: false, message: "Workcenter 可编辑列不在连续区间，已中止写入" };
+      }
+    }
+
+    // 组装当前块：每行 = [Workcenter, ...8 个可编辑列]
+    var block = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = [String(data[i][cols["Workcenter"]] || "").trim()];
+      for (var m = 0; m < MM_EDIT_HEADERS.length; m++) {
+        var cv = data[i][cols[MM_EDIT_HEADERS[m]]];
+        row.push(cv === undefined || cv === null ? "" : String(cv));
+      }
+      block.push(row);
+    }
+
+    var res = applyMachineMasterChanges_(block, changes);
+    if (res.applied.length === 0) {
+      return { ok: true, applied: [], conflicts: res.conflicts };
+    }
+
+    // 只对有应用改动的行写 M–T 8 列（绝不触碰 A–L）
+    var changedRowIdx = {};
+    res.applied.forEach(function (a) { changedRowIdx[a.rowIdx] = true; });
+    Object.keys(changedRowIdx).forEach(function (idxStr) {
+      var idx = parseInt(idxStr, 10);
+      var rowValues = res.nextBlock[idx].slice(1); // 去掉 Workcenter 列
+      ws.getRange(idx + 2, editStart0 + 1, 1, MM_EDIT_HEADERS.length).setValues([rowValues]);
+    });
+
+    appendMM_AuditLog_(ss, userCode, userName, res.applied);
+    return { ok: true, applied: res.applied, conflicts: res.conflicts };
+  } catch (e) {
+    return { ok: false, message: e.toString() };
+  }
+}
+
+function get_MachineMasterAuditLog(limit) {
+  try {
+    var ss = SpreadsheetApp.openById(MM_WC_SS_ID);
+    var ws = getMM_AuditSheet_(ss);
+    var lastRow = ws.getLastRow();
+    if (lastRow < 2) return { rows: [] };
+    var take = Math.min(limit || 200, lastRow - 1);
+    var vals = ws.getRange(lastRow - take + 1, 1, take, MM_AUDIT_HEADERS.length).getValues();
+    var rows = vals.map(function (r) {
+      var o = {};
+      for (var j = 0; j < MM_AUDIT_HEADERS.length; j++) {
+        var v = r[j];
+        o[MM_AUDIT_HEADERS[j]] = v === undefined || v === null ? "" : String(v);
+      }
+      return o;
+    });
+    rows.reverse(); // 最新在前
+    return { rows: rows };
+  } catch (e) {
+    return { rows: [], error: e.toString() };
+  }
+}

@@ -241,3 +241,82 @@ test('读取主数据：枚举源读不到时返回空数组而不是抛错', ()
   assert.deepEqual(r.deviceTypeOptions, []);
   assert.deepEqual(r.ownerOptions, []);
 });
+
+// ===== Task 4: 保存与日志 =====
+test('保存：只写 M–T 区间，A–L 保持不变，日志批量落库', () => {
+  setupMM({
+    rows: [
+      wcRow({ Workcenter: 'V1FTA463', 'Machine Type': 'FT400', 设备编号: '10128837', 机型: '3AX', 责任人: '王玉峰' }),
+      wcRow({ Workcenter: 'V1FTA564', 'Machine Type': 'FT400', 设备编号: '10127949', 机型: 'VIM' }),
+    ],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  const r = globalThis.save_MachineMasterData(
+    [{ 机台号: 'V1FTA463', 字段: '机型', 旧值: '3AX', 新值: '6AX' }],
+    '33012', '李华'
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.applied.length, 1);
+  assert.deepEqual(r.conflicts, []);
+
+  const wcRows = fakeSS[MM_WC_SS_ID].Workcenter._rows;
+  assert.equal(wcRows[1][12], '6AX', 'M 列机型已更新');
+  assert.equal(wcRows[1][1], 'FT400', 'B 列 Machine Type 未被触碰');
+  assert.equal(wcRows[1][11], '10128837', 'L 列设备编号未被触碰');
+  assert.equal(wcRows[2][12], 'VIM', '未改动的行保持原值');
+
+  const audit = fakeSS[MM_WC_SS_ID]['变更日志']._rows;
+  assert.deepEqual(audit[0], ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值']);
+  assert.deepEqual(audit[1], ['2026-10-01 12:00:00', '33012', '李华', 'V1FTA463', '机型', '3AX', '6AX']);
+});
+
+test('保存：冲突字段跳过不写，返回冲突明细', () => {
+  setupMM({
+    rows: [wcRow({ Workcenter: 'V1FTA463', 机型: '3AX', 责任人: '王玉峰' })],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  const r = globalThis.save_MachineMasterData(
+    [{ 机台号: 'V1FTA463', 字段: '责任人', 旧值: '旧人', 新值: '新人' }],
+    '33012', '李华'
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.applied.length, 0);
+  assert.equal(r.conflicts.length, 1);
+  assert.equal(r.conflicts[0].现值, '王玉峰');
+  assert.equal(fakeSS[MM_WC_SS_ID].Workcenter._rows[1][16], '王玉峰', '冲突值没被写入');
+  assert.equal(fakeSS[MM_WC_SS_ID]['变更日志'], undefined, '无应用改动时不建日志 sheet');
+});
+
+test('保存：空改动清单直接返回 ok，不读表', () => {
+  fakeSS = {};
+  const r = globalThis.save_MachineMasterData([], '33012', '李华');
+  assert.deepEqual(r, { ok: true, applied: [], conflicts: [] });
+});
+
+test('保存：表头缺可编辑列 → ok=false 且不写任何单元格', () => {
+  const broken = WC_HEADERS.filter(h => h !== '设备类型1');
+  setupMM({ headers: broken, rows: [wcRow({ Workcenter: 'M1', 机型: '3AX' })] });
+  const before = JSON.stringify(fakeSS[MM_WC_SS_ID].Workcenter._rows);
+  const r = globalThis.save_MachineMasterData(
+    [{ 机台号: 'M1', 字段: '机型', 旧值: '3AX', 新值: '6AX' }],
+    '33012', '李华'
+  );
+  assert.equal(r.ok, false);
+  assert.ok(r.message.indexOf('设备类型1') >= 0);
+  assert.equal(JSON.stringify(fakeSS[MM_WC_SS_ID].Workcenter._rows), before);
+});
+
+test('读取变更日志：倒序返回，字段名取自表头', () => {
+  fakeSS = {};
+  fakeSS[MM_WC_SS_ID] = {
+    '变更日志': fakeSheet([
+      ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值'],
+      ['2026-10-01 10:00:00', '33012', '李华', 'V1FTA463', '机型', '3AX', '6AX'],
+      ['2026-10-01 11:00:00', '69063', '赵阳', 'V1FTA564', '责任人', '', '游臣'],
+    ]),
+  };
+  const r = globalThis.get_MachineMasterAuditLog(200);
+  assert.equal(r.rows.length, 2);
+  assert.equal(r.rows[0]['时间'], '2026-10-01 11:00:00', '最新在前');
+  assert.equal(r.rows[1]['字段'], '机型');
+});
