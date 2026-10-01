@@ -236,6 +236,7 @@ function doGet(e) {
   Route.path("Inspection2.0", loadInspection2_0); // 新增点检2.0路由
   Route.path("PM_ShiftFollowUp", loadPM_ShiftFollowUp); // 新增三班转保养跟进页面路由
   Route.path("PM_MasterData", loadPM_MasterData); // 保养主数据管理页
+  Route.path("INJ_MachineMaster", loadINJMachineMaster); // 注塑机台主数据维护页
   Route.path("Handover_1.0", loadHandover_1_0); // 新增交接班页面路由
   Route.path("Fault_Record_1.0", loadFault_Record_1_0); // 新增故障记录页面路由
   Route.path("FailureReport_Template", loadFailureReport_Template);
@@ -389,6 +390,22 @@ function loadPM_MasterData(
     .setFaviconUrl(webIconUrl);
 }
 
+function loadINJMachineMaster(
+  intoWebUrl,
+  intoWebLoginId,
+  intoWebLoginName,
+  intoWebLoginType
+) {
+  let webPage = getReleaseWebPage();
+  return render("INJ_MachineMaster", {
+    webPage: webPage,
+    intoWebID: intoWebLoginId || "",
+    intoWebName: intoWebLoginName || "",
+    intoWebType: intoWebLoginType || "",
+  })
+    .setTitle("注塑机台主数据 | IM Machine Master Data")
+    .setFaviconUrl(webIconUrl);
+}
 
 // 新增：交接班页面加载函数
 function loadHandover_1_0() {
