@@ -1,3 +1,207 @@
 <script>
-  // 注塑机台主数据维护页逻辑（Task 7/8 实现）
+  // 双语 Swal 提示 helper：中文在上，英文在下（小字号、灰色）
+  const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
+  const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  let global_ID = sessionStorage.getItem('ID') || '';
+  let global_Name = sessionStorage.getItem('Name') || '';
+  $('#name').text(global_Name);
+
+  // A 列 Workcenter 在 0-based 12 之前为只读列
+  const EDIT_START = 12;
+  const EDIT_FIELDS = ['机型', '设备类型1', '设备类型2', '自动化类型', '责任人', '备份责任人', '工艺无需检查Y/N', '点检无需检查Y/N'];
+  const CHECK_FIELDS = ['工艺无需检查Y/N', '点检无需检查Y/N'];
+  const OWNER_FIELDS = ['责任人', '备份责任人'];
+  const ALL_HEADERS = ['Workcenter', 'Machine Type', '机器性能', 'New Formed Cell', 'HIM/Auto', 'VIM-1', 'VIM-2', 'VIM-3', 'VIM-4', 'Final Machine Type', '是否主设备', '设备编号', '机型', '设备类型1', '设备类型2', '自动化类型', '责任人', '备份责任人', '工艺无需检查Y/N', '点检无需检查Y/N'];
+  const TITLES = {
+    'Workcenter': '机台号<br>Workcenter',
+    'Machine Type': '机器类型<br>Machine Type',
+    '机器性能': '机器性能<br>Performance',
+    'New Formed Cell': '成型单元<br>New Formed Cell',
+    'HIM/Auto': 'HIM/Auto',
+    'Final Machine Type': '最终机型<br>Final Machine Type',
+    '是否主设备': '主设备<br>Main',
+    '设备编号': '设备编号<br>Equipment No.',
+    '机型': '机型<br>Model',
+    '设备类型1': '设备类型1<br>Device Type 1',
+    '设备类型2': '设备类型2<br>Device Type 2',
+    '自动化类型': '自动化类型<br>Automation',
+    '责任人': '责任人<br>Owner',
+    '备份责任人': '备份责任人<br>Backup Owner',
+    '工艺无需检查Y/N': '工艺免检<br>Craft No-Check',
+    '点检无需检查Y/N': '点检免检<br>Point No-Check'
+  };
+
+  let masterRows = [];
+  let options = { '机型': [], '设备类型1': [], '设备类型2': [], '自动化类型': [], '责任人': [], '备份责任人': [] };
+  let origMap = {};   // 机台号 → { 字段: 加载时原值 }
+  let table = null;
+  let dirtyCount = 0;
+
+  function loadMachineMaster() {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(r => {
+        if (!r || !r.rows || r.error) { reject(new Error((r && r.error) || '加载失败')); return; }
+        masterRows = r.rows;
+        options['机型'] = r.typeOptions || [];
+        options['设备类型1'] = options['设备类型2'] = options['自动化类型'] = r.deviceTypeOptions || [];
+        options['责任人'] = options['备份责任人'] = r.ownerOptions || [];
+        origMap = {};
+        masterRows.forEach(row => {
+          const wc = String(row['Workcenter'] || '').trim();
+          const o = {};
+          EDIT_FIELDS.forEach(f => { o[f] = String(row[f] || ''); });
+          origMap[wc] = o;
+        });
+        // 重复机台号 / 空枚举提醒
+        const dups = r.dupWorkcenters || [];
+        if (dups.length > 0) {
+          $('#dupWarn').removeClass('d-none').html('Workcenter 表存在重复机台号：' + escapeAttr(dups.join('、')) + '。保存时只写首行。<br>Duplicate workcenters found; only the first row is written.');
+        } else {
+          $('#dupWarn').addClass('d-none');
+        }
+        const emptyEnums = [];
+        if (!options['机型'].length) emptyEnums.push('机型选项');
+        if (!options['设备类型1'].length) emptyEnums.push('Tasklist_history（设备类型）');
+        if (!options['责任人'].length) emptyEnums.push('userID（责任人）');
+        if (emptyEnums.length > 0) {
+          $('#enumWarn').removeClass('d-none').html('以下枚举来源为空，下拉仅显示各机台当前值：' + escapeAttr(emptyEnums.join('、')) + '<br>Empty option sources: ' + escapeAttr(emptyEnums.join(', ')));
+        } else {
+          $('#enumWarn').addClass('d-none');
+        }
+        resolve();
+      }).withFailureHandler(reject).get_MachineMasterData();
+    });
+  }
+
+  function destroySelect2() {
+    if (!$.fn.select2) return;
+    $('#tableMaster .cell-select').each(function () {
+      try { $(this).select2('destroy'); } catch (e) { /* 未初始化的元素忽略 */ }
+    });
+  }
+
+  function renderTable() {
+    destroySelect2();
+    if (table) { table.destroy(); }
+    const columns = ALL_HEADERS.map(h => ({ title: TITLES[h] || h, data: h, defaultContent: '' }));
+    table = $('#tableMaster').DataTable({
+      data: masterRows,
+      columns: columns,
+      order: [[0, 'asc']],
+      pageLength: 25,
+      scrollX: true,
+      autoWidth: false,
+      deferRender: false,
+      createdRow: function (row, data) {
+        $(row).attr('data-wc', String(data['Workcenter'] || '').trim());
+        // 只读列灰底
+        for (let i = 0; i < EDIT_START; i++) { $('td', row).eq(i).addClass('readonly-cell'); }
+        // 可编辑列渲染控件
+        EDIT_FIELDS.forEach((f, i) => {
+          const $cell = $('td', row).eq(EDIT_START + i);
+          const val = String(data[f] || '');
+          if (CHECK_FIELDS.indexOf(f) >= 0) {
+            $cell.html(`<input type="checkbox" class="cell-check" data-field="${f}"${val === 'Y' ? ' checked' : ''}>`);
+            return;
+          }
+          const list = options[f] || [];
+          const opts = ['<option value=""></option>'];
+          list.forEach(o => opts.push(`<option${o === val ? ' selected' : ''}>${escapeAttr(o)}</option>`));
+          // 当前值不在枚举源里时补一个，避免显示空白后被误存为空
+          if (val && list.indexOf(val) < 0) opts.push(`<option selected>${escapeAttr(val)}</option>`);
+          $cell.html(`<select class="form-select form-select-sm cell-select" data-field="${f}">${opts.join('')}</select>`);
+        });
+      },
+      drawCallback: function () {
+        // 责任人/备份责任人 Select2 增强；失败时原生下拉仍可用
+        try {
+          if ($.fn.select2) {
+            $('#tableMaster .cell-select').filter(function () { return OWNER_FIELDS.indexOf($(this).data('field')) >= 0; })
+              .select2({ dropdownParent: $('.table-wrapper'), width: '100%' });
+          }
+        } catch (e) { console.warn('Select2 初始化失败，退回原生下拉', e); }
+      }
+    });
+    updateDirty();
+  }
+
+  function collectChanges() {
+    const changes = [];
+    if (!table) return changes;
+    table.rows().every(function () {
+      const $row = $(this.node());
+      const wc = $row.attr('data-wc') || '';
+      const orig = origMap[wc];
+      if (!orig) return;
+      EDIT_FIELDS.forEach(f => {
+        const $el = $row.find(`[data-field="${f}"]`);
+        if ($el.length === 0) return;
+        const val = CHECK_FIELDS.indexOf(f) >= 0 ? ($el.prop('checked') ? 'Y' : '') : String($el.val() || '');
+        const oldVal = String(orig[f] || '');
+        if (val !== oldVal) {
+          changes.push({ 机台号: wc, 字段: f, 旧值: oldVal, 新值: val });
+          $el.closest('td').addClass('cell-dirty');
+        } else {
+          $el.closest('td').removeClass('cell-dirty');
+        }
+      });
+    });
+    return changes;
+  }
+
+  function updateDirty() {
+    dirtyCount = collectChanges().length;
+    $('#dirtyCount').text(dirtyCount);
+    return dirtyCount;
+  }
+
+  function fillFilterSelect(sel, list) {
+    const $s = $(sel);
+    const cur = $s.val();
+    $s.empty().append('<option value="">全部 / All</option>');
+    list.forEach(v => $s.append(`<option value="${escapeAttr(v)}">${escapeAttr(v)}</option>`));
+    if (cur) $s.val(cur);
+  }
+
+  let checkFilter = '';
+  $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+    if (settings.nTable.id !== 'tableMaster') return true;
+    if (!checkFilter) return true;
+    const row = settings.aoData[dataIndex]._aData || {};
+    if (checkFilter === 'craft') return String(row['工艺无需检查Y/N'] || '') === 'Y';
+    if (checkFilter === 'point') return String(row['点检无需检查Y/N'] || '') === 'Y';
+    return true;
+  });
+
+  function initFilters() {
+    fillFilterSelect('#filterMachineType', options['机型']);
+    fillFilterSelect('#filterDeviceType', options['设备类型1']);
+    fillFilterSelect('#filterOwner', options['责任人']);
+    // 每次 reloadAll 后都会重新调用本函数，先解绑避免事件重复叠加
+    $('#filterWorkcenter').off('keyup change').on('keyup change', function () {
+      table.column(0).search(this.value).draw();
+    });
+    $('#filterMachineType').off('change').on('change', function () { table.column(12).search(this.value).draw(); });
+    $('#filterDeviceType').off('change').on('change', function () { table.column(13).search(this.value).draw(); });
+    $('#filterOwner').off('change').on('change', function () { table.column(16).search(this.value).draw(); });
+    $('#filterCheck').off('change').on('change', function () { checkFilter = this.value; table.draw(); });
+  }
+
+  function reloadAll() {
+    return loadMachineMaster().then(() => { renderTable(); initFilters(); });
+  }
+
+  $(document).ready(function () {
+    Swal.fire({ title: swalTitle('加载中...', 'Loading...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+    reloadAll().then(() => Swal.close()).catch(e => {
+      Swal.close();
+      Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(String(e.message || e), '') });
+    });
+    $(document).on('change', '#tableMaster .cell-select, #tableMaster .cell-check', updateDirty);
+  });
 </script>
