@@ -16427,3 +16427,50 @@ function sendDailyBrief() {
     return JSON.stringify({ success: false, message: e.message });
   }
 }
+
+// ===== 注塑机台主数据维护（INJ Machine Master）=====
+// 数据源：11 表 Workcenter（20 列，A 列机台号为主键），只维护 M–T 8 列
+var MM_WC_SS_ID = "12MXO53wJC8s_J-IE2uGY5jx35rnUE7rxW1xvwVU-FxM";
+var MM_WC_SHEET_NAME = "Workcenter";
+var MM_TYPE_OPTION_SHEET_NAME = "机型选项";
+var MM_AUDIT_SHEET_NAME = "变更日志";
+var MM_TASKLIST_SS_ID = "1bYKTK5a63yJWRHzM_UPP6b4hwF67eZKEM5dCKLWR59U";
+var MM_TASKLIST_SHEET_NAME = "Tasklist_history";
+var MM_USERID_SS_ID = "1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM";
+var MM_USERID_SHEET_NAME = "userID";
+var MM_EDIT_HEADERS = ["机型", "设备类型1", "设备类型2", "自动化类型", "责任人", "备份责任人", "工艺无需检查Y/N", "点检无需检查Y/N"];
+var MM_AUDIT_HEADERS = ["时间", "工号", "姓名", "机台号", "字段", "旧值", "新值"];
+
+// Tasklist_history 行（含表头）→ Process=IM 且 Status 含「生效」的 MachineType 去重列表
+// 列位：A=MachineType(0)、M=Status(12)、O=Process(14)
+function filterMachineTypesFromTasklist_(data) {
+  var out = [];
+  var seen = {};
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i] || [];
+    if (String(row[14] || "").trim() !== "IM") continue;
+    if (String(row[12] || "").trim().indexOf("生效") === -1) continue;
+    var mt = String(row[0] || "").trim();
+    if (!mt || seen[mt]) continue;
+    seen[mt] = true;
+    out.push(mt);
+  }
+  return out;
+}
+
+// userID 行（含前两行分类/表头）→ 工序=INJ 且 职位=IDL 的姓名去重列表
+// 列位：B=NAME(1)、O=工序(14)、P=职位(15)；数据从第 3 行（index 2）起
+function filterINJIDLNames_(data) {
+  var out = [];
+  var seen = {};
+  for (var i = 2; i < data.length; i++) {
+    var row = data[i] || [];
+    if (String(row[14] || "").trim() !== "INJ") continue;
+    if (String(row[15] || "").trim() !== "IDL") continue;
+    var name = String(row[1] || "").trim();
+    if (!name || seen[name]) continue;
+    seen[name] = true;
+    out.push(name);
+  }
+  return out;
+}
