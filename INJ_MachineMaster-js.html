@@ -7,6 +7,12 @@
     return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // 免检复选框标记：表里 S/T 只会是 'Y' 或空，值为 'Y' 即勾选
+  // （抽成具名函数以便 Node 侧单测锁定"存量 Y 必须显示为勾选"）
+  function checkboxHtml_(field, val) {
+    return `<input type="checkbox" class="cell-check" data-field="${escapeAttr(field)}"${String(val) === 'Y' ? ' checked' : ''}>`;
+  }
+
   let global_ID = sessionStorage.getItem('ID') || '';
   let global_Name = sessionStorage.getItem('Name') || '';
   $('#name').text(global_Name);
@@ -123,7 +129,7 @@
             return;
           }
           if (CHECK_FIELDS.indexOf(f) >= 0) {
-            $cell.html(`<input type="checkbox" class="cell-check" data-field="${f}"${val === 'Y' ? ' checked' : ''}>`);
+            $cell.html(checkboxHtml_(f, val));
             return;
           }
           const list = options[f] || [];

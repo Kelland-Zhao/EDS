@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const code = fs.readFileSync(new URL('./Code.js', import.meta.url), 'utf8');
 (0, eval)(code);
@@ -419,4 +420,52 @@ test('变更日志：sheet 行数写满时自动扩行，不丢日志', () => {
   assert.equal(audit.length, 3, '扩行后日志落库');
   assert.equal(audit[2][3], 'M2');
   assert.ok(fakeSS[MM_WC_SS_ID]['变更日志']._maxRows >= 3, 'sheet 容量已扩');
+});
+
+// ===== 前端：S/T 免检复选框必须反映表里的存量 Y =====
+// 页面 JS 无法在 Node 里整体执行，只抽取纯函数到 vm 沙箱验证（项目已有的 extractFunction 模式）
+function extractFunction(source, fnName) {
+  const sig = `function ${fnName}(`;
+  const start = source.indexOf(sig);
+  if (start === -1) throw new Error(`function ${fnName} not found in source`);
+  let i = source.indexOf('{', start);
+  let depth = 0;
+  for (; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') { depth--; if (depth === 0) return source.slice(start, i + 1); }
+  }
+  throw new Error(`unbalanced braces while extracting ${fnName}`);
+}
+
+const pageJs = fs.readFileSync(new URL('./INJ_MachineMaster-js.html', import.meta.url), 'utf8')
+  .replace(/<\/?script[^>]*>/gi, '');
+
+// 惰性提取：函数不存在时让失败发生在测试内部，而不是模块加载期
+function checkboxHtml_() {
+  const sandbox = {};
+  vm.createContext(sandbox);
+  vm.runInContext(extractFunction(pageJs, 'escapeAttr') + '\n' + extractFunction(pageJs, 'checkboxHtml_'), sandbox);
+  return sandbox.checkboxHtml_.apply(null, arguments);
+}
+
+test('免检复选框：表里存量的 Y 必须渲染为勾选', () => {
+  assert.ok(checkboxHtml_('工艺无需检查Y/N', 'Y').includes('checked'), '工艺免检 Y 未勾选');
+  assert.ok(checkboxHtml_('点检无需检查Y/N', 'Y').includes('checked'), '点检免检 Y 未勾选');
+});
+
+test('免检复选框：空白渲染为未勾选', () => {
+  assert.ok(!checkboxHtml_('工艺无需检查Y/N', '').includes('checked'));
+  assert.ok(!checkboxHtml_('点检无需检查Y/N', null).includes('checked'));
+  assert.ok(!checkboxHtml_('点检无需检查Y/N', undefined).includes('checked'));
+});
+
+test('免检复选框：非 Y 值不勾选，且带正确的 data-field', () => {
+  assert.ok(!checkboxHtml_('点检无需检查Y/N', 'N').includes('checked'));
+  assert.ok(!checkboxHtml_('点检无需检查Y/N', 'true').includes('checked'));
+  assert.ok(checkboxHtml_('点检无需检查Y/N', 'Y').includes('data-field="点检无需检查Y/N"'));
+});
+
+test('前端确实用 checkboxHtml_ 渲染两列免检（接线守卫）', () => {
+  assert.ok(/CHECK_FIELDS\.indexOf\(f\) >= 0[\s\S]{0,160}checkboxHtml_/.test(pageJs),
+    'createdRow 里的免检分支必须调用 checkboxHtml_');
 });
