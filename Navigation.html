@@ -190,6 +190,13 @@
         </button>
       </div>
       <div class="col-6 col-md-4 col-lg-3">
+        <button type="button" class="nav-card" id="MasterData">
+          <i class="bi bi-database-gear icon"></i>
+          <div class="title-cn">主数据维护</div>
+          <div class="title-en">Master Data</div>
+        </button>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
         <button type="button" class="nav-card" id="PonitCheck">
           <i class="bi bi-clipboard-check icon"></i>
           <div class="title-cn">点检</div>
@@ -302,6 +309,30 @@
     </div>
 
     <div style="height: 24px;"></div>
+  </div>
+
+  <!-- 主数据维护 弹出窗口 -->
+  <div class="modal fade" id="masterDataModal" tabindex="-1" aria-labelledby="masterDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="masterDataModalLabel">主数据维护 / Master Data</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body modal-domain-daily">
+          <div class="d-grid gap-2">
+            <button class="modal-card-btn" type="button" id="INJ_MachineMaster">
+              <i class="bi bi-cpu mc-icon"></i>
+              <div class="mc-text">
+                <div class="title-cn">注塑机台主数据</div>
+                <div class="title-en">IM Machine Master Data</div>
+              </div>
+              <i class="bi bi-chevron-right mc-arrow"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 保养/PM 弹出窗口 -->
