@@ -104,6 +104,19 @@
         #tableMaster td .cell-select { width: 100%; min-width: 0; font-size: 12px; padding: 1px 2px; }
         #tableMaster td .cell-check { width: 15px; height: 15px; cursor: pointer; }
 
+        /* 默认隐藏 6 个只读分组列（机器性能 / HIM/Auto / VIM-1~4），腾出的 22.5% 宽度
+           自动分给其余列。用 CSS 隐藏而不是 DataTables 的 column().visible()：
+           后者会从 DOM 里移除单元格，使 createdRow 中按位置索引渲染控件的逻辑错位。
+           序号（nth-child）与 ALL_HEADERS 的列顺序绑定，由 inj-machine-master.test.mjs 锁定。 */
+        #tableMaster.hide-group-cols th:nth-child(3), #tableMaster.hide-group-cols td:nth-child(3),
+        #tableMaster.hide-group-cols th:nth-child(5), #tableMaster.hide-group-cols td:nth-child(5),
+        #tableMaster.hide-group-cols th:nth-child(6), #tableMaster.hide-group-cols td:nth-child(6),
+        #tableMaster.hide-group-cols th:nth-child(7), #tableMaster.hide-group-cols td:nth-child(7),
+        #tableMaster.hide-group-cols th:nth-child(8), #tableMaster.hide-group-cols td:nth-child(8),
+        #tableMaster.hide-group-cols th:nth-child(9), #tableMaster.hide-group-cols td:nth-child(9) {
+            display: none;
+        }
+
         #tableAuditLog thead th {
             background-color: #E60012 !important;
             color: white !important;
@@ -203,6 +216,10 @@
             注塑机台主数据 / IM MACHINE MASTER
             <span class="toolbar">
                 <span class="dirty-tip">待保存 <span id="dirtyCount">0</span> 项 / Pending</span>
+                <label class="form-check form-switch d-inline-flex align-items-center m-0" style="font-size:12px;cursor:pointer;">
+                    <input class="form-check-input m-0" type="checkbox" role="switch" id="chkGroupCols" style="cursor:pointer;">
+                    <span class="ms-1">显示分组列<br>Group Cols</span>
+                </label>
                 <button type="button" class="btn btn-primary" id="btnSave">保存<br>Save</button>
                 <button type="button" class="btn btn-secondary" id="btnRevert">撤销更改<br>Revert</button>
                 <button type="button" class="btn btn-secondary" id="btnRefresh">刷新<br>Refresh</button>

@@ -50,6 +50,11 @@
     '点检无需检查Y/N': '点检免检<br>Point No-Check'
   };
 
+  // 默认隐藏的只读分组列（仅影响显示；单元格仍在 DOM 中，控件渲染与改动收集都不受影响）
+  const GROUP_COLS = ['机器性能', 'HIM/Auto', 'VIM-1', 'VIM-2', 'VIM-3', 'VIM-4'];
+  let showGroupCols = false;
+  try { showGroupCols = sessionStorage.getItem('mmShowGroupCols') === '1'; } catch (e) { showGroupCols = false; }
+
   let masterRows = [];
   let options = { '机型': [], '设备类型1': [], '设备类型2': [], '自动化类型': [], '责任人': [], '备份责任人': [] };
   let origMap = {};   // 机台号 → { 字段: 加载时原值 }（只取首次出现的行，与后端写首行一致）
@@ -239,6 +244,19 @@
     applyFiltersToTable(); // 重放当前筛选，避免表格与筛选框脱节
   }
 
+  // 分组列显隐：切的是 #tableMaster 上的类，DataTables 重建表格时该类仍在，
+  // 因此保存/刷新/撤销重绘后开关不会回弹
+  function applyGroupColVisibility() {
+    $('#tableMaster').toggleClass('hide-group-cols', !showGroupCols);
+    $('#chkGroupCols').prop('checked', showGroupCols);
+  }
+
+  $('#chkGroupCols').off('change').on('change', function () {
+    showGroupCols = !!this.checked;
+    try { sessionStorage.setItem('mmShowGroupCols', showGroupCols ? '1' : '0'); } catch (e) { /* 存储不可用时忽略 */ }
+    applyGroupColVisibility();
+  });
+
   function reloadAll() {
     return loadMachineMaster().then(() => { renderTable(); initFilters(); });
   }
@@ -364,6 +382,7 @@
   });
 
   $(document).ready(function () {
+    applyGroupColVisibility(); // 按会话状态先定好列显隐，再加载数据
     Swal.fire({ title: swalTitle('加载中...', 'Loading...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
     reloadAll().then(() => Swal.close()).catch(e => {
       Swal.close();

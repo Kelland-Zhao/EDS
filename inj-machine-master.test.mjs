@@ -469,3 +469,37 @@ test('前端确实用 checkboxHtml_ 渲染两列免检（接线守卫）', () =>
   assert.ok(/CHECK_FIELDS\.indexOf\(f\) >= 0[\s\S]{0,160}checkboxHtml_/.test(pageJs),
     'createdRow 里的免检分支必须调用 checkboxHtml_');
 });
+
+// ===== 分组列开关：CSS 隐藏序号必须与 ALL_HEADERS 里的分组列一一对应 =====
+// 用 CSS 隐藏而非 DataTables column().visible()——后者会从 DOM 移除单元格，
+// 使 createdRow 里按位置索引渲染控件的逻辑错位。CSS 隐藏依赖 nth-child 序号，
+// 因此列顺序一旦调整，序号就会指错列 —— 这条测试锁住这个耦合。
+const pageHtml = fs.readFileSync(new URL('./INJ_MachineMaster.html', import.meta.url), 'utf8');
+const GROUP_COLS_EXPECTED = ['机器性能', 'HIM/Auto', 'VIM-1', 'VIM-2', 'VIM-3', 'VIM-4'];
+
+test('分组列开关：ALL_HEADERS 中分组列的实际位置与 CSS 隐藏的 nth-child 序号一致', () => {
+  const m = pageJs.match(/const ALL_HEADERS = \[([\s\S]*?)\];/);
+  assert.ok(m, 'ALL_HEADERS 未找到');
+  const headers = [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]);
+  const actual = GROUP_COLS_EXPECTED.map(h => headers.indexOf(h) + 1); // nth-child 从 1 起
+  assert.deepEqual(actual, [3, 5, 6, 7, 8, 9], '分组列在 ALL_HEADERS 中的位置变了，CSS 的 nth-child 需要同步改');
+});
+
+test('分组列开关：CSS 恰好隐藏这 6 个序号，且 th/td 都覆盖', () => {
+  [3, 5, 6, 7, 8, 9].forEach(n => {
+    assert.ok(pageHtml.includes(`#tableMaster.hide-group-cols th:nth-child(${n})`), `缺少 th:nth-child(${n}) 规则`);
+    assert.ok(pageHtml.includes(`#tableMaster.hide-group-cols td:nth-child(${n})`), `缺少 td:nth-child(${n}) 规则`);
+  });
+  [1, 2, 4, 10, 12, 13, 20].forEach(n => {
+    assert.ok(!pageHtml.includes(`nth-child(${n})`), `第 ${n} 列不该被隐藏`);
+  });
+});
+
+test('分组列开关：用 CSS class 切换，不得改用 DataTables 列可见性 API', () => {
+  assert.ok(/toggleClass\('hide-group-cols'/.test(pageJs), '开关必须切 hide-group-cols 类');
+  assert.ok(!/\.column\([^)]*\)\.visible\(/.test(pageJs), '改用 column().visible() 会移除单元格导致控件错位');
+});
+
+test('分组列开关：状态存 sessionStorage，重绘后不回弹', () => {
+  assert.ok(/sessionStorage\.(getItem|setItem)\('mmShowGroupCols'/.test(pageJs), '开关状态未持久化到会话');
+});
