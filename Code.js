@@ -16657,6 +16657,11 @@ function get_MachineMasterData() {
       deviceTypeOptions: getMM_DeviceTypeOptions_(),
       ownerOptions: getMM_OwnerOptions_(),
       dupWorkcenters: dupWorkcenters,
+      // 变更日志随页面数据一起带回：弹窗点开即可渲染，不必再等一次请求；
+      // 日志读失败不能影响主表加载，故单独兜底为 []
+      auditRows: (function () {
+        try { return readMM_AuditRows_(200); } catch (e) { return []; }
+      })(),
     };
   } catch (e) {
     return { headers: [], rows: [], error: e.toString() };
@@ -16771,23 +16776,28 @@ function save_MachineMasterData(changes, userCode, userName) {
   }
 }
 
+// 读变更日志（最新在前）——变更日志弹窗与页面加载共用
+function readMM_AuditRows_(limit) {
+  var ss = SpreadsheetApp.openById(MM_WC_SS_ID);
+  var ws = getMM_AuditSheet_(ss);
+  var lastRow = ws.getLastRow();
+  if (lastRow < 2) return [];
+  var take = Math.min(limit || 200, lastRow - 1);
+  var vals = ws.getRange(lastRow - take + 1, 1, take, MM_AUDIT_HEADERS.length).getValues();
+  var rows = vals.map(function (r) {
+    var o = {};
+    for (var j = 0; j < MM_AUDIT_HEADERS.length; j++) {
+      o[MM_AUDIT_HEADERS[j]] = formatMM_AuditTime_(r[j]);
+    }
+    return o;
+  });
+  rows.reverse(); // 最新在前
+  return rows;
+}
+
 function get_MachineMasterAuditLog(limit) {
   try {
-    var ss = SpreadsheetApp.openById(MM_WC_SS_ID);
-    var ws = getMM_AuditSheet_(ss);
-    var lastRow = ws.getLastRow();
-    if (lastRow < 2) return { rows: [] };
-    var take = Math.min(limit || 200, lastRow - 1);
-    var vals = ws.getRange(lastRow - take + 1, 1, take, MM_AUDIT_HEADERS.length).getValues();
-    var rows = vals.map(function (r) {
-      var o = {};
-      for (var j = 0; j < MM_AUDIT_HEADERS.length; j++) {
-        o[MM_AUDIT_HEADERS[j]] = formatMM_AuditTime_(r[j]);
-      }
-      return o;
-    });
-    rows.reverse(); // 最新在前
-    return { rows: rows };
+    return { rows: readMM_AuditRows_(limit) };
   } catch (e) {
     return { rows: [], error: e.toString() };
   }

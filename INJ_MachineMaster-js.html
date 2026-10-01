@@ -67,6 +67,8 @@
       google.script.run.withSuccessHandler(r => {
         if (!r || !r.rows || r.error) { reject(new Error((r && r.error) || '加载失败')); return; }
         masterRows = r.rows;
+        auditRowsCache = r.auditRows || []; // 变更日志随页面数据一起取回，弹窗点开即可渲染
+        auditRowsCacheKey = JSON.stringify(auditRowsCache);
         options['机型'] = r.typeOptions || [];
         options['设备类型1'] = options['设备类型2'] = options['自动化类型'] = r.deviceTypeOptions || [];
         options['责任人'] = options['备份责任人'] = r.ownerOptions || [];
@@ -357,21 +359,43 @@
   }
 
   let tableAuditLog = null;
+  let auditRowsCache = [];      // 随页面数据一起取回，点开弹窗即可渲染
+  let auditRowsCacheKey = '';   // 用于判断后台刷新是否有变化
+
+  function renderAuditTable(rows) {
+    if (tableAuditLog) tableAuditLog.destroy();
+    tableAuditLog = $('#tableAuditLog').DataTable({
+      data: rows,
+      columns: ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值'].map(h => ({ title: h, data: h, render: DataTable.render.text() })),
+      order: [[0, 'desc']],
+      pageLength: 15
+    });
+    $('#auditFilterWorkcenter').off('keyup change').on('keyup change', function () {
+      tableAuditLog.column(3).search(this.value).draw();
+    });
+  }
+
   $('#btnAuditLog').on('click', function () {
     $('#auditLogModal').modal('show');
+    // 先用页面加载时就取回的日志立即渲染；没有缓存（例如加载尚未完成）才显示"加载中"
+    if (auditRowsCache.length > 0) {
+      $('#auditLogLoading').addClass('d-none');
+      renderAuditTable(auditRowsCache);
+    } else {
+      $('#auditLogLoading').removeClass('d-none');
+    }
+    // 后台再拉一次最新的：内容有变化才重绘，避免无谓闪动
     google.script.run.withSuccessHandler(r => {
       const rows = (r && r.rows) || [];
-      if (tableAuditLog) tableAuditLog.destroy();
-      tableAuditLog = $('#tableAuditLog').DataTable({
-        data: rows,
-        columns: ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值'].map(h => ({ title: h, data: h, render: DataTable.render.text() })),
-        order: [[0, 'desc']],
-        pageLength: 15
-      });
-      $('#auditFilterWorkcenter').off('keyup change').on('keyup change', function () {
-        tableAuditLog.column(3).search(this.value).draw();
-      });
+      $('#auditLogLoading').addClass('d-none');
+      const key = JSON.stringify(rows);
+      if (key === auditRowsCacheKey && tableAuditLog) return; // 与已在显示的一致，不重绘
+      auditRowsCache = rows;
+      auditRowsCacheKey = key;
+      renderAuditTable(rows);
     }).withFailureHandler(e => {
+      $('#auditLogLoading').addClass('d-none');
+      if (tableAuditLog) return; // 已有内容就不要用错误弹窗打断
       Swal.fire({ icon: 'error', title: swalTitle('日志加载失败', 'Audit Log Failed'), html: swalHtml(String(e.message || e), '') });
     }).get_MachineMasterAuditLog(200);
   });

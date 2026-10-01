@@ -530,3 +530,33 @@ test('读取变更日志：时间列是 Date 对象时格式化为 yyyy-MM-dd HH
   assert.equal(r.rows[0]['时间'], '2026-10-01 10:00:00', '文本时间应原样保留');
   assert.ok(!/GMT/.test(r.rows[1]['时间']), '不能出现 GMT 这种 Date.toString() 形式');
 });
+
+// ===== 变更日志随页面数据一起返回（弹窗秒开，不再干等一次请求）=====
+test('读取主数据：同时带回变更日志，供弹窗立即渲染', () => {
+  setupMM({
+    rows: [wcRow({ Workcenter: 'M1', 机型: '3AX' })],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  fakeSS[MM_WC_SS_ID]['变更日志'] = fakeSheet([
+    ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值'],
+    [new Date(2026, 9, 1, 21, 37, 3), '69063', '赵阳', 'M1', '机型', '', '6AX'],
+    ['2026-10-01 10:00:00', '33012', '李华', 'M2', '责任人', 'A', 'B'],
+  ]);
+  const r = globalThis.get_MachineMasterData();
+  assert.equal(r.error, undefined);
+  assert.equal(r.auditRows.length, 2);
+  assert.equal(r.auditRows[0]['机台号'], 'M2', '最新在前');
+  assert.equal(r.auditRows[1]['时间'], '2026-10-01 21:37:03', 'Date 对象同样要格式化');
+});
+
+test('读取主数据：变更日志读不到时返回空数组，不影响主表加载', () => {
+  setupMM({
+    rows: [wcRow({ Workcenter: 'M1', 机型: '3AX' })],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  // 不建「变更日志」sheet：应自动创建并返回空数组，主表照常返回
+  const r = globalThis.get_MachineMasterData();
+  assert.equal(r.error, undefined);
+  assert.equal(r.rows.length, 1);
+  assert.deepEqual(r.auditRows, []);
+});
