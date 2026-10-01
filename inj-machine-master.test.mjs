@@ -162,3 +162,82 @@ test('冲突校验：未知字段名进冲突清单，不写块', () => {
   assert.equal(res.conflicts.length, 1);
   assert.equal(res.nextBlock[0][2], 'VIM', '设备类型1 未被触碰');
 });
+
+// ===== Task 3: 读取主数据 =====
+function setupMM(opts) {
+  opts = opts || {};
+  fakeSS = {};
+  fakeSS[MM_WC_SS_ID] = {
+    Workcenter: fakeSheet([opts.headers || WC_HEADERS].concat(opts.rows || [])),
+  };
+  if (opts.typeOptions) fakeSS[MM_WC_SS_ID]['机型选项'] = fakeSheet(opts.typeOptions);
+  if (opts.tasklist) fakeSS[MM_TASKLIST_SS_ID] = { Tasklist_history: fakeSheet(opts.tasklist) };
+  if (opts.userid) fakeSS[MM_USERID_SS_ID] = { userID: fakeSheet(opts.userid) };
+}
+
+const TL_HEADERS = ['MachineType', '', '', '', '', '', '', '', '', '', '', '', 'Status', '', 'Process'];
+const UID_ROWS = [[], [], ['', '张俊', '', '', '', '', '', '', '', '', '', '', '', '', 'INJ', 'IDL']];
+
+test('读取主数据：返回 20 列 String 行 + 可编辑列清单 + 三类枚举', () => {
+  setupMM({
+    rows: [
+      wcRow({ Workcenter: 'V1FTA463', 机型: '3AX', 设备类型1: 'VIM', 责任人: '王玉峰', '工艺无需检查Y/N': 'Y' }),
+      wcRow({ Workcenter: 'V1FTA564', 机型: 'VIM' }),
+    ],
+    typeOptions: [['机型'], ['3AX'], ['VIM']],
+    tasklist: [TL_HEADERS, ['3AX', '', '', '', '', '', '', '', '', '', '', '', '生效/ Effective', '', 'IM']],
+    userid: UID_ROWS,
+  });
+  const r = globalThis.get_MachineMasterData();
+  assert.equal(r.error, undefined);
+  assert.equal(r.rows.length, 2);
+  assert.equal(r.rows[0]['Workcenter'], 'V1FTA463');
+  assert.equal(r.rows[0]['__rowIndex'], 2);
+  assert.equal(r.rows[0]['工艺无需检查Y/N'], 'Y');
+  assert.deepEqual(r.editHeaders, ['机型', '设备类型1', '设备类型2', '自动化类型', '责任人', '备份责任人', '工艺无需检查Y/N', '点检无需检查Y/N']);
+  assert.deepEqual(r.typeOptions, ['3AX', 'VIM']);
+  assert.deepEqual(r.deviceTypeOptions, ['3AX']);
+  assert.deepEqual(r.ownerOptions, ['张俊']);
+  assert.deepEqual(r.dupWorkcenters, []);
+});
+
+test('读取主数据：机型选项 sheet 缺失时自动创建，并用 M 列去重值预填', () => {
+  setupMM({
+    rows: [
+      wcRow({ Workcenter: 'M1', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M2', 机型: '6AX' }),
+      wcRow({ Workcenter: 'M3', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M4', 机型: '' }),
+    ],
+  });
+  const r = globalThis.get_MachineMasterData();
+  assert.deepEqual(r.typeOptions, ['3AX', '6AX']);
+  assert.deepEqual(fakeSS[MM_WC_SS_ID]['机型选项']._rows, [['机型'], ['3AX'], ['6AX']]);
+});
+
+test('读取主数据：重复机台号在 dupWorkcenters 里报出', () => {
+  setupMM({
+    rows: [
+      wcRow({ Workcenter: 'V1FTA463', 机型: '3AX' }),
+      wcRow({ Workcenter: 'V1FTA463', 机型: 'DB' }),
+    ],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  const r = globalThis.get_MachineMasterData();
+  assert.deepEqual(r.dupWorkcenters, ['V1FTA463']);
+});
+
+test('读取主数据：Workcenter 表头缺可编辑列 → 返回 error 不返回行', () => {
+  const broken = WC_HEADERS.filter(h => h !== '责任人');
+  setupMM({ headers: broken, rows: [wcRow({ Workcenter: 'M1' })] });
+  const r = globalThis.get_MachineMasterData();
+  assert.ok(r.error && r.error.indexOf('责任人') >= 0);
+  assert.deepEqual(r.rows, []);
+});
+
+test('读取主数据：枚举源读不到时返回空数组而不是抛错', () => {
+  setupMM({ rows: [wcRow({ Workcenter: 'M1', 机型: '3AX' })], typeOptions: [['机型'], ['3AX']] });
+  const r = globalThis.get_MachineMasterData();
+  assert.deepEqual(r.deviceTypeOptions, []);
+  assert.deepEqual(r.ownerOptions, []);
+});

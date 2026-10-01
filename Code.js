@@ -16523,3 +16523,125 @@ function applyMachineMasterChanges_(block, changes) {
   });
   return { nextBlock: nextBlock, applied: applied, conflicts: conflicts };
 }
+
+function getMM_TypeOptionSheet_(ss) {
+  var ws = ss.getSheetByName(MM_TYPE_OPTION_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(MM_TYPE_OPTION_SHEET_NAME);
+    ws.getRange(1, 1).setValue("机型");
+  }
+  return ws;
+}
+
+function getMM_AuditSheet_(ss) {
+  var ws = ss.getSheetByName(MM_AUDIT_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(MM_AUDIT_SHEET_NAME);
+    ws.getRange(1, 1, 1, MM_AUDIT_HEADERS.length).setValues([MM_AUDIT_HEADERS]);
+  }
+  return ws;
+}
+
+// 机型枚举：读「机型选项」A2 起；为空则用 Workcenter 当前 M 列去重值预填后返回
+function getMM_TypeOptions_(wcData, cols) {
+  var out = [];
+  var seen = {};
+  try {
+    var ss = SpreadsheetApp.openById(MM_WC_SS_ID);
+    var ws = getMM_TypeOptionSheet_(ss);
+    var lastRow = ws.getLastRow();
+    if (lastRow >= 2) {
+      ws.getRange(2, 1, lastRow - 1, 1).getValues().forEach(function (r) {
+        var v = String(r[0] || "").trim();
+        if (v && !seen[v]) { seen[v] = true; out.push(v); }
+      });
+    }
+    if (out.length === 0 && wcData && cols && cols["机型"] !== undefined) {
+      var seed = [];
+      for (var i = 1; i < wcData.length; i++) {
+        var v = String((wcData[i] || [])[cols["机型"]] || "").trim();
+        if (v && !seen[v]) { seen[v] = true; seed.push(v); out.push(v); }
+      }
+      if (seed.length > 0) {
+        ws.getRange(2, 1, seed.length, 1).setValues(seed.map(function (x) { return [x]; }));
+      }
+    }
+  } catch (e) {
+    console.warn("机型枚举读取失败：" + e.toString());
+  }
+  return out;
+}
+
+// 设备类型枚举：Tasklist_history 中 Process=IM 且 Status 含「生效」的 MachineType
+function getMM_DeviceTypeOptions_() {
+  try {
+    var ws = SpreadsheetApp.openById(MM_TASKLIST_SS_ID).getSheetByName(MM_TASKLIST_SHEET_NAME);
+    if (!ws) return [];
+    return filterMachineTypesFromTasklist_(ws.getDataRange().getValues());
+  } catch (e) {
+    console.warn("设备类型枚举读取失败：" + e.toString());
+    return [];
+  }
+}
+
+// 责任人枚举：userID 中 工序=INJ 且 职位=IDL 的姓名
+function getMM_OwnerOptions_() {
+  try {
+    var ws = SpreadsheetApp.openById(MM_USERID_SS_ID).getSheetByName(MM_USERID_SHEET_NAME);
+    if (!ws) return [];
+    return filterINJIDLNames_(ws.getDataRange().getValues());
+  } catch (e) {
+    console.warn("责任人枚举读取失败：" + e.toString());
+    return [];
+  }
+}
+
+function get_MachineMasterData() {
+  try {
+    var ss = SpreadsheetApp.openById(MM_WC_SS_ID);
+    var ws = ss.getSheetByName(MM_WC_SHEET_NAME);
+    if (!ws) return { headers: [], rows: [], error: "Workcenter sheet 未找到" };
+    var lastRow = ws.getLastRow();
+    var lastCol = ws.getLastColumn();
+    if (lastRow < 2) return { headers: [], rows: [], error: "Workcenter 无数据行" };
+
+    var data = ws.getRange(1, 1, lastRow, lastCol).getValues();
+    var head = (data[0] || []).map(function (h) { return String(h || "").trim(); });
+    var cols = workcenterHeaderIndex_(head);
+    var required = ["Workcenter"].concat(MM_EDIT_HEADERS);
+    var missing = required.filter(function (n) { return cols[n] === undefined; });
+    if (missing.length > 0) {
+      return { headers: head, rows: [], error: "Workcenter 表头缺少字段: " + missing.join("、") };
+    }
+
+    var rows = [];
+    var dupWorkcenters = [];
+    var seenWc = {};
+    for (var i = 1; i < data.length; i++) {
+      var obj = {};
+      for (var j = 0; j < head.length; j++) {
+        if (!head[j]) continue;
+        var v = data[i][j];
+        obj[head[j]] = v === undefined || v === null ? "" : String(v);
+      }
+      var wc = String(obj["Workcenter"] || "").trim();
+      if (!wc) continue;
+      if (seenWc[wc]) dupWorkcenters.push(wc);
+      seenWc[wc] = true;
+      obj["__rowIndex"] = i + 1;
+      rows.push(obj);
+    }
+
+    return {
+      headers: head,
+      rows: rows,
+      editHeaders: MM_EDIT_HEADERS,
+      typeOptions: getMM_TypeOptions_(data, cols),
+      deviceTypeOptions: getMM_DeviceTypeOptions_(),
+      ownerOptions: getMM_OwnerOptions_(),
+      dupWorkcenters: dupWorkcenters,
+    };
+  } catch (e) {
+    return { headers: [], rows: [], error: e.toString() };
+  }
+}
