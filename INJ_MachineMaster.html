@@ -67,30 +67,56 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
 
-        #tableMaster thead th, #tableAuditLog thead th {
+        /* 20 列要在一屏内放下：固定表格布局 + 按比例分配列宽，表格宽度恒为 100%，不产生横向滚动。
+           不用 scrollX —— DataTables 的 scrollX 会把表头克隆到另一张表再同步列宽，
+           既容易表头/内容错位，克隆表头又不在 #tableMaster 选择器范围内（样式失效）。 */
+        #tableMaster {
+            table-layout: fixed;
+            width: 100%;
+            margin: 0 !important;
+        }
+        #tableMaster thead th {
             background-color: #E60012 !important;
             color: white !important;
             position: sticky;
             top: 0;
             z-index: 10;
             text-align: center !important;
-            white-space: nowrap;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.2;
+            padding: 6px 3px;
+            vertical-align: middle;
+            white-space: normal; /* 窄列里双语表头靠 <br> 换行排开，不能用 nowrap */
         }
-        #tableMaster th, #tableMaster td, #tableAuditLog th, #tableAuditLog td {
-            padding: 5px 6px;
+        #tableMaster th, #tableMaster td {
+            padding: 4px 3px;
+            font-size: 12px;
+            vertical-align: middle;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        #tableMaster td { text-align: center; vertical-align: middle; }
+        #tableMaster td { text-align: center; }
         /* A–L 只读列灰底 */
         #tableMaster td.readonly-cell { background: #f1f3f5; color: #495057; }
         /* 改动单元格黄底 */
         #tableMaster td.cell-dirty { background: #fff3cd !important; }
-        #tableMaster td .cell-select { min-width: 92px; font-size: 12px; padding: 2px 6px; }
-        #tableMaster td .cell-check { width: 16px; height: 16px; cursor: pointer; }
+        #tableMaster td .cell-select { width: 100%; min-width: 0; font-size: 12px; padding: 1px 2px; }
+        #tableMaster td .cell-check { width: 15px; height: 15px; cursor: pointer; }
 
-        #tableAuditLog td { font-size: 12px; }
+        #tableAuditLog thead th {
+            background-color: #E60012 !important;
+            color: white !important;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-align: center !important;
+            font-size: 12px;
+        }
+        #tableAuditLog th, #tableAuditLog td { padding: 5px 6px; font-size: 12px; }
 
         .select2-container--bootstrap .select2-selection--single {
-            height: 28px;
+            height: 24px;
             padding: 0 !important;
             font-size: 12px;
             border-color: #ced4da;
@@ -98,10 +124,12 @@
             align-items: center;
         }
         .select2-container--bootstrap .select2-selection--single .select2-selection__rendered {
-            line-height: 28px;
-            padding: 0 22px 0 8px;
+            line-height: 24px;
+            padding: 0 18px 0 4px;
             color: #333;
             width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .select2-container--bootstrap.select2-container--focus .select2-selection,
         .select2-container--bootstrap.select2-container--open .select2-selection {
