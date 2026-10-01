@@ -104,3 +104,61 @@ test('责任人枚举：只取 工序=INJ 且 职位=IDL 的姓名，去重保�
   ];
   assert.deepEqual(globalThis.filterINJIDLNames_(data), ['张俊', '游臣']);
 });
+
+// ===== Task 2: 行定位与冲突校验 =====
+test('行定位：机台号 → 1-based 行号，重复机台号保留首行并标 dup', () => {
+  const data = [
+    ['Workcenter', '机型'],
+    ['V1FTA463', '3AX'],
+    ['V1FTA563', 'VIM'],
+    ['V1FTA463', 'DB'],
+  ];
+  const idx = globalThis.locateWorkcenterRows_(data);
+  assert.equal(idx['V1FTA463'].rowIndex, 2);
+  assert.equal(idx['V1FTA463'].dup, true);
+  assert.equal(idx['V1FTA563'].rowIndex, 3);
+  assert.equal(idx['V1FTA563'].dup, false);
+});
+
+test('冲突校验：现值等于旧值才应用，被他人改过则记冲突且不改块内容', () => {
+  const block = [
+    ['V1FTA463', '3AX', 'VIM', 'NA', 'V3AX', '王玉峰', '曹海基', '', ''],
+    ['V1FTA564', 'VIM', 'VIM', 'NA', 'NA', '王玉峰', '曹海基', 'Y', 'Y'],
+  ];
+  const changes = [
+    { 机台号: 'V1FTA463', 字段: '机型', 旧值: '3AX', 新值: '6AX' },
+    { 机台号: 'V1FTA564', 字段: '责任人', 旧值: '张三', 新值: '李四' },
+    { 机台号: 'V1FTA999', 字段: '机型', 旧值: 'DB', 新值: 'HS' },
+  ];
+  const res = globalThis.applyMachineMasterChanges_(block, changes);
+  assert.equal(res.nextBlock[0][1], '6AX');
+  assert.equal(res.nextBlock[1][5], '王玉峰', '冲突字段不能被写');
+  assert.deepEqual(res.applied.map(a => [a.机台号, a.字段, a.新值, a.rowIdx]), [['V1FTA463', '机型', '6AX', 0]]);
+  assert.equal(res.conflicts.length, 2);
+  assert.equal(res.conflicts[0].现值, '王玉峰');
+  assert.equal(res.conflicts[0].原因, '已被他人修改');
+  assert.equal(res.conflicts[1].原因, '未找到机台');
+  assert.equal(block[0][1], '3AX', '原块不能被就地修改');
+});
+
+test('冲突校验：免检列取消勾选写空字符串，勾选写 Y', () => {
+  const block = [['V1FTA464', '3AX', 'VIM', 'NA', 'V3AX', '王玉峰', '曹海基', 'Y', '']];
+  const res = globalThis.applyMachineMasterChanges_(block, [
+    { 机台号: 'V1FTA464', 字段: '工艺无需检查Y/N', 旧值: 'Y', 新值: '' },
+    { 机台号: 'V1FTA464', 字段: '点检无需检查Y/N', 旧值: '', 新值: 'Y' },
+  ]);
+  assert.equal(res.nextBlock[0][7], '');
+  assert.equal(res.nextBlock[0][8], 'Y');
+  assert.equal(res.applied.length, 2);
+  assert.deepEqual(res.conflicts, []);
+});
+
+test('冲突校验：未知字段名进冲突清单，不写块', () => {
+  const block = [['V1FTA464', '3AX', 'VIM', 'NA', 'V3AX', '王玉峰', '曹海基', '', '']];
+  const res = globalThis.applyMachineMasterChanges_(block, [
+    { 机台号: 'V1FTA464', 字段: '设备编号', 旧值: '10127969', 新值: 'X' },
+  ]);
+  assert.equal(res.applied.length, 0);
+  assert.equal(res.conflicts.length, 1);
+  assert.equal(res.nextBlock[0][2], 'VIM', '设备类型1 未被触碰');
+});

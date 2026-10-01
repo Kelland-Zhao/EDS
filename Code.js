@@ -16474,3 +16474,52 @@ function filterINJIDLNames_(data) {
   }
   return out;
 }
+
+// Workcenter 行（含表头）→ { 机台号: { rowIndex: 1-based 行号, dup: 是否重复出现 } }
+// 重复机台号保留首行（与 applyMachineMasterChanges_ 取首行一致）
+function locateWorkcenterRows_(data) {
+  var cols = workcenterHeaderIndex_(data[0] || []);
+  var index = {};
+  if (cols["Workcenter"] === undefined) return index;
+  for (var i = 1; i < data.length; i++) {
+    var wc = String((data[i] || [])[cols["Workcenter"]] || "").trim();
+    if (!wc) continue;
+    if (index[wc]) { index[wc].dup = true; continue; }
+    index[wc] = { rowIndex: i + 1, dup: false };
+  }
+  return index;
+}
+
+// 字段级冲突校验：把 changes 应用到 block（每行 = [Workcenter, ...MM_EDIT_HEADERS]）
+// 现值 != 提交旧值 → 跳过该字段并记冲突（他人已改）；返回新块、已应用清单、冲突清单
+function applyMachineMasterChanges_(block, changes) {
+  var wcToIdx = {};
+  for (var i = 0; i < block.length; i++) {
+    var wc = String((block[i] || [])[0] || "").trim();
+    if (wc && wcToIdx[wc] === undefined) wcToIdx[wc] = i; // 重复机台号取首行
+  }
+  var nextBlock = block.map(function (r) { return r.slice(); });
+  var applied = [];
+  var conflicts = [];
+  (changes || []).forEach(function (ch) {
+    var field = String(ch["字段"] || "");
+    var wc = String(ch["机台号"] || "").trim();
+    var oldVal = ch["旧值"] === undefined || ch["旧值"] === null ? "" : String(ch["旧值"]);
+    var newVal = ch["新值"] === undefined || ch["新值"] === null ? "" : String(ch["新值"]);
+    var pos = MM_EDIT_HEADERS.indexOf(field);
+    if (pos === -1 || wcToIdx[wc] === undefined) {
+      conflicts.push({ 机台号: wc, 字段: field, 旧值: oldVal, 新值: newVal, 现值: "", 原因: "未找到机台" });
+      return;
+    }
+    var idx = wcToIdx[wc];
+    var col = pos + 1; // 第 0 列是 Workcenter
+    var current = nextBlock[idx][col] === undefined || nextBlock[idx][col] === null ? "" : String(nextBlock[idx][col]);
+    if (current !== oldVal) {
+      conflicts.push({ 机台号: wc, 字段: field, 旧值: oldVal, 新值: newVal, 现值: current, 原因: "已被他人修改" });
+      return;
+    }
+    nextBlock[idx][col] = newVal;
+    applied.push({ 机台号: wc, 字段: field, 旧值: oldVal, 新值: newVal, rowIdx: idx });
+  });
+  return { nextBlock: nextBlock, applied: applied, conflicts: conflicts };
+}
