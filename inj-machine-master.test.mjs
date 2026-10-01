@@ -14,34 +14,46 @@ const MM_USERID_SS_ID = '1F7G3WOY5xM4fEYZ1s5RKulY4kJhqCZ9HefthmiVkraM';
 // ===== GAS stub =====
 let fakeSS = {};
 
-function fakeSheet(rows) {
+function fakeSheet(rows, maxRows) {
   const sheet = {
     _rows: rows,
+    _maxRows: maxRows || Math.max(rows.length, 1000),
+    _setValuesCalls: 0,
+    _failSetValuesAt: 0,
     getLastRow: () => sheet._rows.length,
     getLastColumn: () => sheet._rows.reduce((m, r) => Math.max(m, r.length), 0),
+    getMaxRows: () => sheet._maxRows,
+    insertRowsAfter: (after, n) => { sheet._maxRows += n; },
     getDataRange: () => ({ getValues: () => sheet._rows.map(r => r.slice()) }),
-    getRange: (r, c, nr, nc) => ({
-      getValues: () => {
-        const out = [];
-        for (let i = 0; i < nr; i++) {
-          const row = sheet._rows[r - 1 + i] || [];
-          const line = [];
-          for (let j = 0; j < nc; j++) line.push(row[c - 1 + j] ?? '');
-          out.push(line);
-        }
-        return out;
-      },
-      setValues: (vals) => {
-        for (let i = 0; i < vals.length; i++) {
-          const ri = r - 1 + i;
-          while (sheet._rows.length <= ri) sheet._rows.push([]);
-          const line = sheet._rows[ri].slice();
-          for (let j = 0; j < vals[i].length; j++) line[c - 1 + j] = vals[i][j];
-          sheet._rows[ri] = line;
-        }
-      },
-      setValue: (v) => { sheet.getRange(r, c, 1, 1).setValues([[v]]); },
-    }),
+    getRange: (r, c, nr, nc) => {
+      if (r + nr - 1 > sheet._maxRows) throw new Error('The coordinates or dimensions of the range are invalid.');
+      return {
+        getValues: () => {
+          const out = [];
+          for (let i = 0; i < nr; i++) {
+            const row = sheet._rows[r - 1 + i] || [];
+            const line = [];
+            for (let j = 0; j < nc; j++) line.push(row[c - 1 + j] ?? '');
+            out.push(line);
+          }
+          return out;
+        },
+        setValues: (vals) => {
+          sheet._setValuesCalls++;
+          if (sheet._failSetValuesAt && sheet._setValuesCalls === sheet._failSetValuesAt) {
+            throw new Error('模拟写入失败');
+          }
+          for (let i = 0; i < vals.length; i++) {
+            const ri = r - 1 + i;
+            while (sheet._rows.length <= ri) sheet._rows.push([]);
+            const line = sheet._rows[ri].slice();
+            for (let j = 0; j < vals[i].length; j++) line[c - 1 + j] = vals[i][j];
+            sheet._rows[ri] = line;
+          }
+        },
+        setValue: (v) => { sheet.getRange(r, c, 1, 1).setValues([[v]]); },
+      };
+    },
     appendRow: (row) => { sheet._rows.push(row.slice()); },
   };
   return sheet;
@@ -319,4 +331,92 @@ test('读取变更日志：倒序返回，字段名取自表头', () => {
   assert.equal(r.rows.length, 2);
   assert.equal(r.rows[0]['时间'], '2026-10-01 11:00:00', '最新在前');
   assert.equal(r.rows[1]['字段'], '机型');
+});
+
+// ===== Final review 修复：I2 写入合并与失败可追溯、M5 审计表扩行 =====
+test('保存：连续改动行合并为一次 setValues 写入', () => {
+  setupMM({
+    rows: [
+      wcRow({ Workcenter: 'M1', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M2', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M3', 机型: '3AX' }),
+    ],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  fakeSS[MM_WC_SS_ID].Workcenter._setValuesCalls = 0;
+  const r = globalThis.save_MachineMasterData([
+    { 机台号: 'M1', 字段: '机型', 旧值: '3AX', 新值: '6AX' },
+    { 机台号: 'M2', 字段: '机型', 旧值: '3AX', 新值: '6AX' },
+    { 机台号: 'M3', 字段: '机型', 旧值: '3AX', 新值: '6AX' },
+  ], '33012', '李华');
+  assert.equal(r.ok, true);
+  assert.equal(r.applied.length, 3);
+  assert.equal(fakeSS[MM_WC_SS_ID].Workcenter._setValuesCalls, 1, '连续 3 行应合并为 1 次写入');
+  const wcRows = fakeSS[MM_WC_SS_ID].Workcenter._rows;
+  assert.equal(wcRows[1][12], '6AX');
+  assert.equal(wcRows[3][12], '6AX');
+});
+
+test('保存：不连续改动行各写一次，不合并且不误写中间行', () => {
+  setupMM({
+    rows: [
+      wcRow({ Workcenter: 'M1', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M2', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M3', 机型: '3AX' }),
+    ],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  fakeSS[MM_WC_SS_ID].Workcenter._setValuesCalls = 0;
+  const r = globalThis.save_MachineMasterData([
+    { 机台号: 'M1', 字段: '机型', 旧值: '3AX', 新值: '6AX' },
+    { 机台号: 'M3', 字段: '机型', 旧值: '3AX', 新值: '5AX' },
+  ], '33012', '李华');
+  assert.equal(r.ok, true);
+  assert.equal(fakeSS[MM_WC_SS_ID].Workcenter._setValuesCalls, 2, 'M1 与 M3 不连续 → 两次写入');
+  const wcRows = fakeSS[MM_WC_SS_ID].Workcenter._rows;
+  assert.equal(wcRows[1][12], '6AX');
+  assert.equal(wcRows[2][12], '3AX', '中间行 M2 不能被带上');
+  assert.equal(wcRows[3][12], '5AX');
+});
+
+test('保存：中途写入失败时，已写入的行仍要记变更日志', () => {
+  setupMM({
+    rows: [
+      wcRow({ Workcenter: 'M1', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M2', 机型: '3AX' }),
+      wcRow({ Workcenter: 'M3', 机型: '3AX' }),
+    ],
+    typeOptions: [['机型'], ['3AX']],
+  });
+  fakeSS[MM_WC_SS_ID].Workcenter._failSetValuesAt = 2; // 第二次写入（M3）抛错
+  const r = globalThis.save_MachineMasterData([
+    { 机台号: 'M1', 字段: '机型', 旧值: '3AX', 新值: '6AX' },
+    { 机台号: 'M3', 字段: '机型', 旧值: '3AX', 新值: '5AX' },
+  ], '33012', '李华');
+  assert.equal(r.ok, false, '部分失败必须如实返回失败');
+  const audit = fakeSS[MM_WC_SS_ID]['变更日志']._rows;
+  assert.equal(audit.length, 2, '表头 + 已写入的 1 条日志');
+  assert.deepEqual(audit[1].slice(3), ['M1', '机型', '3AX', '6AX'], '已写入的行必须留下日志');
+  assert.equal(fakeSS[MM_WC_SS_ID].Workcenter._rows[1][12], '6AX', '已写入的单元格确实落库');
+});
+
+test('变更日志：sheet 行数写满时自动扩行，不丢日志', () => {
+  fakeSS = {};
+  fakeSS[MM_WC_SS_ID] = {
+    '变更日志': fakeSheet([
+      ['时间', '工号', '姓名', '机台号', '字段', '旧值', '新值'],
+      ['2026-10-01 10:00:00', '1', '甲', 'M1', '机型', 'A', 'B'],
+    ], 2), // 只有 2 行容量，正好写满
+  };
+  const ss = {
+    getSheetByName: n => fakeSS[MM_WC_SS_ID][n] ?? null,
+    insertSheet: n => { fakeSS[MM_WC_SS_ID][n] = fakeSheet([[]]); return fakeSS[MM_WC_SS_ID][n]; },
+  };
+  globalThis.appendMM_AuditLog_(ss, '33012', '李华', [
+    { 机台号: 'M2', 字段: '机型', 旧值: 'A', 新值: 'C' },
+  ]);
+  const audit = fakeSS[MM_WC_SS_ID]['变更日志']._rows;
+  assert.equal(audit.length, 3, '扩行后日志落库');
+  assert.equal(audit[2][3], 'M2');
+  assert.ok(fakeSS[MM_WC_SS_ID]['变更日志']._maxRows >= 3, 'sheet 容量已扩');
 });

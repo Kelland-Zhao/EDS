@@ -16664,14 +16664,20 @@ function get_MachineMasterData() {
 }
 
 // 批量写变更日志（一次 setValues，附在最后一行之后）
+// 容量不足时先扩行：日志表写满后 setValues 会整批抛错，等于把审计本身弄丢
 function appendMM_AuditLog_(ss, userCode, userName, applied) {
   if (!applied || applied.length === 0) return;
   var ws = getMM_AuditSheet_(ss);
+  var lastRow = ws.getLastRow();
+  var needMax = lastRow + applied.length;
+  if (ws.getMaxRows() < needMax) {
+    ws.insertRowsAfter(ws.getMaxRows(), needMax - ws.getMaxRows());
+  }
   var now = Utilities.formatDate(new Date(), "Asia/Shanghai", "yyyy-MM-dd HH:mm:ss");
   var rows = applied.map(function (a) {
     return [now, userCode || "", userName || "", a["机台号"] || "", a["字段"] || "", a["旧值"] || "", a["新值"] || ""];
   });
-  ws.getRange(ws.getLastRow() + 1, 1, rows.length, MM_AUDIT_HEADERS.length).setValues(rows);
+  ws.getRange(lastRow + 1, 1, rows.length, MM_AUDIT_HEADERS.length).setValues(rows);
 }
 
 function save_MachineMasterData(changes, userCode, userName) {
@@ -16718,13 +16724,35 @@ function save_MachineMasterData(changes, userCode, userName) {
     }
 
     // 只对有应用改动的行写 M–T 8 列（绝不触碰 A–L）
+    // 连续行下标合并成区段，每段一次 setValues（批量改 300 行只需 1 次调用）
     var changedRowIdx = {};
     res.applied.forEach(function (a) { changedRowIdx[a.rowIdx] = true; });
-    Object.keys(changedRowIdx).forEach(function (idxStr) {
-      var idx = parseInt(idxStr, 10);
-      var rowValues = res.nextBlock[idx].slice(1); // 去掉 Workcenter 列
-      ws.getRange(idx + 2, editStart0 + 1, 1, MM_EDIT_HEADERS.length).setValues([rowValues]);
-    });
+    var idxList = Object.keys(changedRowIdx).map(function (s) { return parseInt(s, 10); })
+      .sort(function (a, b) { return a - b; });
+    var runs = [];
+    for (var r = 0; r < idxList.length; r++) {
+      var runStart = idxList[r];
+      var runEnd = idxList[r];
+      while (r + 1 < idxList.length && idxList[r + 1] === runEnd + 1) { r++; runEnd = idxList[r]; }
+      runs.push([runStart, runEnd]);
+    }
+
+    var writtenRowIdx = {};
+    try {
+      runs.forEach(function (run) {
+        var values = [];
+        for (var i = run[0]; i <= run[1]; i++) values.push(res.nextBlock[i].slice(1)); // 去掉 Workcenter 列
+        ws.getRange(run[0] + 2, editStart0 + 1, values.length, MM_EDIT_HEADERS.length).setValues(values);
+        for (var j = run[0]; j <= run[1]; j++) writtenRowIdx[j] = true;
+      });
+    } catch (e) {
+      // 部分写入中断：已落库的行照样记日志，否则这些改动永远不会出现在审计里
+      // （重试时它们的现值已不等于旧值，会被当作"已被他人修改"跳过）
+      appendMM_AuditLog_(ss, userCode, userName, res.applied.filter(function (a) {
+        return writtenRowIdx[a.rowIdx];
+      }));
+      return { ok: false, message: "写入中断，已写入部分已记日志：" + e.toString(), applied: [], conflicts: [] };
+    }
 
     appendMM_AuditLog_(ss, userCode, userName, res.applied);
     return { ok: true, applied: res.applied, conflicts: res.conflicts };

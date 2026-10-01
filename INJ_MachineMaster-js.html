@@ -38,7 +38,8 @@
 
   let masterRows = [];
   let options = { '机型': [], '设备类型1': [], '设备类型2': [], '自动化类型': [], '责任人': [], '备份责任人': [] };
-  let origMap = {};   // 机台号 → { 字段: 加载时原值 }
+  let origMap = {};   // 机台号 → { 字段: 加载时原值 }（只取首次出现的行，与后端写首行一致）
+  let firstRowIndexByWc = {}; // 机台号 → 首次出现的 __rowIndex
   let table = null;
   let dirtyCount = 0;
 
@@ -51,8 +52,14 @@
         options['设备类型1'] = options['设备类型2'] = options['自动化类型'] = r.deviceTypeOptions || [];
         options['责任人'] = options['备份责任人'] = r.ownerOptions || [];
         origMap = {};
+        firstRowIndexByWc = {};
         masterRows.forEach(row => {
           const wc = String(row['Workcenter'] || '').trim();
+          if (!wc) return;
+          // 重复机台号：基线只认首行，与后端"写首行"一致；
+          // 否则后一行会覆盖基线，导致首行一加载就显脏、保存必报假冲突
+          if (firstRowIndexByWc[wc] !== undefined) return;
+          firstRowIndexByWc[wc] = row['__rowIndex'];
           const o = {};
           EDIT_FIELDS.forEach(f => { o[f] = String(row[f] || ''); });
           origMap[wc] = o;
@@ -96,15 +103,25 @@
       pageLength: 25,
       scrollX: true,
       autoWidth: false,
-      deferRender: false,
+      // 延迟渲染：328 行 × 6 个下拉各自带整套 option，首屏一次性建完会有 5 万+ 节点；
+      // 行节点首次渲染后会被复用，未渲染的行不可能被编辑，故不影响改动收集
+      deferRender: true,
       createdRow: function (row, data) {
-        $(row).attr('data-wc', String(data['Workcenter'] || '').trim());
+        const wc = String(data['Workcenter'] || '').trim();
+        $(row).attr('data-wc', wc);
         // 只读列灰底
         for (let i = 0; i < EDIT_START; i++) { $('td', row).eq(i).addClass('readonly-cell'); }
+        // 重复机台号的非首行：只读展示（后端只会写首行，这里可编辑会给出假冲突）
+        const editable = firstRowIndexByWc[wc] === data['__rowIndex'];
         // 可编辑列渲染控件
         EDIT_FIELDS.forEach((f, i) => {
           const $cell = $('td', row).eq(EDIT_START + i);
           const val = String(data[f] || '');
+          if (!editable) {
+            $cell.text(val).addClass('readonly-cell')
+              .attr('title', '重复机台号，只维护首次出现的行 / Duplicate workcenter; only the first row is editable');
+            return;
+          }
           if (CHECK_FIELDS.indexOf(f) >= 0) {
             $cell.html(`<input type="checkbox" class="cell-check" data-field="${f}"${val === 'Y' ? ' checked' : ''}>`);
             return;
@@ -178,6 +195,19 @@
     return true;
   });
 
+  // 把筛选控件当前值重新施加到表格。
+  // renderTable 会重建 DataTable 并丢掉列搜索状态，若不重放，保存/刷新/撤销后表格显示全部行
+  // 而筛选框仍停在旧值，界面与实际看到的内容不符。
+  function applyFiltersToTable() {
+    if (!table) return;
+    table.column(0).search($('#filterWorkcenter').val() || '');
+    table.column(12).search($('#filterMachineType').val() || '');
+    table.column(13).search($('#filterDeviceType').val() || '');
+    table.column(16).search($('#filterOwner').val() || '');
+    checkFilter = $('#filterCheck').val() || '';
+    table.draw();
+  }
+
   function initFilters() {
     fillFilterSelect('#filterMachineType', options['机型']);
     fillFilterSelect('#filterDeviceType', options['设备类型1']);
@@ -190,6 +220,7 @@
     $('#filterDeviceType').off('change').on('change', function () { table.column(13).search(this.value).draw(); });
     $('#filterOwner').off('change').on('change', function () { table.column(16).search(this.value).draw(); });
     $('#filterCheck').off('change').on('change', function () { checkFilter = this.value; table.draw(); });
+    applyFiltersToTable(); // 重放当前筛选，避免表格与筛选框脱节
   }
 
   function reloadAll() {
@@ -266,6 +297,7 @@
     }).then(result => {
       if (!result.isConfirmed) return;
       renderTable(); // 用 masterRows（加载时的数据）重绘，回到原值
+      applyFiltersToTable(); // 重绘会丢筛选，重放当前筛选保持界面一致
       Swal.fire({ icon: 'success', title: swalTitle('已撤销', 'Reverted'), timer: 1000, showConfirmButton: false });
     });
   });
