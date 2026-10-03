@@ -26,6 +26,29 @@ const loginJs = fs.readFileSync(new URL('./home_new_1.0-js.html', import.meta.ur
 
 const EXEC = 'https://script.google.com/a/colpal.com/macros/s/AKfycbTESTDEPLOYID/exec';
 
+// ===== 登录闸门面板 =====
+// GAS 沙箱禁自动顶层跳转（allow-top-navigation 未设，只有 by-user-activation），
+// 官方指定做法是给用户一个可点的链接，目标 _top / _blank——所以此处必须是真的 <a>，不能用 JS 跳
+
+(0, eval)(extractFunction(mmJs, 'escapeAttr'));
+(0, eval)(extractFunction(mmJs, 'mmLoginGateHtml_'));
+
+test('登录面板同时给出整页跳转与备用新标签页两个真实链接', () => {
+  const html = mmLoginGateHtml_('https://script.google.com/a/colpal.com/macros/s/ID/exec?v=home_new_1.0&next=INJ_MachineMaster');
+  assert.ok(
+    html.includes('href="https://script.google.com/a/colpal.com/macros/s/ID/exec?v=home_new_1.0&amp;next=INJ_MachineMaster" target="_top"'),
+    '主链接：整页跳转到登录页'
+  );
+  assert.ok(html.includes('target="_blank"'), '备用链接：新标签页打开');
+});
+
+test('登录面板对地址做属性转义，不会冲破 href', () => {
+  const html = mmLoginGateHtml_('https://e/x?a="1"&b=<2>');
+  assert.ok(!html.includes('"1"'), '原始引号不得出现');
+  assert.ok(html.includes('&quot;1&quot;'), '引号必须转义');
+  assert.ok(html.includes('&lt;2&gt;'), '尖括号必须转义');
+});
+
 // ===== 跨文件契约：兜底与回跳拼的路由名必须真实注册在 doGet 里，否则静默失效 =====
 
 test('兜底/回跳用到的 doGet 路由真实存在', () => {

@@ -22,6 +22,33 @@
     return webPage + '?v=home_new_1.0&next=INJ_MachineMaster';
   }
 
+  // 未登录面板的 HTML：GAS 沙箱没设 allow-top-navigation（只有 by-user-activation），
+  // 脚本自动做顶层跳转会被拦（页面会变成 X-Frame-Options 错误页），官方指定做法是放一个
+  // 用户可点的链接、目标 _top——所以这里必须是真实 <a>，不能用 JS 跳转
+  function mmLoginGateHtml_(loginUrl) {
+    const safe = escapeAttr(loginUrl);
+    return '<div style="max-width:560px;margin:12vh auto 0;text-align:center;background:#fff;'
+      + 'border:1px solid #e3e6ea;border-radius:12px;padding:32px 28px;box-shadow:0 6px 24px rgba(0,0,0,.08);">'
+      + '<div style="font-size:18px;font-weight:600;color:#1f2d3d;">请先登录 EDS / Please log in to EDS</div>'
+      + '<div style="font-size:13px;color:#7a8794;margin-top:10px;line-height:1.7;">'
+      + '本页需要登录后才能使用，登录成功后会自动回到本页。<br>'
+      + 'This page requires sign-in. You will be returned here after logging in.</div>'
+      + '<a href="' + safe + '" target="_top" style="display:inline-block;margin-top:22px;background:#E60012;color:#fff;'
+      + 'text-decoration:none;padding:10px 30px;border-radius:6px;font-size:14px;">去登录 / Log in</a>'
+      + '<div style="font-size:12px;color:#adb5bd;margin-top:16px;">按钮没反应？'
+      + '<a href="' + safe + '" target="_blank" style="color:#E60012;">在新标签页打开登录页</a></div>'
+      + '</div>';
+  }
+
+  // 未登录：整页盖上登录入口（同时一个数据/日志接口都不触发）
+  function showLoginGate_(loginUrl) {
+    const wrap = document.createElement('div');
+    wrap.id = 'mmLoginGate';
+    wrap.style.cssText = 'position:fixed;inset:0;background:#f4f6f8;z-index:2000;overflow:auto;';
+    wrap.innerHTML = mmLoginGateHtml_(loginUrl);
+    document.body.appendChild(wrap);
+  }
+
   let global_ID = sessionStorage.getItem('ID') || '';
   let global_Name = sessionStorage.getItem('Name') || '';
   $('#name').text(global_Name);
@@ -415,11 +442,11 @@
   });
 
   $(document).ready(function () {
-    // 未登录兜底：邮件/书签直达本页时 sessionStorage 里没有工号 → 先去登录页（登录后由 next 回到本页），
-    // 此时不触发任何数据/日志接口
+    // 未登录兜底：邮件/书签直达本页时 sessionStorage 里没有工号 → 只显示登录入口（登录后由 next 回到本页），
+    // 此时不触发任何数据/日志接口。注意：只能用可点链接，沙箱不允许脚本自动跳顶层
     const mmWebPage = (document.getElementById('mmWebPage') || {}).value || '';
     const gateUrl = mmGateRedirect_(mmWebPage, sessionStorage.getItem('ID'));
-    if (gateUrl) { window.location.replace(gateUrl); return; }
+    if (gateUrl) { showLoginGate_(gateUrl); return; }
 
     applyGroupColVisibility(); // 按会话状态先定好列显隐，再加载数据
     Swal.fire({ title: swalTitle('加载中...', 'Loading...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
