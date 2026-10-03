@@ -13,6 +13,15 @@
     return `<input type="checkbox" class="cell-check" data-field="${escapeAttr(field)}"${String(val) === 'Y' ? ' checked' : ''}>`;
   }
 
+  // 未登录兜底：本页可被邮件链接/书签直接打开（新标签页里 sessionStorage 是空的），
+  // 没有工号就先去 EDS 登录页，登录成功后由 next 参数回到本页；已登录返回空串
+  // （抽成具名纯函数以便 Node 侧单测锁定"未登录必须拦到登录页"）
+  function mmGateRedirect_(webPage, userId) {
+    if (String(userId || '').trim()) return '';
+    if (!String(webPage || '').trim()) return ''; // 拿不到部署地址时不跳，避免跳到相对路径（部署环境下该值恒有）
+    return webPage + '?v=home_new_1.0&next=INJ_MachineMaster';
+  }
+
   let global_ID = sessionStorage.getItem('ID') || '';
   let global_Name = sessionStorage.getItem('Name') || '';
   $('#name').text(global_Name);
@@ -406,6 +415,12 @@
   });
 
   $(document).ready(function () {
+    // 未登录兜底：邮件/书签直达本页时 sessionStorage 里没有工号 → 先去登录页（登录后由 next 回到本页），
+    // 此时不触发任何数据/日志接口
+    const mmWebPage = (document.getElementById('mmWebPage') || {}).value || '';
+    const gateUrl = mmGateRedirect_(mmWebPage, sessionStorage.getItem('ID'));
+    if (gateUrl) { window.location.replace(gateUrl); return; }
+
     applyGroupColVisibility(); // 按会话状态先定好列显隐，再加载数据
     Swal.fire({ title: swalTitle('加载中...', 'Loading...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
     reloadAll().then(() => Swal.close()).catch(e => {

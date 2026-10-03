@@ -275,11 +275,12 @@ function doGet(e) {
       e.parameters.webPage,
       e.parameters.intoWebID || e.parameters.ID,
       e.parameters.intoWebName || e.parameters.Name,
-      e.parameters.intoWebType || e.parameters.Process
+      e.parameters.intoWebType || e.parameters.Process,
+      e.parameters.intoWebNext || e.parameters.next // 登录后回跳目标（如邮件直达的 INJ_MachineMaster）
     );
   } else {
     let webPage = getReleaseWebPage();
-    return render("home_new_1.0", { webPage: webPage })
+    return render("home_new_1.0", { webPage: webPage, intoNext: e.parameters.intoWebNext || e.parameters.next || "" })
       .setTitle("EDS 登录 | EDS Login")
       .setFaviconUrl(webIconUrl);
   }
@@ -1458,9 +1459,9 @@ function loadFault_Record_1_0() {
     .setFaviconUrl(webIconUrl);
 }
 
-function loadhome_new() {
+function loadhome_new(intoWebUrl, intoWebLoginId, intoWebLoginName, intoWebLoginType, intoWebNext) {
   let webPage = getReleaseWebPage();
-  return render("home_new_1.0", { webPage: webPage })
+  return render("home_new_1.0", { webPage: webPage, intoNext: intoWebNext || "" })
     .setTitle("EDS 登录 | EDS Login")
     .setFaviconUrl(webIconUrl);
 }

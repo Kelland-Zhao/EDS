@@ -2,6 +2,17 @@
   const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
   const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
 
+  // 登录成功后要打开的路由：next 只放行 [A-Za-z0-9_.]（路由名形如 INJ_MachineMaster、PM_Plan_1.0），
+  // 为空或含 ? & / 空格等拼接字符一律回退导航页，避免 next 被用来改写跳转地址
+  // （抽成具名纯函数以便 Node 侧单测锁定白名单）
+  function loginTargetRoute_(next) {
+    const route = String(next || '').trim();
+    return /^[A-Za-z0-9_.]+$/.test(route) ? route : 'Navigation';
+  }
+
+  // 登录后回跳目标：由 doGet 的 next 参数经模板注入；空/非法值由 loginTargetRoute_ 回退 Navigation
+  const intoNext = (document.getElementById('intoNext') || {}).value || '';
+
   let pageLoadComplete = false;
   let webPageLoaded = false;
   let userInfoLoaded = false;
@@ -114,7 +125,7 @@
         else {
           if (pd == PWD) {
             window.open(sessionStorage.getItem("siWebPage")
-              + "?v=Navigation"
+              + "?v=" + loginTargetRoute_(intoNext)
               + '&ID=' + encodeURIComponent(id)
               + '&Name=' + encodeURIComponent(name)
               + '&Process=' + encodeURIComponent(process)

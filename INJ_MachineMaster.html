@@ -159,6 +159,8 @@
 </head>
 
 <body>
+    <!-- 当前部署的 exec 地址（服务端注入）：未登录兜底跳登录页时用它拼回跳地址 -->
+    <input type="hidden" id="mmWebPage" value="<?= webPage ?>">
     <!-- 顶部 navbar -->
     <nav class="navbar navbar-expand-lg bg-nav">
         <div class="container-fluid">
