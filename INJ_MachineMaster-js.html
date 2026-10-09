@@ -58,6 +58,8 @@
   const EDIT_FIELDS = ['机型', '设备类型1', '设备类型2', '自动化类型', '责任人', '备份责任人', '工艺无需检查Y/N', '点检无需检查Y/N'];
   const CHECK_FIELDS = ['工艺无需检查Y/N', '点检无需检查Y/N'];
   const OWNER_FIELDS = ['责任人', '备份责任人'];
+  // 不适用：设备类型1/2、自动化类型三列共用的固定选项，与保养模块里 "v !== 'NA'" 的既有约定一致
+  const MM_NA_VALUE = 'NA';
   const ALL_HEADERS = ['Workcenter', 'Machine Type', '机器性能', 'New Formed Cell', 'HIM/Auto', 'VIM-1', 'VIM-2', 'VIM-3', 'VIM-4', 'Final Machine Type', '是否主设备', '设备编号', '机型', '设备类型1', '设备类型2', '自动化类型', '责任人', '备份责任人', '工艺无需检查Y/N', '点检无需检查Y/N'];
   // 列宽（百分比，合计 100）：配合 CSS 的 table-layout:fixed，20 列始终撑满容器且不横向滚动
   const COL_WIDTHS = {
@@ -98,6 +100,16 @@
   let table = null;
   let dirtyCount = 0;
 
+  // 设备类型1/2、自动化类型三列共用一个选项源：Tasklist_history 的真实机型（原序）+ 末尾固定追加 NA。
+  // sourceEmpty 看的是「原始来源」而不是拼好的列表——NA 是常量，拿结果判空会让空枚举提醒永久失效。
+  // （抽成具名纯函数以便 Node 侧单测锁定这两点）
+  function mmDeviceTypeOptions_(resp) {
+    const raw = (resp && resp.deviceTypeOptions) || [];
+    const list = raw.slice();
+    if (list.indexOf(MM_NA_VALUE) < 0) list.push(MM_NA_VALUE);
+    return { list: list, sourceEmpty: raw.length === 0 };
+  }
+
   function loadMachineMaster() {
     return new Promise((resolve, reject) => {
       google.script.run.withSuccessHandler(r => {
@@ -105,8 +117,9 @@
         masterRows = r.rows;
         auditRowsCache = r.auditRows || []; // 变更日志随页面数据一起取回，弹窗点开即可渲染
         auditRowsCacheKey = JSON.stringify(auditRowsCache);
+        const deviceTypes = mmDeviceTypeOptions_(r);
         options['机型'] = r.typeOptions || [];
-        options['设备类型1'] = options['设备类型2'] = options['自动化类型'] = r.deviceTypeOptions || [];
+        options['设备类型1'] = options['设备类型2'] = options['自动化类型'] = deviceTypes.list;
         options['责任人'] = options['备份责任人'] = r.ownerOptions || [];
         origMap = {};
         firstRowIndexByWc = {};
@@ -130,7 +143,7 @@
         }
         const emptyEnums = [];
         if (!options['机型'].length) emptyEnums.push('机型选项');
-        if (!options['设备类型1'].length) emptyEnums.push('Tasklist_history（设备类型）');
+        if (deviceTypes.sourceEmpty) emptyEnums.push('Tasklist_history（设备类型）');
         if (!options['责任人'].length) emptyEnums.push('userID（责任人）');
         if (emptyEnums.length > 0) {
           $('#enumWarn').removeClass('d-none').html('以下枚举来源为空，下拉仅显示各机台当前值：' + escapeAttr(emptyEnums.join('、')) + '<br>Empty option sources: ' + escapeAttr(emptyEnums.join(', ')));
