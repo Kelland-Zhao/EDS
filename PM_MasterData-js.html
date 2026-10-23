@@ -155,11 +155,15 @@
 
   $(document).ready(async function () {
     initFilters();
+    // 页面加载弹窗：后端取数 + 表格渲染完成前给出反馈（与 INJ_MachineMaster 一致）
+    Swal.fire({ title: swalTitle('加载中...', 'Loading...'), allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
     try {
       await loadMasterData();
       renderMasterTable();
       setUserLevelBadge(false);
+      Swal.close();
     } catch (e) {
+      Swal.close();
       Swal.fire({ icon: 'error', title: swalTitle('加载失败', 'Load Failed'), html: swalHtml(String(e.message || e), '') });
     }
     $('#btnRefresh').on('click', async function () {
