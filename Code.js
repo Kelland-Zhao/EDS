@@ -49,6 +49,66 @@ var USE_MERGED_PM_SHEET = true;  // 紧急回滚设 false
 var PM_RECORDS_SHEET_NAME = "PM_Records";
 var PM_DB_ID = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
 
+// 保养计划数据源：直接读草稿表【PmPlan工序年度主计划】的 PmPlanNew
+// 原链路 PmPlanNew -> AM+PM活动安排表.database -> Database_PM.Total PM Plan List 有两层 IMPORTRANGE 缓存
+var PM_PLAN_DRAFT_SS_ID = "1_atn1Q6bR2mIBN_Q6nl01Fmc3o3FGJJfY92C7xQrCsA";
+var PM_PLAN_DRAFT_SHEET_NAME = "PmPlanNew";
+var PM_PLAN_HEADERS = ["月份", "日历周次", "车间", "工序", "开始日期", "状态", "AEM#", "保养时间", "保养类型", "机型", "类别", "设备类型1", "设备类型2", "自动化类型"];
+// 草稿 A:W（23 列）→ Total PM Plan List 14 列的列索引映射
+var PM_PLAN_DRAFT_COL_MAP = [0, 6, 8, 9, 10, 21, 12, 13, 14, 15, 16, 17, 18, 19];
+
+// 把草稿数据行映射/过滤成 Total PM Plan List 的 14 列结构
+// 复刻原公式 QUERY：开始日期非空、AEM# 非空、类别 like '%PM%'、状态 <> '取消'
+function normalizePMPlanDraftRows_(rows) {
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i] || [];
+    var start = r[10]; // K: 开始日期
+    var aem = r[12];   // M: AEM #
+    if (start === '' || start === null || start === undefined) continue;
+    if (aem === '' || aem === null || aem === undefined || String(aem).trim() === '') continue;
+    var category = String(r[16] === null || r[16] === undefined ? '' : r[16]); // Q: 类别
+    if (category.indexOf('PM') === -1) continue;
+    var status = String(r[21] === null || r[21] === undefined ? '' : r[21]).trim(); // V: 状态
+    if (status === '取消') continue;
+    var mapped = [];
+    for (var j = 0; j < PM_PLAN_DRAFT_COL_MAP.length; j++) {
+      var v = r[PM_PLAN_DRAFT_COL_MAP[j]];
+      mapped.push(v === null || v === undefined ? '' : v);
+    }
+    out.push(mapped);
+  }
+  return out;
+}
+
+// 读取保养计划数据行（不含表头）
+// renderOption: 'display' 返回显示值字符串；'raw' 返回原始值（日期保留 Date 对象）
+// 草稿表读取异常时回退到 Database_PM 的 Total PM Plan List
+function getPMPlanRows_(renderOption) {
+  try {
+    var draftWs = SpreadsheetApp.openById(PM_PLAN_DRAFT_SS_ID).getSheetByName(PM_PLAN_DRAFT_SHEET_NAME);
+    if (!draftWs) throw new Error("sheet not found: " + PM_PLAN_DRAFT_SHEET_NAME);
+    var lastRow = draftWs.getLastRow();
+    if (lastRow < 2) return [];
+    var range = draftWs.getRange(2, 1, lastRow - 1, 23);
+    var values = renderOption === 'display' ? range.getDisplayValues() : range.getValues();
+    return normalizePMPlanDraftRows_(values);
+  } catch (e) {
+    console.warn("保养计划草稿表读取失败，回退 Total PM Plan List：" + e);
+    return readPMPlanFallback_(renderOption);
+  }
+}
+
+// 回退：沿用原数据源 Database_PM / Total PM Plan List
+function readPMPlanFallback_(renderOption) {
+  var ws = SpreadsheetApp.openById(PM_DB_ID).getSheetByName("Total PM Plan List");
+  if (!ws) return [];
+  var lastRow = ws.getLastRow();
+  if (lastRow < 2) return [];
+  var range = ws.getRange(2, 1, lastRow - 1, PM_PLAN_HEADERS.length);
+  return renderOption === 'display' ? range.getDisplayValues() : range.getValues();
+}
+
 // PM 分表合并 - 获取合并表引用
 function getPMSheet(ss) {
   if (USE_MERGED_PM_SHEET) {
@@ -1765,10 +1825,7 @@ function getPlan(info) {
     var url =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     var ss = SpreadsheetApp.openByUrl(url);
-    var ws = ss.getSheetByName("Total PM Plan List");
-    var data = ws
-      .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-      .getDisplayValues();
+    var data = getPMPlanRows_('display');
 
     if (
       date == "" &&
@@ -1883,11 +1940,8 @@ function getPlan_new() {
     let id =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     let ss = SpreadsheetApp.openByUrl(id);
-    let ws = ss.getSheetByName("Total PM Plan List");
-    let head = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
-    let values = ws
-      .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-      .getValues();
+    let head = PM_PLAN_HEADERS;
+    let values = getPMPlanRows_('raw');
     let array = [];
     values.forEach((r) => {
       let obj = {};
@@ -1988,10 +2042,8 @@ function getPlan_weekly() {
     let id =
       "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
     let ss = SpreadsheetApp.openByUrl(id);
-    let ws = ss.getSheetByName("Total PM Plan List");
-    let lastRow = ws.getLastRow();
-    let lastColumn = ws.getLastColumn();
-    let head = ws.getRange(1, 1, 1, lastColumn).getValues()[0];
+    let head = PM_PLAN_HEADERS;
+    let allRows = getPMPlanRows_('raw');
 
     // 计算时间范围（自然周：周日到周六）
     let today = new Date();
@@ -2038,12 +2090,9 @@ function getPlan_weekly() {
     let hasLastWeekData = false;
     let hasNextThreeWeeksData = false;
 
-    if (lastRow > 1) {
-      let dateValues = ws.getRange(2, 5, lastRow - 1, 1).getValues();
-      let matchedRows = [];
-
-      dateValues.forEach((row, idx) => {
-        let cell = row[0];
+    if (allRows.length > 0) {
+      allRows.forEach((row) => {
+        let cell = row[4]; // E: 开始日期
         if (!cell) {
           return;
         }
@@ -2059,37 +2108,18 @@ function getPlan_weekly() {
           return;
         }
 
-        if (
-          dateStr >= startDateStr &&
-          dateStr <= endDateStr
-        ) {
-          let rowNumber = idx + 2; // 数据开始于第2行
-          matchedRows.push(rowNumber);
+        if (dateStr >= startDateStr && dateStr <= endDateStr) {
+          filteredValues.push(row);
 
-          if (dateStr >= startDateStr && dateStr < currentWeekSundayStr) {
+          if (dateStr < currentWeekSundayStr) {
             hasLastWeekData = true;
           }
 
-          if (dateStr >= currentWeekSundayStr && dateStr <= endDateStr) {
+          if (dateStr >= currentWeekSundayStr) {
             hasNextThreeWeeksData = true;
           }
         }
       });
-
-      if (matchedRows.length > 0) {
-        let minRow = Math.min.apply(null, matchedRows);
-        let maxRow = Math.max.apply(null, matchedRows);
-        let rowsToFetch = maxRow - minRow + 1;
-        let rowValues = ws.getRange(minRow, 1, rowsToFetch, lastColumn).getValues();
-        let rowNumberSet = new Set(matchedRows);
-
-        rowValues.forEach((r, idx) => {
-          let actualRow = minRow + idx;
-          if (rowNumberSet.has(actualRow)) {
-            filteredValues.push(r);
-          }
-        });
-      }
     }
 
     // 处理筛选后的数据
@@ -2387,14 +2417,7 @@ function autocomplete_errorCode(process, workshop) {
 }
 
 function pmMasterplan() {
-  var url =
-    "https://docs.google.com/spreadsheets/d/1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4/";
-  var ss = SpreadsheetApp.openByUrl(url);
-  var ws = ss.getSheetByName("Total PM Plan List");
-  var data = ws
-    .getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn())
-    .getDisplayValues();
-  return JSON.stringify(data);
+  return JSON.stringify(getPMPlanRows_('display'));
 }
 
 function get_toPM_data() {
@@ -12595,12 +12618,11 @@ function loadAllPMTasks(filterJSON) {
       return Utilities.formatDate(dt, 'Asia/Shanghai', 'yyyy-MM-dd');
     }
 
-    // Step 1: Read Total PM Plan List once → build taskMap
+    // Step 1: 读保养计划（草稿 PmPlanNew，异常回退 Total PM Plan List）→ build taskMap
     var taskMap = {};
-    var planWs = ss.getSheetByName('Total PM Plan List');
-    if (planWs) {
-      var planData = planWs.getDataRange().getValues();
-      for (var i = 1; i < planData.length; i++) {
+    var planData = getPMPlanRows_('raw');
+    if (planData.length > 0) {
+      for (var i = 0; i < planData.length; i++) {
         var planDate = normalizeDate_(planData[i][4]);
         var planHours = parseFloat(String(planData[i][7] || '0'));
         var durationDays = Math.max(1, Math.ceil(planHours / 24));
@@ -12964,12 +12986,11 @@ function loadPMTasksByDate(dateStr) {
       return Utilities.formatDate(dt, 'Asia/Shanghai', 'yyyy-MM-dd');
     }
 
-    // Step 1: Total PM Plan List -> base, key = PlanDate_AEM#
+    // Step 1: 保养计划（草稿 PmPlanNew，异常回退 Total PM Plan List）-> base, key = PlanDate_AEM#
     const taskMap = {};
-    const planWs = ss.getSheetByName('Total PM Plan List');
-    if (planWs) {
-      const planData = planWs.getDataRange().getValues();
-      for (let i = 1; i < planData.length; i++) {
+    const planData = getPMPlanRows_('raw');
+    if (planData.length > 0) {
+      for (let i = 0; i < planData.length; i++) {
         const planDate = normalizeDate_(planData[i][4]); // E: 开始日期
         const planHours = parseFloat(String(planData[i][7] || '0')); // H: 保养时间
         const durationDays = Math.max(1, Math.ceil(planHours / 24));
