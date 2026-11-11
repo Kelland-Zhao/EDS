@@ -90,16 +90,6 @@
         $('#pmModal').modal('hide');
     });
 
-    $('#PM_MasterData').click(() => {
-        let url = siWebPage + '?v=PM_MasterData'
-            + '&ID=' + encodeURIComponent(id)
-            + '&Name=' + encodeURIComponent(name)
-            + '&Process=' + encodeURIComponent(process)
-            + '&Workshop=' + encodeURIComponent(workshop);
-        window.open(url);
-        $('#pmModal').modal('hide');
-    });
-
     $('#MasterData').click(() => {
         $('#masterDataModal').modal('show');
     });

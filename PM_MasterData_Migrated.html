@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <base target="_top">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <?!=include("Kez_Bootstrap@5.3.1_css");?>
+  <?!=include("CSS");?>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: #f5f6f8; }
+    .migrate-wrap { max-width: 760px; margin: 72px auto; padding: 0 16px; }
+    .migrate-card {
+      background: #fff; border-radius: 10px; padding: 40px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .08); text-align: center;
+    }
+    .migrate-icon { font-size: 52px; color: #E60012; }
+    .migrate-title { font-size: 24px; font-weight: 700; margin: 16px 0 6px; }
+    .migrate-sub { color: #6c757d; font-size: 14px; margin-bottom: 24px; }
+    .migrate-text { font-size: 14px; color: #333; line-height: 1.9; text-align: left; }
+    .migrate-text strong { color: #E60012; }
+    .btn-brand { background: #E60012; color: #fff; border-color: #E60012; }
+    .btn-brand:hover { background: #c0000f; color: #fff; border-color: #c0000f; }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark" style="background:#E60012;">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1">
+        设备部数字化系统
+        <span style="font-size:14px;font-weight:400;opacity:.85;">EDS</span>
+      </span>
+    </div>
+  </nav>
+
+  <div class="migrate-wrap">
+    <div class="migrate-card">
+      <i class="bi bi-arrow-right-circle migrate-icon"></i>
+      <div class="migrate-title">保养主数据已迁移</div>
+      <div class="migrate-sub">PM Master Data Has Moved</div>
+      <div class="migrate-text">
+        <p>原【保养主数据】已迁移至 <strong>任务清单变更管理 → 保养策略</strong>。</p>
+        <p>The former PM Master Data has moved to <strong>Tasklist MoC → PM Strategy</strong>.</p>
+        <p>请在新系统中进行策略的新建、修改、作废和审批。旧页面与旧数据保留归档，不再维护。</p>
+        <p>Please create, modify, void and approve strategies in the new system. The old page and data are archived and no longer maintained.</p>
+      </div>
+      <div class="mt-4 d-flex flex-wrap gap-2 justify-content-center">
+        <a class="btn btn-brand" target="_blank"
+          href="https://script.google.com/a/macros/colpal.com/s/AKfycbxpDYL02i5FaFzUDcIoW3siG2U94cvWUUnz_F5x2BO1jnrXoMGzFQH-jw9C4nvZ7FE/exec">
+          前往任务清单变更管理 / Open Tasklist MoC
+        </a>
+        <a class="btn btn-outline-secondary" target="_top" href="<?= webPage ?>">
+          返回导航 / Back
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

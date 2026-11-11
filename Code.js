@@ -295,7 +295,7 @@ function doGet(e) {
   Route.path("PM_RecordQuery", loadPM_RecordQuery); // 新增记录查询页面路由
   Route.path("Inspection2.0", loadInspection2_0); // 新增点检2.0路由
   Route.path("PM_ShiftFollowUp", loadPM_ShiftFollowUp); // 新增三班转保养跟进页面路由
-  Route.path("PM_MasterData", loadPM_MasterData); // 保养主数据管理页
+  Route.path("PM_MasterData", loadPM_MasterData); // 保养主数据迁移提示（已软下线）
   Route.path("INJ_MachineMaster", loadINJMachineMaster); // 注塑机台主数据维护页
   Route.path("Handover_1.0", loadHandover_1_0); // 新增交接班页面路由
   Route.path("Fault_Record_1.0", loadFault_Record_1_0); // 新增故障记录页面路由
@@ -441,13 +441,13 @@ function loadPM_MasterData(
   intoWebLoginType
 ) {
   let webPage = getReleaseWebPage();
-  return render("PM_MasterData", {
+  return render("PM_MasterData_Migrated", {
     webPage: webPage,
     intoWebID: intoWebLoginId || "",
     intoWebName: intoWebLoginName || "",
     intoWebType: intoWebLoginType || "",
   })
-    .setTitle("保养主数据 | PM Master Data")
+    .setTitle("保养主数据已迁移 | PM Master Data Moved")
     .setFaviconUrl(webIconUrl);
 }
 
