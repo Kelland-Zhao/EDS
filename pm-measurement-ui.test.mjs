@@ -217,3 +217,50 @@ test('确认页摘要包含不合格与异常措施', () => {
 test('无 measurements 的旧任务摘要为空', () => {
   assert.equal(pmMeasurementSummaryText_({ valueAndNote: '125' }), '');
 });
+
+function extractAssignedTaskFormatter(src) {
+  const mapIdx = src.indexOf('finalTaskList.map(');
+  if (mapIdx < 0) throw new Error('finalTaskList.map not found');
+  const start = src.indexOf('task =>', mapIdx);
+  if (start < 0) throw new Error('task => callback not found');
+  const open = src.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  throw new Error('formatter braces not balanced');
+}
+
+test('人员分配展开原任务保留测量字段', () => {
+  const src = fs.readFileSync(new URL('./PersonnelAssignment_js.html', import.meta.url), 'utf8');
+  const formatter = new Function('taskAssignments', 'return (' + extractAssignedTaskFormatter(src) + ')')({ 'FCS-43': ['张三'] });
+  const result = formatter({
+    'Task No': 'FCS-43',
+    'Measurement Points': 'S1,S2,S3,S4',
+    'Point Labels': 'S1=操作侧;S2=非操作侧;S3=天侧;S4=地侧',
+    'Measurement Unit': 'kN',
+    'Photo Required': 'Y',
+  });
+  assert.equal(result['Measurement Points'], 'S1,S2,S3,S4');
+  assert.equal(result['Point Labels'], 'S1=操作侧;S2=非操作侧;S3=天侧;S4=地侧');
+  assert.equal(result['Measurement Unit'], 'kN');
+  assert.equal(result['Photo Required'], 'Y');
+  assert.deepEqual(result['执行人员'], ['张三']);
+  assert.equal(result.taskStatus, false);
+});
+
+test('任务编辑保存完整行数据不丢测量字段', () => {
+  const src = fs.readFileSync(new URL('./TaskEdit_js.html', import.meta.url), 'utf8');
+  assert.ok(src.includes('const updatedData = taskEditTable.rows().data().toArray();'));
+  assert.ok(src.includes('updatedTasklist: JSON.stringify(updatedData)'));
+});
+
+test('旧数据缺新字段时不报错并按旧工单处理', () => {
+  const oldTask = { 'Task No': 'OLD-1', 'PdM?': '是/ Yes', taskStatus: true, valueAndNote: '125' };
+  assert.deepEqual(pmTaskEndErrors_([oldTask]), []);
+  assert.equal(pmMeasurementSummaryText_({ 'Task No': 'OLD-1', valueAndNote: '125' }), '');
+});
