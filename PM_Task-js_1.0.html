@@ -8,19 +8,36 @@
     return text === '是/ Yes' || text === '是' || text === 'Yes';
   }
 
+  function pmLegacyDoneValue_(value) {
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return null;
+  }
+
   function pmTaskDoneState_(task) {
     const source = task || {};
     const hasTaskStatus = Object.prototype.hasOwnProperty.call(source, 'taskStatus');
-    const hasLegacy = Object.prototype.hasOwnProperty.call(source, 'Task Status');
+    const legacyDone = pmLegacyDoneValue_(source['Task Status']);
+    const hasLegacy = legacyDone !== null;
     let done = false;
     let conflict = false;
     if (hasTaskStatus) {
       done = source.taskStatus === true;
-      if (hasLegacy) conflict = (source['Task Status'] === true) !== done;
+      if (hasLegacy) conflict = legacyDone !== done;
     } else if (hasLegacy) {
-      done = source['Task Status'] === true;
+      done = legacyDone;
     }
     return { done: done, conflict: conflict };
+  }
+
+  function pmTaskCheckboxState_(task) {
+    const source = task || {};
+    const hasTaskStatus = Object.prototype.hasOwnProperty.call(source, 'taskStatus');
+    const legacyDone = pmLegacyDoneValue_(source['Task Status']);
+    const taskDone = source.taskStatus === true;
+    const checked = hasTaskStatus ? taskDone : legacyDone === true;
+    const conflict = hasTaskStatus && legacyDone !== null && legacyDone !== taskDone;
+    return { checked: checked, conflict: conflict };
   }
 
   function pmPhotoSuccess_(task) {
@@ -45,7 +62,8 @@
       const hasPoints = task['Measurement Points'] !== null
         && task['Measurement Points'] !== undefined
         && String(task['Measurement Points']).trim() !== '';
-      if (hasPoints) {
+      const pdmYes = pmIsPdMYes_(task['PdM?']);
+      if (pdmYes && hasPoints) {
         pmMeasurementErrors_(task).forEach((e) => {
           errors.push({ row: index + 1, taskNo: taskNo, field: e.field, message: e.message });
         });
@@ -55,7 +73,7 @@
             errors.push({ row: index + 1, taskNo: taskNo, field: 'Note', message: '超限需填写异常措施 / Exception note required' });
           }
         }
-      } else if (pmIsPdMYes_(task['PdM?'])) {
+      } else if (pdmYes) {
         const value = task.valueAndNote === null || task.valueAndNote === undefined ? '' : String(task.valueAndNote).trim();
         if (value === '') {
           errors.push({ row: index + 1, taskNo: taskNo, field: 'Value', message: 'PdM 任务未填写数值 / Value required for PdM task' });
@@ -80,6 +98,85 @@
       seen.add(name);
     });
     return list.slice(0, 3);
+  }
+
+  // 结束载荷白名单：保留测量配置、读数与异常措施，丢弃 base64 等临时字段
+  function pmTaskPayload_(rowData, taskStatus, valueAndNote, existingPhotos) {
+    const source = rowData || {};
+    const fields = [
+      'MachineType', 'Task No', 'Resource', 'Frecuency', 'Section', 'Function', 'Task Description',
+      '执行人员', 'Unit', 'Component', 'Logic', 'TagName', 'LL Limited', 'HH Limited',
+      'PdM?', 'Photo Required', 'Task Status',
+      'Measurement Points', 'Point Labels', 'Measurement Unit',
+      'measurements', 'note'
+    ];
+    const payload = {};
+    fields.forEach((field) => {
+      if (source[field] !== undefined) payload[field] = source[field];
+    });
+    payload.taskStatus = taskStatus;
+    payload.valueAndNote = valueAndNote;
+    const legacyDone = pmLegacyDoneValue_(source['Task Status']);
+    payload['Task Status'] = legacyDone === null ? taskStatus : source['Task Status'];
+    payload.photos = Array.isArray(existingPhotos) ? existingPhotos.slice() : [];
+    payload.image = payload.photos.length > 0 || source.image === '见文件夹' ? '见文件夹' : '无图片';
+    return payload;
+  }
+
+  // 客户端预计算 Total / 结果，供结束后的确认页快照使用（后端仍会重算）
+  function pmMeasurementTotals_(task) {
+    const source = task || {};
+    if (pmParsePoints_(source['Measurement Points']).length === 0) return {};
+    const measurements = Array.isArray(source.measurements) ? source.measurements : [];
+    const values = measurements.map((item) => item && item.value);
+    return {
+      measurementTotal: pmAggregate_(values, source['Measurement Unit']),
+      inspectionResult: pmInspectionResult_(source)
+    };
+  }
+
+  // 等待所有照片转换完成后再上传；promises 为空时直接返回（修复 images 异步未填充的竞态）
+  async function pmUploadPendingPhotos_(images, promises, task, uploadFn, timestamp, options) {
+    const opts = options || {};
+    const pending = Array.isArray(promises) ? promises : [];
+    const list = Array.isArray(images) ? images : [];
+    if (pending.length === 0) return { ok: true, uploaded: 0, failed: 0 };
+    await Promise.all(pending);
+    let failed = 0;
+    for (const img of list) {
+      try {
+        const fileId = await uploadFn(img);
+        const taskItem = task[img.taskIndex];
+        if (!taskItem) throw new Error('task not found for uploaded image');
+        taskItem.photos = pmMergePhotos_(taskItem.photos, [{
+          fileId: fileId,
+          name: img.imageName,
+          status: 'success',
+          uploadedAt: timestamp
+        }]);
+        taskItem.image = '见文件夹';
+      } catch (e) {
+        failed++;
+        if (opts.failFast !== false) throw e;
+        console.error('图片上传失败:', e);
+      }
+    }
+    return { ok: failed === 0, uploaded: list.length - failed, failed: failed };
+  }
+
+  // 上传成功后把照片元数据回写行数据，避免同一会话再次保存时丢失关联
+  function pmApplyUploadedPhotos_(rowDatas, tasks) {
+    const rows = Array.isArray(rowDatas) ? rowDatas : [];
+    const list = Array.isArray(tasks) ? tasks : [];
+    return rows.map((rowData, index) => {
+      const task = list[index];
+      const copy = Object.assign({}, rowData);
+      if (task) {
+        if (Array.isArray(task.photos)) copy.photos = task.photos;
+        if (task.image !== undefined) copy.image = task.image;
+      }
+      return copy;
+    });
   }
 
   function pmParsePoints_(value) {
@@ -131,14 +228,20 @@
     if (number === null) return null;
     const low = pmNumericValue_(ll);
     const high = pmNumericValue_(hh);
-    if (low === null && high === null) return null;
     const logicText = logic === null || logic === undefined ? '' : String(logic);
-    if (logicText.indexOf('LowAlarm') !== -1) return low !== null && number < low;
+    if (logicText.indexOf('LowAlarm') !== -1) {
+      if (low === null) return null;
+      return number < low;
+    }
+    if (logicText.indexOf('HighAlarm') !== -1) {
+      if (high === null) return null;
+      return number > high;
+    }
     if (logicText.indexOf('Out_of_range') !== -1) {
+      if (low === null && high === null) return null;
       return (low !== null && number < low) || (high !== null && number > high);
     }
-    if (high !== null) return number > high;
-    return low !== null && number < low;
+    return null;
   }
 
   function pmInspectionResult_(task) {
@@ -494,12 +597,6 @@
         let nonEmptyNotesCount = 0;
         let images = [];
         let promises = [];
-        const TASK_FIELDS = [
-          'MachineType', 'Task No', 'Resource', 'Frecuency', 'Section', 'Function', 'Task Description',
-          '执行人员', 'Unit', 'Component', 'Logic', 'TagName', 'LL Limited', 'HH Limited',
-          'PdM?', 'Photo Required', 'Task Status',
-          'Measurement Points', 'Point Labels', 'Measurement Unit'
-        ];
 
         table_tasklist.rows().every(function () {
           const row = this.node();
@@ -511,15 +608,7 @@
           const taskIndex = task.length;
           const existingPhotos = Array.isArray(rowData.photos) ? rowData.photos : [];
 
-          let trimmedRowData = {};
-          TASK_FIELDS.forEach((f) => { if (rowData[f] !== undefined) trimmedRowData[f] = rowData[f]; });
-          let taskData = {
-            ...trimmedRowData,
-            taskStatus: taskStatusCheckbox,
-            valueAndNote: valueAndNote,
-            photos: existingPhotos,
-            image: existingPhotos.length > 0 ? '见文件夹' : '无图片'
-          };
+          let taskData = pmTaskPayload_(rowData, taskStatusCheckbox, valueAndNote, existingPhotos);
 
           if (file) {
             const fileName = pmNo + '_' + (rowData['Task No'] || '') + '_' + file.name;
@@ -532,7 +621,6 @@
               });
             });
             promises.push(convert);
-            taskData.image = '见文件夹';
           }
 
           if (!taskStatusCheckbox) {
@@ -560,27 +648,22 @@
 
         // ====== 再上传照片，拿到 fileId ======
         let uploadFailed = false;
-        if (images.length > 0) {
+        if (promises.length > 0) {
           try {
             const ID = await check_Image_Content(pmNo);
             const folderId = ID == null ? await createFolder() : ID;
-            await Promise.all(promises);
-            for (const img of images) {
-              const fileId = await new Promise((resolve, reject) => {
-                google.script.run
-                  .withSuccessHandler(resolve)
-                  .withFailureHandler(reject)
-                  .uploadBase64ImageToDrive(img.base64Image, folderId, img.imageName, img.mimeType);
-              });
-              const taskItem = task[img.taskIndex];
-              taskItem.photos = pmMergePhotos_(taskItem.photos, [{
-                fileId: fileId,
-                name: img.imageName,
-                status: 'success',
-                uploadedAt: formattedDate + ' ' + formattedTime
-              }]);
-              taskItem.image = '见文件夹';
-            }
+            await pmUploadPendingPhotos_(images, promises, task, (img) => new Promise((resolve, reject) => {
+              google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(reject)
+                .uploadBase64ImageToDrive(img.base64Image, folderId, img.imageName, img.mimeType);
+            }), formattedDate + ' ' + formattedTime);
+            // 回写行数据：确认页快照与重复保存都能看到刚上传的照片
+            let rowCursor = 0;
+            table_tasklist.rows().every(function () {
+              this.data(pmApplyUploadedPhotos_([this.data()], [task[rowCursor]])[0]);
+              rowCursor++;
+            });
           } catch (e) {
             uploadFailed = true;
           }
@@ -684,13 +767,16 @@
           const rowData = this.data();
           const taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
           const valueAndNote = $(row).find('input[type="text"]').val();
+          const legacyDone = pmLegacyDoneValue_(rowData['Task Status']);
+          const totals = pmMeasurementTotals_(rowData);
           completeTaskList.push({
             ...rowData,
             taskStatus: taskStatusCheckbox,
             valueAndNote: valueAndNote,
-            'Task Status': rowData['Task Status'] !== undefined ? rowData['Task Status'] : taskStatusCheckbox,
+            'Task Status': legacyDone === null ? taskStatusCheckbox : rowData['Task Status'],
             '数值记录&备注': valueAndNote,
-            '执行人员': rowData['执行人员'] || 'N/A'
+            '执行人员': rowData['执行人员'] || 'N/A',
+            ...totals
           });
         });
         sessionStorage.setItem('PM_Task_Details', JSON.stringify(completeTaskList));
@@ -1855,11 +1941,14 @@
           colDef.title = `<input type="checkbox" id="selectAllTaskStatus" class="form-check-input" style="width:18px;height:18px;cursor:pointer;display:block;margin:0 auto 2px;"><br>完成状态<br>Task Status`;
         }
         colDef.render = function (data, type, row) {
-          const checked = data === true || row.taskStatus === true;
+          const state = pmTaskCheckboxState_(row);
           // PM任务验证：已有验证记录 → 勾选框锁定（不可取消勾选）
           const verifyRecords = (global_VerifyRecords && global_VerifyRecords[row['Task No']]) || [];
           const locked = pmHasVerify_(verifyRecords);
-          return `<input class="form-check-input" type="checkbox" value="" style="border: 2px solid #696969; width: 24px; height: 24px; cursor: pointer;" ${checked ? 'checked' : ''} ${(!isEditable || locked) ? 'disabled' : ''}>`;
+          const conflictBadge = state.conflict
+            ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 4px;border-radius:3px;background:#f0ad4e;color:#fff;font-size:10px;">待核实</span>'
+            : '';
+          return `<input class="form-check-input" type="checkbox" value="" style="border: 2px solid #696969; width: 24px; height: 24px; cursor: pointer;" ${state.checked ? 'checked' : ''} ${(!isEditable || locked) ? 'disabled' : ''}>` + conflictBadge;
         };
       }
       if (title === '验证状态') {
@@ -1871,7 +1960,7 @@
       }
       if (title === '数值记录&备注') {
         colDef.render = function (data, type, row) {
-          const hasConfig = pmParsePoints_(row['Measurement Points']).length > 0;
+          const hasConfig = pmIsPdMYes_(row['PdM?']) && pmParsePoints_(row['Measurement Points']).length > 0;
           if (hasConfig) {
             return '<div style="font-size:11px;line-height:1.4;">' + pmEscapeTaskHtml_(pmMeasurementSummary_(row)) + '</div>'
               + '<button type="button" class="btn btn-info btn-sm measure-btn" style="margin-top:4px;"' + (!isEditable ? ' disabled' : '') + '>录入 / Measure</button>';
@@ -2816,6 +2905,8 @@
       let taskNo = (r.taskNo || '').toString();
       let isMandatory = taskNo.toUpperCase().includes('PDM') || taskNo.includes('*');
       if (!isMandatory) return;
+      // 新配置任务走 measurements 校验，不再要求旧的数值输入框
+      if (r.hasMeasurementConfig) return;
       // 仅勾选完成的任务强制填写数值；未勾选的走"原因+措施"流程
       if (!r.checked) return;
       if (r.valueAndNote && r.valueAndNote.trim() !== '') return;
@@ -2838,7 +2929,8 @@
         taskNo: rowData['Task No'],
         taskDescription: rowData['Task Description'],
         checked: $(row).find('.form-check-input').prop('checked'),
-        valueAndNote: $(row).find('input[type="text"]').val()
+        valueAndNote: $(row).find('input[type="text"]').val(),
+        hasMeasurementConfig: pmIsPdMYes_(rowData['PdM?']) && pmParsePoints_(rowData['Measurement Points']).length > 0
       });
     });
     return findMissingMandatoryValueRows(rows);
@@ -3001,7 +3093,7 @@
             taskStatus: taskStatusCheckbox,
             valueAndNote: valueAndNote,
             photos: existingPhotos,
-            image: existingPhotos.length > 0 ? '见文件夹' : '无图片'
+            image: existingPhotos.length > 0 || rowData.image === '见文件夹' ? '见文件夹' : '无图片'
           };
 
           if (file && file.size > 0) {
@@ -3010,7 +3102,6 @@
               images.push({ taskIndex: taskIndex, imageName: fileName, mimeType: file.type, base64Image: base64Image });
             }).catch(() => {});
             promises.push(promise);
-            taskData.image = '见文件夹';
           }
 
           if (!taskStatusCheckbox) {
@@ -3025,29 +3116,20 @@
         });
 
         // 草稿：先上传照片，成功的结果写回任务；失败不阻断草稿保存
-        if (images.length > 0) {
+        if (promises.length > 0) {
           try {
             const ID = await check_Image_Content(pmNo);
             const folderId = ID == null ? await createFolder() : ID;
-            await Promise.all(promises);
-            for (const img of images) {
-              try {
-                const fileId = await new Promise((resolve, reject) => {
-                  google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)
-                    .uploadBase64ImageToDrive(img.base64Image, folderId, img.imageName, img.mimeType);
-                });
-                const taskItem = task[img.taskIndex];
-                taskItem.photos = pmMergePhotos_(taskItem.photos, [{
-                  fileId: fileId,
-                  name: img.imageName,
-                  status: 'success',
-                  uploadedAt: formattedDate + ' ' + formattedTime
-                }]);
-                taskItem.image = '见文件夹';
-              } catch (e) {
-                console.error('草稿图片上传失败:', e);
-              }
-            }
+            await pmUploadPendingPhotos_(images, promises, task, (img) => new Promise((resolve, reject) => {
+              google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)
+                .uploadBase64ImageToDrive(img.base64Image, folderId, img.imageName, img.mimeType);
+            }), formattedDate + ' ' + formattedTime, { failFast: false });
+            // 回写行数据：同一会话再次保存草稿时保留已上传照片
+            let rowCursor = 0;
+            table_tasklist.rows().every(function () {
+              this.data(pmApplyUploadedPhotos_([this.data()], [task[rowCursor]])[0]);
+              rowCursor++;
+            });
           } catch (e) {
             console.error('草稿图片上传过程中发生错误:', e);
           }

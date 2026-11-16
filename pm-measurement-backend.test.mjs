@@ -165,3 +165,49 @@ test('测量单位与配置不一致时报错', () => {
   }]);
   assert.ok(errors.some((e) => e.field === 'Measurement Unit'));
 });
+
+// ===== Final review 修复项 =====
+
+test('空字符串 Task Status 不构成状态冲突', () => {
+  assert.deepEqual(pmTaskDoneState_({ taskStatus: true, 'Task Status': '' }), { done: true, conflict: false });
+  assert.deepEqual(pmTaskDoneState_({ taskStatus: true, 'Task Status': false }), { done: true, conflict: true });
+});
+
+test('HighAlarm 缺 HH 或 LowAlarm 缺 LL 时待判定', () => {
+  assert.equal(pmPointOutOfLimit_('HighAlarm_Max', 125, 100, ''), null);
+  assert.equal(pmPointOutOfLimit_('LowAlarm_Max', 145, '', 130), null);
+  assert.equal(pmPointOutOfLimit_('', 145, '', 130), null);
+  assert.equal(pmPointOutOfLimit_('HighAlarm_Max', 145, '', 130), true);
+  assert.equal(pmPointOutOfLimit_('HighAlarm_Max', 125, '', 130), false);
+});
+
+test('PdM=否 的有配置任务不要求测量', () => {
+  const errors = pmTaskEndErrors_([{
+    'Task No': 'T-1', 'PdM?': '否/ No', taskStatus: true,
+    'Measurement Points': 'S1', 'Point Labels': 'S1=操作侧', 'Measurement Unit': 'kN',
+    measurements: [],
+  }]);
+  assert.deepEqual(errors, []);
+});
+
+test('End 任务明细 JSON 损坏时拒绝写入', () => {
+  setupFakePmSheet();
+  const res = saveData_tasklist({
+    'PM No.': 'PM-001', 'SheetName': 'IM-TB1', Status: 'End',
+    '任务明细': '{not-json', EndDate: '2026-11-16', EndTime: '10:00',
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'MEASUREMENT_VALIDATION');
+  assert.deepEqual(ws.writes, []);
+});
+
+test('End 任务明细为空数组时拒绝写入', () => {
+  setupFakePmSheet();
+  const res = saveData_tasklist({
+    'PM No.': 'PM-001', 'SheetName': 'IM-TB1', Status: 'End',
+    '任务明细': '[]', EndDate: '2026-11-16', EndTime: '10:00',
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'MEASUREMENT_VALIDATION');
+  assert.deepEqual(ws.writes, []);
+});

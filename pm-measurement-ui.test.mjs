@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 function extractFunction(src, name) {
-  const start = src.indexOf(`function ${name}(`);
+  let start = src.indexOf(`function ${name}(`);
   if (start < 0) throw new Error(`${name} not found in source`);
+  if (src.slice(start - 6, start) === 'async ') start -= 6;
   let depth = 0;
   for (let i = src.indexOf('{', start); i < src.length; i++) {
     if (src[i] === '{') depth++;
@@ -19,13 +20,13 @@ function extractFunction(src, name) {
 }
 
 const html = fs.readFileSync(new URL('./PM_Task-js_1.0.html', import.meta.url), 'utf8');
-for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_', 'pmMeasurementErrors_', 'pmMeasurementSummary_', 'checkPdMLimit', 'buildPdMRows_', 'PdMData_empty_or_not']) {
+for (const name of ['pmIsPdMYes_', 'pmLegacyDoneValue_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_', 'pmMeasurementErrors_', 'pmMeasurementSummary_', 'checkPdMLimit', 'buildPdMRows_', 'PdMData_empty_or_not', 'pmTaskPayload_', 'pmMeasurementTotals_', 'pmTaskCheckboxState_', 'pmUploadPendingPhotos_', 'pmApplyUploadedPhotos_', 'findMissingMandatoryValueRows']) {
   const fn = (() => { try { return extractFunction(html, name); } catch (e) { return null; } })();
   (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Task-js_1.0.html"); }`);
 }
 
 const common = fs.readFileSync(new URL('./PM_Common_js.html', import.meta.url), 'utf8');
-for (const name of ['pmTaskStatusLabel_', 'pmEscapeReportHtml_', 'pmMeasurementSummaryText_', 'pmMeasurementReportHtml_']) {
+for (const name of ['pmTaskStatusLabel_', 'pmLegacyDoneValue_', 'pmEscapeReportHtml_', 'pmMeasurementSummaryText_', 'pmMeasurementReportHtml_']) {
   const fn = (() => { try { return extractFunction(common, name); } catch (e) { return null; } })();
   (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Common_js.html"); }`);
 }
@@ -263,4 +264,88 @@ test('旧数据缺新字段时不报错并按旧工单处理', () => {
   const oldTask = { 'Task No': 'OLD-1', 'PdM?': '是/ Yes', taskStatus: true, valueAndNote: '125' };
   assert.deepEqual(pmTaskEndErrors_([oldTask]), []);
   assert.equal(pmMeasurementSummaryText_({ 'Task No': 'OLD-1', valueAndNote: '125' }), '');
+});
+
+// ===== Final review 修复项 =====
+
+test('空字符串 Task Status 在报告里不显示待核实', () => {
+  assert.equal(pmTaskStatusLabel_({ taskStatus: true, 'Task Status': '' }), '已完成 / Done');
+  assert.equal(pmTaskStatusLabel_({ taskStatus: true, 'Task Status': false }), '待核实 / Verify');
+});
+
+test('前端 HighAlarm 缺 HH 时待判定', () => {
+  assert.equal(pmPointOutOfLimit_('HighAlarm_Max', 125, 100, ''), null);
+});
+
+test('前端 PdM=否 的有配置任务不要求测量', () => {
+  const errors = pmTaskEndErrors_([{
+    'Task No': 'T-1', 'PdM?': '否/ No', taskStatus: true,
+    'Measurement Points': 'S1', 'Point Labels': 'S1=操作侧', 'Measurement Unit': 'kN',
+    measurements: [],
+  }]);
+  assert.deepEqual(errors, []);
+});
+
+test('结束载荷保留 measurements 与 note 并归一空 Task Status', () => {
+  const payload = pmTaskPayload_({
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes', 'Task Status': '',
+    'Measurement Points': 'S1', 'Point Labels': 'S1=操作侧', 'Measurement Unit': 'kN',
+    measurements: [{ point: 'S1', value: 125, unit: 'kN' }],
+    note: '正常', image: '见文件夹',
+  }, true, '');
+  assert.deepEqual(payload.measurements, [{ point: 'S1', value: 125, unit: 'kN' }]);
+  assert.equal(payload.note, '正常');
+  assert.equal(payload['Task Status'], true);
+  assert.equal(payload.image, '见文件夹');
+  assert.equal(pmTaskPayload_({ 'Task No': 'T2' }, false, '').image, '无图片');
+});
+
+test('快照计算 Total 与结果', () => {
+  const totals = pmMeasurementTotals_({
+    'Measurement Points': 'S1,S2', 'Measurement Unit': 'kN', 'LL Limited': '', 'HH Limited': '',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }],
+  });
+  assert.equal(totals.measurementTotal, 251);
+  assert.equal(totals.inspectionResult, '待判定');
+  assert.deepEqual(pmMeasurementTotals_({ 'Task No': 'OLD' }), {});
+});
+
+test('完成状态勾选以 taskStatus 为准并标记冲突', () => {
+  assert.deepEqual(pmTaskCheckboxState_({ taskStatus: false, 'Task Status': true }), { checked: false, conflict: true });
+  assert.deepEqual(pmTaskCheckboxState_({ taskStatus: true, 'Task Status': '' }), { checked: true, conflict: false });
+  assert.deepEqual(pmTaskCheckboxState_({ 'Task Status': true }), { checked: true, conflict: false });
+});
+
+test('照片转换完成后才上传并回写任务', async () => {
+  const images = [];
+  const promises = [Promise.resolve().then(() => images.push({ taskIndex: 0, imageName: 'a.jpg', mimeType: 'image/jpeg', base64Image: 'x' }))];
+  const task = [{ photos: [], image: '无图片' }];
+  const calls = [];
+  const res = await pmUploadPendingPhotos_(images, promises, task, async (img) => { calls.push(img.imageName); return 'FILE1'; }, '2026-11-16 10:00:00');
+  assert.equal(res.uploaded, 1);
+  assert.deepEqual(calls, ['a.jpg']);
+  assert.equal(task[0].photos[0].fileId, 'FILE1');
+  assert.equal(task[0].image, '见文件夹');
+});
+
+test('无待上传照片时不上传', async () => {
+  const res = await pmUploadPendingPhotos_([], [], [], async () => 'X', 'T');
+  assert.equal(res.uploaded, 0);
+});
+
+test('上传成功的照片回写行数据供再次保存', () => {
+  const rows = [{ 'Task No': 'T1', photos: [], image: '无图片' }];
+  const tasks = [{ photos: [{ fileId: 'F1', status: 'success' }], image: '见文件夹' }];
+  const merged = pmApplyUploadedPhotos_(rows, tasks);
+  assert.equal(merged[0].photos[0].fileId, 'F1');
+  assert.equal(merged[0].image, '见文件夹');
+});
+
+test('有测量配置的 PdM 任务不再要求旧数值输入', () => {
+  const missing = findMissingMandatoryValueRows([
+    { taskNo: 'FCS-43 - PdM', checked: true, valueAndNote: '', hasMeasurementConfig: true },
+    { taskNo: 'PDM-01', checked: true, valueAndNote: '' },
+  ]);
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].taskNo, 'PDM-01');
 });

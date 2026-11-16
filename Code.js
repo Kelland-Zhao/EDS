@@ -4596,19 +4596,26 @@ function pmIsPdMYes_(value) {
  * @param {Object} task
  * @returns {{done:boolean, conflict:boolean}}
  */
+function pmLegacyDoneValue_(value) {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return null;
+}
+
 function pmTaskDoneState_(task) {
   var source = task || {};
   var hasTaskStatus = Object.prototype.hasOwnProperty.call(source, "taskStatus");
-  var hasLegacy = Object.prototype.hasOwnProperty.call(source, "Task Status");
+  var legacyDone = pmLegacyDoneValue_(source["Task Status"]);
+  var hasLegacy = legacyDone !== null;
   var done = false;
   var conflict = false;
   if (hasTaskStatus) {
     done = source.taskStatus === true;
     if (hasLegacy) {
-      conflict = (source["Task Status"] === true) !== done;
+      conflict = legacyDone !== done;
     }
   } else if (hasLegacy) {
-    done = source["Task Status"] === true;
+    done = legacyDone;
   }
   return { done: done, conflict: conflict };
 }
@@ -4653,7 +4660,8 @@ function pmTaskEndErrors_(tasks) {
     var hasPoints = task["Measurement Points"] !== null
       && task["Measurement Points"] !== undefined
       && String(task["Measurement Points"]).trim() !== "";
-    if (hasPoints) {
+    var pdmYes = pmIsPdMYes_(task["PdM?"]);
+    if (pdmYes && hasPoints) {
       var measurementErrors = pmMeasurementErrors_(task);
       measurementErrors.forEach(function (e) {
         errors.push({ row: index + 1, taskNo: taskNo, field: e.field, message: e.message });
@@ -4669,7 +4677,7 @@ function pmTaskEndErrors_(tasks) {
           });
         }
       }
-    } else if (pmIsPdMYes_(task["PdM?"])) {
+    } else if (pdmYes) {
       var value = task.valueAndNote === null || task.valueAndNote === undefined ? "" : String(task.valueAndNote).trim();
       if (value === "") {
         errors.push({
@@ -4733,16 +4741,20 @@ function pmPointOutOfLimit_(logic, value, ll, hh) {
   if (number === null) return null;
   var low = pmNumericValue_(ll);
   var high = pmNumericValue_(hh);
-  if (low === null && high === null) return null;
   var logicText = logic === null || logic === undefined ? "" : String(logic);
   if (logicText.indexOf("LowAlarm") !== -1) {
-    return low !== null && number < low;
+    if (low === null) return null;
+    return number < low;
+  }
+  if (logicText.indexOf("HighAlarm") !== -1) {
+    if (high === null) return null;
+    return number > high;
   }
   if (logicText.indexOf("Out_of_range") !== -1) {
+    if (low === null && high === null) return null;
     return (low !== null && number < low) || (high !== null && number > high);
   }
-  if (high !== null) return number > high;
-  return low !== null && number < low;
+  return null;
 }
 
 function pmInspectionResult_(task) {
@@ -4880,11 +4892,23 @@ function saveData_tasklist(data, confirmUser) {
         }
       }
     } else if (Status == "End" && rowNumber !== -1) {
-      let parsedTasks = [];
+      let parsedTasks = null;
       try {
         parsedTasks = JSON.parse(data["任务明细"] || "[]");
       } catch (e) {
-        parsedTasks = [];
+        parsedTasks = null;
+      }
+      if (!Array.isArray(parsedTasks) || parsedTasks.length === 0) {
+        return {
+          ok: false,
+          code: "MEASUREMENT_VALIDATION",
+          errors: [{
+            row: 0,
+            taskNo: "",
+            field: "任务明细",
+            message: "任务明细数据无效，请重新载入后重试 / Invalid task details payload"
+          }]
+        };
       }
       let validationErrors = pmTaskEndErrors_(parsedTasks);
       if (validationErrors.length > 0) {
