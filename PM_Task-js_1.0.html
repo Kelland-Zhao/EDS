@@ -3,6 +3,75 @@
   const swalTitle = (cn, en) => `${cn}<span style="display:block;font-size:0.65em;color:#888;font-weight:400;line-height:1.3;margin-top:4px;">${en}</span>`;
   const swalHtml = (cn, en) => `<div>${cn}<div style="font-size:0.85em;color:#888;margin-top:6px;line-height:1.4;">${en}</div></div>`;
 
+  function pmIsPdMYes_(value) {
+    const text = value === null || value === undefined ? '' : String(value).trim();
+    return text === '是/ Yes' || text === '是' || text === 'Yes';
+  }
+
+  function pmTaskDoneState_(task) {
+    const source = task || {};
+    const hasTaskStatus = Object.prototype.hasOwnProperty.call(source, 'taskStatus');
+    const hasLegacy = Object.prototype.hasOwnProperty.call(source, 'Task Status');
+    let done = false;
+    let conflict = false;
+    if (hasTaskStatus) {
+      done = source.taskStatus === true;
+      if (hasLegacy) conflict = (source['Task Status'] === true) !== done;
+    } else if (hasLegacy) {
+      done = source['Task Status'] === true;
+    }
+    return { done: done, conflict: conflict };
+  }
+
+  function pmPhotoSuccess_(task) {
+    const photos = task && Array.isArray(task.photos) ? task.photos : [];
+    return photos.some((photo) => String(photo && photo.status || '').trim() === 'success');
+  }
+
+  function pmTaskEndErrors_(tasks, options) {
+    const opts = options || {};
+    const errors = [];
+    (tasks || []).forEach((task, index) => {
+      if (!task) return;
+      const state = pmTaskDoneState_(task);
+      if (!state.done) return;
+      const taskNo = task['Task No'] === null || task['Task No'] === undefined ? '' : String(task['Task No']);
+      const photoRequired = task['Photo Required'] === null || task['Photo Required'] === undefined
+        ? ''
+        : String(task['Photo Required']).trim().toUpperCase();
+      if (!opts.skipPhoto && photoRequired === 'Y' && !pmPhotoSuccess_(task)) {
+        errors.push({ row: index + 1, taskNo: taskNo, field: 'Photo', message: '缺少成功上传的照片 / Missing successful photo' });
+      }
+      const hasPoints = task['Measurement Points'] !== null
+        && task['Measurement Points'] !== undefined
+        && String(task['Measurement Points']).trim() !== '';
+      if (!hasPoints && pmIsPdMYes_(task['PdM?'])) {
+        const value = task.valueAndNote === null || task.valueAndNote === undefined ? '' : String(task.valueAndNote).trim();
+        if (value === '') {
+          errors.push({ row: index + 1, taskNo: taskNo, field: 'Value', message: 'PdM 任务未填写数值 / Value required for PdM task' });
+        }
+      }
+    });
+    return errors;
+  }
+
+  function pmPhotoKey_(pmNo, taskNo, name) {
+    return [pmNo, taskNo, name].map((value) => value === null || value === undefined ? '' : String(value).trim()).join('|');
+  }
+
+  function pmMergePhotos_(existing, incoming) {
+    const list = Array.isArray(existing) ? existing.slice() : [];
+    const seen = new Set(list.map((photo) => String(photo && photo.name || '').trim()));
+    (incoming || []).forEach((photo) => {
+      if (!photo) return;
+      const name = String(photo.name || '').trim();
+      if (seen.has(name)) return;
+      list.push(photo);
+      seen.add(name);
+    });
+    return list.slice(0, 3);
+  }
+
   let global_Name = sessionStorage.getItem('Name');
   $('#name').text(global_Name);
   let global_Process = sessionStorage.getItem('Process');
@@ -170,6 +239,26 @@
   }
 
   // 执行提交流程的函数（全局作用域）
+  function pmEscapeTaskHtml_(value) {
+    return String(value === null || value === undefined ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function pmEndErrorsHtml_(errors) {
+    const list = Array.isArray(errors) ? errors : [];
+    const lines = list.slice(0, 8).map((item) => {
+      const taskNo = item && item.taskNo ? ' ' + pmEscapeTaskHtml_(item.taskNo) : '';
+      const message = item && item.message ? pmEscapeTaskHtml_(item.message) : '';
+      return `第 ${item ? item.row : ''} 行${taskNo}：${message}`;
+    });
+    const more = list.length > 8 ? `<div>… 另有 ${list.length - 8} 项</div>` : '';
+    return `<div style="text-align:left;font-size:13px;line-height:1.7;">提交前检查未通过：<br>${lines.join('<br>')}${more}</div>`;
+  }
+
   function executeSubmissionProcess(confirmUser, incompleteTaskInfo) {
     Swal.fire({
       title: swalTitle('确认提交？','Confirm Submission?'),
@@ -179,261 +268,248 @@
       confirmButtonText: "确认",
       cancelButtonText: "取消"
     }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          let status = $("#PmStatus").val();
-          let currentDate = new Date();
-          let year = currentDate.getFullYear();
-          let month = currentDate.getMonth() + 1;
-          let day = currentDate.getDate();
-          month = month < 10 ? '0' + month : month;
-          day = day < 10 ? '0' + day : day;
-          let formattedDate = year + "-" + month + "-" + day;
+      if (!result.isConfirmed) return;
+      try {
+        const currentDate = new Date();
+        let year = currentDate.getFullYear();
+        let month = currentDate.getMonth() + 1;
+        let day = currentDate.getDate();
+        month = month < 10 ? '0' + month : month;
+        day = day < 10 ? '0' + day : day;
+        const formattedDate = year + "-" + month + "-" + day;
 
-          let hours = currentDate.getHours();
-          let minutes = currentDate.getMinutes();
-          let seconds = currentDate.getSeconds();
-          hours = hours < 10 ? '0' + hours : hours;
-          minutes = minutes < 10 ? '0' + minutes : minutes;
-          seconds = seconds < 10 ? '0' + seconds : seconds;
-          let formattedTime = hours + ':' + minutes + ':' + seconds;
+        let hours = currentDate.getHours();
+        let minutes = currentDate.getMinutes();
+        let seconds = currentDate.getSeconds();
+        hours = hours < 10 ? '0' + hours : hours;
+        minutes = minutes < 10 ? '0' + minutes : minutes;
+        seconds = seconds < 10 ? '0' + seconds : seconds;
+        const formattedTime = hours + ':' + minutes + ':' + seconds;
+        const pmNo = $("#PmNo").val();
 
-          $("#PmStatus").val("已完成/ Done");
-          $("#PmEndDate").val(formattedDate);
-          $("#PmEndTime").val(formattedTime);
-          $('#PmEnd').prop('disabled', true);
-          $('#PmStatus').css({
-            'background-color': '#3CB371',
-            'color': 'white',
-            'font-weight': 'bold'
+        // ====== 构造任务数据 ======
+        let task = [];
+        let uncheckedTasks = [];
+        let uncheckedCount = 0;
+        let nonEmptyNotes = [];
+        let nonEmptyNotesCount = 0;
+        let images = [];
+        let promises = [];
+        const TASK_FIELDS = [
+          'MachineType', 'Task No', 'Resource', 'Frecuency', 'Section', 'Function', 'Task Description',
+          '执行人员', 'Unit', 'Component', 'Logic', 'TagName', 'LL Limited', 'HH Limited',
+          'PdM?', 'Photo Required', 'Task Status',
+          'Measurement Points', 'Point Labels', 'Measurement Unit'
+        ];
+
+        table_tasklist.rows().every(function () {
+          const row = this.node();
+          const rowData = this.data();
+          const taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
+          const valueAndNote = $(row).find('input[type="text"]').val();
+          const photoInput = row ? $(row).find('.photo-input').get(0) : null;
+          const file = photoInput ? photoInput.files[0] : undefined;
+          const taskIndex = task.length;
+          const existingPhotos = Array.isArray(rowData.photos) ? rowData.photos : [];
+
+          let trimmedRowData = {};
+          TASK_FIELDS.forEach((f) => { if (rowData[f] !== undefined) trimmedRowData[f] = rowData[f]; });
+          let taskData = {
+            ...trimmedRowData,
+            taskStatus: taskStatusCheckbox,
+            valueAndNote: valueAndNote,
+            photos: existingPhotos,
+            image: existingPhotos.length > 0 ? '见文件夹' : '无图片'
+          };
+
+          if (file) {
+            const fileName = pmNo + '_' + (rowData['Task No'] || '') + '_' + file.name;
+            const convert = convertImageToBase64(file).then((base64Image) => {
+              images.push({
+                taskIndex: taskIndex,
+                imageName: fileName,
+                mimeType: file.type,
+                base64Image: base64Image
+              });
+            });
+            promises.push(convert);
+            taskData.image = '见文件夹';
+          }
+
+          if (!taskStatusCheckbox) {
+            uncheckedTasks.push({ 'Task No': rowData['Task No'], 'Task Description': rowData['Task Description'], taskStatus: false });
+            uncheckedCount++;
+          }
+          if (valueAndNote && valueAndNote.trim() !== "") {
+            nonEmptyNotes.push({ 'Task No': rowData['Task No'], 'Task Description': rowData['Task Description'], valueAndNote: valueAndNote });
+            nonEmptyNotesCount++;
+          }
+          task.push(taskData);
+        });
+
+        // ====== 先校验（照片暂不校验，待上传后再校验） ======
+        const preErrors = pmTaskEndErrors_(task, { skipPhoto: true });
+        if (preErrors.length > 0) {
+          Swal.fire({
+            icon: 'warning',
+            title: swalTitle('无法提交', 'Cannot Submit'),
+            html: pmEndErrorsHtml_(preErrors),
+            confirmButtonText: '确定 / OK'
           });
-
-          // ====== 构造表单数据（与测试按钮一致） ======
-          let data = {};
-          let task = [];
-          let uncheckedTasks = [];
-          let uncheckedCount = 0;
-          let nonEmptyNotes = [];
-          let nonEmptyNotesCount = 0;
-          let Count_of_image = 0;
-          let images = [];
-          let promises = [];
-          const TASK_FIELDS = ['MachineType', 'Task No', 'Resource', 'Frecuency', 'Section', 'Function', 'Task Description', '执行人员', 'Unit', 'Component', 'Logic', 'TagName', 'LL Limited', 'HH Limited'];
-
-          table_tasklist.rows().every(function (rowIdx) {
-            let obj = {};
-            let row = this.node();
-            let rowData = this.data();
-            let taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
-            let valueAndNote = $(row).find('input[type="text"]').val();
-            let photoInput = row ? $(row).find('.photo-input').get(0) : null;
-            let file = photoInput ? photoInput.files[0] : undefined;
-            let image = '无图片';
-
-            // 【图片上传相关】如有图片，转Base64并存入images数组，后续上传（只保留一处，避免重复）
-            if (file != undefined) {
-              Count_of_image++;
-              image = "见文件夹";
-              // 仅在内存中临时存储 imageContent 字段用于预览和上传
-              let lastIndex = task.length;
-              let promise = convertImageToBase64(file).then(base64Image => {
-                let obj = {
-                  imageName: $("#PmNo").val() + '_' + rowData['Task No'],
-                  mimeType: file.type,
-                  base64Image: base64Image
-                }
-                images.push(obj);
-                if (task[lastIndex]) {
-                  task[lastIndex].imageContent = base64Image;
-                }
-              })
-              promises.push(promise)
-            }
-
-            // 构建任务数据时，只保留白名单字段，避免超出GAS参数大小限制
-            let trimmedRowData = {};
-            TASK_FIELDS.forEach(f => { if (rowData[f] !== undefined) trimmedRowData[f] = rowData[f]; });
-            let taskData = {
-              ...trimmedRowData,
-              taskStatus: taskStatusCheckbox,
-              valueAndNote: valueAndNote,
-              image: image
-            };
-
-            if (!taskStatusCheckbox) {
-              uncheckedTasks.push({ 'Task No': rowData['Task No'], 'Task Description': rowData['Task Description'], taskStatus: false });
-              uncheckedCount++;
-            }
-            if (valueAndNote && valueAndNote.trim() !== "") {
-              nonEmptyNotes.push({ 'Task No': rowData['Task No'], 'Task Description': rowData['Task Description'], valueAndNote: valueAndNote });
-              nonEmptyNotesCount++;
-            }
-            task.push(taskData);
-          })
-          // 提交到表格时，移除所有 imageContent 字段，确保任务明细无base64内容
-          task = task.map(t => { let { imageContent, ...rest } = t; return rest; });
-
-          let totalRows = table_tasklist.rows().count();
-          data["PM No."] = $("#PmNo").val();
-          data["PmStatus"] = $("#PmStatus").val();
-          data["Notification"] = "";
-          data["PM People"] = "";
-          data["Plan PM Date"] = "";
-          data["SatrtDate"] = "";
-          data["StartTime"] = "";
-          data["EndDate"] = formattedDate;
-          data["EndTime"] = formattedTime;
-          data["Workcenter"] = "";
-          data["任务明细"] = JSON.stringify(task);
-          data["TaskCount"] = totalRows;
-          data["UncheckedTasks"] = JSON.stringify(uncheckedTasks);
-          data["UncheckedCount"] = uncheckedCount;
-          data["NonEmptyNotesTasks"] = JSON.stringify(nonEmptyNotes);
-          data["NonEmptyNotesCount"] = nonEmptyNotesCount;
-          data["SheetName"] = global_data["工序"] + "-" + global_data["车间"];
-          data["Status"] = "End";
-
-
-          PdMData();
-
-          let finalConfirmUser = confirmUser;
-          if (incompleteTaskInfo) {
-            finalConfirmUser = `${confirmUser}|原因:${incompleteTaskInfo.reason}|措施:${incompleteTaskInfo.steps}`;
-          }
-          let data_Submit_Result = await dataSubmit(data, finalConfirmUser);
-          let Count_Image_Upload = 0;
-
-          // ====== 再上传图片 ======
-          if (Count_of_image > 0) {
-            let PM_NO = $("#PmNo").val();
-            let ID = await check_Image_Content(PM_NO);
-            let folderId = '';
-            if (ID == null) {
-              folderId = await createFolder();
-            } else {
-              folderId = ID;
-            }
-            await Promise.all(promises);
-            let uploadPromises = images.map(r => {
-              return new Promise((resolve, reject) => {
-                google.script.run.withSuccessHandler(function (result) {
-                  Count_Image_Upload++;
-                  resolve(result);
-                }).withFailureHandler(function (error) {
-                  reject(error);
-                }).uploadBase64ImageToDrive(r.base64Image, folderId, r.imageName, r.mimeType);
-              });
-            });
-            try {
-              await Promise.all(uploadPromises);
-              let image_Submit_Result = (Count_of_image == Count_Image_Upload);
-              if (data_Submit_Result == '提交成功' && image_Submit_Result) {
-                Swal.fire({
-                  icon: 'success',
-                  title: swalTitle('提交成功','Submission Success'),
-                  html: swalHtml('数据和图片均已成功上传！','Data and images uploaded successfully!'),
-                  timer: 1500,
-                  showConfirmButton: false
-                });
-              } else if (data_Submit_Result != '提交成功' && image_Submit_Result) {
-                Swal.fire({
-                  icon: 'warning',
-                  title: swalTitle('部分成功','Partial Success'),
-                  html: swalHtml('数据上传失败，但图片上传成功。','Data upload failed, but images uploaded successfully.')
-                });
-              } else if (data_Submit_Result == '提交成功' && !image_Submit_Result) {
-                Swal.fire({
-                  icon: 'warning',
-                  title: swalTitle('部分成功','Partial Success'),
-                  html: swalHtml('数据上传成功，但图片上传失败。','Data uploaded successfully, but images upload failed.')
-                });
-              } else {
-                Swal.fire({
-                  icon: 'error',
-                  title: swalTitle('上传失败','Upload Failed'),
-                  html: swalHtml('数据和图片均上传失败，请重试。','Both data and images upload failed. Please retry.')
-                });
-              }
-            } catch (e) {
-              Swal.fire({
-                icon: 'error',
-                title: swalTitle('上传失败','Upload Failed'),
-                html: swalHtml('图片上传过程中发生错误，请重试。','An error occurred during image upload. Please retry.')
-              });
-            }
-          } else {
-            if (data_Submit_Result == '提交成功') {
-              Swal.fire({
-                icon: 'success',
-                title: swalTitle('提交成功','Submission Success'),
-                html: swalHtml('数据已成功上传。','Data uploaded successfully.'),
-                timer: 1500,
-                showConfirmButton: false
-              });
-            } else {
-              Swal.fire({
-                icon: 'error',
-                title: swalTitle('上传失败','Upload Failed'),
-                html: swalHtml('数据上传失败，请重试。','Data upload failed. Please retry.')
-              });
-            }
-          }
-
-          // 存储PM Planner确认信息到sessionStorage（仅在提交成功时）
-          if (data_Submit_Result == '提交成功') {
-            // 格式化为标准时间格式 "2025-01-20 19:38:02"
-            const confirmationTime = `${formattedDate} ${formattedTime}`;
-            const pmPlannerConfirmation = {
-              confirmedBy: finalConfirmUser,
-              confirmationTime: confirmationTime,
-              timestamp: new Date().toISOString()
-            };
-
-            // 如果有未完成任务信息，添加到确认信息中
-            if (incompleteTaskInfo) {
-              pmPlannerConfirmation.incompleteTaskReason = incompleteTaskInfo.reason;
-              pmPlannerConfirmation.nextSteps = incompleteTaskInfo.steps;
-            }
-
-            sessionStorage.setItem('PM_Planner_Confirmation', JSON.stringify(pmPlannerConfirmation));
-            console.log('PM Planner confirmation saved to sessionStorage:', pmPlannerConfirmation);
-
-            // 保存完整的任务清单数据到sessionStorage
-            const completeTaskList = [];
-            table_tasklist.rows().every(function () {
-              let row = this.node();
-              let rowData = this.data();
-              let taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
-              let valueAndNote = $(row).find('input[type="text"]').val();
-
-              // 创建完整的任务数据对象
-              const completeTaskData = {
-                ...rowData,
-                taskStatus: taskStatusCheckbox,
-                valueAndNote: valueAndNote,
-                'Task Status': taskStatusCheckbox, // 兼容不同的字段名
-                '数值记录&备注': valueAndNote,
-                // 确保执行人员信息被正确包含
-                '执行人员': rowData['执行人员'] || 'N/A'
-              };
-
-              completeTaskList.push(completeTaskData);
-            });
-
-            // 将任务清单保存到sessionStorage
-            sessionStorage.setItem('PM_Task_Details', JSON.stringify(completeTaskList));
-          }
-
-          sessionStorage.setItem('PM_SerialNumber', $("#PmNo").val());
-
-          if (global_data["设备类型1"] != 'UV') {
-            window.open(sessionStorage.getItem("siWebPage")
-              + "?v=PM_Production_Confirm"
-            )
-          }
-        } catch (e) {
-          Swal.fire({ icon:'error', title:swalTitle('错误','Error'), html:swalHtml('提交过程中发生异常，请联系管理员。','An error occurred during submission. Please contact admin.') });
+          return;
         }
+
+        // ====== 再上传照片，拿到 fileId ======
+        let uploadFailed = false;
+        if (images.length > 0) {
+          try {
+            const ID = await check_Image_Content(pmNo);
+            const folderId = ID == null ? await createFolder() : ID;
+            await Promise.all(promises);
+            for (const img of images) {
+              const fileId = await new Promise((resolve, reject) => {
+                google.script.run
+                  .withSuccessHandler(resolve)
+                  .withFailureHandler(reject)
+                  .uploadBase64ImageToDrive(img.base64Image, folderId, img.imageName, img.mimeType);
+              });
+              const taskItem = task[img.taskIndex];
+              taskItem.photos = pmMergePhotos_(taskItem.photos, [{
+                fileId: fileId,
+                name: img.imageName,
+                status: 'success',
+                uploadedAt: formattedDate + ' ' + formattedTime
+              }]);
+              taskItem.image = '见文件夹';
+            }
+          } catch (e) {
+            uploadFailed = true;
+          }
+        }
+        if (uploadFailed) {
+          Swal.fire({
+            icon: 'error',
+            title: swalTitle('图片上传失败', 'Photo Upload Failed'),
+            html: swalHtml('图片上传失败，保养尚未完成，请重试。', 'Photo upload failed; the PM is not completed. Please retry.'),
+            confirmButtonText: '确定 / OK'
+          });
+          return;
+        }
+
+        // ====== 完整校验（含照片） ======
+        const endErrors = pmTaskEndErrors_(task);
+        if (endErrors.length > 0) {
+          Swal.fire({
+            icon: 'warning',
+            title: swalTitle('无法提交', 'Cannot Submit'),
+            html: pmEndErrorsHtml_(endErrors),
+            confirmButtonText: '确定 / OK'
+          });
+          return;
+        }
+
+        // ====== 最后提交 ======
+        const totalRows = table_tasklist.rows().count();
+        const data = {};
+        data["PM No."] = pmNo;
+        data["PmStatus"] = "已完成/ Done";
+        data["Notification"] = "";
+        data["PM People"] = "";
+        data["Plan PM Date"] = "";
+        data["SatrtDate"] = "";
+        data["StartTime"] = "";
+        data["EndDate"] = formattedDate;
+        data["EndTime"] = formattedTime;
+        data["Workcenter"] = "";
+        data["任务明细"] = JSON.stringify(task);
+        data["TaskCount"] = totalRows;
+        data["UncheckedTasks"] = JSON.stringify(uncheckedTasks);
+        data["UncheckedCount"] = uncheckedCount;
+        data["NonEmptyNotesTasks"] = JSON.stringify(nonEmptyNotes);
+        data["NonEmptyNotesCount"] = nonEmptyNotesCount;
+        data["SheetName"] = global_data["工序"] + "-" + global_data["车间"];
+        data["Status"] = "End";
+
+        let finalConfirmUser = confirmUser;
+        if (incompleteTaskInfo) {
+          finalConfirmUser = `${confirmUser}|原因:${incompleteTaskInfo.reason}|措施:${incompleteTaskInfo.steps}`;
+        }
+        const submitResult = await dataSubmit(data, finalConfirmUser);
+        if (submitResult && submitResult.ok === false && submitResult.code === 'MEASUREMENT_VALIDATION') {
+          Swal.fire({
+            icon: 'warning',
+            title: swalTitle('无法提交', 'Cannot Submit'),
+            html: pmEndErrorsHtml_(submitResult.errors || []),
+            confirmButtonText: '确定 / OK'
+          });
+          return;
+        }
+        if (submitResult !== '提交成功') {
+          Swal.fire({
+            icon: 'error',
+            title: swalTitle('提交失败', 'Submit Failed'),
+            html: swalHtml('数据提交失败，保养尚未完成，请重试。', 'Data submission failed; the PM is not completed. Please retry.'),
+            confirmButtonText: '确定 / OK'
+          });
+          return;
+        }
+
+        // ====== 成功后更新页面状态 ======
+        $("#PmStatus").val("已完成/ Done");
+        $("#PmEndDate").val(formattedDate);
+        $("#PmEndTime").val(formattedTime);
+        $('#PmEnd').prop('disabled', true);
+        $('#PmStatus').css({
+          'background-color': '#3CB371',
+          'color': 'white',
+          'font-weight': 'bold'
+        });
+
+        PdMData();
+
+        const confirmationTime = `${formattedDate} ${formattedTime}`;
+        const pmPlannerConfirmation = {
+          confirmedBy: finalConfirmUser,
+          confirmationTime: confirmationTime,
+          timestamp: new Date().toISOString()
+        };
+        if (incompleteTaskInfo) {
+          pmPlannerConfirmation.incompleteTaskReason = incompleteTaskInfo.reason;
+          pmPlannerConfirmation.nextSteps = incompleteTaskInfo.steps;
+        }
+        sessionStorage.setItem('PM_Planner_Confirmation', JSON.stringify(pmPlannerConfirmation));
+
+        const completeTaskList = [];
+        table_tasklist.rows().every(function () {
+          const row = this.node();
+          const rowData = this.data();
+          const taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
+          const valueAndNote = $(row).find('input[type="text"]').val();
+          completeTaskList.push({
+            ...rowData,
+            taskStatus: taskStatusCheckbox,
+            valueAndNote: valueAndNote,
+            'Task Status': rowData['Task Status'] !== undefined ? rowData['Task Status'] : taskStatusCheckbox,
+            '数值记录&备注': valueAndNote,
+            '执行人员': rowData['执行人员'] || 'N/A'
+          });
+        });
+        sessionStorage.setItem('PM_Task_Details', JSON.stringify(completeTaskList));
+        sessionStorage.setItem('PM_SerialNumber', pmNo);
+
+        Swal.fire({
+          icon: 'success',
+          title: swalTitle('提交成功', 'Submission Success'),
+          html: swalHtml('数据和图片均已成功上传！', 'Data and images uploaded successfully!'),
+          timer: 1500,
+          showConfirmButton: false
+        });
+
+        if (global_data["设备类型1"] != 'UV') {
+          window.open(sessionStorage.getItem("siWebPage") + "?v=PM_Production_Confirm");
+        }
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: swalTitle('错误', 'Error'), html: swalHtml('提交过程中发生异常，请联系管理员。', 'An error occurred during submission. Please contact admin.') });
       }
     });
   }
