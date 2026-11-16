@@ -153,6 +153,79 @@
     return anyDeterminate ? '合格' : '待判定';
   }
 
+  function pmMeasurementSummary_(task) {
+    const source = task || {};
+    const points = pmParsePoints_(source['Measurement Points']);
+    if (points.length === 0) return '—';
+    const measurements = Array.isArray(source.measurements) ? source.measurements : [];
+    const byPoint = {};
+    measurements.forEach((item) => {
+      if (item && item.point !== null && item.point !== undefined) byPoint[String(item.point)] = item.value;
+    });
+    return points.map((point) => {
+      const value = byPoint[point.code];
+      const text = value === null || value === undefined || String(value).trim() === '' ? '—' : String(value).trim();
+      return point.code + ' ' + text;
+    }).join(' · ');
+  }
+
+  function openMeasurementModal_(row) {
+    const task = row.data() || {};
+    const points = pmParsePoints_(task['Measurement Points']);
+    const labels = pmParseLabels_(task['Point Labels']);
+    const measurements = Array.isArray(task.measurements) ? task.measurements : [];
+    const byPoint = {};
+    measurements.forEach((item) => {
+      if (item && item.point !== null && item.point !== undefined) byPoint[String(item.point)] = item.value;
+    });
+    const fields = points.map((point) => {
+      const label = labels[point.code] ? point.code + ' · ' + labels[point.code] : point.code;
+      const value = byPoint[point.code] === null || byPoint[point.code] === undefined ? '' : byPoint[point.code];
+      return '<div style="margin-bottom:8px;text-align:left;"><label style="display:block;font-size:12px;font-weight:600;color:#333;margin-bottom:2px;">'
+        + pmEscapeTaskHtml_(label) + '</label><input id="measure_' + pmEscapeTaskHtml_(point.code)
+        + '" class="form-control form-control-sm" value="' + pmEscapeTaskHtml_(value) + '"></div>';
+    }).join('');
+    const noteValue = task.note || '';
+    const html = '<div style="font-size:13px;max-height:60vh;overflow:auto;">'
+      + fields
+      + '<div style="margin-bottom:8px;text-align:left;"><label style="display:block;font-size:12px;font-weight:600;color:#333;margin-bottom:2px;">备注 / Note</label><textarea id="measure_note" class="form-control form-control-sm" rows="3">'
+      + pmEscapeTaskHtml_(noteValue) + '</textarea></div>'
+      + '<div style="font-size:11px;color:#888;text-align:left;">单位 / Unit：' + pmEscapeTaskHtml_(task['Measurement Unit'] || '') + '</div>'
+      + '</div>';
+    Swal.fire({
+      title: swalTitle('测量录入', 'Measurement Entry'),
+      html: html,
+      width: '80%',
+      showCancelButton: true,
+      confirmButtonText: '保存 / Save',
+      cancelButtonText: '取消 / Cancel',
+      confirmButtonColor: '#E60012'
+    }).then(function (result) {
+      if (!result.isConfirmed) return;
+      const root = Swal.getHtmlContainer();
+      const next = [];
+      for (const point of points) {
+        const input = root.querySelector('#measure_' + point.code);
+        const raw = input ? input.value.trim() : '';
+        const value = pmNumericValue_(raw);
+        if (value === null) {
+          Swal.fire({
+            icon: 'error',
+            title: swalTitle('数值无效', 'Invalid Value'),
+            html: swalHtml('测点 ' + point.code + ' 请输入数字。', 'Point ' + point.code + ' must be a number.'),
+            confirmButtonText: '确定 / OK'
+          });
+          return;
+        }
+        next.push({ point: point.code, value: value, unit: task['Measurement Unit'] || '' });
+      }
+      const copy = Object.assign({}, task);
+      copy.measurements = next;
+      copy.note = root.querySelector('#measure_note').value.trim();
+      row.data(copy).draw(false);
+    });
+  }
+
   let global_Name = sessionStorage.getItem('Name');
   $('#name').text(global_Name);
   let global_Process = sessionStorage.getItem('Process');
@@ -793,6 +866,12 @@
     // 【图片上传相关】拍照按钮事件，触发文件选择
     $(document).on('click', '#table_tasklist .take-photo-btn', function () {
       $(this).siblings('.photo-input').click();
+    });
+
+    // 多点测量录入
+    $(document).on('click', '#table_tasklist .measure-btn', function () {
+      const row = table_tasklist.row($(this).closest('tr'));
+      openMeasurementModal_(row);
     });
 
     // 表头全选复选框：点击时全选/取消全选所有行
@@ -1747,6 +1826,11 @@
       }
       if (title === '数值记录&备注') {
         colDef.render = function (data, type, row) {
+          const hasConfig = pmParsePoints_(row['Measurement Points']).length > 0;
+          if (hasConfig) {
+            return '<div style="font-size:11px;line-height:1.4;">' + pmEscapeTaskHtml_(pmMeasurementSummary_(row)) + '</div>'
+              + '<button type="button" class="btn btn-info btn-sm measure-btn" style="margin-top:4px;"' + (!isEditable ? ' disabled' : '') + '>录入 / Measure</button>';
+          }
           const noteValue = data || row.valueAndNote || '';
           return `<input type="text" class="form-control text-center" value="${noteValue}" placeholder="输入数值" ${!isEditable ? 'readonly' : ''}>`;
         };

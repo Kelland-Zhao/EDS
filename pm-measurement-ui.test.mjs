@@ -19,7 +19,7 @@ function extractFunction(src, name) {
 }
 
 const html = fs.readFileSync(new URL('./PM_Task-js_1.0.html', import.meta.url), 'utf8');
-for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_']) {
+for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_', 'pmMeasurementSummary_']) {
   const fn = (() => { try { return extractFunction(html, name); } catch (e) { return null; } })();
   (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Task-js_1.0.html"); }`);
 }
@@ -104,4 +104,13 @@ test('任一点超限即不合格（前端同规则）', () => {
     measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 145 }],
   };
   assert.equal(pmInspectionResult_(task), '不合格');
+});
+
+test('多点摘要按测点顺序显示', () => {
+  const task = {
+    'Measurement Points': 'S1,S2',
+    'Point Labels': 'S1=操作侧;S2=非操作侧',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }],
+  };
+  assert.equal(pmMeasurementSummary_(task), 'S1 125 · S2 126');
 });
