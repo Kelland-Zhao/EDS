@@ -211,3 +211,7 @@ test('End 任务明细为空数组时拒绝写入', () => {
   assert.equal(res.code, 'MEASUREMENT_VALIDATION');
   assert.deepEqual(ws.writes, []);
 });
+
+test('测点解析兼容中文逗号', () => {
+  assert.deepEqual(pmParsePoints_('S1，S2,S3').map((p) => p.code), ['S1', 'S2', 'S3']);
+});

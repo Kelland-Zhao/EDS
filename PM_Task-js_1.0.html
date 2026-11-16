@@ -180,7 +180,7 @@
   }
 
   function pmParsePoints_(value) {
-    const text = value === null || value === undefined ? '' : String(value).trim();
+    const text = value === null || value === undefined ? '' : String(value).trim().replace(/，/g, ',');
     const result = [];
     if (text === '') return result;
     const seen = new Set();

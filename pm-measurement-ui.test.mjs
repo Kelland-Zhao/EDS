@@ -349,3 +349,7 @@ test('有测量配置的 PdM 任务不再要求旧数值输入', () => {
   assert.equal(missing.length, 1);
   assert.equal(missing[0].taskNo, 'PDM-01');
 });
+
+test('前端测点解析兼容中文逗号', () => {
+  assert.deepEqual(pmParsePoints_('S1，S2,S3').map((p) => p.code), ['S1', 'S2', 'S3']);
+});

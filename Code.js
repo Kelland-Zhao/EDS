@@ -4693,7 +4693,7 @@ function pmTaskEndErrors_(tasks) {
 }
 
 function pmParsePoints_(value) {
-  var text = value === null || value === undefined ? "" : String(value).trim();
+  var text = value === null || value === undefined ? "" : String(value).trim().replace(/，/g, ",");
   var result = [];
   if (text === "") return result;
   var seen = {};
