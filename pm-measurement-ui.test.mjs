@@ -19,7 +19,7 @@ function extractFunction(src, name) {
 }
 
 const html = fs.readFileSync(new URL('./PM_Task-js_1.0.html', import.meta.url), 'utf8');
-for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_', 'pmMeasurementErrors_', 'pmMeasurementSummary_']) {
+for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_', 'pmMeasurementErrors_', 'pmMeasurementSummary_', 'checkPdMLimit', 'buildPdMRows_', 'PdMData_empty_or_not']) {
   const fn = (() => { try { return extractFunction(html, name); } catch (e) { return null; } })();
   (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Task-js_1.0.html"); }`);
 }
@@ -133,4 +133,44 @@ test('前端测量单位与配置不一致时结束校验报错', () => {
     measurements: [{ point: 'S1', value: 125, unit: '吨力' }],
   }]);
   assert.ok(errors.some((e) => e.field === 'Measurement Unit'));
+});
+
+test('PdM 趋势按测点展开', () => {
+  const rows = buildPdMRows_([{
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }],
+  }], 'PM-001');
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].TagName, 'S1');
+  assert.equal(rows[1].TagName, 'S2');
+});
+
+test('PdM 趋势逐点判定超限', () => {
+  const rows = buildPdMRows_([{
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes', Logic: 'HighAlarm_Max', 'LL Limited': '', 'HH Limited': '130',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 145 }],
+  }], 'PM-001');
+  assert.equal(rows[0].Record, '125');
+  assert.equal(rows[0].Notification, 'No');
+  assert.equal(rows[1].Notification, 'Yes');
+});
+
+test('PdM 趋势筛选不再看任务编号', () => {
+  const result = PdMData_empty_or_not([
+    { 'Task No': 'ABC-1', 'PdM?': '是/ Yes', measurements: [{ point: 'S1', value: 1 }] },
+    { 'Task No': 'PDM-OLD-1', 'PdM?': '否/ No' },
+  ]);
+  assert.equal(result.PdMData.length, 1);
+  assert.equal(result.PdMData[0]['Task No'], 'ABC-1');
+});
+
+test('旧 PdM 任务没有 measurements 仍按单行归集', () => {
+  const result = PdMData_empty_or_not([
+    { 'Task No': 'PDM-OLD-1', 'PdM?': '是/ Yes', TagName: 'OLD', '数值记录&备注': '125' },
+  ]);
+  assert.equal(result.PdMData.length, 1);
+  const rows = buildPdMRows_(result.PdMData, 'PM-001');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].TagName, 'OLD');
+  assert.equal(rows[0].Record, '125');
 });

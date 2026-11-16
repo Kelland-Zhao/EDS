@@ -3152,13 +3152,63 @@
     }
   }
 
+  // 每个测点一行：TagName 写测点代码；无 measurements 的旧 PdM 任务按单行归集
+  function buildPdMRows_(tasks, pmNo) {
+    const rows = [];
+    (tasks || []).forEach((task) => {
+      if (!task) return;
+      const measurements = Array.isArray(task.measurements) ? task.measurements : [];
+      if (measurements.length > 0) {
+        measurements.forEach((measurement) => {
+          if (!measurement) return;
+          const point = measurement.point === null || measurement.point === undefined ? '' : String(measurement.point);
+          const record = measurement.value === null || measurement.value === undefined ? '' : String(measurement.value);
+          const isOutOfLimit = checkPdMLimit(task.Logic, record, task['LL Limited'], task['HH Limited']);
+          rows.push({
+            'PM No.': pmNo,
+            Machine_Type: task['MachineType'],
+            Unit: task['Unit'],
+            Component: task['Component'],
+            Logic: task['Logic'],
+            TagName: point,
+            LL_Limited: task['LL Limited'],
+            HH_Limited: task['HH Limited'],
+            Record: record,
+            Notification: isOutOfLimit ? 'Yes' : 'No',
+            Alarm_information: isOutOfLimit ? `${point}超出设定范围！` : 'NA'
+          });
+        });
+        return;
+      }
+      const legacyNote = task['数值记录&备注'];
+      const record = legacyNote === null || legacyNote === undefined ? '' : String(legacyNote);
+      const tagName = task['TagName'] === null || task['TagName'] === undefined ? '' : String(task['TagName']);
+      const isOutOfLimit = checkPdMLimit(task.Logic, record, task['LL Limited'], task['HH Limited']);
+      rows.push({
+        'PM No.': pmNo,
+        Machine_Type: task['MachineType'],
+        Unit: task['Unit'],
+        Component: task['Component'],
+        Logic: task['Logic'],
+        TagName: tagName,
+        LL_Limited: task['LL Limited'],
+        HH_Limited: task['HH Limited'],
+        Record: record,
+        Notification: isOutOfLimit ? 'Yes' : 'No',
+        Alarm_information: isOutOfLimit ? `${tagName}超出设定范围！` : 'NA'
+      });
+    });
+    return rows;
+  }
+
   function PdMData() {
     // 从 table_tasklist 获取所有表格数据
     let tableData = getAllTableData();
 
-    // 筛选出包含 'PDM' 的任务
+    // 按 PdM? / measurements 筛选（不再看任务编号）
     let data = PdMData_empty_or_not(tableData);
-    let PdMData = data['PdMData'];  // 筛选后的PdM任务数组
+    let PdMTasks = data['PdMData'];
+    let pmNo = $("#PmNo").val();
     let Workcenter = $("#workcenter").val();
     let Workshop = global_data["车间"];
     let Equipment = $("#Equipment").val() || "";
@@ -3178,43 +3228,15 @@
     let Month = `${year}-${month}`; // 格式：YYYY-MM
     let Week = getWeekNumber(currentDate); // 格式：WKXX
 
-    let PdM_Data_Written_In = [];
-
-    PdMData.forEach((r) => {
-      let Machine_Type = r['MachineType'];
-      let Unit = r['Unit'];
-      let Component = r['Component'];
-      let Logic = r['Logic'];
-      let TagName = r['TagName'];
-      let LL_Limited = r['LL Limited'];
-      let HH_Limited = r['HH Limited'];
-      let Record = r['数值记录&备注'];
-
-      // 新增：判断是否超限
-      let isOutOfLimit = checkPdMLimit(Logic, Record, LL_Limited, HH_Limited);
-      let Notification = isOutOfLimit ? 'Yes' : 'No';
-      let Alarm_information = isOutOfLimit ? `${TagName}超出设定范围！` : 'NA';
-
-      let record = {
-        Workshop: Workshop,
-        Machine_Type: Machine_Type,
-        Workcenter: Workcenter,
-        Unit: Unit,
-        Component: Component,
-        Logic: Logic,
-        TagName: TagName,
-        LL_Limited: LL_Limited,
-        HH_Limited: HH_Limited,
-        Record: Record,
-        Record_Time: Record_Time,
-        Equipment: Equipment,
-        Process: Process,           // 新增：工序字段
-        Month: Month,               // 新增：月份字段
-        Week: Week,                 // 新增：周数字段
-        Notification: Notification, // 新增：通知字段（Yes/No）
-        Alarm_information: Alarm_information // 新增：报警信息字段
-      }
-      PdM_Data_Written_In.push(record);
+    let PdM_Data_Written_In = buildPdMRows_(PdMTasks, pmNo);
+    PdM_Data_Written_In.forEach((row) => {
+      row.Workshop = Workshop;
+      row.Workcenter = Workcenter;
+      row.Equipment = Equipment;
+      row.Process = Process;
+      row.Record_Time = Record_Time;
+      row.Month = Month;
+      row.Week = Week;
     });
 
 
@@ -3271,12 +3293,20 @@
   })
 
   function PdMData_empty_or_not(tableData) {
-    // 不区分大小写筛选包含 'PDM' 的任务
-    let filteredData = tableData.filter(item => {
-      if (!item['Task No']) return false;
-      return item['Task No'].toUpperCase().includes('PDM');
+    // 归集条件：PdM? = 是，或有 measurements；不再看任务编号是否含 PDM
+    let filteredData = (tableData || []).filter(item => {
+      if (!item) return false;
+      const measurements = Array.isArray(item.measurements) ? item.measurements : [];
+      return pmIsPdMYes_(item['PdM?']) || measurements.length > 0;
     });
-    let allNotEmpty = filteredData.every(item => item['数值记录&备注'] && item['数值记录&备注'].trim() !== '');
+    let allNotEmpty = filteredData.every(item => {
+      const measurements = Array.isArray(item.measurements) ? item.measurements : [];
+      if (measurements.length > 0) {
+        return measurements.every(m => pmNumericValue_(m && m.value) !== null);
+      }
+      const note = item['数值记录&备注'];
+      return note !== null && note !== undefined && String(note).trim() !== '';
+    });
     let PdM_Data_Empty = allNotEmpty ? 'Y' : 'N';
     let result = { PdMData_Empty: PdM_Data_Empty, PdMData: filteredData }
     return result
