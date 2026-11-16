@@ -24,6 +24,12 @@ for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTas
   (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Task-js_1.0.html"); }`);
 }
 
+const common = fs.readFileSync(new URL('./PM_Common_js.html', import.meta.url), 'utf8');
+for (const name of ['pmTaskStatusLabel_', 'pmEscapeReportHtml_', 'pmMeasurementSummaryText_', 'pmMeasurementReportHtml_']) {
+  const fn = (() => { try { return extractFunction(common, name); } catch (e) { return null; } })();
+  (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Common_js.html"); }`);
+}
+
 test('前端结束校验与后端同规则', () => {
   const errors = pmTaskEndErrors_([
     { 'Task No': 'FCS-43', 'PdM?': '是/ Yes', taskStatus: true, valueAndNote: '' },
@@ -173,4 +179,41 @@ test('旧 PdM 任务没有 measurements 仍按单行归集', () => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0].TagName, 'OLD');
   assert.equal(rows[0].Record, '125');
+});
+
+test('报告显示测点、Total 与结果', () => {
+  const html = pmMeasurementReportHtml_({
+    'Measurement Unit': 'kN', measurementTotal: 502, inspectionResult: '合格',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }],
+  });
+  assert.ok(html.includes('S1=125'));
+  assert.ok(html.includes('502'));
+  assert.ok(html.includes('合格'));
+});
+
+test('报告包含成功照片链接并忽略失败照片', () => {
+  const html = pmMeasurementReportHtml_({
+    'Measurement Unit': 'kN', measurements: [{ point: 'S1', value: 125 }],
+    photos: [
+      { fileId: 'FILE_OK', name: 'a.jpg', status: 'success' },
+      { fileId: 'FILE_BAD', name: 'b.jpg', status: 'failed' },
+    ],
+  });
+  assert.ok(html.includes('FILE_OK'));
+  assert.ok(!html.includes('FILE_BAD'));
+});
+
+test('确认页摘要包含不合格与异常措施', () => {
+  const text = pmMeasurementSummaryText_({
+    'Measurement Unit': 'kN', measurementTotal: 502, inspectionResult: '不合格',
+    note: '更换密封', measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }],
+  });
+  assert.ok(text.includes('S1=125'));
+  assert.ok(text.includes('502'));
+  assert.ok(text.includes('不合格'));
+  assert.ok(text.includes('更换密封'));
+});
+
+test('无 measurements 的旧任务摘要为空', () => {
+  assert.equal(pmMeasurementSummaryText_({ valueAndNote: '125' }), '');
 });

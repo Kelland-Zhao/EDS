@@ -304,16 +304,33 @@
                   });
                 }
               });
+              // 测量相关原始字段合并为一列展示（测点/Total/结果/备注/照片链接）
+              const measurementFields = ['measurements', 'measurementTotal', 'inspectionResult', 'note', 'photos', 'Measurement Points', 'Point Labels', 'Measurement Unit'];
+              const hasMeasurements = tableData.some(item => Array.isArray(item.measurements) && item.measurements.length > 0);
               // 过滤掉"Task Status"字段，无论是否为空都不显示
               const validFields = fieldSet.filter(k => {
                 // 如果字段名是"Task Status"，则过滤掉
                 if (k === 'Task Status') {
                   return false;
                 }
+                if (measurementFields.indexOf(k) !== -1) {
+                  return false;
+                }
                 return true;
               });
-              
+              if (hasMeasurements) validFields.push('__pmMeasurementReport');
+
               columns = validFields.map(k => {
+                if (k === '__pmMeasurementReport') {
+                  return {
+                    title: '测量记录<br>Measurements',
+                    data: null,
+                    defaultContent: '',
+                    render: function (data, type, row) {
+                      return pmMeasurementReportHtml_(row);
+                    }
+                  };
+                }
                 if (k === 'imageContent') {
                   return {
                     title: k,

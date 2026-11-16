@@ -627,8 +627,9 @@
               const taskDesc = task['Task Description'] || task['任务描述'] || task['Standard'] || '';
               // 根据taskStatus的值确定完成状态
               const taskStatus = pmTaskStatusLabel_(task);
-              // 优先从数值记录&备注或valueAndNote字段提取备注信息
-              const taskNotes = task.valueAndNote || task['数值记录&备注'] || task['备注'] || task['Result'] || task['Notes'] || '';
+              // 新配置任务显示测量摘要（含 Total/结果/异常措施）；旧任务回退到原备注字段
+              const measurementSummary = pmMeasurementSummaryText_(task);
+              const taskNotes = measurementSummary || task.valueAndNote || task['数值记录&备注'] || task['备注'] || task['Result'] || task['Notes'] || '';
               // 只从执行人员字段提取执行人员信息
               const taskResource = task['执行人员'] || 'N/A';
               

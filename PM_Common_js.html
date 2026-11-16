@@ -24,4 +24,89 @@
     if (conflict) return '待核实 / Verify';
     return done ? '已完成 / Done' : '未完成 / Pending';
   }
+
+  function pmEscapeReportHtml_(value) {
+    const text = value === null || value === undefined ? '' : String(value);
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * 测量摘要（纯文本）：测点=值 · Total · 结果 · 异常措施。
+   * 无 measurements 时返回空串，调用方回退到旧备注字段。
+   * @param {Object} task
+   * @returns {string}
+   */
+  function pmMeasurementSummaryText_(task) {
+    const source = task || {};
+    const measurements = Array.isArray(source.measurements) ? source.measurements : [];
+    if (measurements.length === 0) return '';
+    const parts = measurements.map((m) => {
+      const point = m && m.point !== null && m.point !== undefined ? String(m.point) : '';
+      const value = m && m.value !== null && m.value !== undefined ? String(m.value) : '';
+      return point + '=' + value;
+    });
+    const unit = source['Measurement Unit'] === null || source['Measurement Unit'] === undefined
+      ? ''
+      : String(source['Measurement Unit']).trim();
+    const total = source.measurementTotal;
+    if (total !== null && total !== undefined && String(total).trim() !== '') {
+      parts.push('Total ' + String(total) + (unit ? ' ' + unit : ''));
+    }
+    const result = source.inspectionResult === null || source.inspectionResult === undefined
+      ? ''
+      : String(source.inspectionResult).trim();
+    if (result !== '') parts.push(result);
+    const note = source.note === null || source.note === undefined ? '' : String(source.note).trim();
+    if (note !== '') parts.push('异常措施: ' + note);
+    return parts.join(' · ');
+  }
+
+  /**
+   * 测量报告 HTML：测点值、Total、结果、备注、照片链接。
+   * 无 measurements 时返回空串。
+   * @param {Object} task
+   * @returns {string}
+   */
+  function pmMeasurementReportHtml_(task) {
+    const source = task || {};
+    const measurements = Array.isArray(source.measurements) ? source.measurements : [];
+    if (measurements.length === 0) return '';
+    const unit = source['Measurement Unit'] === null || source['Measurement Unit'] === undefined
+      ? ''
+      : String(source['Measurement Unit']).trim();
+    const lines = [];
+    const points = measurements.map((m) => {
+      const point = m && m.point !== null && m.point !== undefined ? String(m.point) : '';
+      const value = m && m.value !== null && m.value !== undefined ? String(m.value) : '';
+      return point + '=' + value;
+    });
+    lines.push('<div>测点 / Points: ' + pmEscapeReportHtml_(points.join(' · ')) + '</div>');
+    const total = source.measurementTotal;
+    if (total !== null && total !== undefined && String(total).trim() !== '') {
+      lines.push('<div>Total: ' + pmEscapeReportHtml_(String(total) + (unit ? ' ' + unit : '')) + '</div>');
+    }
+    const result = source.inspectionResult === null || source.inspectionResult === undefined
+      ? ''
+      : String(source.inspectionResult).trim();
+    if (result !== '') lines.push('<div>结果 / Result: ' + pmEscapeReportHtml_(result) + '</div>');
+    const note = source.note === null || source.note === undefined ? '' : String(source.note).trim();
+    if (note !== '') lines.push('<div>备注 / Note: ' + pmEscapeReportHtml_(note) + '</div>');
+    const photos = (Array.isArray(source.photos) ? source.photos : []).filter((photo) => {
+      return photo && photo.status === 'success' && photo.fileId;
+    });
+    if (photos.length > 0) {
+      const links = photos.map((photo) => {
+        const name = photo.name === null || photo.name === undefined ? photo.fileId : photo.name;
+        return '<a href="https://drive.google.com/file/d/' + encodeURIComponent(String(photo.fileId))
+          + '/view" target="_blank" rel="noopener">' + pmEscapeReportHtml_(name) + '</a>';
+      });
+      lines.push('<div>照片 / Photos: ' + links.join(' · ') + '</div>');
+    }
+    return '<div class="pm-measurement-report">' + lines.join('') + '</div>';
+  }
 </script>
