@@ -1,0 +1,27 @@
+<script>
+  /**
+   * 任务完成状态显示标签：taskStatus 优先，兼容旧 Task Status；冲突显示待核实。
+   * @param {Object} task
+   * @returns {string}
+   */
+  function pmTaskStatusLabel_(task) {
+    const source = task || {};
+    const hasTaskStatus = Object.prototype.hasOwnProperty.call(source, 'taskStatus');
+    const hasLegacy = Object.prototype.hasOwnProperty.call(source, 'Task Status');
+    let done = false;
+    let conflict = false;
+    if (hasTaskStatus) {
+      const value = source.taskStatus;
+      done = value === true || value === 'true';
+      if (hasLegacy) {
+        const legacyValue = source['Task Status'];
+        conflict = (legacyValue === true || legacyValue === 'true') !== done;
+      }
+    } else if (hasLegacy) {
+      const legacyValue = source['Task Status'];
+      done = legacyValue === true || legacyValue === 'true';
+    }
+    if (conflict) return '待核实 / Verify';
+    return done ? '已完成 / Done' : '未完成 / Pending';
+  }
+</script>

@@ -328,8 +328,8 @@
                     title: fieldMapping[k] || k,
                     data: k,
                     defaultContent: '',
-                    render: function (data) {
-                      return data === true || data === 'true' ? '√' : '×';
+                    render: function (data, type, row) {
+                      return pmTaskStatusLabel_(row);
                     }
                   };
                 } else {

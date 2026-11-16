@@ -79,3 +79,14 @@ test('草稿保存先传图再保存', () => {
   assert.ok(iUpload > iHandler, '草稿应先上传照片');
   assert.ok(iSubmit > iUpload, '草稿保存应在传图之后');
 });
+
+let commonSrc = '';
+try { commonSrc = fs.readFileSync(new URL('./PM_Common_js.html', import.meta.url), 'utf8'); } catch (e) { commonSrc = ''; }
+const statusFn = (() => { try { return extractFunction(commonSrc, 'pmTaskStatusLabel_'); } catch (e) { return null; } })();
+(0, eval)(statusFn || 'function pmTaskStatusLabel_(){ throw new Error("pmTaskStatusLabel_ not found in PM_Common_js.html"); }');
+
+test('完成状态冲突显示待核实', () => {
+  assert.equal(pmTaskStatusLabel_({ taskStatus: true, 'Task Status': false }), '待核实 / Verify');
+  assert.equal(pmTaskStatusLabel_({ taskStatus: true }), '已完成 / Done');
+  assert.equal(pmTaskStatusLabel_({ 'Task Status': false }), '未完成 / Pending');
+});
