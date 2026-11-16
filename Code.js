@@ -4581,6 +4581,93 @@ function get_Tasklist_new() {
   }
 }
 
+/**
+ * 判断 PdM? 值是否表示“预测性 = 是”。
+ * @param {*} value
+ * @returns {boolean}
+ */
+function pmIsPdMYes_(value) {
+  var text = value === null || value === undefined ? "" : String(value).trim();
+  return text === "是/ Yes" || text === "是" || text === "Yes";
+}
+
+/**
+ * 任务完成状态：taskStatus 优先，缺失时兼容旧 Task Status；两者冲突时 conflict=true。
+ * @param {Object} task
+ * @returns {{done:boolean, conflict:boolean}}
+ */
+function pmTaskDoneState_(task) {
+  var source = task || {};
+  var hasTaskStatus = Object.prototype.hasOwnProperty.call(source, "taskStatus");
+  var hasLegacy = Object.prototype.hasOwnProperty.call(source, "Task Status");
+  var done = false;
+  var conflict = false;
+  if (hasTaskStatus) {
+    done = source.taskStatus === true;
+    if (hasLegacy) {
+      conflict = (source["Task Status"] === true) !== done;
+    }
+  } else if (hasLegacy) {
+    done = source["Task Status"] === true;
+  }
+  return { done: done, conflict: conflict };
+}
+
+/**
+ * 任务是否至少有一张成功上传的照片。
+ * @param {Object} task
+ * @returns {boolean}
+ */
+function pmPhotoSuccess_(task) {
+  var photos = task && Array.isArray(task.photos) ? task.photos : [];
+  for (var i = 0; i < photos.length; i++) {
+    var photo = photos[i] || {};
+    if (String(photo.status || "").trim() === "success") return true;
+  }
+  return false;
+}
+
+/**
+ * 结束保养前的任务校验（阶段 1：状态、照片、旧 PdM 数值非空）。
+ * @param {Array<Object>} tasks
+ * @returns {Array<{row:number, taskNo:string, field:string, message:string}>}
+ */
+function pmTaskEndErrors_(tasks) {
+  var errors = [];
+  (tasks || []).forEach(function (task, index) {
+    if (!task) return;
+    var state = pmTaskDoneState_(task);
+    if (!state.done) return;
+    var taskNo = task["Task No"] === null || task["Task No"] === undefined ? "" : String(task["Task No"]);
+    var photoRequired = task["Photo Required"] === null || task["Photo Required"] === undefined
+      ? ""
+      : String(task["Photo Required"]).trim().toUpperCase();
+    if (photoRequired === "Y" && !pmPhotoSuccess_(task)) {
+      errors.push({
+        row: index + 1,
+        taskNo: taskNo,
+        field: "Photo",
+        message: "缺少成功上传的照片 / Missing successful photo"
+      });
+    }
+    var hasPoints = task["Measurement Points"] !== null
+      && task["Measurement Points"] !== undefined
+      && String(task["Measurement Points"]).trim() !== "";
+    if (!hasPoints && pmIsPdMYes_(task["PdM?"])) {
+      var value = task.valueAndNote === null || task.valueAndNote === undefined ? "" : String(task.valueAndNote).trim();
+      if (value === "") {
+        errors.push({
+          row: index + 1,
+          taskNo: taskNo,
+          field: "Value",
+          message: "PdM 任务未填写数值 / Value required for PdM task"
+        });
+      }
+    }
+  });
+  return errors;
+}
+
 function saveData_tasklist(data, confirmUser) {
   try {
     let id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
