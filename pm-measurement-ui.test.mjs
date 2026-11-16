@@ -69,3 +69,13 @@ test('结束流程先校验、再传图、最后提交', () => {
   assert.ok(iUpload > iValidate, '传图应在预校验之后');
   assert.ok(iSubmit > iUpload, '提交应在传图之后');
 });
+
+test('草稿保存先传图再保存', () => {
+  const src = fs.readFileSync(new URL('./PM_Task-js_1.0.html', import.meta.url), 'utf8');
+  const iHandler = src.indexOf('$("#Submit_wo_End").on("click"');
+  const iUpload = src.indexOf('uploadBase64ImageToDrive(img.base64Image', iHandler);
+  const iSubmit = src.indexOf('await dataSubmit(data);', iHandler);
+  assert.ok(iHandler > 0, '缺少草稿保存入口');
+  assert.ok(iUpload > iHandler, '草稿应先上传照片');
+  assert.ok(iSubmit > iUpload, '草稿保存应在传图之后');
+});

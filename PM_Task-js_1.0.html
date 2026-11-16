@@ -2765,8 +2765,6 @@
         $("#PmEndDate").val(formattedDate);
         $("#PmEndTime").val(formattedTime);
 
-        // 【图片上传相关】图片上传核心变量
-        let Count_of_image = 0;
         let images = [];
         let promises = [];
         let task = [];
@@ -2775,58 +2773,78 @@
         let nonEmptyNotes = [];
         let nonEmptyNotesCount = 0;
         let data = {};
+        const pmNo = $("#PmNo").val();
 
         table_tasklist.rows().every(function () {
-          let obj = {};
-          let row = this.node();
-          let rowData = this.data();
-          let taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
-          let valueAndNote = $(row).find('input[type="text"]').val();
-          let photoInput = $(row).find('.photo-input').get(0);
-          let file = photoInput.files[0];
-          let image = '无图片';
+          const row = this.node();
+          const rowData = this.data();
+          const taskStatusCheckbox = $(row).find('.form-check-input').prop('checked');
+          const valueAndNote = $(row).find('input[type="text"]').val();
+          const photoInput = $(row).find('.photo-input').get(0);
+          const file = photoInput ? photoInput.files[0] : undefined;
+          const taskIndex = task.length;
+          const existingPhotos = Array.isArray(rowData.photos) ? rowData.photos : [];
 
-          // 【图片上传相关】如有图片，转Base64并存入images数组，后续上传
-          if (file != undefined && file.size > 0) {
-            Count_of_image++;
-            let promise = convertImageToBase64(file).then(base64Image => {
-              let obj = {
-                imageName: $("#PmNo").val() + '_' + rowData['Task No'],
-                mimeType: file.type,
-                base64Image: base64Image
-              }
-              images.push(obj);
-            }).catch(error => {
-              Count_of_image--; // 减少计数，因为转换失败
-            });
-            promises.push(promise);
-            image = "见文件夹";
-          }
-
-          // 排除 imageContent 字段，避免数据过大
           let { imageContent, ...rowDataWithoutImageContent } = rowData;
           let taskData = {
             ...rowDataWithoutImageContent,
             taskStatus: taskStatusCheckbox,
             valueAndNote: valueAndNote,
-            image: image
+            photos: existingPhotos,
+            image: existingPhotos.length > 0 ? '见文件夹' : '无图片'
           };
 
+          if (file && file.size > 0) {
+            const fileName = pmNo + '_' + (rowData['Task No'] || '') + '_' + file.name;
+            const promise = convertImageToBase64(file).then((base64Image) => {
+              images.push({ taskIndex: taskIndex, imageName: fileName, mimeType: file.type, base64Image: base64Image });
+            }).catch(() => {});
+            promises.push(promise);
+            taskData.image = '见文件夹';
+          }
 
           if (!taskStatusCheckbox) {
             uncheckedTasks.push(taskData);
             uncheckedCount++;
           }
-
           if (valueAndNote.trim() !== "") {
             nonEmptyNotes.push(taskData);
             nonEmptyNotesCount++;
           }
           task.push(taskData);
-        })
+        });
 
-        let totalRows = table_tasklist.rows().count();
-        data["PM No."] = $("#PmNo").val();
+        // 草稿：先上传照片，成功的结果写回任务；失败不阻断草稿保存
+        if (images.length > 0) {
+          try {
+            const ID = await check_Image_Content(pmNo);
+            const folderId = ID == null ? await createFolder() : ID;
+            await Promise.all(promises);
+            for (const img of images) {
+              try {
+                const fileId = await new Promise((resolve, reject) => {
+                  google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)
+                    .uploadBase64ImageToDrive(img.base64Image, folderId, img.imageName, img.mimeType);
+                });
+                const taskItem = task[img.taskIndex];
+                taskItem.photos = pmMergePhotos_(taskItem.photos, [{
+                  fileId: fileId,
+                  name: img.imageName,
+                  status: 'success',
+                  uploadedAt: formattedDate + ' ' + formattedTime
+                }]);
+                taskItem.image = '见文件夹';
+              } catch (e) {
+                console.error('草稿图片上传失败:', e);
+              }
+            }
+          } catch (e) {
+            console.error('草稿图片上传过程中发生错误:', e);
+          }
+        }
+
+        const totalRows = table_tasklist.rows().count();
+        data["PM No."] = pmNo;
         data["PmStatus"] = $("#PmStatus").val();
         data["Notification"] = "";
         data["PM People"] = "";
@@ -2843,82 +2861,18 @@
         data["SheetName"] = global_data["工序"] + "-" + global_data["车间"];
         data["Status"] = "Ongoing";
 
-        PdMData();
-
-        let data_Submit_Result = await dataSubmit(data);
-
-        let Count_Image_Upload = 0;
-
-        // 【图片上传相关】如有图片，批量上传到Google Drive
-        if (Count_of_image > 0) {
-          try {
-            let PM_NO = $("#PmNo").val();
-            let ID = await check_Image_Content(PM_NO);
-            let folderId = '';
-            if (ID == null) {
-              folderId = await createFolder();
-            } else {
-              folderId = ID;
-            }
-
-            // 等待所有图片转换完成
-            await Promise.all(promises);
-
-            // 检查是否有图片转换失败
-            if (images.length === 0) {
-              Count_of_image = 0; // 重置计数
-            } else {
-              let uploadPromises = images.map(r => {
-                return new Promise((resolve, reject) => {
-                  google.script.run.withSuccessHandler(function (result) {
-                    Count_Image_Upload++;
-                    resolve(result);
-                  }).withFailureHandler(function (error) {
-                    console.error('图片上传失败:', error);
-                    reject(error);
-                  }).uploadBase64ImageToDrive(r.base64Image, folderId, r.imageName, r.mimeType);
-                });
-              });
-
-              await Promise.all(uploadPromises);
-            }
-
-            let image_Submit_Result;
-            if (Count_of_image == Count_Image_Upload) {
-              image_Submit_Result = true;
-            } else {
-              image_Submit_Result = false;
-            };
-
-            if (data_Submit_Result == '提交成功' && image_Submit_Result == true) {
-              alert('提交成功');
-            } else if (data_Submit_Result != '提交成功' && image_Submit_Result == true) {
-              alert('上传失败');
-            } else if (data_Submit_Result == '提交成功' && image_Submit_Result == false) {
-              alert('上传失败');
-            }
-          } catch (error) {
-            console.error('图片上传过程中发生错误:', error);
-            // 如果图片上传失败，但数据提交成功，仍然显示部分成功
-            if (data_Submit_Result == '提交成功') {
-              Swal.fire({
-                icon: 'warning',
-                title: swalTitle('部分成功','Partial Success'),
-                html: swalHtml('数据上传成功，但图片上传失败。','Data uploaded successfully, but images upload failed.')
-              });
-            } else {
-              Swal.fire({
-                icon: 'error',
-                title: swalTitle('上传失败','Upload Failed'),
-                html: swalHtml('数据和图片均上传失败，请重试。','Both data and images upload failed. Please retry.')
-              });
-            }
-          }
+        const data_Submit_Result = await dataSubmit(data);
+        if (data_Submit_Result === '提交成功') {
+          alert('提交成功');
         } else {
-          if (data_Submit_Result == '提交成功') {
-            alert('提交成功');
-          }
+          Swal.fire({
+            icon: 'error',
+            title: swalTitle('保存失败','Save Failed'),
+            html: swalHtml('草稿保存失败，请重试。','Draft save failed. Please retry.'),
+            confirmButtonText: '确定 / OK'
+          });
         }
+
       }
     })
   })
