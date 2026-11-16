@@ -56,7 +56,7 @@ FCS 标准保养任务「使用哥林柱拉力检测仪测量四根锁模哥林�
   "Unit": "哥林柱",
   "Component": "锁模机构",
   "Logic": "HighAlarm_Max",
-  "TagName": "S1-S4",
+  "TagName": "哥林柱拉伸变形量",
   "LL Limited": "",
   "HH Limited": "",
 

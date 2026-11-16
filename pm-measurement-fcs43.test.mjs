@@ -15,7 +15,7 @@ function fcs43Task(overrides) {
     Unit: '哥林柱',
     Component: '锁模机构',
     Logic: 'HighAlarm_Max',
-    TagName: 'S1-S4',
+    TagName: '哥林柱拉伸变形量',
     'LL Limited': '',
     'HH Limited': '',
     'Measurement Points': 'S1,S2,S3,S4',
