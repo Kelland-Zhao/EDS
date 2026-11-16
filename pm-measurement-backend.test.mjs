@@ -98,3 +98,26 @@ test('End 有缺失测量时后端拒绝写入', () => {
   assert.equal(res.code, 'MEASUREMENT_VALIDATION');
   assert.deepEqual(ws.writes, []);
 });
+
+test('0 是有效数值，正常/284abc 不是', () => {
+  assert.equal(pmNumericValue_('0'), 0);
+  assert.equal(pmNumericValue_('正常'), null);
+  assert.equal(pmNumericValue_('284abc'), null);
+});
+
+test('任一点超限即不合格', () => {
+  const task = {
+    'Measurement Points': 'S1,S2',
+    'Measurement Unit': 'kN',
+    Logic: 'Out_of_range',
+    'LL Limited': '100',
+    'HH Limited': '130',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 145 }],
+  };
+  assert.equal(pmInspectionResult_(task), '不合格');
+});
+
+test('με 模式合计取平均', () => {
+  assert.equal(pmAggregate_([100, 120], 'με'), 110);
+  assert.equal(pmAggregate_([100, 120], 'kN'), 220);
+});

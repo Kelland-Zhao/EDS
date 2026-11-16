@@ -19,7 +19,7 @@ function extractFunction(src, name) {
 }
 
 const html = fs.readFileSync(new URL('./PM_Task-js_1.0.html', import.meta.url), 'utf8');
-for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_']) {
+for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_']) {
   const fn = (() => { try { return extractFunction(html, name); } catch (e) { return null; } })();
   (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Task-js_1.0.html"); }`);
 }
@@ -89,4 +89,19 @@ test('完成状态冲突显示待核实', () => {
   assert.equal(pmTaskStatusLabel_({ taskStatus: true, 'Task Status': false }), '待核实 / Verify');
   assert.equal(pmTaskStatusLabel_({ taskStatus: true }), '已完成 / Done');
   assert.equal(pmTaskStatusLabel_({ 'Task Status': false }), '未完成 / Pending');
+});
+
+test('0 是有效数值，正常/284abc 不是（前端同规则）', () => {
+  assert.equal(pmNumericValue_('0'), 0);
+  assert.equal(pmNumericValue_('正常'), null);
+  assert.equal(pmNumericValue_('284abc'), null);
+});
+
+test('任一点超限即不合格（前端同规则）', () => {
+  const task = {
+    'Measurement Points': 'S1,S2', 'Measurement Unit': 'kN',
+    Logic: 'Out_of_range', 'LL Limited': '100', 'HH Limited': '130',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 145 }],
+  };
+  assert.equal(pmInspectionResult_(task), '不合格');
 });

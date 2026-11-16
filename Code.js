@@ -4668,6 +4668,89 @@ function pmTaskEndErrors_(tasks) {
   return errors;
 }
 
+function pmParsePoints_(value) {
+  var text = value === null || value === undefined ? "" : String(value).trim();
+  var result = [];
+  if (text === "") return result;
+  var seen = {};
+  text.split(",").forEach(function (part) {
+    var code = part.trim();
+    if (code === "" || seen[code]) return;
+    seen[code] = true;
+    result.push({ code: code });
+  });
+  return result;
+}
+
+function pmParseLabels_(value) {
+  var text = value === null || value === undefined ? "" : String(value).trim();
+  var result = {};
+  if (text === "") return result;
+  text.split(";").forEach(function (part) {
+    var index = part.indexOf("=");
+    if (index <= 0) return;
+    var code = part.slice(0, index).trim();
+    var label = part.slice(index + 1).trim();
+    if (code !== "") result[code] = label;
+  });
+  return result;
+}
+
+function pmNumericValue_(value) {
+  if (value === null || value === undefined) return null;
+  var text = String(value).trim();
+  if (text === "") return null;
+  var number = Number(text);
+  return isFinite(number) ? number : null;
+}
+
+function pmAggregate_(values, unit) {
+  var numbers = (values || []).map(pmNumericValue_).filter(function (v) { return v !== null; });
+  if (numbers.length === 0) return null;
+  var total = numbers.reduce(function (a, b) { return a + b; }, 0);
+  var unitText = unit === null || unit === undefined ? "" : String(unit);
+  return unitText.indexOf("με") !== -1 ? total / numbers.length : total;
+}
+
+function pmPointOutOfLimit_(logic, value, ll, hh) {
+  var number = pmNumericValue_(value);
+  if (number === null) return null;
+  var low = pmNumericValue_(ll);
+  var high = pmNumericValue_(hh);
+  if (low === null && high === null) return null;
+  var logicText = logic === null || logic === undefined ? "" : String(logic);
+  if (logicText.indexOf("LowAlarm") !== -1) {
+    return low !== null && number < low;
+  }
+  if (logicText.indexOf("Out_of_range") !== -1) {
+    return (low !== null && number < low) || (high !== null && number > high);
+  }
+  if (high !== null) return number > high;
+  return low !== null && number < low;
+}
+
+function pmInspectionResult_(task) {
+  var source = task || {};
+  var points = pmParsePoints_(source["Measurement Points"]);
+  if (points.length === 0) return "";
+  var measurements = Array.isArray(source.measurements) ? source.measurements : [];
+  var byPoint = {};
+  measurements.forEach(function (item) {
+    if (item && item.point !== null && item.point !== undefined) {
+      byPoint[String(item.point)] = item.value;
+    }
+  });
+  var anyDeterminate = false;
+  for (var i = 0; i < points.length; i++) {
+    var value = pmNumericValue_(byPoint[points[i].code]);
+    if (value === null) return "待判定";
+    var out = pmPointOutOfLimit_(source.Logic, value, source["LL Limited"], source["HH Limited"]);
+    if (out === true) return "不合格";
+    if (out === false) anyDeterminate = true;
+  }
+  return anyDeterminate ? "合格" : "待判定";
+}
+
 function saveData_tasklist(data, confirmUser) {
   try {
     let id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";

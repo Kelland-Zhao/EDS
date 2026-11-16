@@ -72,6 +72,87 @@
     return list.slice(0, 3);
   }
 
+  function pmParsePoints_(value) {
+    const text = value === null || value === undefined ? '' : String(value).trim();
+    const result = [];
+    if (text === '') return result;
+    const seen = new Set();
+    text.split(',').forEach((part) => {
+      const code = part.trim();
+      if (code === '' || seen.has(code)) return;
+      seen.add(code);
+      result.push({ code: code });
+    });
+    return result;
+  }
+
+  function pmParseLabels_(value) {
+    const text = value === null || value === undefined ? '' : String(value).trim();
+    const result = {};
+    if (text === '') return result;
+    text.split(';').forEach((part) => {
+      const index = part.indexOf('=');
+      if (index <= 0) return;
+      const code = part.slice(0, index).trim();
+      const label = part.slice(index + 1).trim();
+      if (code !== '') result[code] = label;
+    });
+    return result;
+  }
+
+  function pmNumericValue_(value) {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    if (text === '') return null;
+    const number = Number(text);
+    return isFinite(number) ? number : null;
+  }
+
+  function pmAggregate_(values, unit) {
+    const numbers = (values || []).map(pmNumericValue_).filter((v) => v !== null);
+    if (numbers.length === 0) return null;
+    const total = numbers.reduce((a, b) => a + b, 0);
+    const unitText = unit === null || unit === undefined ? '' : String(unit);
+    return unitText.indexOf('με') !== -1 ? total / numbers.length : total;
+  }
+
+  function pmPointOutOfLimit_(logic, value, ll, hh) {
+    const number = pmNumericValue_(value);
+    if (number === null) return null;
+    const low = pmNumericValue_(ll);
+    const high = pmNumericValue_(hh);
+    if (low === null && high === null) return null;
+    const logicText = logic === null || logic === undefined ? '' : String(logic);
+    if (logicText.indexOf('LowAlarm') !== -1) return low !== null && number < low;
+    if (logicText.indexOf('Out_of_range') !== -1) {
+      return (low !== null && number < low) || (high !== null && number > high);
+    }
+    if (high !== null) return number > high;
+    return low !== null && number < low;
+  }
+
+  function pmInspectionResult_(task) {
+    const source = task || {};
+    const points = pmParsePoints_(source['Measurement Points']);
+    if (points.length === 0) return '';
+    const measurements = Array.isArray(source.measurements) ? source.measurements : [];
+    const byPoint = {};
+    measurements.forEach((item) => {
+      if (item && item.point !== null && item.point !== undefined) {
+        byPoint[String(item.point)] = item.value;
+      }
+    });
+    let anyDeterminate = false;
+    for (let i = 0; i < points.length; i++) {
+      const value = pmNumericValue_(byPoint[points[i].code]);
+      if (value === null) return '待判定';
+      const out = pmPointOutOfLimit_(source.Logic, value, source['LL Limited'], source['HH Limited']);
+      if (out === true) return '不合格';
+      if (out === false) anyDeterminate = true;
+    }
+    return anyDeterminate ? '合格' : '待判定';
+  }
+
   let global_Name = sessionStorage.getItem('Name');
   $('#name').text(global_Name);
   let global_Process = sessionStorage.getItem('Process');
