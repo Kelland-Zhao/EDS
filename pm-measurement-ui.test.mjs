@@ -19,7 +19,7 @@ function extractFunction(src, name) {
 }
 
 const html = fs.readFileSync(new URL('./PM_Task-js_1.0.html', import.meta.url), 'utf8');
-for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_', 'pmMeasurementSummary_']) {
+for (const name of ['pmIsPdMYes_', 'pmTaskDoneState_', 'pmPhotoSuccess_', 'pmTaskEndErrors_', 'pmPhotoKey_', 'pmMergePhotos_', 'pmParsePoints_', 'pmParseLabels_', 'pmNumericValue_', 'pmAggregate_', 'pmPointOutOfLimit_', 'pmInspectionResult_', 'pmMeasurementErrors_', 'pmMeasurementSummary_']) {
   const fn = (() => { try { return extractFunction(html, name); } catch (e) { return null; } })();
   (0, eval)(fn || `function ${name}(){ throw new Error("${name} not found in PM_Task-js_1.0.html"); }`);
 }
@@ -113,4 +113,24 @@ test('多点摘要按测点顺序显示', () => {
     measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }],
   };
   assert.equal(pmMeasurementSummary_(task), 'S1 125 · S2 126');
+});
+
+test('前端新配置缺 S3 时结束校验报错', () => {
+  const errors = pmTaskEndErrors_([{
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes', taskStatus: true,
+    'Measurement Points': 'S1,S2,S3,S4',
+    'Point Labels': 'S1=操作侧;S2=非操作侧;S3=天侧;S4=地侧',
+    'Measurement Unit': 'kN',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }, { point: 'S4', value: 127 }],
+  }]);
+  assert.ok(errors.some((e) => e.field === 'S3'));
+});
+
+test('前端测量单位与配置不一致时结束校验报错', () => {
+  const errors = pmTaskEndErrors_([{
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes', taskStatus: true,
+    'Measurement Points': 'S1', 'Point Labels': 'S1=操作侧', 'Measurement Unit': 'kN',
+    measurements: [{ point: 'S1', value: 125, unit: '吨力' }],
+  }]);
+  assert.ok(errors.some((e) => e.field === 'Measurement Unit'));
 });

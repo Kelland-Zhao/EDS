@@ -45,7 +45,17 @@
       const hasPoints = task['Measurement Points'] !== null
         && task['Measurement Points'] !== undefined
         && String(task['Measurement Points']).trim() !== '';
-      if (!hasPoints && pmIsPdMYes_(task['PdM?'])) {
+      if (hasPoints) {
+        pmMeasurementErrors_(task).forEach((e) => {
+          errors.push({ row: index + 1, taskNo: taskNo, field: e.field, message: e.message });
+        });
+        if (pmInspectionResult_(task) === '不合格') {
+          const note = task.note === null || task.note === undefined ? '' : String(task.note).trim();
+          if (note === '') {
+            errors.push({ row: index + 1, taskNo: taskNo, field: 'Note', message: '超限需填写异常措施 / Exception note required' });
+          }
+        }
+      } else if (pmIsPdMYes_(task['PdM?'])) {
         const value = task.valueAndNote === null || task.valueAndNote === undefined ? '' : String(task.valueAndNote).trim();
         if (value === '') {
           errors.push({ row: index + 1, taskNo: taskNo, field: 'Value', message: 'PdM 任务未填写数值 / Value required for PdM task' });
@@ -151,6 +161,41 @@
       if (out === false) anyDeterminate = true;
     }
     return anyDeterminate ? '合格' : '待判定';
+  }
+
+  function pmMeasurementErrors_(task) {
+    const source = task || {};
+    const points = pmParsePoints_(source['Measurement Points']);
+    if (points.length === 0) return [];
+    const errors = [];
+    const labels = pmParseLabels_(source['Point Labels']);
+    const unit = source['Measurement Unit'] === null || source['Measurement Unit'] === undefined
+      ? ''
+      : String(source['Measurement Unit']).trim();
+    if (unit === '') {
+      errors.push({ field: 'Measurement Unit', message: '测量单位必填 / Measurement unit required' });
+    }
+    const measurements = Array.isArray(source.measurements) ? source.measurements : [];
+    const byPoint = {};
+    let unitMismatch = false;
+    measurements.forEach((item) => {
+      if (!item) return;
+      if (item.point !== null && item.point !== undefined) byPoint[String(item.point)] = item.value;
+      const itemUnit = item.unit === null || item.unit === undefined ? '' : String(item.unit).trim();
+      if (itemUnit !== '' && unit !== '' && itemUnit !== unit) unitMismatch = true;
+    });
+    if (unitMismatch) {
+      errors.push({ field: 'Measurement Unit', message: '测量单位与配置不一致 / Measurement unit mismatch' });
+    }
+    points.forEach((point) => {
+      if (!labels[point.code]) {
+        errors.push({ field: 'Point Labels', message: '缺少测点位置: ' + point.code });
+      }
+      if (pmNumericValue_(byPoint[point.code]) === null) {
+        errors.push({ field: point.code, message: '测点 ' + point.code + ' 未填写有效数值 / Invalid or missing value' });
+      }
+    });
+    return errors;
   }
 
   function pmMeasurementSummary_(task) {

@@ -4653,7 +4653,23 @@ function pmTaskEndErrors_(tasks) {
     var hasPoints = task["Measurement Points"] !== null
       && task["Measurement Points"] !== undefined
       && String(task["Measurement Points"]).trim() !== "";
-    if (!hasPoints && pmIsPdMYes_(task["PdM?"])) {
+    if (hasPoints) {
+      var measurementErrors = pmMeasurementErrors_(task);
+      measurementErrors.forEach(function (e) {
+        errors.push({ row: index + 1, taskNo: taskNo, field: e.field, message: e.message });
+      });
+      if (pmInspectionResult_(task) === "不合格") {
+        var note = task.note === null || task.note === undefined ? "" : String(task.note).trim();
+        if (note === "") {
+          errors.push({
+            row: index + 1,
+            taskNo: taskNo,
+            field: "Note",
+            message: "超限需填写异常措施 / Exception note required"
+          });
+        }
+      }
+    } else if (pmIsPdMYes_(task["PdM?"])) {
       var value = task.valueAndNote === null || task.valueAndNote === undefined ? "" : String(task.valueAndNote).trim();
       if (value === "") {
         errors.push({
@@ -4751,6 +4767,57 @@ function pmInspectionResult_(task) {
   return anyDeterminate ? "合格" : "待判定";
 }
 
+function pmMeasurementErrors_(task) {
+  var source = task || {};
+  var points = pmParsePoints_(source["Measurement Points"]);
+  if (points.length === 0) return [];
+  var errors = [];
+  var labels = pmParseLabels_(source["Point Labels"]);
+  var unit = source["Measurement Unit"] === null || source["Measurement Unit"] === undefined
+    ? ""
+    : String(source["Measurement Unit"]).trim();
+  if (unit === "") {
+    errors.push({ field: "Measurement Unit", message: "测量单位必填 / Measurement unit required" });
+  }
+  var measurements = Array.isArray(source.measurements) ? source.measurements : [];
+  var byPoint = {};
+  var unitMismatch = false;
+  measurements.forEach(function (item) {
+    if (!item) return;
+    if (item.point !== null && item.point !== undefined) {
+      byPoint[String(item.point)] = item.value;
+    }
+    var itemUnit = item.unit === null || item.unit === undefined ? "" : String(item.unit).trim();
+    if (itemUnit !== "" && unit !== "" && itemUnit !== unit) unitMismatch = true;
+  });
+  if (unitMismatch) {
+    errors.push({ field: "Measurement Unit", message: "测量单位与配置不一致 / Measurement unit mismatch" });
+  }
+  points.forEach(function (point) {
+    if (!labels[point.code]) {
+      errors.push({ field: "Point Labels", message: "缺少测点位置: " + point.code });
+    }
+    if (pmNumericValue_(byPoint[point.code]) === null) {
+      errors.push({ field: point.code, message: "测点 " + point.code + " 未填写有效数值 / Invalid or missing value" });
+    }
+  });
+  return errors;
+}
+
+function pmPrepareMeasurementResults_(tasks) {
+  (tasks || []).forEach(function (task) {
+    if (!task) return;
+    var points = pmParsePoints_(task["Measurement Points"]);
+    if (points.length === 0) return;
+    var values = (Array.isArray(task.measurements) ? task.measurements : []).map(function (item) {
+      return item.value;
+    });
+    task.measurementTotal = pmAggregate_(values, task["Measurement Unit"]);
+    task.inspectionResult = pmInspectionResult_(task);
+  });
+  return tasks;
+}
+
 function saveData_tasklist(data, confirmUser) {
   try {
     let id = "1Y7FclPNn_yHWzwZiRCzSy350fppgXZ3NYgwA1OXQgD4";
@@ -4823,6 +4890,8 @@ function saveData_tasklist(data, confirmUser) {
       if (validationErrors.length > 0) {
         return { ok: false, code: "MEASUREMENT_VALIDATION", errors: validationErrors };
       }
+      parsedTasks = pmPrepareMeasurementResults_(parsedTasks);
+      data["任务明细"] = JSON.stringify(parsedTasks);
 
       let endDateColumn = 8; // 假设 EndDate 在第8列
       let endTimeColumn = 9; // 假设 EndTime 在第9列

@@ -121,3 +121,47 @@ test('με 模式合计取平均', () => {
   assert.equal(pmAggregate_([100, 120], 'με'), 110);
   assert.equal(pmAggregate_([100, 120], 'kN'), 220);
 });
+
+test('新配置缺 S3 时后端报错', () => {
+  const errors = pmTaskEndErrors_([{
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes', taskStatus: true,
+    'Measurement Points': 'S1,S2,S3,S4',
+    'Point Labels': 'S1=操作侧;S2=非操作侧;S3=天侧;S4=地侧',
+    'Measurement Unit': 'kN',
+    measurements: [{ point: 'S1', value: 125 }, { point: 'S2', value: 126 }, { point: 'S4', value: 127 }],
+  }]);
+  assert.ok(errors.some((e) => e.field === 'S3'));
+});
+
+test('超限且 note 为空时报错', () => {
+  const errors = pmTaskEndErrors_([{
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes', taskStatus: true,
+    'Measurement Points': 'S1',
+    'Point Labels': 'S1=操作侧',
+    'Measurement Unit': 'kN',
+    Logic: 'Out_of_range', 'LL Limited': '100', 'HH Limited': '130',
+    measurements: [{ point: 'S1', value: 145 }],
+    note: '',
+  }]);
+  assert.ok(errors.some((e) => e.field === 'Note'));
+});
+
+test('结果计算写入 Total 与 inspectionResult', () => {
+  const tasks = [{
+    'Measurement Points': 'S1,S2', 'Measurement Unit': 'με',
+    measurements: [{ point: 'S1', value: 100 }, { point: 'S2', value: 120 }],
+    Logic: 'HighAlarm_Max', 'LL Limited': '', 'HH Limited': '200',
+  }];
+  pmPrepareMeasurementResults_(tasks);
+  assert.equal(tasks[0].measurementTotal, 110);
+  assert.equal(tasks[0].inspectionResult, '合格');
+});
+
+test('测量单位与配置不一致时报错', () => {
+  const errors = pmTaskEndErrors_([{
+    'Task No': 'FCS-43', 'PdM?': '是/ Yes', taskStatus: true,
+    'Measurement Points': 'S1', 'Point Labels': 'S1=操作侧', 'Measurement Unit': 'kN',
+    measurements: [{ point: 'S1', value: 125, unit: '吨力' }],
+  }]);
+  assert.ok(errors.some((e) => e.field === 'Measurement Unit'));
+});
