@@ -4730,6 +4730,17 @@ function saveData_tasklist(data, confirmUser) {
         }
       }
     } else if (Status == "End" && rowNumber !== -1) {
+      let parsedTasks = [];
+      try {
+        parsedTasks = JSON.parse(data["任务明细"] || "[]");
+      } catch (e) {
+        parsedTasks = [];
+      }
+      let validationErrors = pmTaskEndErrors_(parsedTasks);
+      if (validationErrors.length > 0) {
+        return { ok: false, code: "MEASUREMENT_VALIDATION", errors: validationErrors };
+      }
+
       let endDateColumn = 8; // 假设 EndDate 在第8列
       let endTimeColumn = 9; // 假设 EndTime 在第9列
       let taskDetailColumn = 11; // 假设 任务明细 在第11列

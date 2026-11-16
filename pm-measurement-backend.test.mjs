@@ -46,3 +46,55 @@ test('taskStatus 与 Task Status 冲突时标记 conflict', () => {
   assert.deepEqual(pmTaskDoneState_({ taskStatus: true, 'Task Status': false }), { done: true, conflict: true });
   assert.deepEqual(pmTaskDoneState_({ 'Task Status': true }), { done: true, conflict: false });
 });
+
+let ws;
+function setupFakePmSheet() {
+  const rows = [
+    ['PM No.', 'PmStatus', 'Notification', 'PM People', 'Plan PM Date', 'SatrtDate', 'StartTime', 'EndDate', 'EndTime', 'Workcenter', '任务明细', 'TaskCount', 'UncheckedTasks', 'UncheckedCount', 'NonEmptyNotesTasks', 'NonEmptyNotesCount'],
+    ['PM-001', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+  ];
+  const writes = [];
+  ws = {
+    values: rows,
+    writes: writes,
+    getName: function () { return 'PM_Records'; },
+    getLastRow: function () { return rows.length; },
+    getLastColumn: function () { return rows[0].length; },
+    getRange: function (a, b, c, d) {
+      return {
+        getValues: function () { return rows.slice(a - 1, a - 1 + c).map(function (row) { return row.slice(b - 1, b - 1 + d); }); },
+        getValue: function () { return (rows[a - 1] || [])[b - 1] || ''; },
+        setValue: function (v) {
+          writes.push([a, b, v]);
+          if (!rows[a - 1]) rows[a - 1] = [];
+          rows[a - 1][b - 1] = v;
+        },
+        setValues: function (matrix) {
+          matrix.forEach(function (rowVals, i) {
+            const r = a - 1 + i;
+            if (!rows[r]) rows[r] = [];
+            rowVals.forEach(function (v, j) { rows[r][b - 1 + j] = v; });
+          });
+        },
+      };
+    },
+    appendRow: function (v) { rows.push(v.slice()); },
+  };
+  globalThis.SpreadsheetApp = {
+    openById: function () {
+      return { getSheetByName: function (name) { return name === 'PM_Records' ? ws : null; } };
+    },
+  };
+}
+
+test('End 有缺失测量时后端拒绝写入', () => {
+  setupFakePmSheet();
+  const res = saveData_tasklist({
+    'PM No.': 'PM-001', 'SheetName': 'IM-TB1', Status: 'End',
+    '任务明细': JSON.stringify([{ 'Task No': 'FCS-43', 'PdM?': '是/ Yes', taskStatus: true, valueAndNote: '' }]),
+    EndDate: '2026-11-16', EndTime: '10:00',
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'MEASUREMENT_VALIDATION');
+  assert.deepEqual(ws.writes, []);
+});
