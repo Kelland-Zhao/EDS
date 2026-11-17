@@ -311,6 +311,7 @@ function doGet(e) {
   Route.path("EDS_TaskList", loadEDSTaskList);
   Route.path("EDS_MyTasks", loadEDSMyTasks);
   Route.path("CycleMonitor", loadCycleMonitor);
+  Route.path("TaskMonitor", loadTaskMonitor);
   Route.path("NPI_ProcessRecord", loadNPIProcessRecord);
   Route.path("NPI_Dashboard", loadNPIDashboard);
   Route.path("NPI_TemplateCards", loadNPITemplateCards);
@@ -328,6 +329,8 @@ function doGet(e) {
   Route.path("loadTestPlanImportCandidates", loadTestPlanImportCandidates);
   Route.path("ensureNPISharedCards", ensureNPISharedCards);
 
+  // 只读监控路由不触发其他模块的定时器初始化，包括未授权请求。
+  if (String(e.parameters.v || '') === 'TaskMonitor') return loadTaskMonitor();
   ensureDailyBriefTrigger_();
 
   if (Route[e.parameters.v]) {
@@ -627,8 +630,7 @@ function getFailureReportFormData(reportId) {
     // 从 Drive 读取照片文件
     if (formData._photoFileId) {
       try {
-        const photoFile = DriveApp.getFileById(formData._photoFileId);
-        const photoBytes = photoFile.getBlob().getBytes();
+        const photoBytes = getEDSPictureBlob_(formData._photoFileId).getBytes();
         formData.photo = 'data:image/jpeg;base64,' + Utilities.base64Encode(photoBytes);
       } catch (e) { /* 照片文件不存在则忽略 */ }
     }
@@ -5470,6 +5472,14 @@ function getCompletedRecords() {
   }
 }
 
+function getEDSPictureBlob_(fileId) {
+  const file = DriveApp.getFileById(fileId);
+  if (!/^image\//i.test(file.getMimeType())) {
+    throw new Error("仅允许读取图片文件 / Image files only");
+  }
+  return file.getBlob();
+}
+
 /**
  * 根据文件ID获取图片的Base64数据，用于前端直接显示。
  * @param {string} fileId Google Drive文件的ID。
@@ -5480,8 +5490,7 @@ function getImageAsBase64(fileId) {
     if (!fileId) {
       throw new Error("文件ID未提供。");
     }
-    const file = DriveApp.getFileById(fileId);
-    const blob = file.getBlob();
+    const blob = getEDSPictureBlob_(fileId);
     const contentType = blob.getContentType();
     // --- 修复：使用正确的函数名 base64Encode ---
     const base64Data = Utilities.base64Encode(blob.getBytes());

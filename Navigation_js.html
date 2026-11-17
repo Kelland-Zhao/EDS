@@ -39,6 +39,15 @@
     sessionStorage.setItem('siWebPage', siWebPage);
     $("#name").text(name);
 
+    // 入口显示由服务端真实 Google 身份决定；页面与数据接口各自再次校验。
+    google.script.run
+      .withSuccessHandler(function(allowed) { $('#TaskMonitorTools').toggle(allowed === true); })
+      .withFailureHandler(function() { $('#TaskMonitorTools').hide(); })
+      .checkTaskMonitorAccess();
+    $('#TaskMonitor').click(function() {
+      window.open(siWebPage + '?v=TaskMonitor');
+    });
+
     google.script.run
       .withSuccessHandler((result) => {
         try {

@@ -1,0 +1,167 @@
+<script>
+var tmState_ = { data: null, days: 7, view: 'tasks', query: '', filter: 'all', page: 0, selected: null, detailPage: 0, stale: false, inFlight: false, pending: false };
+var TM_PAGE_SIZE_ = 25;
+function tmEl_(id) { return document.getElementById(id); }
+function tmEscape_(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+}
+function tmBadge_(kind, text) { return '<span class="tm-status tm-status-' + tmEscape_(kind) + '">' + tmEscape_(text) + '</span>'; }
+function tmVisibleRows_() {
+  if (!tmState_.data) return [];
+  var history = tmState_.view === 'history';
+  var query = tmState_.query.trim().toLowerCase();
+  return (history ? tmState_.data.logs : tmState_.data.tasks).filter(function (row) {
+    if (!history && tmState_.view === 'issues' && row.issue === 'none') return false;
+    var filter = tmState_.filter;
+    if (filter !== 'all') {
+      if (history && row.kind !== filter) return false;
+      if (!history) {
+        if (filter === 'missing' && !row.missing.length && !row.uncertain.length) return false;
+        if (filter === 'config' && !row.configErrors.length) return false;
+        if (filter === 'error' && !row.errorCount) return false;
+        if (filter === 'warning' && !row.warningCount) return false;
+        if (['business', 'skip', 'success'].indexOf(filter) !== -1 && (!row.latest || row.latest.kind !== filter)) return false;
+      }
+    }
+    return !query || [row.name, row.fn, history ? row.detail : row.latest && row.latest.detail, history ? row.remark : row.configErrors.join(' ')].join(' ').toLowerCase().indexOf(query) !== -1;
+  });
+}
+function tmRenderDetail_() {
+  var data = tmState_.data;
+  var task = data && data.tasks.find(function (item) { return item.fn === tmState_.selected; });
+  tmEl_('tmDetail').hidden = !task;
+  if (!task) { tmEl_('tmDetailBody').innerHTML = ''; return; }
+  tmEl_('tmDetailTitle').textContent = task.name;
+  tmEl_('tmDetailMeta').textContent = task.fn + ' · 来源：' + task.sources.join('、');
+  var records = data.logs.filter(function (log) { return log.fn === task.fn; });
+  var pages = Math.max(1, Math.ceil(records.length / TM_PAGE_SIZE_));
+  tmState_.detailPage = Math.min(tmState_.detailPage, pages - 1);
+  var hints = task.configErrors.concat(task.missing.map(function (time) { return time + ' 到期未见定时日志，待核实'; }), task.uncertain.map(function (time) { return time + ' 有日志但无法区分触发方式，待核实'; }));
+  var body = hints.length ? '<div class="alert alert-warning tm-logdetail">' + tmEscape_(hints.join('\n')) + '</div>' : '';
+  body += '<div class="tm-table-wrap"><table class="tm-table"><thead><tr><th>时间<br><span>Time</span></th><th>原始状态<br><span>Raw status</span></th><th>详情及备注<br><span>Detail and remark</span></th></tr></thead><tbody>';
+  body += records.slice(tmState_.detailPage * TM_PAGE_SIZE_, (tmState_.detailPage + 1) * TM_PAGE_SIZE_).map(function (log) {
+    return '<tr><td class="tm-time">' + tmEscape_(log.time) + '<span class="tm-function">' + tmEscape_(log.trigger) + '</span></td><td>' + tmBadge_(log.kind, log.status || '未标注') + '</td><td class="tm-logdetail">' + tmEscape_(log.detail + (log.remark ? '\n备注：' + log.remark : '')) + '</td></tr>';
+  }).join('');
+  if (!records.length) body += '<tr><td colspan="3" class="tm-empty">所选日期窗口内没有日志 / No logs in this window</td></tr>';
+  tmEl_('tmDetailBody').innerHTML = body + '</tbody></table></div>';
+  tmEl_('tmDetailCount').textContent = records.length + ' 条日志 · ' + (tmState_.detailPage + 1) + ' / ' + pages;
+  tmEl_('tmDetailPrev').disabled = tmState_.detailPage === 0;
+  tmEl_('tmDetailNext').disabled = tmState_.detailPage >= pages - 1;
+}
+function tmRender_() {
+  var data = tmState_.data;
+  tmEl_('tmContent').hidden = !data;
+  if (!data) {
+    ['tmRows', 'tmDetailBody', 'tmHead'].forEach(function (id) { tmEl_(id).innerHTML = ''; });
+    ['tmTaskCount', 'tmSeenCount', 'tmErrorCount', 'tmMissingCount'].forEach(function (id) { tmEl_(id).textContent = '—'; });
+    ['tmDetailTitle', 'tmDetailMeta', 'tmConfigErrors', 'tmCoverage', 'tmSourceMeta', 'tmWarningCount', 'tmResult', 'tmDetailCount'].forEach(function (id) { tmEl_(id).textContent = ''; });
+    tmEl_('tmConfigErrors').hidden = true;
+    tmEl_('tmCoverage').hidden = true;
+    tmEl_('tmDetail').hidden = true;
+    return;
+  }
+  var summary = data.summary;
+  tmEl_('tmTaskCount').textContent = summary.taskCount;
+  tmEl_('tmSeenCount').textContent = summary.todaySeenTasks;
+  tmEl_('tmErrorCount').textContent = summary.errorLogs;
+  tmEl_('tmMissingCount').textContent = summary.missingOccurrences === null ? '无法判断' : summary.missingOccurrences;
+  tmEl_('tmWarningCount').textContent = '另有 ' + summary.warningLogs + ' 条警告日志 / Warning entries';
+  tmEl_('tmCoverage').hidden = data.coverage.complete;
+  tmEl_('tmCoverage').textContent = '数据覆盖不足，缺日志判断已暂停。以下数量及清单仅代表已读取范围。\n' + data.coverage.warnings.join('\n');
+  tmEl_('tmConfigErrors').hidden = !data.configErrors.length;
+  tmEl_('tmConfigErrors').textContent = data.configErrors.join('\n');
+  document.querySelectorAll('[data-tm-view]').forEach(function (button) { button.setAttribute('aria-selected', String(button.dataset.tmView === tmState_.view)); });
+  tmEl_('tmPanel').setAttribute('aria-labelledby', { tasks: 'tmTabTasks', issues: 'tmTabIssues', history: 'tmTabHistory' }[tmState_.view]);
+  var history = tmState_.view === 'history';
+  tmEl_('tmHead').innerHTML = history ? '<tr><th>记录时间<br><span>Log time</span></th><th>任务<br><span>Task</span></th><th>原始状态<br><span>Raw status</span></th><th>日志摘要<br><span>Log detail</span></th><th>详情<br><span>Details</span></th></tr>' : '<tr><th>任务<br><span>Task</span></th><th>最近日志<br><span>Latest log</span></th><th>状态及提示<br><span>Status</span></th><th>计划<br><span>Schedule</span></th><th>详情<br><span>Details</span></th></tr>';
+  var rows = tmVisibleRows_();
+  var pages = Math.max(1, Math.ceil(rows.length / TM_PAGE_SIZE_));
+  tmState_.page = Math.min(tmState_.page, pages - 1);
+  tmEl_('tmRows').innerHTML = rows.slice(tmState_.page * TM_PAGE_SIZE_, (tmState_.page + 1) * TM_PAGE_SIZE_).map(function (row) {
+    var link = '<button type="button" class="tm-details-link" data-tm-task="' + tmEscape_(row.fn) + '">查看 →<span class="tm-function">Details</span></button>';
+    var name = '<div class="tm-name">' + tmEscape_(row.name) + '</div><span class="tm-function">' + tmEscape_(row.fn) + '</span>';
+    if (history) return '<tr><td class="tm-time">' + tmEscape_(row.time) + '<span class="tm-function">' + tmEscape_(row.trigger) + '</span></td><td>' + name + '</td><td>' + tmBadge_(row.kind, row.status || '未标注') + (row.valid ? '' : tmBadge_('warning', '时间或函数待核实')) + '</td><td class="tm-logdetail">' + tmEscape_(row.detail) + '</td><td>' + link + '</td></tr>';
+    var status = row.latest ? tmBadge_(row.latest.kind, row.latest.status || '未标注') : tmBadge_('other', '未读取到日志');
+    if (row.configErrors.length) status += tmBadge_('config', '配置错误');
+    if (row.missing.length) status += tmBadge_('missing', '到期未见 ' + row.missing.length + ' 次');
+    if (row.uncertain.length) status += tmBadge_('warning', '触发方式待核实 ' + row.uncertain.length + ' 次');
+    if (row.errorCount) status += '<span class="tm-function">窗口内 ' + row.errorCount + ' 条失败／异常</span>';
+    if (row.warningCount) status += '<span class="tm-function">窗口内 ' + row.warningCount + ' 条警告</span>';
+    var plan = row.plans.map(function (p) { return '<div>' + tmEscape_(p.text) + '</div>'; }).join('');
+    var next = row.scheduled ? row.nextPlanned || (row.configErrors.length ? '配置错误，待核实' : '未来366天内无匹配计划') : '无自动计划 / Manual or log only';
+    return '<tr><td>' + name + '</td><td class="tm-time">' + tmEscape_(row.latest ? row.latest.time : '—') + '<span class="tm-function">' + tmEscape_(row.latest ? row.latest.trigger : '') + '</span></td><td>' + status + '</td><td class="tm-plan">' + plan + '<span class="tm-function">下次：' + tmEscape_(next) + '</span></td><td>' + link + '</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="tm-empty">没有匹配记录 / No matching records</td></tr>';
+  tmEl_('tmResult').textContent = '共 ' + rows.length + ' 项 · 第 ' + (tmState_.page + 1) + ' / ' + pages + ' 页';
+  tmEl_('tmPrev').disabled = tmState_.page === 0;
+  tmEl_('tmNext').disabled = tmState_.page >= pages - 1;
+  tmEl_('tmSourceMeta').textContent = (tmState_.stale ? '数据已过期 · ' : '') + '快照：' + data.generatedAt + ' · 时区：' + data.timeZone + ' · 所选日志窗口：' + data.windowStart.slice(0, 10) + ' 至 ' + data.generatedAt.slice(0, 10) + ' · 来源 Log 第 ' + data.coverage.startRow + '–' + data.coverage.endRow + ' 行 · 已读日志日期：' + (data.coverage.actualStart || '无') + ' 至 ' + (data.coverage.actualEnd || '无') + ' · 页面可见时每60秒刷新';
+  tmRenderDetail_();
+}
+function tmFail_(error) {
+  var message = String(error && error.message || error);
+  var forbidden = message.indexOf('TM_FORBIDDEN') !== -1;
+  if (forbidden) {
+    tmState_.data = null;
+    tmState_.selected = null;
+    tmEl_('userLevelBadge').textContent = '无访问权限 / Access denied';
+    tmEl_('userLevelBadge').className = 'badge bg-danger';
+  }
+  tmState_.stale = true;
+  tmRender_();
+  tmEl_('tmNotice').hidden = false;
+  tmEl_('tmNotice').className = 'alert alert-danger tm-notice';
+  tmEl_('tmNotice').textContent = forbidden ? '仅限 Kelland 的真实 Google 账号访问；无法确认身份时不会显示数据。\nOwner only. Identity could not be verified.' : (tmState_.data ? '刷新失败；保留上次数据，数据已过期。\nRefresh failed. Previous data is stale.\n' : '读取失败 / Failed to load\n') + message;
+}
+function tmLoad_() {
+  if (document.hidden) return;
+  if (tmState_.inFlight) { tmState_.pending = true; return; }
+  tmState_.inFlight = true;
+  tmState_.pending = false;
+  var days = tmState_.days;
+  tmEl_('tmRefresh').disabled = true;
+  tmEl_('tmNotice').hidden = false;
+  tmEl_('tmNotice').className = 'alert alert-info tm-notice';
+  tmEl_('tmNotice').textContent = '正在读取配置和日志… / Loading configuration and logs…';
+  function finish() {
+    tmState_.inFlight = false;
+    tmEl_('tmRefresh').disabled = false;
+    if (tmState_.pending && !document.hidden) tmLoad_();
+  }
+  google.script.run.withSuccessHandler(function (data) {
+    if (days !== tmState_.days) { tmState_.pending = true; finish(); return; }
+    try {
+      if (!data || !data.summary || !data.coverage || !Array.isArray(data.tasks) || !Array.isArray(data.logs)) throw new Error('服务器返回的数据格式无效 / Invalid response');
+      tmState_.data = data;
+      tmState_.stale = false;
+      tmEl_('userLevelBadge').textContent = 'Kelland · 只读 / Read only';
+      tmEl_('userLevelBadge').className = 'badge bg-success';
+      tmEl_('tmNotice').hidden = true;
+      tmRender_();
+    } catch (error) { tmFail_(error); }
+    finish();
+  }).withFailureHandler(function (error) { tmFail_(error); finish(); }).getTaskMonitorData(days);
+}
+document.addEventListener('DOMContentLoaded', function () {
+  tmEl_('name').textContent = sessionStorage.getItem('Name') || 'Kelland';
+  tmEl_('tmRefresh').addEventListener('click', tmLoad_);
+  tmEl_('tmSearch').addEventListener('input', function (event) { tmState_.query = event.target.value; tmState_.page = 0; tmRender_(); });
+  tmEl_('tmFilter').addEventListener('change', function (event) { tmState_.filter = event.target.value; tmState_.page = 0; tmRender_(); });
+  tmEl_('tmDays').addEventListener('change', function (event) { tmState_.days = Number(event.target.value); tmState_.page = 0; tmState_.detailPage = 0; tmLoad_(); });
+  document.querySelectorAll('[data-tm-view]').forEach(function (button) {
+    button.addEventListener('click', function () { tmState_.view = button.dataset.tmView; tmState_.filter = 'all'; tmEl_('tmFilter').value = 'all'; tmState_.page = 0; tmRender_(); });
+  });
+  tmEl_('tmRows').addEventListener('click', function (event) {
+    var button = event.target.closest('[data-tm-task]');
+    if (!button) return;
+    tmState_.selected = button.dataset.tmTask; tmState_.detailPage = 0; tmRenderDetail_(); tmEl_('tmDetail').scrollIntoView({ block: 'nearest' });
+  });
+  tmEl_('tmClose').addEventListener('click', function () { tmState_.selected = null; tmRenderDetail_(); });
+  tmEl_('tmPrev').addEventListener('click', function () { tmState_.page = Math.max(0, tmState_.page - 1); tmRender_(); });
+  tmEl_('tmNext').addEventListener('click', function () { tmState_.page++; tmRender_(); });
+  tmEl_('tmDetailPrev').addEventListener('click', function () { tmState_.detailPage = Math.max(0, tmState_.detailPage - 1); tmRenderDetail_(); });
+  tmEl_('tmDetailNext').addEventListener('click', function () { tmState_.detailPage++; tmRenderDetail_(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) tmLoad_(); });
+  setInterval(function () { if (!document.hidden) tmLoad_(); }, 60000);
+  tmLoad_();
+});
+</script>
