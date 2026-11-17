@@ -2049,6 +2049,7 @@
         $('#pmViewToggle .btn').removeClass('active');
         $(this).addClass('active');
         if (view === 'all') {
+          table_tasklist.column(5).search('');
           table_tasklist.search('').draw();
         } else if (view === 'tech') {
           table_tasklist.column(5).search('技术员', true, false).draw();
