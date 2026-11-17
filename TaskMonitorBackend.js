@@ -1,4 +1,5 @@
 // EDS 自动任务监控：只读 ScheduledTask 配置与日志，不执行任务。
+// GAS 项目内文件名须唯一，后台名称与 TaskMonitor.html 区分。
 var TASK_MONITOR_CONFIG_ = {
   spreadsheetId: '1VH9I4-vRA3GlKo2dx6LVsr29HKdzCylxwROdsfoLwtM',
   ownerEmail: 'kelland_zhao@colpal.com',

@@ -3,11 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const scriptPath = new URL('./TaskMonitor.js', import.meta.url);
+const scriptPath = new URL('./TaskMonitorBackend.js', import.meta.url);
 const script = () => fs.existsSync(scriptPath) ? fs.readFileSync(scriptPath, 'utf8') : '';
 const timingHeaders = ['月\n(文本格式：[1~12])', '星期\n(文本格式：[1~0])', '当月第几周\n(文本格式：[1~6])', '日\n(文本格式：[1~31])', '时间点\n(文本格式：HH:MM)', '程序名', '函数名'];
 const menuHeaders = ['描述', '脚本名称', '是否显示'];
 const logHeaders = ['执行时间', '函数名', '状态', '详情', '触发方式', '备注'];
+test('GAS 源码与 HTML 文件的项目内名称不能重复', () => {
+  const names = fs.readdirSync(new URL('.', import.meta.url)).filter(file => /\.(js|html)$/.test(file)).map(file => file.replace(/\.(js|html)$/, ''));
+  assert.deepEqual(names.filter((name, i) => names.indexOf(name) !== i), []);
+});
 const all = (n, start = 1) => JSON.stringify(Array.from({ length: n }, (_, i) => i + start));
 function schedule(fn = 'job', times = '8:00', overrides = {}) {
   return Object.assign(Object.fromEntries(timingHeaders.map((h, i) => [h, [all(12), all(7, 0), all(6), all(31), times, '测试任务', fn][i]])), overrides);
