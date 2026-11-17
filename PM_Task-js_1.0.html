@@ -40,6 +40,10 @@
     return { checked: checked, conflict: conflict };
   }
 
+  function pmPhotoRequired_(task) {
+    return String(task && task['Photo Required'] || '').trim().toUpperCase() === 'Y';
+  }
+
   function pmPhotoSuccess_(task) {
     const photos = task && Array.isArray(task.photos) ? task.photos : [];
     return photos.some((photo) => String(photo && photo.status || '').trim() === 'success');
@@ -1916,6 +1920,13 @@
           return val || '';
         };
       }
+      if (title === 'Task Description') {
+        colDef.render = function (data, type, row) {
+          if (type !== 'display' || !pmPhotoRequired_(row)) return data;
+          return '<span class="badge bg-danger pm-photo-required">必须提交照片<br>Photo required</span><br>'
+            + pmEscapeTaskHtml_(data);
+        };
+      }
       if (title === '执行人员') {
         colDef.render = function (data, type, row) {
           // 兼容数组、JSON字符串、逗号分隔字符串
@@ -1971,9 +1982,12 @@
       }
       if (title === '操作') {
         colDef.render = function (data, type, row) {
+          const required = pmPhotoRequired_(row);
+          const photoClass = required ? 'btn-danger' : 'btn-warning';
+          const photoLabel = required ? '拍照（必需）<br>PHOTO REQUIRED' : '拍照<br>PHOTO';
           return `<button class="btn btn-info btn-sm text-center preview-btn">预览<br>PREVIEW</button>
                         <input type="file" accept="image/*" capture="camera" style="display: none;" class="photo-input">
-                        <button class="btn btn-warning btn-sm text-center take-photo-btn" ${!isEditable ? 'disabled' : ''}>拍照<br>PHOTO</button>`;
+                        <button class="btn ${photoClass} btn-sm text-center take-photo-btn" ${!isEditable ? 'disabled' : ''}>${photoLabel}</button>`;
         };
       }
       table_head.push(colDef);
